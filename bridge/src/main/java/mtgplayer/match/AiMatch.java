@@ -11,6 +11,7 @@ import forge.game.GameRules;
 import forge.game.GameType;
 import forge.game.Match;
 import forge.game.event.GameEventTurnEnded;
+import forge.game.player.Player;
 import forge.game.player.RegisteredPlayer;
 
 import java.util.ArrayList;
@@ -67,6 +68,9 @@ public final class AiMatch {
             public void onTurnEnded(GameEventTurnEnded e) {
                 if (!game.isGameOver() && game.getPhaseHandler().getTurn() >= maxTurns) {
                     log.accept("[bridge] turn-cap " + maxTurns + " erreicht, breche ab");
+                    for (Player p : game.getPlayers()) {
+                        p.intentionalDraw();
+                    }
                     game.setGameOver(GameEndReason.Draw);
                 }
             }
@@ -79,10 +83,7 @@ public final class AiMatch {
         }
 
         GameOutcome outcome = game.getOutcome();
-        // outcome.isDraw()/getWinningPlayer() werten den *einzelnen* PlayerOutcome jedes Spielers aus
-        // (Player.onGameOver() setzt jeden Spieler ohne explizites Loss-Outcome auf win() – auch bei
-        // einem von aussen erzwungenen Draw, siehe forge-game Player.java). Bei einem selbst gesetzten
-        // GameEndReason.Draw ist daher der Reason die verlaessliche Quelle, nicht Forges Ableitung.
+        // Spieler vorher auf Draw setzen, sonst markiert Player.onGameOver() alle als Gewinner.
         String winner = outcome == null || outcome.getWinCondition() == GameEndReason.Draw || outcome.getWinningPlayer() == null
                 ? null : outcome.getWinningPlayer().getPlayer().getName();
         String reason = outcome == null ? "unbekannt" : String.valueOf(outcome.getWinCondition());

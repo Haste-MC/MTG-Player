@@ -55,5 +55,7 @@ class AiMatchTest {
         assertTrue(r.turns() <= 3, "turn-cap nicht eingehalten: " + r.turns());
         assertTrue(log.stream().anyMatch(l -> l.startsWith("[bridge] turn-cap")),
                 "Log sollte eine turn-cap Zeile enthalten");
+        assertTrue(log.stream().noneMatch(l -> l.contains("has won")),
+                "Log sollte bei einem Unentschieden keine 'has won'-Zeile enthalten");
     }
 }
