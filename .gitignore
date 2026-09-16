@@ -1,0 +1,6 @@
+target/
+node_modules/
+bridge/assets/forge.profile.properties
+*.log
+.idea/
+*.iml
