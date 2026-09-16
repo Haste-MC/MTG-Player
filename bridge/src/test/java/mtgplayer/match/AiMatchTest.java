@@ -1,6 +1,8 @@
 package mtgplayer.match;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import forge.deck.Deck;
@@ -36,5 +38,22 @@ class AiMatchTest {
         assertTrue(log.size() > 20, "Log erwartet, war " + log.size() + " Zeilen");
         assertTrue(r.turns() <= 60, "turn-cap nicht eingehalten: " + r.turns());
         System.out.println("Gewinner: " + r.winner() + " (" + r.reason() + ") nach " + r.turns() + " Zuegen");
+    }
+
+    @Test
+    @Timeout(value = 5, unit = TimeUnit.MINUTES)
+    void turnCapBeendetAlsUnentschieden() {
+        List<String> names = List.of("Abzan Armor [TDC] [2025]", "Adaptive Enchantment [C18] [2018]");
+        List<Deck> decks = names.stream().map(Precons::load).toList();
+        List<String> log = new ArrayList<>();
+
+        AiMatch.Result r = AiMatch.play(decks, List.of("KI 1", "KI 2"), 3, log::add);
+
+        assertNotNull(r);
+        assertNull(r.winner(), "bei turn-cap sollte es keinen Gewinner geben, war " + r.winner());
+        assertEquals("Draw", r.reason());
+        assertTrue(r.turns() <= 3, "turn-cap nicht eingehalten: " + r.turns());
+        assertTrue(log.stream().anyMatch(l -> l.startsWith("[bridge] turn-cap")),
+                "Log sollte eine turn-cap Zeile enthalten");
     }
 }

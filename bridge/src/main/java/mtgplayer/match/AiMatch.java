@@ -1,5 +1,6 @@
 package mtgplayer.match;
 
+import com.google.common.eventbus.Subscribe;
 import forge.ai.LobbyPlayerAi;
 import forge.deck.Deck;
 import forge.game.Game;
@@ -9,6 +10,7 @@ import forge.game.GameOutcome;
 import forge.game.GameRules;
 import forge.game.GameType;
 import forge.game.Match;
+import forge.game.event.GameEventTurnEnded;
 import forge.game.player.RegisteredPlayer;
 
 import java.util.ArrayList;
@@ -30,7 +32,8 @@ public final class AiMatch {
     /**
      * @param decks    ein Deck pro Sitz, 2–6
      * @param names    Anzeigenamen, gleiche Länge wie decks
-     * @param maxTurns Spiel wird bei Überschreiten als Unentschieden beendet (KI-Spiele können sich festfahren)
+     * @param maxTurns Spiel endet nach maxTurns Spieler-Zügen als Unentschieden (Forge zählt jeden
+     *                 Spieler-Zug einzeln, nicht pro Runde; KI-Spiele können sich festfahren)
      * @param log      bekommt jede Forge-Logzeile, sobald sie entsteht
      */
     @SuppressWarnings("deprecation")
@@ -59,35 +62,28 @@ public final class AiMatch {
         };
         game.getGameLog().addObserver(observer);
 
-        Thread watchdog = new Thread(() -> {
-            try {
-                while (!game.isGameOver()) {
-                    // 50ms statt 1000ms: getTurn() zaehlt jeden Spieler-Zug einzeln (PhaseHandler.turn++
-                    // bei jedem Zugwechsel), bei 4 Spielern mit duennem Board schaffen KIs mehrere Zuege
-                    // pro Sekunde. Mit 1000ms-Poll wurde der turn-cap im Test (60) reproduzierbar
-                    // ueberschritten (beobachtet: 62). 50ms haelt den Cap zuverlaessig ein.
-                    Thread.sleep(50);
-                    if (game.getPhaseHandler().getTurn() > maxTurns) {
-                        log.accept("[bridge] turn-cap " + maxTurns + " erreicht, breche ab");
-                        game.setGameOver(GameEndReason.Draw);
-                    }
+        game.subscribeToEvents(new Object() {
+            @Subscribe
+            public void onTurnEnded(GameEventTurnEnded e) {
+                if (!game.isGameOver() && game.getPhaseHandler().getTurn() >= maxTurns) {
+                    log.accept("[bridge] turn-cap " + maxTurns + " erreicht, breche ab");
+                    game.setGameOver(GameEndReason.Draw);
                 }
-            } catch (InterruptedException ignored) {
-                // Spiel ist fertig
             }
-        }, "ai-match-watchdog");
-        watchdog.setDaemon(true);
-        watchdog.start();
+        });
 
         try {
             match.startGame(game);
         } finally {
-            watchdog.interrupt();
             game.getGameLog().deleteObserver(observer);
         }
 
         GameOutcome outcome = game.getOutcome();
-        String winner = outcome == null || outcome.isDraw() || outcome.getWinningPlayer() == null
+        // outcome.isDraw()/getWinningPlayer() werten den *einzelnen* PlayerOutcome jedes Spielers aus
+        // (Player.onGameOver() setzt jeden Spieler ohne explizites Loss-Outcome auf win() – auch bei
+        // einem von aussen erzwungenen Draw, siehe forge-game Player.java). Bei einem selbst gesetzten
+        // GameEndReason.Draw ist daher der Reason die verlaessliche Quelle, nicht Forges Ableitung.
+        String winner = outcome == null || outcome.getWinCondition() == GameEndReason.Draw || outcome.getWinningPlayer() == null
                 ? null : outcome.getWinningPlayer().getPlayer().getName();
         String reason = outcome == null ? "unbekannt" : String.valueOf(outcome.getWinCondition());
         int turns = outcome == null ? game.getPhaseHandler().getTurn() : outcome.getLastTurnNumber();
