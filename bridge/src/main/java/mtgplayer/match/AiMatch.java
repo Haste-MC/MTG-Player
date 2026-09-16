@@ -39,6 +39,9 @@ public final class AiMatch {
      */
     @SuppressWarnings("deprecation")
     public static Result play(List<Deck> decks, List<String> names, int maxTurns, Consumer<String> log) {
+        if (maxTurns <= 0) {
+            throw new IllegalArgumentException("maxTurns muss > 0 sein");
+        }
         if (decks.size() != names.size() || decks.size() < 2 || decks.size() > 6) {
             throw new IllegalArgumentException("2–6 Decks mit gleich vielen Namen");
         }
@@ -68,6 +71,7 @@ public final class AiMatch {
             public void onTurnEnded(GameEventTurnEnded e) {
                 if (!game.isGameOver() && game.getPhaseHandler().getTurn() >= maxTurns) {
                     log.accept("[bridge] turn-cap " + maxTurns + " erreicht, breche ab");
+                    // Spieler vorher auf Draw setzen, sonst markiert Player.onGameOver() alle als Gewinner.
                     for (Player p : game.getPlayers()) {
                         p.intentionalDraw();
                     }
@@ -83,7 +87,6 @@ public final class AiMatch {
         }
 
         GameOutcome outcome = game.getOutcome();
-        // Spieler vorher auf Draw setzen, sonst markiert Player.onGameOver() alle als Gewinner.
         String winner = outcome == null || outcome.getWinCondition() == GameEndReason.Draw || outcome.getWinningPlayer() == null
                 ? null : outcome.getWinningPlayer().getPlayer().getName();
         String reason = outcome == null ? "unbekannt" : String.valueOf(outcome.getWinCondition());

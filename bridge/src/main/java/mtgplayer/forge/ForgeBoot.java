@@ -16,6 +16,8 @@ import java.nio.file.Paths;
  * 1. forge.profile.properties schreiben (Forge liest sie beim ersten Zugriff auf ForgeConstants)
  * 2. GuiBase.setInterface (ForgeConstants.ASSETS_DIR kommt daher – statisch, einmalig)
  * 3. FModel.initialize (lädt ~30k Kartenskripte, dauert 20–60 s)
+ * Alles, was vor init() ForgeConstants/FModel berührt, scheitert in einem statischen Initialisierer
+ * und vergiftet damit die JVM für den Rest des Laufs (NoClassDefFoundError bei späteren Tests).
  */
 public final class ForgeBoot {
 
@@ -42,7 +44,8 @@ public final class ForgeBoot {
         Path assets = assetsDir();
         if (!Files.isDirectory(assets.resolve("res").resolve("cardsfolder"))) {
             throw new IllegalStateException("assets/res/cardsfolder fehlt unter " + assets
-                    + " – Symlink bridge/assets/res -> ../../forge/forge-gui/res vorhanden?");
+                    + " – Symlink bridge/assets/res -> ../../forge/forge-gui/res vorhanden?"
+                    + " Pfad ueberschreibbar mit -Dmtgplayer.assets=<dir>");
         }
         writeProfile(assets);
         GuiBase.setInterface(new WebGuiBase(assets.toString() + "/"));

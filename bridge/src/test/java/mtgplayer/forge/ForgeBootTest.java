@@ -1,5 +1,6 @@
 package mtgplayer.forge;
 
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import forge.StaticData;
@@ -18,8 +19,8 @@ class ForgeBootTest {
     @Test
     void initIstIdempotent() {
         ForgeBoot.init();
-        int a = ForgeBoot.cardCount();
+        StaticData before = StaticData.instance();
         ForgeBoot.init();
-        assertTrue(a == ForgeBoot.cardCount());
+        assertSame(before, StaticData.instance(), "zweiter init() darf StaticData nicht neu aufbauen");
     }
 }
