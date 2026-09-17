@@ -2,7 +2,6 @@ package mtgplayer.protocol;
 
 import com.google.common.collect.Multiset;
 import forge.card.MagicColor;
-import forge.game.GameEntityView;
 import forge.game.GameView;
 import forge.game.card.CardView;
 import forge.game.card.CardView.CardStateView;
@@ -112,7 +111,7 @@ public final class StateSerializer {
             return Snapshot.CardSnap.hidden(cv.getId());
         }
         CardStateView st = cv.getCurrentState();
-        boolean creature = st.getType() != null && st.getType().isCreature();
+        boolean creature = st.isCreature();
         List<Integer> attachments = new ArrayList<>();
         if (cv.hasCardAttachments()) {
             for (CardView a : cv.getAttachedCards()) {
