@@ -36,10 +36,15 @@ public final class Main {
         int httpPort = Integer.getInteger("mtgplayer.httpPort", 8080);
         Path web = Paths.get(System.getProperty("mtgplayer.web", "../web/dist")).toAbsolutePath().normalize();
 
-        Bridge bridge = new Bridge(wsPort);
-        bridge.start();
         HttpStatic http = new HttpStatic(httpPort, web);
         http.start();
+        Bridge bridge = new Bridge(wsPort);
+        try {
+            bridge.start();
+        } catch (RuntimeException e) {
+            http.stop();
+            throw e;
+        }
         System.out.println("Bereit. Browser: http://127.0.0.1:" + httpPort + "  (Dev: http://localhost:5173)");
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             http.stop();

@@ -80,4 +80,17 @@ class ChoiceBrokerTest {
         assertEquals(1, r1.get(5, TimeUnit.SECONDS).asInt());
         assertTrue(broker.pending().isEmpty());
     }
+
+    @Test
+    void notifySendetRevealUndLandetNichtInPending() throws Exception {
+        List<Messages.Option> opts = List.of(new Messages.Option(0, "A", null, null), new Messages.Option(1, "B", null, null));
+        broker.notify("Titel", "Frage", opts, null);
+
+        JsonNode msg = Json.parse(sent.poll(5, TimeUnit.SECONDS));
+        assertEquals("choice", msg.get("type").asText());
+        assertEquals("reveal", msg.get("kind").asText());
+        assertEquals(0, msg.get("min").asInt());
+        assertEquals(0, msg.get("max").asInt());
+        assertTrue(broker.pending().isEmpty());
+    }
 }

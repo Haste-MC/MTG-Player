@@ -43,6 +43,8 @@ public final class HumanMatch {
 
         GameRules rules = new GameRules(GameType.Commander);
         rules.setGamesPerMatch(1);
+        // Forge zeigt sonst beim Start eine Liste von Karten, die die KI nicht spielen kann – Rauschen für den menschlichen Sitz
+        rules.setWarnAboutAICards(false);
         hosted = new HostedMatch();
         hosted.startMatch(rules, null, players, guis, null);
     }

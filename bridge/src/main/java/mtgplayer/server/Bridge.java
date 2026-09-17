@@ -49,15 +49,28 @@ public final class Bridge {
             case "selectPlayer" -> ui(() -> gui.onSelectPlayer(msg.path("id").asInt()));
             case "ok" -> ui(gui::onOk);
             case "cancel" -> ui(gui::onCancel);
-            case "answer" -> gui.broker().answer(msg.path("id").asInt(), msg.get("value"));
+            case "answer" -> {
+                int id = msg.path("id").asInt();
+                if (!gui.broker().answer(id, msg.get("value"))) {
+                    ws.send(new Messages.ErrorMsg("answer fuer unbekannte id " + id));
+                }
+            }
             case "concede" -> ui(gui::onConcede);
             case "requestState" -> onClientConnected();
             default -> ws.send(new Messages.ErrorMsg("unbekannter Nachrichtentyp: " + type));
         }
     }
 
-    private static void ui(Runnable r) {
-        GuiBase.getInterface().invokeInEdtLater(r);
+    /** Fehler aus dem Runnable duerfen den UI-Thread nicht stillschweigend beenden - sie muessen zum Browser. */
+    private void ui(Runnable r) {
+        GuiBase.getInterface().invokeInEdtLater(() -> {
+            try {
+                r.run();
+            } catch (RuntimeException e) {
+                e.printStackTrace();
+                ws.send(new Messages.ErrorMsg("Bridge: " + e));
+            }
+        });
     }
 
     /**

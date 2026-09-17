@@ -159,4 +159,16 @@ class WebGuiGameTest {
     void isUiSetToSkipPhaseIstInM2Falsch() {
         assertFalse(gui.isUiSetToSkipPhase(null, null));
     }
+
+    @Test
+    void getChoicesMitMinMaxMinusEinsIstRevealOhneBlockieren() throws Exception {
+        // min < 0 && max < 0 ist Forges Konvention fuer "nur anzeigen" (reveal) - kein Future noetig,
+        // der Aufruf muss sofort zurueckkehren statt auf eine Antwort zu warten.
+        List<String> out = gui.getChoices("Zeig her", -1, -1, List.of("a", "b"), null, null);
+        assertTrue(out.isEmpty());
+
+        JsonNode c = nextChoice();
+        assertEquals("reveal", c.get("kind").asText());
+        assertEquals(2, c.get("options").size());
+    }
 }

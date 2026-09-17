@@ -239,7 +239,7 @@ public class WebGuiGame extends AbstractGuiGame {
         // Forge nutzt min == max == -1 für "nur anzeigen" (reveal, z. B. revealAISkipCards bei
         // UI_SHOW_ACTIONABLE_HIGHLIGHTS) – informativ, blockiert den Game-Thread nicht.
         if (min < 0 && max < 0) {
-            broker.notify("many", message, message, options(choices, display), null);
+            broker.notify(message, message, options(choices, display), null);
             return new ArrayList<>();
         }
         String kind = max == 1 ? "one" : "many";

@@ -70,9 +70,11 @@ class BridgeEndToEndTest {
     }
 
     /**
-     * Wartet auf den Mulligan-Prompt (okLabel "Keep"), klickt dabei jeden davorliegenden
-     * Prompt mit ok weg - z. B. Forges "Play or Draw?" beim Muenzwurf, der nur auftritt,
-     * wenn der Mensch ihn gewinnt (siehe PlayerControllerHuman#chooseStartingPlayer).
+     * Wartet auf den Mulligan-Prompt (okLabel "Keep"), klickt dabei den Muenzwurf-Prompt
+     * "Play or Draw?" (okLabel "Play") explizit weg - der tritt nur auf, wenn der Mensch den
+     * Muenzwurf gewinnt (siehe PlayerControllerHuman#chooseStartingPlayer). Kein blindes
+     * Wegklicken jedes enabled-ok-Prompts, damit ein unerwarteter dritter Prompt auffaellt statt
+     * stillschweigend weggeklickt zu werden.
      */
     private static JsonNode awaitMulliganPrompt(int seconds) throws InterruptedException {
         long end = System.currentTimeMillis() + seconds * 1000L;
@@ -83,8 +85,11 @@ class BridgeEndToEndTest {
                 System.err.println("[bridge error] " + n.path("text").asText());
             }
             if ("state".equals(n.path("type").asText())) {
-                if ("Keep".equals(n.path("prompt").path("okLabel").asText())) return n;
-                if (n.path("prompt").path("okEnabled").asBoolean()) send("{\"type\":\"ok\"}");
+                String okLabel = n.path("prompt").path("okLabel").asText();
+                if ("Keep".equals(okLabel)) return n;
+                if ("Play".equals(okLabel) && n.path("prompt").path("okEnabled").asBoolean()) {
+                    send("{\"type\":\"ok\"}");
+                }
             }
         }
         throw new AssertionError("keine Nachricht 'state' mit Keep-Prompt innerhalb " + seconds + " s");

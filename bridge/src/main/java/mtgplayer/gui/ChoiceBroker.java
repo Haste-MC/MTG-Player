@@ -48,11 +48,12 @@ public final class ChoiceBroker {
     /**
      * Rein informative Anzeige ohne Antwort (z. B. Forges "reveal", min == max == -1 in
      * {@code getChoices}) – wird nur geschickt, blockiert den Game-Thread nicht und landet
-     * nicht in {@link #pending()}.
+     * nicht in {@link #pending()}. Geht immer als {@code kind:"reveal"} raus (min == max == 0),
+     * damit ein Browser sie von einer echten Frage unterscheiden kann.
      */
-    public void notify(String kind, String title, String message, List<Messages.Option> options, Integer card) {
+    public void notify(String title, String message, List<Messages.Option> options, Integer card) {
         int id = seq.incrementAndGet();
-        out.send(new Messages.Choice(id, kind, title, message, options, 0, 0, card));
+        out.send(new Messages.Choice(id, "reveal", title, message, options, 0, 0, card));
     }
 
     /** @return true, wenn eine offene Frage mit dieser id beantwortet wurde. */

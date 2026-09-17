@@ -20,13 +20,14 @@ public final class HttpStatic {
     private final Path dir;
 
     public HttpStatic(int port, Path dir) throws IOException {
-        this.dir = dir;
+        this.dir = dir.toAbsolutePath().normalize();
         this.server = HttpServer.create(new InetSocketAddress("127.0.0.1", port), 0);
         server.createContext("/", ex -> {
             String p = ex.getRequestURI().getPath();
-            Path f = dir.resolve(p.substring(1)).normalize();
-            if (!f.startsWith(dir) || !Files.isRegularFile(f)) {
-                f = dir.resolve("index.html");
+            String rel = p.length() > 1 ? p.substring(1) : "";
+            Path f = this.dir.resolve(rel).normalize();
+            if (!f.startsWith(this.dir) || !Files.isRegularFile(f)) {
+                f = this.dir.resolve("index.html");
             }
             if (!Files.isRegularFile(f)) {
                 byte[] msg = "web/dist fehlt – erst `npm run build` in web/ oder Vite-Dev-Server auf :5173 nutzen".getBytes();

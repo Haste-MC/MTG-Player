@@ -14,9 +14,10 @@ public final class Messages {
     public record Option(int index, String label, Integer card, Integer player) { }
 
     /**
-     * kind: one | many | order | confirm | number | text | ability | entities
+     * kind: one | many | order | confirm | number | text | ability | entities | reveal
      * options: Auswahl mit Index; value der Antwort ist je nach kind
      * Index (one/ability), Index-Liste (many/entities/order), bool (confirm), Zahl (number), String (text).
+     * reveal erwartet keine Antwort (min == max == 0, rein informativ).
      */
     public record Choice(String type, int id, String kind, String title, String message,
                          List<Option> options, int min, int max, Integer card) {
