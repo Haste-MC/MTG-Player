@@ -1,0 +1,149 @@
+package mtgplayer.server;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import mtgplayer.forge.ForgeBoot;
+import mtgplayer.protocol.Json;
+import org.java_websocket.client.WebSocketClient;
+import org.java_websocket.handshake.ServerHandshake;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
+
+import java.net.URI;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
+import java.util.function.Predicate;
+
+/**
+ * Spielt die ersten Sekunden eines echten Spiels über das Protokoll: Lobby → Spielstart →
+ * Mulligan-Prompt → Keep → Prio-Prompt in Zug 1 → Concede-Dialog → gameOver.
+ */
+class BridgeEndToEndTest {
+
+    private static final int PORT = 18081;
+    private static Bridge bridge;
+    private static WebSocketClient client;
+    private static final BlockingQueue<JsonNode> inbox = new LinkedBlockingQueue<>();
+
+    @BeforeAll
+    static void start() throws Exception {
+        ForgeBoot.init();
+        bridge = new Bridge(PORT);
+        bridge.start();
+        client = new WebSocketClient(new URI("ws://127.0.0.1:" + PORT)) {
+            @Override public void onOpen(ServerHandshake h) { }
+            @Override public void onMessage(String m) { inbox.add(Json.parse(m)); }
+            @Override public void onClose(int code, String reason, boolean remote) { }
+            @Override public void onError(Exception ex) { ex.printStackTrace(); }
+        };
+        assertTrue(client.connectBlocking(10, TimeUnit.SECONDS), "WebSocket-Verbindung");
+    }
+
+    @AfterAll
+    static void stop() throws Exception {
+        client.closeBlocking();
+        bridge.stop();
+    }
+
+    private static JsonNode await(String type, Predicate<JsonNode> cond, int seconds) throws InterruptedException {
+        long end = System.currentTimeMillis() + seconds * 1000L;
+        while (System.currentTimeMillis() < end) {
+            JsonNode n = inbox.poll(Math.max(1, end - System.currentTimeMillis()), TimeUnit.MILLISECONDS);
+            if (n == null) break;
+            if ("error".equals(n.path("type").asText())) {
+                System.err.println("[bridge error] " + n.path("text").asText());
+            }
+            if (type.equals(n.path("type").asText()) && cond.test(n)) return n;
+        }
+        throw new AssertionError("keine Nachricht '" + type + "' innerhalb " + seconds + " s");
+    }
+
+    private static void send(String json) {
+        client.send(json);
+    }
+
+    /**
+     * Wartet auf den Mulligan-Prompt (okLabel "Keep"), klickt dabei jeden davorliegenden
+     * Prompt mit ok weg - z. B. Forges "Play or Draw?" beim Muenzwurf, der nur auftritt,
+     * wenn der Mensch ihn gewinnt (siehe PlayerControllerHuman#chooseStartingPlayer).
+     */
+    private static JsonNode awaitMulliganPrompt(int seconds) throws InterruptedException {
+        long end = System.currentTimeMillis() + seconds * 1000L;
+        while (System.currentTimeMillis() < end) {
+            JsonNode n = inbox.poll(Math.max(1, end - System.currentTimeMillis()), TimeUnit.MILLISECONDS);
+            if (n == null) break;
+            if ("error".equals(n.path("type").asText())) {
+                System.err.println("[bridge error] " + n.path("text").asText());
+            }
+            if ("state".equals(n.path("type").asText())) {
+                if ("Keep".equals(n.path("prompt").path("okLabel").asText())) return n;
+                if (n.path("prompt").path("okEnabled").asBoolean()) send("{\"type\":\"ok\"}");
+            }
+        }
+        throw new AssertionError("keine Nachricht 'state' mit Keep-Prompt innerhalb " + seconds + " s");
+    }
+
+    private static JsonNode myPlayer(JsonNode state) {
+        int me = state.get("me").asInt();
+        for (JsonNode p : state.get("players")) {
+            if (p.get("id").asInt() == me) return p;
+        }
+        throw new AssertionError("eigener Spieler fehlt im Snapshot");
+    }
+
+    @Test
+    @Timeout(value = 5, unit = TimeUnit.MINUTES)
+    void lobbyStartKeepPrioConcede() throws Exception {
+        JsonNode lobby = await("lobby", n -> true, 10);
+        assertTrue(lobby.get("precons").size() > 100);
+
+        send("{\"type\":\"startGame\",\"humanDeck\":{\"precon\":\"Abzan Armor [TDC] [2025]\"},"
+                + "\"opponents\":[{\"precon\":\"Adaptive Enchantment [C18] [2018]\",\"name\":\"KI 1\"}]}");
+
+        // Gewinnt der Mensch den Muenzwurf, fragt Forge vor dem Mulligan "Play or Draw?"
+        // (PlayerControllerHuman.chooseStartingPlayer) - ein echter, ~zufaellig auftretender
+        // Prompt, den ein Browser genauso wegklicken muesste. Klick auf ok (== "Play").
+        JsonNode mull = awaitMulliganPrompt(90);
+        JsonNode me = myPlayer(mull);
+        assertEquals(7, me.get("hand").size(), "Starthand");
+        assertEquals(false, me.get("isAi").asBoolean());
+        for (JsonNode id : me.get("hand")) {
+            JsonNode card = mull.get("cards").get(id.asText());
+            assertNotNull(card.get("name"), "eigene Handkarte sichtbar");
+            // faceDown ist ein primitives boolean im Snapshot (Task 1) - Jackson laesst es nie weg
+            // (NON_NULL greift nur bei null), also den Wert pruefen statt has() (wie unten bei foe).
+            assertFalse(card.path("faceDown").asBoolean());
+        }
+        JsonNode foe = null;
+        for (JsonNode p : mull.get("players")) if (p.get("isAi").asBoolean()) foe = p;
+        assertNotNull(foe);
+        assertEquals(40, foe.get("life").asInt());
+        for (JsonNode id : foe.get("hand")) {
+            JsonNode card = mull.get("cards").get(id.asText());
+            assertTrue(card.path("faceDown").asBoolean(), "gegnerische Handkarte verdeckt");
+            assertFalse(card.has("name"));
+        }
+
+        send("{\"type\":\"ok\"}");
+
+        JsonNode prio = await("state", n -> n.path("turn").asInt() >= 1
+                && n.path("prompt").path("okEnabled").asBoolean()
+                && !"Keep".equals(n.path("prompt").path("okLabel").asText()), 120);
+        assertNotNull(prio.get("phase"));
+        assertTrue(prio.path("prompt").path("message").asText().length() > 0, "Prio-Prompt hat Text");
+
+        send("{\"type\":\"concede\"}");
+        JsonNode confirm = await("choice", n -> "confirm".equals(n.path("kind").asText()), 30);
+        send("{\"type\":\"answer\",\"id\":" + confirm.get("id").asInt() + ",\"value\":true}");
+
+        JsonNode over = await("gameOver", n -> true, 60);
+        assertNotNull(over);
+    }
+}

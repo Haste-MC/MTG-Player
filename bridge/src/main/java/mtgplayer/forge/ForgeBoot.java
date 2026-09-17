@@ -52,6 +52,13 @@ public final class ForgeBoot {
         FModel.initialize(null, prefs -> {
             prefs.setPref(FPref.LOAD_CARD_SCRIPTS_LAZILY, false);
             prefs.setPref(FPref.UI_LANGUAGE, "en-US");
+            // menschlicher Sitz: Arena-Stil (Forge passt, wenn nichts spielbar ist) + spielbare Karten markieren
+            prefs.setPref(FPref.YIELD_AUTO_PASS_NO_ACTIONS, true);
+            prefs.setPref(FPref.UI_SHOW_ACTIONABLE_HIGHLIGHTS, true);
+            // headless: keine Musik/Sounds, kein Namensdialog beim Spielstart
+            prefs.setPref(FPref.UI_ENABLE_MUSIC, false);
+            prefs.setPref(FPref.UI_ENABLE_SOUNDS, false);
+            prefs.setPref(FPref.PLAYER_NAME, "Du");
             return null;
         });
         initialized = true;
