@@ -32,7 +32,7 @@ class ChoiceBrokerTest {
         assertEquals(2, msg.get("options").size());
         int id = msg.get("id").asInt();
         assertFalse(result.isDone(), "muss auf die Antwort warten");
-        assertTrue(broker.pending().isPresent());
+        assertEquals(1, broker.pending().size());
 
         assertTrue(broker.answer(id, Json.parse("1")));
         assertEquals(1, result.get(5, TimeUnit.SECONDS).asInt());
@@ -57,5 +57,27 @@ class ChoiceBrokerTest {
         sent.poll(5, TimeUnit.SECONDS);
         broker.cancelAll();
         assertTrue(result.get(5, TimeUnit.SECONDS).isNull());
+    }
+
+    @Test
+    void pendingEnthaeltMehrereGleichzeitigOffeneFragen() throws Exception {
+        CompletableFuture<JsonNode> r1 = CompletableFuture.supplyAsync(
+                () -> broker.ask("one", "T1", "?", List.of(), 1, 1, null));
+        int id1 = Json.parse(sent.poll(5, TimeUnit.SECONDS)).get("id").asInt();
+
+        CompletableFuture<JsonNode> r2 = CompletableFuture.supplyAsync(
+                () -> broker.ask("one", "T2", "?", List.of(), 1, 1, null));
+        int id2 = Json.parse(sent.poll(5, TimeUnit.SECONDS)).get("id").asInt();
+
+        assertEquals(2, broker.pending().size());
+
+        assertTrue(broker.answer(id2, Json.parse("1")));
+        assertEquals(1, r2.get(5, TimeUnit.SECONDS).asInt());
+        assertEquals(1, broker.pending().size());
+        assertEquals(id1, broker.pending().get(0).id());
+
+        assertTrue(broker.answer(id1, Json.parse("1")));
+        assertEquals(1, r1.get(5, TimeUnit.SECONDS).asInt());
+        assertTrue(broker.pending().isEmpty());
     }
 }

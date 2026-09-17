@@ -114,7 +114,7 @@ public class WebGuiGame extends AbstractGuiGame {
     @Override public void setHighlighted(Iterable<GameEntityView> entities, boolean b) { super.setHighlighted(entities, b); push(); }
 
     @Override
-    public void showPromptMessage(PlayerView playerView, String message, CardView card) {
+    public synchronized void showPromptMessage(PlayerView playerView, String message, CardView card) {
         Snapshot.PromptSnap p = prompt;
         prompt = new Snapshot.PromptSnap(message == null ? "" : message, card == null ? null : card.getId(),
                 p.okLabel(), p.cancelLabel(), p.okEnabled(), p.cancelEnabled());
@@ -122,7 +122,7 @@ public class WebGuiGame extends AbstractGuiGame {
     }
 
     @Override
-    public void updateButtons(PlayerView owner, String label1, String label2, boolean enable1, boolean enable2, boolean focus1) {
+    public synchronized void updateButtons(PlayerView owner, String label1, String label2, boolean enable1, boolean enable2, boolean focus1) {
         Snapshot.PromptSnap p = prompt;
         prompt = new Snapshot.PromptSnap(p.message(), p.card(), label1, label2, enable1, enable2);
         push();
@@ -133,7 +133,9 @@ public class WebGuiGame extends AbstractGuiGame {
         GameView gv = getGameView();
         String winner = gv == null ? null : gv.getWinningPlayerName();
         broker.cancelAll();
-        push();
+        // pushState() statt push(): finishGame läuft auf dem UI-Thread (Forges Event-Handler), der finale
+        // Snapshot muss den Client also synchron vor GameOver erreichen statt erst später über invokeInEdtLater.
+        pushState();
         out.send(new Messages.GameOver(winner));
     }
 
@@ -186,6 +188,7 @@ public class WebGuiGame extends AbstractGuiGame {
     }
 
     public void onConcede() {
+        if (getGameView() == null) return;
         concede();
     }
 
@@ -207,8 +210,8 @@ public class WebGuiGame extends AbstractGuiGame {
         return out;
     }
 
-    /** Index-Liste aus der Antwort; bei null/ungültig die ersten {@code min} Einträge. */
-    private static List<Integer> indices(JsonNode value, int min, int size) {
+    /** Index-Liste aus der Antwort; bei null/ungültig die ersten {@code min} Einträge, auf {@code max} gekappt. */
+    private static List<Integer> indices(JsonNode value, int min, int max, int size) {
         List<Integer> out = new ArrayList<>();
         if (value != null && value.isArray()) {
             for (JsonNode n : value) {
@@ -222,6 +225,9 @@ public class WebGuiGame extends AbstractGuiGame {
         if (out.size() < Math.max(min, 0)) {
             out.clear();
             for (int i = 0; i < Math.min(Math.max(min, 0), size); i++) out.add(i);
+        }
+        if (max > 0 && out.size() > max) {
+            out = new ArrayList<>(out.subList(0, max));
         }
         return out;
     }
@@ -238,23 +244,47 @@ public class WebGuiGame extends AbstractGuiGame {
         String kind = max == 1 ? "one" : "many";
         JsonNode v = broker.ask(kind, message, message, options(choices, display), min, max, null);
         List<T> out = new ArrayList<>();
-        for (int i : indices(v, min, choices.size())) out.add(choices.get(i));
+        for (int i : indices(v, min, max, choices.size())) out.add(choices.get(i));
         return out;
     }
 
+    /**
+     * Zwei Modi, je nach Forges "remaining objects"-Vertrag (siehe AbstractGuiGame#many/order):
+     * <ul>
+     *   <li>{@code remainingObjectsMin == 0 && remainingObjectsMax == 0}: volle Umsortierung – Antwort ist
+     *       eine Permutation aller Elemente (kind {@code order}), Sicherheitsnetz füllt fehlende Indizes auf.</li>
+     *   <li>sonst: Teilauswahl – {@code remainingObjectsMin/Max} begrenzen, wie viele Elemente in der Quelle
+     *       bleiben dürfen ({@code -1} = unbegrenzt); die Antwort ist nur die gewählte Teilmenge (kind
+     *       {@code many}), ohne Sicherheitsnetz.</li>
+     * </ul>
+     */
     @Override
     public <T> OrderResult<T> order(String title, String top, int remainingObjectsMin, int remainingObjectsMax,
                                     List<T> sourceChoices, List<T> destChoices, CardView referenceCard,
                                     boolean sideboardingMode, boolean showRememberCheckbox) {
-        List<T> src = sourceChoices == null ? new ArrayList<>() : sourceChoices;
-        if (src.isEmpty()) return new OrderResult<>(new ArrayList<>(src), false);
-        JsonNode v = broker.ask("order", title, top, options(src, null), src.size(), src.size(),
-                referenceCard == null ? null : referenceCard.getId());
-        List<Integer> idx = indices(v, src.size(), src.size());
-        List<T> ordered = new ArrayList<>();
-        for (int i : idx) ordered.add(src.get(i));
-        for (T t : src) if (!ordered.contains(t)) ordered.add(t); // Sicherheitsnetz bei unvollständiger Antwort
-        return new OrderResult<>(ordered, false);
+        List<T> all = new ArrayList<>(sourceChoices == null ? List.of() : sourceChoices);
+        if (destChoices != null) all.addAll(destChoices);
+        if (all.isEmpty()) return new OrderResult<>(new ArrayList<>(), false);
+
+        int n = all.size();
+        Integer card = referenceCard == null ? null : referenceCard.getId();
+
+        if (remainingObjectsMin == 0 && remainingObjectsMax == 0) {
+            JsonNode v = broker.ask("order", title, top, options(all, null), n, n, card);
+            List<Integer> idx = indices(v, n, n, n);
+            List<T> ordered = new ArrayList<>();
+            for (int i : idx) ordered.add(all.get(i));
+            for (T t : all) if (!ordered.contains(t)) ordered.add(t); // Sicherheitsnetz bei unvollständiger Antwort
+            return new OrderResult<>(ordered, false);
+        }
+
+        int pickMin = remainingObjectsMax >= 0 ? Math.max(0, n - remainingObjectsMax) : 0;
+        int pickMax = remainingObjectsMin >= 0 ? Math.max(0, n - remainingObjectsMin) : n;
+        JsonNode v = broker.ask("many", title, top, options(all, null), pickMin, pickMax, card);
+        List<Integer> idx = indices(v, pickMin, pickMax, n);
+        List<T> chosen = new ArrayList<>();
+        for (int i : idx) chosen.add(all.get(i));
+        return new OrderResult<>(chosen, false);
     }
 
     @Override
@@ -279,7 +309,7 @@ public class WebGuiGame extends AbstractGuiGame {
     public int showOptionDialog(String message, String title, FSkinProp icon, List<String> options, int defaultOption) {
         if (options == null || options.isEmpty()) return defaultOption;
         JsonNode v = broker.ask("one", title, message, options(options, null), 1, 1, null);
-        List<Integer> idx = indices(v, 0, options.size());
+        List<Integer> idx = indices(v, 0, 1, options.size());
         return idx.isEmpty() ? Math.max(0, defaultOption) : idx.get(0);
     }
 
@@ -288,11 +318,12 @@ public class WebGuiGame extends AbstractGuiGame {
                                   List<String> inputOptions, boolean isNumeric) {
         if (inputOptions != null && !inputOptions.isEmpty()) {
             JsonNode v = broker.ask("one", title, message, options(inputOptions, null), 1, 1, null);
-            List<Integer> idx = indices(v, 0, inputOptions.size());
+            List<Integer> idx = indices(v, 0, 1, inputOptions.size());
             return idx.isEmpty() ? (initialInput == null ? inputOptions.get(0) : initialInput) : inputOptions.get(idx.get(0));
         }
         JsonNode v = broker.ask(isNumeric ? "number" : "text", title, message, List.of(), 0, 0, null);
-        if (v == null || v.isNull()) return initialInput == null ? (isNumeric ? "0" : "") : initialInput;
+        // Freie Eingabe: null/NullNode heißt Abbruch (Forges getInteger-Cutoff-Schleife re-prompt't sonst endlos).
+        if (v == null || v.isNull()) return null;
         return v.isNumber() ? String.valueOf(v.asInt()) : v.asText();
     }
 
@@ -302,7 +333,7 @@ public class WebGuiGame extends AbstractGuiGame {
         if (abilities.size() == 1) return abilities.get(0);
         JsonNode v = broker.ask("ability", hostCard == null ? "" : hostCard.getCurrentState().getName(),
                 "Welche Fähigkeit?", options(abilities, null), 0, 1, hostCard == null ? null : hostCard.getId());
-        List<Integer> idx = indices(v, 0, abilities.size());
+        List<Integer> idx = indices(v, 0, 1, abilities.size());
         return idx.isEmpty() ? null : abilities.get(idx.get(0));
     }
 
@@ -312,7 +343,7 @@ public class WebGuiGame extends AbstractGuiGame {
         if (optionList == null || optionList.isEmpty()) return null;
         List<GameEntityView> list = new ArrayList<>(optionList);
         JsonNode v = broker.ask("entities", title, title, options(list, null), isOptional ? 0 : 1, 1, null);
-        List<Integer> idx = indices(v, isOptional ? 0 : 1, list.size());
+        List<Integer> idx = indices(v, isOptional ? 0 : 1, 1, list.size());
         return idx.isEmpty() ? null : list.get(idx.get(0));
     }
 
@@ -323,7 +354,7 @@ public class WebGuiGame extends AbstractGuiGame {
         List<GameEntityView> list = new ArrayList<>(optionList);
         JsonNode v = broker.ask("entities", title, title, options(list, null), min, max, null);
         List<GameEntityView> out = new ArrayList<>();
-        for (int i : indices(v, min, list.size())) out.add(list.get(i));
+        for (int i : indices(v, min, max, list.size())) out.add(list.get(i));
         return out;
     }
 

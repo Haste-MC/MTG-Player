@@ -91,6 +91,42 @@ class WebGuiGameTest {
     }
 
     @Test
+    void orderMitRemainingBoundsIstTeilauswahl() throws Exception {
+        // many(min=1,max=2) auf 4 Karten → order(remainingMin=2, remainingMax=3)
+        CompletableFuture<List<String>> r = CompletableFuture.supplyAsync(
+                () -> gui.order("Scry", "unten", 2, 3, List.of("a", "b", "c", "d"), null, null, false, false).ordered());
+        JsonNode c = nextChoice();
+        assertEquals("many", c.get("kind").asText());
+        assertEquals(1, c.get("min").asInt());
+        assertEquals(2, c.get("max").asInt());
+        gui.broker().answer(c.get("id").asInt(), Json.parse("[3,1]"));
+        assertEquals(List.of("d", "b"), r.get(5, TimeUnit.SECONDS));
+    }
+
+    @Test
+    void manyUeberAbstractGuiGameWaehltTeilmenge() throws Exception {
+        CompletableFuture<List<String>> r = CompletableFuture.supplyAsync(
+                () -> gui.many("Discard", "weg", 2, 2, List.of("a", "b", "c", "d", "e"), null));
+        JsonNode c = nextChoice();
+        assertEquals("many", c.get("kind").asText());
+        assertEquals(2, c.get("min").asInt());
+        assertEquals(2, c.get("max").asInt());
+        gui.broker().answer(c.get("id").asInt(), Json.parse("[4,0]"));
+        assertEquals(List.of("e", "a"), r.get(5, TimeUnit.SECONDS));
+    }
+
+    @Test
+    void orderMitUnbegrenztemRestErlaubtLeereAuswahl() throws Exception {
+        CompletableFuture<List<String>> r = CompletableFuture.supplyAsync(
+                () -> gui.order("Opt", "x", -1, -1, List.of("a", "b"), null, null, false, false).ordered());
+        JsonNode c = nextChoice();
+        assertEquals(0, c.get("min").asInt());
+        assertEquals(2, c.get("max").asInt());
+        gui.broker().answer(c.get("id").asInt(), Json.parse("[]"));
+        assertEquals(List.of(), r.get(5, TimeUnit.SECONDS));
+    }
+
+    @Test
     void showOptionDialogLiefertIndex() throws Exception {
         CompletableFuture<Integer> r = CompletableFuture.supplyAsync(
                 () -> gui.showOptionDialog("Frage", "Titel", null, List.of("A", "B", "C"), 0));
@@ -108,6 +144,15 @@ class WebGuiGameTest {
         assertEquals("number", c.get("kind").asText());
         gui.broker().answer(c.get("id").asInt(), Json.parse("7"));
         assertEquals("7", r.get(5, TimeUnit.SECONDS));
+    }
+
+    @Test
+    void showInputDialogNullAntwortIstAbbruch() throws Exception {
+        CompletableFuture<String> r = CompletableFuture.supplyAsync(
+                () -> gui.showInputDialog("X?", "Titel", null, "0", null, true));
+        JsonNode c = nextChoice();
+        gui.broker().answer(c.get("id").asInt(), null);
+        assertEquals(null, r.get(5, TimeUnit.SECONDS));
     }
 
     @Test
