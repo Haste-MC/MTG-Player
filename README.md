@@ -15,15 +15,35 @@ git submodule update --init --depth 1
 cd forge && mvn -q -pl forge-gui -am install -DskipTests -Dcheckstyle.skip -Dmaven.javadoc.skip=true
 ```
 
+## Spielen
+
+Einmalig das Frontend bauen, dann die Bridge starten:
+
+```bash
+cd web && npm install && npm run build && cd ..
+cd bridge && mvn -q compile exec:java
+```
+
+Browser: <http://127.0.0.1:8080>. Lobby → eigenes Precon und 1–5 KI-Precons wählen → Spiel starten.
+Steuerung: leuchtende Karten sind klickbar, Rechtsklick = andere Fähigkeit, Enter/Leertaste = OK,
+Esc = Abbrechen. Forge passt automatisch, wenn du nichts tun kannst (Arena-Stil).
+
+Entwicklung am Frontend: `cd web && npm run dev` (Vite auf :5173, verbindet sich mit der Bridge auf :8081).
+
 ## Bridge
 
 ```bash
 cd bridge
-mvn -q test                 # alle Tests, inkl. eines kompletten KI-Spiels (Minuten)
-mvn -q compile exec:java    # vier zufällige Precons, KI-Spiel auf stdout
-mvn -q compile exec:java -Dexec.args="42"   # mit festem Seed
+mvn -q test                                # alle Tests inkl. KI-Spiel und End-to-End über WebSocket (Minuten)
+mvn -q compile exec:java                   # Bridge-Server (WebSocket 8081, HTTP 8080)
+mvn -q compile exec:java -Dexec.args="--ai-demo 42"   # headless KI-Spiel wie in M1
 ```
 
-Forges Nutzerdaten liegen unter `~/.mtg-player/`.
-`ForgeBoot.init()` schreibt bei jedem Start `bridge/assets/forge.profile.properties` (generiert, git-ignoriert) und lenkt Forges Nutzerdaten damit nach `~/.mtg-player/`; `bridge/assets/res` ist ein Symlink auf `forge/forge-gui/res`.
+Ports: `-Dmtgplayer.wsPort=…`, `-Dmtgplayer.httpPort=…`; Frontend-Verzeichnis: `-Dmtgplayer.web=…` (Standard `../web/dist`).
+`ForgeBoot.init()` schreibt bei jedem Start `bridge/assets/forge.profile.properties` (generiert, git-ignoriert) und lenkt
+Forges Nutzerdaten damit nach `~/.mtg-player/`; `bridge/assets/res` ist ein Symlink auf `forge/forge-gui/res`.
 Der Assets-Pfad ist mit `-Dmtgplayer.assets=<dir>` überschreibbar; Maven setzt ihn für `test` und `exec:java` automatisch.
+
+## Was noch fehlt (M3+)
+
+Phasen-Stops und "Volle Kontrolle", Dialog für Kampfschaden-Verteilung, Textlisten-Import, Kartenbilder, Archidekt.
