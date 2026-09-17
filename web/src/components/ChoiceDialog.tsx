@@ -54,8 +54,9 @@ export default function ChoiceDialog({ choice }: { choice: Choice }) {
       case "many":
       case "order": {
         const single = choice.kind === "one" || choice.kind === "ability" || (choice.max === 1 && choice.kind !== "order");
+        const bare = choice.kind === "one" || choice.kind === "ability";
         const toggle = (i: number) => {
-          if (single) { answer(i); return; }
+          if (single) { answer(bare ? i : [i]); return; }
           setPicked(picked.includes(i) ? picked.filter((x) => x !== i) : [...picked, i]);
         };
         const ok = choice.kind === "order" ? picked.length === choice.options.length
@@ -75,7 +76,7 @@ export default function ChoiceDialog({ choice }: { choice: Choice }) {
                 {choice.min === 0 && <button onClick={() => answer([])}>Keine</button>}
               </div>
             )}
-            {single && choice.min === 0 && <div className="buttons"><button onClick={() => answer(null)}>Keine</button></div>}
+            {single && choice.min === 0 && <div className="buttons"><button onClick={() => answer(bare ? null : [])}>Keine</button></div>}
           </>
         );
       }

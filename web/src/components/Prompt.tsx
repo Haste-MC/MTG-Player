@@ -1,18 +1,21 @@
 import { useEffect } from "react";
 import type { Snapshot } from "../protocol";
+import { useStore } from "../store";
 import { send } from "../ws";
 
 export default function Prompt({ state }: { state: Snapshot }) {
   const p = state.prompt;
+  const choiceOpen = useStore((s) => s.choice !== undefined);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (choiceOpen) return;
       if (e.target instanceof HTMLInputElement) return;
       if ((e.key === "Enter" || e.key === " ") && p.okEnabled) { e.preventDefault(); send({ type: "ok" }); }
       if (e.key === "Escape" && p.cancelEnabled) { e.preventDefault(); send({ type: "cancel" }); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [p.okEnabled, p.cancelEnabled]);
+  }, [p.okEnabled, p.cancelEnabled, choiceOpen]);
   return (
     <div className="prompt">
       <span className="phase">Zug {state.turn} · {state.phase ?? ""}</span>

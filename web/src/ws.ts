@@ -11,6 +11,7 @@ export function connect(onMessage: (m: Inbound) => void): void {
 
 function open(): void {
   socket = new WebSocket(url);
+  socket.onopen = () => send({ type: "requestState" });
   socket.onmessage = (ev) => listener?.(JSON.parse(ev.data) as Inbound);
   socket.onclose = () => setTimeout(open, 1000);
 }

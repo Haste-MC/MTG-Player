@@ -9,7 +9,7 @@ export default function App() {
   return (
     <>
       {screen === "lobby" ? <Lobby /> : <Table />}
-      {choice && <ChoiceDialog choice={choice} />}
+      {choice && <ChoiceDialog key={choice.id} choice={choice} />}
     </>
   );
 }
