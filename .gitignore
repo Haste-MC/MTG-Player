@@ -4,3 +4,4 @@ bridge/assets/forge.profile.properties
 *.log
 .idea/
 *.iml
+web/dist/
