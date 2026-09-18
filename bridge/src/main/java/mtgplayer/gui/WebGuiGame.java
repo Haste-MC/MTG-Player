@@ -49,6 +49,10 @@ public class WebGuiGame extends AbstractGuiGame {
     private final ChoiceBroker broker;
     private final AtomicBoolean dirty = new AtomicBoolean();
     private volatile Snapshot.PromptSnap prompt = Snapshot.PromptSnap.EMPTY;
+    private final java.util.concurrent.atomic.AtomicInteger seq = new java.util.concurrent.atomic.AtomicInteger(1);
+    @SuppressWarnings("deprecation")
+    private java.util.Observer inputObserver;
+    private forge.gamemodes.match.input.InputQueue observedQueue;
 
     public WebGuiGame(Transport out) {
         this.out = out;
@@ -81,6 +85,41 @@ public class WebGuiGame extends AbstractGuiGame {
                 this::isHighlighted, prompt);
         out.send(StateSerializer.snapshot(gv, ctx));
     }
+
+    public int currentSeq() {
+        return seq.get();
+    }
+
+    /** Forges Input-Objekt hat gewechselt: neue Sequenz, damit veraltete Klicks verworfen werden. */
+    void onInputChanged() {
+        int s = seq.incrementAndGet();
+        synchronized (this) {
+            prompt = prompt.withSeq(s);
+        }
+        push();
+    }
+
+    boolean seqOk(Integer clientSeq) {
+        return clientSeq == null || clientSeq == seq.get();
+    }
+
+    @Override
+    @SuppressWarnings("deprecation")
+    public void setOriginalGameController(PlayerView player, IGameController gameController) {
+        super.setOriginalGameController(player, gameController);
+        if (observedQueue != null && inputObserver != null) {
+            observedQueue.deleteObserver(inputObserver);
+        }
+        if (gameController instanceof forge.player.PlayerControllerHuman pch) {
+            observedQueue = pch.getInputQueue();
+            inputObserver = (o, arg) -> onInputChanged();
+            observedQueue.addObserver(inputObserver);
+        }
+        applyFullControlPref();
+    }
+
+    /** M3 Task 2 füllt das; hier nur der Hook, damit Task 1 kompiliert. */
+    void applyFullControlPref() { }
 
     @Override public void setGameView(GameView gameView0) { super.setGameView(gameView0); push(); }
     @Override protected void updateCurrentPlayer(PlayerView player) { push(); }
@@ -117,14 +156,14 @@ public class WebGuiGame extends AbstractGuiGame {
     public synchronized void showPromptMessage(PlayerView playerView, String message, CardView card) {
         Snapshot.PromptSnap p = prompt;
         prompt = new Snapshot.PromptSnap(message == null ? "" : message, card == null ? null : card.getId(),
-                p.okLabel(), p.cancelLabel(), p.okEnabled(), p.cancelEnabled());
+                p.okLabel(), p.cancelLabel(), p.okEnabled(), p.cancelEnabled(), p.seq());
         push();
     }
 
     @Override
     public synchronized void updateButtons(PlayerView owner, String label1, String label2, boolean enable1, boolean enable2, boolean focus1) {
         Snapshot.PromptSnap p = prompt;
-        prompt = new Snapshot.PromptSnap(p.message(), p.card(), label1, label2, enable1, enable2);
+        prompt = new Snapshot.PromptSnap(p.message(), p.card(), label1, label2, enable1, enable2, p.seq());
         push();
     }
 
@@ -145,7 +184,7 @@ public class WebGuiGame extends AbstractGuiGame {
         // sonst ueberlebt die Auswahl/Prompt-Anzeige des letzten Spiels ins naechste
         clearSelectables();
         clearWeaklySelectable();
-        prompt = Snapshot.PromptSnap.EMPTY;
+        prompt = Snapshot.PromptSnap.EMPTY.withSeq(seq.get());
     }
 
     // ---- Eingaben rein (UI-Thread) ------------------------------------------------
@@ -168,31 +207,45 @@ public class WebGuiGame extends AbstractGuiGame {
         };
     }
 
-    public void onSelectCard(int cardId, boolean alt) {
+    public boolean onSelectCard(int cardId, boolean alt, Integer clientSeq) {
+        if (!seqOk(clientSeq)) { System.out.println("[bridge] veralteter selectCard verworfen"); return false; }
         CardView cv = cardById(cardId);
         IGameController c = getGameController();
-        if (cv == null || c == null) return;
+        if (cv == null || c == null) return false;
         if (!c.selectCard(cv, null, trigger(alt))) {
             flashIncorrectAction();
         }
+        return true;
     }
+    public void onSelectCard(int cardId, boolean alt) { onSelectCard(cardId, alt, null); }
 
-    public void onSelectPlayer(int playerId) {
+    public boolean onSelectPlayer(int playerId, Integer clientSeq) {
+        if (!seqOk(clientSeq)) { System.out.println("[bridge] veralteter selectPlayer verworfen"); return false; }
         PlayerView pv = playerById(playerId);
         IGameController c = getGameController();
-        if (pv == null || c == null) return;
+        if (pv == null || c == null) return false;
         c.selectPlayer(pv, trigger(false));
+        return true;
     }
+    public void onSelectPlayer(int playerId) { onSelectPlayer(playerId, null); }
 
-    public void onOk() {
+    public boolean onOk(Integer clientSeq) {
+        if (!seqOk(clientSeq)) { System.out.println("[bridge] veraltetes ok verworfen"); return false; }
         IGameController c = getGameController();
-        if (c != null) c.selectButtonOk();
+        if (c == null) return false;
+        c.selectButtonOk();
+        return true;
     }
+    public void onOk() { onOk(null); }
 
-    public void onCancel() {
+    public boolean onCancel(Integer clientSeq) {
+        if (!seqOk(clientSeq)) { System.out.println("[bridge] veraltetes cancel verworfen"); return false; }
         IGameController c = getGameController();
-        if (c != null) c.selectButtonCancel();
+        if (c == null) return false;
+        c.selectButtonCancel();
+        return true;
     }
+    public void onCancel() { onCancel(null); }
 
     public void onConcede() {
         if (getGameView() == null) return;
@@ -201,18 +254,28 @@ public class WebGuiGame extends AbstractGuiGame {
 
     // ---- Synchrone Dialoge (Game-Thread) -------------------------------------------
 
-    private static <T> List<Messages.Option> options(List<T> choices, FSerializableFunction<T, String> display) {
+    private <T> List<Messages.Option> options(List<T> choices, FSerializableFunction<T, String> display) {
         List<Messages.Option> out = new ArrayList<>();
         if (choices == null) return out;
+        ViewContext ctx = getGameView() == null ? null : new ViewContext(
+                getLocalPlayers().isEmpty() ? null : getLocalPlayers().iterator().next(),
+                this::mayView, c -> false, c -> false, e -> false, Snapshot.PromptSnap.EMPTY);
         int i = 0;
         for (T t : choices) {
             String label = display != null ? display.apply(t) : String.valueOf(t);
-            Integer card = t instanceof CardView cv ? cv.getId() : null;
+            Integer card = null;
             Integer player = t instanceof PlayerView pv ? pv.getId() : null;
-            if (t instanceof SpellAbilityView sav && sav.getHostCard() != null) {
-                card = sav.getHostCard().getId();
+            Snapshot.CardSnap detail = null;
+            CardView cv = t instanceof CardView c ? c
+                    : (t instanceof SpellAbilityView sav ? sav.getHostCard() : null);
+            if (cv != null) {
+                card = cv.getId();
+                if (ctx != null) {
+                    Snapshot.CardSnap snap = StateSerializer.cardSnap(cv, ctx);
+                    detail = snap.faceDown() ? null : snap;
+                }
             }
-            out.add(new Messages.Option(i++, label, card, player));
+            out.add(new Messages.Option(i++, label, card, player, detail, null, null, null));
         }
         return out;
     }

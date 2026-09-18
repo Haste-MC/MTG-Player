@@ -50,10 +50,10 @@ public final class Bridge {
         String type = msg.path("type").asText("");
         switch (type) {
             case "startGame" -> startGame(msg);
-            case "selectCard" -> ui(() -> gui.onSelectCard(msg.path("id").asInt(), msg.path("alt").asBoolean(false)));
-            case "selectPlayer" -> ui(() -> gui.onSelectPlayer(msg.path("id").asInt()));
-            case "ok" -> ui(gui::onOk);
-            case "cancel" -> ui(gui::onCancel);
+            case "selectCard" -> ui(() -> gui.onSelectCard(msg.path("id").asInt(), msg.path("alt").asBoolean(false), seqOf(msg)));
+            case "selectPlayer" -> ui(() -> gui.onSelectPlayer(msg.path("id").asInt(), seqOf(msg)));
+            case "ok" -> ui(() -> gui.onOk(seqOf(msg)));
+            case "cancel" -> ui(() -> gui.onCancel(seqOf(msg)));
             case "answer" -> {
                 int id = msg.path("id").asInt();
                 if (!gui.broker().answer(id, msg.get("value"))) {
@@ -71,6 +71,11 @@ public final class Bridge {
             case "requestState" -> onClientConnected();
             default -> ws.send(new Messages.ErrorMsg("unbekannter Nachrichtentyp: " + type));
         }
+    }
+
+    private static Integer seqOf(JsonNode msg) {
+        JsonNode s = msg.get("seq");
+        return s == null || !s.isInt() ? null : s.asInt();
     }
 
     /** Fehler aus dem Runnable duerfen den UI-Thread nicht stillschweigend beenden - sie muessen zum Browser. */

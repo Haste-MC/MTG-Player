@@ -55,6 +55,9 @@ public final class ForgeBoot {
             // menschlicher Sitz: Arena-Stil (Forge passt, wenn nichts spielbar ist) + spielbare Karten markieren
             prefs.setPref(FPref.YIELD_AUTO_PASS_NO_ACTIONS, true);
             prefs.setPref(FPref.UI_SHOW_ACTIONABLE_HIGHLIGHTS, true);
+            // Kartenwahl aus Bibliothek/Friedhof/Exil als Listen-Dialog statt Klick auf die Zone –
+            // der Browser zeigt diese Zonen nicht als klickbare Panels (Tutor-Effekte hingen sonst)
+            prefs.setPref(FPref.UI_SELECT_FROM_CARD_DISPLAYS, false);
             // headless: keine Musik/Sounds, kein Namensdialog beim Spielstart
             prefs.setPref(FPref.UI_ENABLE_MUSIC, false);
             prefs.setPref(FPref.UI_ENABLE_SOUNDS, false);

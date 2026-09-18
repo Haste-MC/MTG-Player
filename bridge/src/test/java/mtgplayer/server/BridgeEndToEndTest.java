@@ -153,7 +153,14 @@ class BridgeEndToEndTest {
             assertFalse(card.has("name"));
         }
 
-        send("{\"type\":\"ok\"}");
+        int keepSeq = mull.path("prompt").path("seq").asInt();
+        assertTrue(keepSeq >= 1, "prompt.seq vorhanden");
+        send("{\"type\":\"ok\",\"seq\":" + (keepSeq - 1) + "}"); // veraltet – muss ignoriert werden
+        Thread.sleep(1500);
+        send("{\"type\":\"requestState\"}");
+        JsonNode still = await("state", n -> true, 10);
+        assertEquals("Keep", still.path("prompt").path("okLabel").asText(), "veraltetes ok hat nichts ausgelöst");
+        send("{\"type\":\"ok\",\"seq\":" + keepSeq + "}");
 
         JsonNode prio = await("state", n -> n.path("turn").asInt() >= 1
                 && n.path("prompt").path("okEnabled").asBoolean()

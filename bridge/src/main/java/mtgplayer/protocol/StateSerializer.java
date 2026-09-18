@@ -92,7 +92,8 @@ public final class StateSerializer {
                 ids(p.getCommand(), ctx, cards),
                 ids(p.getBattlefield(), ctx, cards),
                 mana,
-                p.getHasPriority());
+                p.getHasPriority(),
+                ctx.highlighted().test(p) ? Boolean.TRUE : null);
     }
 
     /** Sammelt IDs einer Zone und legt jede Karte einmal im Wörterbuch ab. */
@@ -101,12 +102,12 @@ public final class StateSerializer {
         if (zone == null) return out;
         for (CardView cv : zone) {
             out.add(cv.getId());
-            cards.computeIfAbsent(cv.getId(), id -> card(cv, ctx));
+            cards.computeIfAbsent(cv.getId(), id -> cardSnap(cv, ctx));
         }
         return out;
     }
 
-    private static Snapshot.CardSnap card(CardView cv, ViewContext ctx) {
+    public static Snapshot.CardSnap cardSnap(CardView cv, ViewContext ctx) {
         if (!ctx.mayView().test(cv)) {
             return Snapshot.CardSnap.hidden(cv.getId());
         }
@@ -162,13 +163,13 @@ public final class StateSerializer {
                                                 Map<Integer, Snapshot.CardSnap> cards) {
         CardView src = si.getSourceCard();
         if (src != null) {
-            cards.computeIfAbsent(src.getId(), id -> card(src, ctx));
+            cards.computeIfAbsent(src.getId(), id -> cardSnap(src, ctx));
         }
         List<Integer> tc = new ArrayList<>();
         if (si.getTargetCards() != null) {
             for (CardView c : si.getTargetCards()) {
                 tc.add(c.getId());
-                cards.computeIfAbsent(c.getId(), id -> card(c, ctx));
+                cards.computeIfAbsent(c.getId(), id -> cardSnap(c, ctx));
             }
         }
         List<Integer> tp = new ArrayList<>();

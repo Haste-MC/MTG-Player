@@ -11,18 +11,31 @@ public final class Messages {
         public Lobby(List<String> precons) { this("lobby", precons); }
     }
 
-    public record Option(int index, String label, Integer card, Integer player) { }
+    /**
+     * detail: Kartendaten (sichtbarkeitsgefiltert) für Auswahlen, deren Karten nicht im Snapshot sind (Tutor).
+     * max/lethal: für amount/damage. movable: für cardlist.
+     */
+    public record Option(int index, String label, Integer card, Integer player,
+                         Snapshot.CardSnap detail, Integer max, Integer lethal, Boolean movable) {
+        public Option(int index, String label, Integer card, Integer player) {
+            this(index, label, card, player, null, null, null, null);
+        }
+    }
 
     /**
-     * kind: one | many | order | confirm | number | text | ability | entities | reveal
-     * options: Auswahl mit Index; value der Antwort ist je nach kind
-     * Index (one/ability), Index-Liste (many/entities/order), bool (confirm), Zahl (number), String (text).
-     * reveal erwartet keine Antwort (min == max == 0, rein informativ).
+     * kind: one | many | order | confirm | number | text | ability | entities | reveal | damage | amount | cardlist
+     * value der Antwort: Index (one/ability), Index-Liste (many/entities/order/cardlist), bool (confirm),
+     * Zahl (number), String (text), Zahlen-Liste je Option (damage/amount). reveal erwartet keine Antwort.
+     * amount/atLeastOne nur bei damage/amount.
      */
     public record Choice(String type, int id, String kind, String title, String message,
-                         List<Option> options, int min, int max, Integer card) {
+                         List<Option> options, int min, int max, Integer card, Integer amount, Boolean atLeastOne) {
         public Choice(int id, String kind, String title, String message, List<Option> options, int min, int max, Integer card) {
-            this("choice", id, kind, title, message, options, min, max, card);
+            this("choice", id, kind, title, message, options, min, max, card, null, null);
+        }
+        public Choice(int id, String kind, String title, String message, List<Option> options, int min, int max,
+                      Integer card, Integer amount, Boolean atLeastOne) {
+            this("choice", id, kind, title, message, options, min, max, card, amount, atLeastOne);
         }
     }
 

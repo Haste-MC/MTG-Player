@@ -106,7 +106,7 @@ class StateSerializerTest {
 
     @Test
     void promptUndSelectableWerdenDurchgereicht() {
-        Snapshot.PromptSnap p = new Snapshot.PromptSnap("Wähle", null, "Keep", "Mulligan", true, true);
+        Snapshot.PromptSnap p = new Snapshot.PromptSnap("Wähle", null, "Keep", "Mulligan", true, true, 1);
         ViewContext ctx = new ViewContext(me.getView(), c -> c.canBeShownTo(me.getView()),
                 c -> c.getId() == myHandCard.getId(), c -> false, e -> false, p);
         Snapshot s = StateSerializer.snapshot(game.getView(), ctx);

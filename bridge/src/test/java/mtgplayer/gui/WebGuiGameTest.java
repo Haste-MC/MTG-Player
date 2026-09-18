@@ -161,6 +161,38 @@ class WebGuiGameTest {
     }
 
     @Test
+    void seqWechseltNurBeiInputWechsel() {
+        int s0 = gui.currentSeq();
+        gui.showPromptMessage(null, "a", null);
+        gui.updateButtons(null, "OK", "Cancel", true, true, true);
+        assertEquals(s0, gui.currentSeq(), "re-push des gleichen Inputs bumpt nicht");
+        gui.onInputChanged();
+        assertEquals(s0 + 1, gui.currentSeq());
+    }
+
+    @Test
+    void eingabenMitFalscherSeqWerdenVerworfen() {
+        gui.onInputChanged();
+        int seq = gui.currentSeq();
+        assertTrue(gui.seqOk(null), "ohne seq: akzeptiert");
+        assertTrue(gui.seqOk(seq));
+        assertFalse(gui.seqOk(seq - 1));
+        assertFalse(gui.onOk(seq - 1), "veraltetes ok wird verworfen");
+        assertFalse(gui.onSelectCard(1, false, seq + 5), "seq aus der Zukunft wird verworfen");
+    }
+
+    @Test
+    void optionenTragenKartendetailsWennSichtbar() throws Exception {
+        // ohne GameView: detail bleibt null, aber die Struktur muss serialisierbar sein
+        CompletableFuture<List<String>> r = CompletableFuture.supplyAsync(
+                () -> gui.getChoices("x", 1, 1, List.of("a"), null, null));
+        JsonNode c = nextChoice();
+        assertFalse(c.get("options").get(0).has("detail"));
+        gui.broker().answer(c.get("id").asInt(), Json.parse("0"));
+        r.get(5, TimeUnit.SECONDS);
+    }
+
+    @Test
     void getChoicesMitMinMaxMinusEinsIstRevealOhneBlockieren() throws Exception {
         // min < 0 && max < 0 ist Forges Konvention fuer "nur anzeigen" (reveal) - kein Future noetig,
         // der Aufruf muss sofort zurueckkehren statt auf eine Antwort zu warten.

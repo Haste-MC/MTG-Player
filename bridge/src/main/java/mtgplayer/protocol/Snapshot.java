@@ -37,7 +37,8 @@ public record Snapshot(
             List<Integer> command,
             List<Integer> battlefield,
             Map<String, Integer> manaPool,
-            boolean hasPriority) { }
+            boolean hasPriority,
+            Boolean highlighted) { }
 
     public record CardSnap(
             int id,
@@ -85,8 +86,13 @@ public record Snapshot(
             String okLabel,
             String cancelLabel,
             boolean okEnabled,
-            boolean cancelEnabled) {
+            boolean cancelEnabled,
+            int seq) {
 
-        public static final PromptSnap EMPTY = new PromptSnap("", null, "OK", "Cancel", false, false);
+        public static final PromptSnap EMPTY = new PromptSnap("", null, "OK", "Cancel", false, false, 0);
+
+        public PromptSnap withSeq(int newSeq) {
+            return new PromptSnap(message, card, okLabel, cancelLabel, okEnabled, cancelEnabled, newSeq);
+        }
     }
 }
