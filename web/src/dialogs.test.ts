@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { amountsValid, isPermutation, remaining } from "./dialogs";
+import { amountsValid, cardlistDirections, isPermutation, remaining } from "./dialogs";
 
 describe("isPermutation", () => {
   it("akzeptiert nur vollstaendige permutationen", () => {
@@ -28,5 +28,17 @@ describe("amountsValid", () => {
 describe("remaining", () => {
   it("rest bis zur summe", () => {
     expect(remaining([1, 1], 5)).toBe(3);
+  });
+});
+
+describe("cardlistDirections", () => {
+  it("ohne flags (alte bridge) ist alles erlaubt", () => {
+    expect(cardlistDirections(undefined)).toEqual({ top: true, bottom: true, anywhere: true });
+  });
+  it("nur top erlaubt nur oben", () => {
+    expect(cardlistDirections(["top"])).toEqual({ top: true, bottom: false, anywhere: false });
+  });
+  it("anywhere erlaubt alles", () => {
+    expect(cardlistDirections(["anywhere"])).toEqual({ top: true, bottom: true, anywhere: true });
   });
 });

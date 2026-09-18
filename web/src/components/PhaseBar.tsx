@@ -2,7 +2,8 @@ import { PHASES, type Snapshot } from "../protocol";
 import { send } from "../ws";
 
 export default function PhaseBar({ state }: { state: Snapshot }) {
-  const ownTurn = state.activePlayer === state.me;
+  // Ohne bekannten aktiven Spieler (Bridge kennt ihn noch nicht) wird der eigene Zug angenommen.
+  const ownTurn = state.activePlayer === undefined || state.activePlayer === state.me;
   const side: "own" | "opp" = ownTurn ? "own" : "opp";
   const stops = new Set(state.stops?.[side] ?? []);
   const toggle = (id: string) => {

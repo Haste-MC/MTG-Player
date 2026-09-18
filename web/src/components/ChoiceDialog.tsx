@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { Choice, Option } from "../protocol";
 import { useStore } from "../store";
 import { send } from "../ws";
-import { amountsValid, isPermutation, remaining } from "../dialogs";
+import { amountsValid, cardlistDirections, isPermutation, remaining } from "../dialogs";
 
 export default function ChoiceDialog({ choice }: { choice: Choice }) {
   const clear = useStore((s) => s.clearChoice);
@@ -133,6 +133,7 @@ export default function ChoiceDialog({ choice }: { choice: Choice }) {
           next.splice(to, 0, x);
           setOrder(next);
         };
+        const { top, bottom, anywhere } = cardlistDirections(choice.flags);
         return (
           <>
             <ul className="options">
@@ -143,10 +144,10 @@ export default function ChoiceDialog({ choice }: { choice: Choice }) {
                     <span className="pos">{pos + 1}.</span>
                     <div className="grow">{optionView(o)}</div>
                     {o.movable && <>
-                      <button onClick={() => move(pos, 0)}>⤒</button>
-                      <button onClick={() => move(pos, pos - 1)}>↑</button>
-                      <button onClick={() => move(pos, pos + 1)}>↓</button>
-                      <button onClick={() => move(pos, order.length - 1)}>⤓</button>
+                      {top && <button onClick={() => move(pos, 0)}>⤒</button>}
+                      {anywhere && <button onClick={() => move(pos, pos - 1)}>↑</button>}
+                      {anywhere && <button onClick={() => move(pos, pos + 1)}>↓</button>}
+                      {bottom && <button onClick={() => move(pos, order.length - 1)}>⤓</button>}
                     </>}
                   </li>
                 );

@@ -25,3 +25,17 @@ export function amountsValid(a: number[], total: number, maxPer: (number | undef
 export function remaining(a: number[], total: number): number {
   return total - a.reduce((s, v) => s + (Number.isFinite(v) ? v : 0), 0);
 }
+
+/**
+ * Welche Verschieberichtungen die cardlist-Dialoganzeige erlauben soll.
+ * Fehlt flags (alte Bridge ohne Task-Feld), wird "beliebig" angenommen.
+ */
+export function cardlistDirections(flags?: string[]): { top: boolean; bottom: boolean; anywhere: boolean } {
+  if (!flags) return { top: true, bottom: true, anywhere: true };
+  const anywhere = flags.includes("anywhere");
+  return {
+    top: anywhere || flags.includes("top"),
+    bottom: anywhere || flags.includes("bottom"),
+    anywhere,
+  };
+}

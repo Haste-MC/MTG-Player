@@ -103,6 +103,7 @@ export interface Choice {
   card?: number;
   amount?: number;
   atLeastOne?: boolean;
+  flags?: string[];
 }
 
 export interface Lobby { type: "lobby"; precons: string[]; }
