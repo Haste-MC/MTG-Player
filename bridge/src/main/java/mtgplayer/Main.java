@@ -3,6 +3,8 @@ package mtgplayer;
 import forge.deck.Deck;
 import mtgplayer.forge.ForgeBoot;
 import mtgplayer.forge.Precons;
+import mtgplayer.images.ImageCache;
+import mtgplayer.images.ImageHandler;
 import mtgplayer.match.AiMatch;
 import mtgplayer.server.Bridge;
 import mtgplayer.server.HttpStatic;
@@ -37,6 +39,7 @@ public final class Main {
         Path web = Paths.get(System.getProperty("mtgplayer.web", "../web/dist")).toAbsolutePath().normalize();
 
         HttpStatic http = new HttpStatic(httpPort, web);
+        http.addContext("/img/", new ImageHandler(ImageCache.standard()));
         http.start();
         Bridge bridge = new Bridge(wsPort);
         try {

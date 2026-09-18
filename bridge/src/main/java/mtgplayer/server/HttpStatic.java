@@ -22,6 +22,7 @@ public final class HttpStatic {
     public HttpStatic(int port, Path dir) throws IOException {
         this.dir = dir.toAbsolutePath().normalize();
         this.server = HttpServer.create(new InetSocketAddress(bindAddress(), port), 0);
+        server.setExecutor(java.util.concurrent.Executors.newFixedThreadPool(4));
         server.createContext("/", ex -> {
             String p = ex.getRequestURI().getPath();
             String rel = p.length() > 1 ? p.substring(1) : "";
@@ -47,6 +48,10 @@ public final class HttpStatic {
     /** Bind-Adresse: -Dmtgplayer.bind, Standard 0.0.0.0 – noetig, damit Windows unter WSL2 den Server per localhost erreicht. */
     static String bindAddress() {
         return System.getProperty("mtgplayer.bind", "0.0.0.0");
+    }
+
+    public void addContext(String path, com.sun.net.httpserver.HttpHandler handler) {
+        server.createContext(path, handler);
     }
 
     public void start() {
