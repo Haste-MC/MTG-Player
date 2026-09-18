@@ -17,7 +17,10 @@ import forge.gamemodes.match.AbstractGuiGame;
 import forge.gui.GuiBase;
 import forge.interfaces.IGameController;
 import forge.item.PaperCard;
+import forge.gamemodes.match.input.InputQueue;
+import forge.localinstance.properties.ForgePreferences.FPref;
 import forge.localinstance.skin.FSkinProp;
+import forge.player.PlayerControllerHuman;
 import forge.player.PlayerZoneUpdate;
 import forge.player.PlayerZoneUpdates;
 import forge.trackable.TrackableCollection;
@@ -32,10 +35,14 @@ import mtgplayer.protocol.ViewContext;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Observer;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Forges GUI-Schnittstelle für einen Browser-Sitz. Zustandsänderungen werden gebündelt als
@@ -51,10 +58,10 @@ public class WebGuiGame extends AbstractGuiGame {
     private volatile Snapshot.PromptSnap prompt = Snapshot.PromptSnap.EMPTY;
     private volatile Stops stops = Stops.defaults();
     private volatile boolean fullControl;
-    private final java.util.concurrent.atomic.AtomicInteger seq = new java.util.concurrent.atomic.AtomicInteger(1);
+    private final AtomicInteger seq = new AtomicInteger(1);
     @SuppressWarnings("deprecation")
-    private java.util.Observer inputObserver;
-    private forge.gamemodes.match.input.InputQueue observedQueue;
+    private Observer inputObserver;
+    private InputQueue observedQueue;
 
     public WebGuiGame(Transport out) {
         this.out = out;
@@ -97,7 +104,10 @@ public class WebGuiGame extends AbstractGuiGame {
     void onInputChanged() {
         synchronized (this) {
             int s = seq.incrementAndGet();
-            prompt = prompt.withSeq(s);
+            Snapshot.PromptSnap p = prompt;
+            // Buttons deaktivieren, bis das neue Input sie ueber updateButtons() selbst wieder freigibt –
+            // sonst kann zwischen Sequenzwechsel und Forges eigenem showMessage() kurz auf das alte Prompt geklickt werden.
+            prompt = new Snapshot.PromptSnap(p.message(), p.card(), p.okLabel(), p.cancelLabel(), false, false, s);
         }
         push();
     }
@@ -113,7 +123,7 @@ public class WebGuiGame extends AbstractGuiGame {
         if (observedQueue != null && inputObserver != null) {
             observedQueue.deleteObserver(inputObserver);
         }
-        if (gameController instanceof forge.player.PlayerControllerHuman pch) {
+        if (gameController instanceof PlayerControllerHuman pch) {
             observedQueue = pch.getInputQueue();
             inputObserver = (o, arg) -> onInputChanged();
             observedQueue.addObserver(inputObserver);
@@ -139,8 +149,13 @@ public class WebGuiGame extends AbstractGuiGame {
     void applyFullControlPref() {
         IGameController c = getGameController();
         if (c == null || c.getYieldController() == null) return;
-        c.getYieldController().setPref(forge.localinstance.properties.ForgePreferences.FPref.YIELD_AUTO_PASS_NO_ACTIONS,
-                fullControl ? "false" : "true");
+        String value = fullControl ? "false" : "true";
+        c.getYieldController().setPref(FPref.YIELD_AUTO_PASS_NO_ACTIONS, value);
+        if (c instanceof PlayerControllerHuman pch) {
+            // Forges eigener Weg: wertet ein bereits sitzendes Prompt sofort neu aus (tryAutoPassNow()),
+            // sonst wirkt der Pref-Wechsel erst beim naechsten Input.
+            pch.setYieldPref(FPref.YIELD_AUTO_PASS_NO_ACTIONS, value);
+        }
     }
 
     @Override public void setGameView(GameView gameView0) { super.setGameView(gameView0); push(); }
@@ -458,18 +473,26 @@ public class WebGuiGame extends AbstractGuiGame {
         List<CardView> all = new ArrayList<>();
         if (cards != null) for (CardView c : cards) all.add(c);
         if (all.isEmpty()) return all;
-        java.util.Set<Integer> movable = new java.util.HashSet<>();
+        Set<Integer> movable = new HashSet<>();
         if (manipulable != null) for (CardView c : manipulable) movable.add(c.getId());
+        // ViewContext (in options()) einmal fuer alle Karten aufbauen statt pro Karte neu.
+        List<Messages.Option> base = options(all, null);
         List<Messages.Option> opts = new ArrayList<>();
-        int i = 0;
-        for (CardView c : all) {
-            Messages.Option base = options(List.of(c), null).get(0);
-            opts.add(new Messages.Option(i++, base.label(), base.card(), null, base.detail(), null, null,
-                    movable.contains(c.getId()) ? Boolean.TRUE : null));
+        for (int i = 0; i < all.size(); i++) {
+            Messages.Option b = base.get(i);
+            opts.add(new Messages.Option(i, b.label(), b.card(), null, b.detail(), null, null,
+                    movable.contains(all.get(i).getId()) ? Boolean.TRUE : null));
         }
         String where = toAnywhere ? "beliebig" : (toTop && toBottom ? "oben oder unten" : toTop ? "nur oben" : "nur unten");
+        List<String> flags = new ArrayList<>();
+        if (toAnywhere) {
+            flags.add("anywhere");
+        } else {
+            if (toTop) flags.add("top");
+            if (toBottom) flags.add("bottom");
+        }
         JsonNode v = broker.ask("cardlist", title, "Verschiebbare Karten: " + where + ". Oberste Karte zuerst.",
-                opts, all.size(), all.size(), null);
+                opts, all.size(), all.size(), null, null, null, flags);
         List<Integer> idx = indices(v, all.size(), all.size(), all.size());
         if (idx.size() != all.size()) return all; // keine gültige Permutation → unverändert
         List<CardView> out = new ArrayList<>();
@@ -522,7 +545,7 @@ public class WebGuiGame extends AbstractGuiGame {
         }
         if (opts.isEmpty()) return out; // keine Blocker, kein Trample-Ziel → nichts zu fragen
         String title = (attacker == null ? "Angreifer" : attacker.getCurrentState().getName()) + " – " + damage + " Schaden verteilen";
-        JsonNode v = broker.ask("damage", title, "Jedem Blocker in Reihenfolge tödlichen Schaden zuweisen, bevor der nächste etwas bekommt.",
+        JsonNode v = broker.ask("damage", title, "Schaden frei auf Blocker verteilen (tödlich = Hinweis, keine Pflichtreihenfolge).",
                 opts, opts.size(), opts.size(), attacker == null ? null : attacker.getId(), damage, Boolean.FALSE);
         List<Integer> a = amounts(v, opts.size(), damage, maxPer, false);
         if (a == null) {
@@ -579,8 +602,12 @@ public class WebGuiGame extends AbstractGuiGame {
         JsonNode v = broker.ask("amount", title, effectSource == null ? "" : effectSource.getCurrentState().getName(),
                 opts, opts.size(), opts.size(), effectSource == null ? null : effectSource.getId(), amount, atLeastOne);
         List<Integer> a = amounts(v, keys.size(), amount, maxPer, atLeastOne);
+        // Fallback bei fehlender/ungueltiger Antwort: mit atLeastOne bekommt jeder Schluessel mindestens 1,
+        // den Rest der erste; sonst (wie bisher) alles auf den ersten.
+        int rest = Math.max(0, amount - keys.size());
         for (int k = 0; k < keys.size(); k++) {
-            out.put(keys.get(k), a == null ? (k == 0 ? amount : 0) : a.get(k));
+            int fallback = atLeastOne ? (k == 0 ? 1 + rest : 1) : (k == 0 ? amount : 0);
+            out.put(keys.get(k), a == null ? fallback : a.get(k));
         }
         return out;
     }

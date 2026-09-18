@@ -28,9 +28,10 @@ Browser: <http://127.0.0.1:8080>. Lobby → eigenes Precon und 1–5 KI-Precons 
 Steuerung: leuchtende Karten sind klickbar, Rechtsklick = andere Fähigkeit, Enter/Leertaste = OK,
 Esc = Abbrechen. Forge passt automatisch, wenn du nichts tun kannst (Arena-Stil).
 
-Phasenleiste über dem Prompt: Klick auf eine Phase setzt/entfernt einen Stop (getrennt für eigene und
-gegnerische Züge, je nachdem wessen Zug gerade ist). "Volle Kontrolle" hält in jeder Phase an und schaltet
-das automatische Passen ab. Tutor-Effekte (Bibliothek durchsuchen) öffnen einen Listen-Dialog mit Kartendetails.
+Phasenleiste über dem Prompt: Klick auf eine Phase setzt/entfernt einen Stop – dort wird angehalten, sofern du
+etwas spielen kannst; ohne Volle Kontrolle passt Forge weiterhin automatisch, wenn nichts spielbar ist
+(getrennt für eigene und gegnerische Züge, je nachdem wessen Zug gerade ist). "Volle Kontrolle" hält in
+jeder Phase an und schaltet das automatische Passen ab. Tutor-Effekte (Bibliothek durchsuchen) öffnen einen Listen-Dialog mit Kartendetails.
 Veraltete Klicks (Prompt hat inzwischen gewechselt) werden von der Bridge ignoriert.
 
 Entwicklung am Frontend: `cd web && npm run dev` (Vite auf :5173, verbindet sich mit der Bridge auf :8081).

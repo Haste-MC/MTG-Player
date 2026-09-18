@@ -154,7 +154,7 @@ class BridgeEndToEndTest {
         }
 
         int keepSeq = mull.path("prompt").path("seq").asInt();
-        assertTrue(keepSeq >= 1, "prompt.seq vorhanden");
+        assertTrue(keepSeq >= 2, "seq wurde durch die InputQueue mindestens einmal erhöht");
         send("{\"type\":\"ok\",\"seq\":" + (keepSeq - 1) + "}"); // veraltet – muss ignoriert werden
         Thread.sleep(1500);
         send("{\"type\":\"requestState\"}");

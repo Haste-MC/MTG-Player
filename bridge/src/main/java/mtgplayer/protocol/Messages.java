@@ -26,16 +26,22 @@ public final class Messages {
      * kind: one | many | order | confirm | number | text | ability | entities | reveal | damage | amount | cardlist
      * value der Antwort: Index (one/ability), Index-Liste (many/entities/order/cardlist), bool (confirm),
      * Zahl (number), String (text), Zahlen-Liste je Option (damage/amount). reveal erwartet keine Antwort.
-     * amount/atLeastOne nur bei damage/amount.
+     * amount/atLeastOne nur bei damage/amount. flags nur bei cardlist: erlaubte Richtungen
+     * ("anywhere" oder eine Teilmenge aus "top"/"bottom"), null bei Antworten von einer alten Bridge.
      */
     public record Choice(String type, int id, String kind, String title, String message,
-                         List<Option> options, int min, int max, Integer card, Integer amount, Boolean atLeastOne) {
+                         List<Option> options, int min, int max, Integer card, Integer amount, Boolean atLeastOne,
+                         List<String> flags) {
         public Choice(int id, String kind, String title, String message, List<Option> options, int min, int max, Integer card) {
-            this("choice", id, kind, title, message, options, min, max, card, null, null);
+            this("choice", id, kind, title, message, options, min, max, card, null, null, null);
         }
         public Choice(int id, String kind, String title, String message, List<Option> options, int min, int max,
                       Integer card, Integer amount, Boolean atLeastOne) {
-            this("choice", id, kind, title, message, options, min, max, card, amount, atLeastOne);
+            this("choice", id, kind, title, message, options, min, max, card, amount, atLeastOne, null);
+        }
+        public Choice(int id, String kind, String title, String message, List<Option> options, int min, int max,
+                      Integer card, Integer amount, Boolean atLeastOne, List<String> flags) {
+            this("choice", id, kind, title, message, options, min, max, card, amount, atLeastOne, flags);
         }
     }
 

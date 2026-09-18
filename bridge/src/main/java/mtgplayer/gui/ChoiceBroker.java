@@ -37,9 +37,14 @@ public final class ChoiceBroker {
 
     public JsonNode ask(String kind, String title, String message, List<Messages.Option> options, int min, int max,
                         Integer card, Integer amount, Boolean atLeastOne) {
+        return ask(kind, title, message, options, min, max, card, amount, atLeastOne, null);
+    }
+
+    public JsonNode ask(String kind, String title, String message, List<Messages.Option> options, int min, int max,
+                        Integer card, Integer amount, Boolean atLeastOne, List<String> flags) {
         int id = seq.incrementAndGet();
         CompletableFuture<JsonNode> f = new CompletableFuture<>();
-        Messages.Choice c = new Messages.Choice(id, kind, title, message, options, min, max, card, amount, atLeastOne);
+        Messages.Choice c = new Messages.Choice(id, kind, title, message, options, min, max, card, amount, atLeastOne, flags);
         pending.put(id, new Open(c, f));
         out.send(c);
         try {

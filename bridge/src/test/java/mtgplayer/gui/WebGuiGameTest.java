@@ -156,7 +156,7 @@ class WebGuiGameTest {
     }
 
     @Test
-    void isUiSetToSkipPhaseIstInM2Falsch() {
+    void isUiSetToSkipPhaseOhnePhaseFalsch() {
         assertFalse(gui.isUiSetToSkipPhase(null, null));
     }
 
