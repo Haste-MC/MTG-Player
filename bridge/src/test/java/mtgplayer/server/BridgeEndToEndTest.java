@@ -16,6 +16,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.net.URI;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -31,6 +34,11 @@ class BridgeEndToEndTest {
     private static Bridge bridge;
     private static WebSocketClient client;
     private static final BlockingQueue<JsonNode> inbox = new LinkedBlockingQueue<>();
+    // await()/awaitMulliganPrompt() verwerfen beim Warten auf state/choice alles, was nicht passt -
+    // Log-Zeilen (TURN/MULLIGAN kommen frueh, waehrend Mulligan bzw. Zug 1 laufen) muessen deshalb hier
+    // mitgeschnitten werden, sonst sind sie laengst durch den Draht und verworfen, bis der Test explizit
+    // danach fragt.
+    private static final List<JsonNode> seenLogLines = Collections.synchronizedList(new ArrayList<>());
 
     @BeforeAll
     static void start() throws Exception {
@@ -59,6 +67,9 @@ class BridgeEndToEndTest {
             if (n == null) break;
             if ("error".equals(n.path("type").asText())) {
                 System.err.println("[bridge error] " + n.path("text").asText());
+            }
+            if ("log".equals(n.path("type").asText())) {
+                seenLogLines.add(n);
             }
             if (type.equals(n.path("type").asText()) && cond.test(n)) return n;
         }
@@ -99,6 +110,9 @@ class BridgeEndToEndTest {
             if (n == null) break;
             if ("error".equals(n.path("type").asText())) {
                 System.err.println("[bridge error] " + n.path("text").asText());
+            }
+            if ("log".equals(n.path("type").asText())) {
+                seenLogLines.add(n);
             }
             if ("state".equals(n.path("type").asText())) {
                 String okLabel = n.path("prompt").path("okLabel").asText();
@@ -167,6 +181,20 @@ class BridgeEndToEndTest {
                 && !"Keep".equals(n.path("prompt").path("okLabel").asText()), 120);
         assertNotNull(prio.get("phase"));
         assertTrue(prio.path("prompt").path("message").asText().length() > 0, "Prio-Prompt hat Text");
+
+        // Forge loggt Mulligan-Entscheidungen und Zugwechsel - eine der beiden Arten muss bis hierhin
+        // ueber den Log-Stream angekommen sein. Ein await() an dieser Stelle waere zu spaet (siehe
+        // seenLogLines oben): TURN/MULLIGAN sind laengst durchgelaufen, waehrend awaitMulliganPrompt()
+        // bzw. der Prio-await() auf "state" gewartet haben - deshalb hier den Mitschnitt pruefen.
+        JsonNode line = seenLogLines.stream()
+                .filter(n -> "TURN".equals(n.path("kind").asText()) || "MULLIGAN".equals(n.path("kind").asText()))
+                .findFirst().orElse(null);
+        assertNotNull(line, "keine TURN/MULLIGAN Log-Zeile gesehen");
+        assertTrue(line.get("text").asText().length() > 0);
+
+        // Reconnect: requestState muss die gepufferten Log-Zeilen erneut schicken.
+        send("{\"type\":\"requestState\"}");
+        await("log", n -> true, 10);
 
         send("{\"type\":\"concede\"}");
         JsonNode confirm = await("choice", n -> "confirm".equals(n.path("kind").asText()), 30);

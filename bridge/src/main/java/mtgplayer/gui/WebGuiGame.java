@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import forge.LobbyPlayer;
 import forge.deck.CardPool;
 import forge.game.GameEntityView;
+import forge.game.GameLog;
+import forge.game.GameLogEntry;
 import forge.game.GameState;
 import forge.game.GameView;
 import forge.game.card.CardView;
@@ -14,6 +16,7 @@ import forge.game.player.PlayerView;
 import forge.game.spellability.SpellAbilityView;
 import forge.game.zone.ZoneType;
 import forge.gamemodes.match.AbstractGuiGame;
+import forge.gamemodes.match.input.InputSelectTargets;
 import forge.gui.GuiBase;
 import forge.interfaces.IGameController;
 import forge.item.PaperCard;
@@ -32,6 +35,7 @@ import mtgplayer.protocol.Snapshot;
 import mtgplayer.protocol.StateSerializer;
 import mtgplayer.protocol.ViewContext;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -63,6 +67,13 @@ public class WebGuiGame extends AbstractGuiGame {
     private Observer inputObserver;
     private InputQueue observedQueue;
 
+    private final ArrayDeque<Messages.LogLine> recentLog = new ArrayDeque<>();
+    private static final int LOG_MAX = 200;
+    @SuppressWarnings("deprecation")
+    private Observer logObserver;
+    private GameLog observedLog;
+    private int logSeen;
+
     public WebGuiGame(Transport out) {
         this.out = out;
         this.broker = new ChoiceBroker(out);
@@ -92,9 +103,15 @@ public class WebGuiGame extends AbstractGuiGame {
         boolean isSpectator = getLocalPlayers().isEmpty();
         PlayerView me = isSpectator ? null : getLocalPlayers().iterator().next();
         ViewContext ctx = new ViewContext(me, this::mayView, this::isSelectable, this::isWeaklySelectable,
-                this::isHighlighted, prompt,
+                this::isHighlighted, p -> isTargetingInput(), prompt,
                 new Messages.StopsMsg(Stops.names(stops.own()), Stops.names(stops.opp())), fullControl, isSpectator);
         out.send(StateSerializer.snapshot(gv, ctx));
+    }
+
+    /** Forge markiert Spieler nicht als wählbar – wir leiten es aus dem aktiven Input ab. */
+    private boolean isTargetingInput() {
+        if (getLocalPlayers().isEmpty() || observedQueue == null) return false;
+        return observedQueue.getInput() instanceof InputSelectTargets;
     }
 
     public int currentSeq() {
@@ -178,7 +195,67 @@ public class WebGuiGame extends AbstractGuiGame {
         }
     }
 
-    @Override public void setGameView(GameView gameView0) { super.setGameView(gameView0); push(); }
+    @Override
+    public void setGameView(GameView gameView0) {
+        super.setGameView(gameView0);
+        watchLogOf(gameView0);
+        push();
+    }
+
+    /**
+     * Wirft die Match-Buchhaltung der Elternklasse ({@link AbstractGuiGame#resetForNewMatch}) weg und
+     * leert zusaetzlich unseren Log-Puffer – {@code HostedMatch} ruft {@code setGameView(null)} und
+     * danach {@code setGameView(view)} einmal pro Spiel auf, der alte Log darf nicht ins naechste
+     * Spiel durchsickern.
+     */
+    @Override
+    public void resetForNewMatch() {
+        super.resetForNewMatch();
+        synchronized (recentLog) { recentLog.clear(); }
+        watchLogOf(null);
+    }
+
+    /** Kopie der letzten Log-Zeilen (älteste zuerst) – für den Reconnect. */
+    public List<Messages.LogLine> recentLog() {
+        synchronized (recentLog) {
+            return new ArrayList<>(recentLog);
+        }
+    }
+
+    private void remember(Messages.LogLine line) {
+        synchronized (recentLog) {
+            recentLog.addLast(line);
+            while (recentLog.size() > LOG_MAX) recentLog.removeFirst();
+        }
+    }
+
+    private void sendLog(Messages.LogLine line) {
+        remember(line);
+        out.send(line);
+    }
+
+    @SuppressWarnings("deprecation")
+    private void watchLogOf(GameView gv) {
+        if (observedLog != null && logObserver != null) {
+            observedLog.deleteObserver(logObserver);
+        }
+        observedLog = null;
+        logObserver = null;
+        logSeen = 0;
+        if (gv == null || gv.getGameLog() == null) return;
+        GameLog log = gv.getGameLog();
+        logObserver = (o, arg) -> {
+            List<GameLogEntry> all = log.getAllEntries();
+            for (; logSeen < all.size(); logSeen++) {
+                GameLogEntry e = all.get(logSeen);
+                sendLog(new Messages.LogLine(e.message(), e.type().name(),
+                        e.sourceCard() == null ? null : e.sourceCard().getId()));
+            }
+        };
+        observedLog = log;
+        log.addObserver(logObserver);
+    }
+
     @Override protected void updateCurrentPlayer(PlayerView player) { push(); }
     @Override public void openView(TrackableCollection<PlayerView> myPlayers) { push(); }
     @Override public void updateZones(Iterable<PlayerZoneUpdate> zonesToUpdate) { push(); }
@@ -316,7 +393,7 @@ public class WebGuiGame extends AbstractGuiGame {
         if (choices == null) return out;
         ViewContext ctx = getGameView() == null ? null : new ViewContext(
                 getLocalPlayers().isEmpty() ? null : getLocalPlayers().iterator().next(),
-                this::mayView, c -> false, c -> false, e -> false, Snapshot.PromptSnap.EMPTY,
+                this::mayView, c -> false, c -> false, e -> false, p -> false, Snapshot.PromptSnap.EMPTY,
                 new Messages.StopsMsg(List.of(), List.of()), false, getLocalPlayers().isEmpty());
         int i = 0;
         for (T t : choices) {
@@ -634,7 +711,7 @@ public class WebGuiGame extends AbstractGuiGame {
 
     // ---- Sonstiges ------------------------------------------------------------------
 
-    @Override public void message(String message, String title) { out.send(new Messages.LogLine(title + ": " + message)); }
+    @Override public void message(String message, String title) { sendLog(new Messages.LogLine(title + ": " + message)); }
     @Override public void showErrorDialog(String message, String title) { out.send(new Messages.ErrorMsg(title + ": " + message)); }
 
     @Override

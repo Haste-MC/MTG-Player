@@ -96,7 +96,8 @@ public final class StateSerializer {
                 ids(p.getBattlefield(), ctx, cards),
                 mana,
                 p.getHasPriority(),
-                ctx.highlighted().test(p) ? Boolean.TRUE : null);
+                ctx.highlighted().test(p) ? Boolean.TRUE : null,
+                ctx.targetable().test(p) ? Boolean.TRUE : null);
     }
 
     /** Sammelt IDs einer Zone und legt jede Karte einmal im Wörterbuch ab. */

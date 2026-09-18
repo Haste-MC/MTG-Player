@@ -61,6 +61,7 @@ public final class Bridge {
         // state vor choice: beides in EINEM Runnable, sonst kann pending() vor pushState() beim Client ankommen
         GuiBase.getInterface().invokeInEdtLater(() -> {
             gui.pushState();
+            gui.recentLog().forEach(ws::send);
             gui.broker().pending().forEach(ws::send);
         });
     }

@@ -127,7 +127,7 @@ class StateSerializerTest {
     void promptUndSelectableWerdenDurchgereicht() {
         Snapshot.PromptSnap p = new Snapshot.PromptSnap("Wähle", null, "Keep", "Mulligan", true, true, 1);
         ViewContext ctx = new ViewContext(me.getView(), c -> c.canBeShownTo(me.getView()),
-                c -> c.getId() == myHandCard.getId(), c -> false, e -> false, p,
+                c -> c.getId() == myHandCard.getId(), c -> false, e -> false, pv -> false, p,
                 new Messages.StopsMsg(List.of(), List.of()), false, false);
         Snapshot s = StateSerializer.snapshot(game.getView(), ctx);
         assertEquals("Keep", s.prompt().okLabel());
@@ -143,10 +143,20 @@ class StateSerializerTest {
         assertFalse(humanJson.has("spectator"), "null-Feld wird weggelassen");
 
         ViewContext spectatorCtx = new ViewContext(null, c -> true, c -> false, c -> false,
-                e -> false, Snapshot.PromptSnap.EMPTY, new Messages.StopsMsg(List.of(), List.of()), false, true);
+                e -> false, p -> false, Snapshot.PromptSnap.EMPTY, new Messages.StopsMsg(List.of(), List.of()), false, true);
         Snapshot spectator = StateSerializer.snapshot(game.getView(), spectatorCtx);
         assertEquals(Boolean.TRUE, spectator.spectator());
         JsonNode spectatorJson = Json.parse(Json.toJson(spectator));
         assertTrue(spectatorJson.get("spectator").asBoolean());
+    }
+
+    @Test
+    void targetableWirdDurchgereicht() {
+        ViewContext ctx = new ViewContext(me.getView(), c -> c.canBeShownTo(me.getView()), c -> false, c -> false,
+                e -> false, p -> p.getId() == foe.getView().getId(), Snapshot.PromptSnap.EMPTY,
+                new Messages.StopsMsg(List.of(), List.of()), false, false);
+        Snapshot s = StateSerializer.snapshot(game.getView(), ctx);
+        assertEquals(Boolean.TRUE, s.players().get(1).targetable());
+        assertNull(s.players().get(0).targetable());
     }
 }

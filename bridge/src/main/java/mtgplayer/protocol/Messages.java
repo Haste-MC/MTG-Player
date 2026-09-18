@@ -45,8 +45,10 @@ public final class Messages {
         }
     }
 
-    public record LogLine(String type, String text) {
-        public LogLine(String text) { this("log", text); }
+    /** kind = GameLogEntryType-Name (null für Bridge-eigene Zeilen), card = Quellkarte falls bekannt. */
+    public record LogLine(String type, String text, String kind, Integer card) {
+        public LogLine(String text) { this("log", text, null, null); }
+        public LogLine(String text, String kind, Integer card) { this("log", text, kind, card); }
     }
 
     public record GameOver(String type, String winner) {

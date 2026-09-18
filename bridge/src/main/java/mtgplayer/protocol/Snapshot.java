@@ -41,7 +41,8 @@ public record Snapshot(
             List<Integer> battlefield,
             Map<String, Integer> manaPool,
             boolean hasPriority,
-            Boolean highlighted) { }
+            Boolean highlighted,
+            Boolean targetable) { }
 
     public record CardSnap(
             int id,

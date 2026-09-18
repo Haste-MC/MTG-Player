@@ -14,6 +14,7 @@ public record ViewContext(
         Predicate<CardView> selectable,
         Predicate<CardView> weaklySelectable,
         Predicate<GameEntityView> highlighted,
+        Predicate<PlayerView> targetable,
         Snapshot.PromptSnap prompt,
         Messages.StopsMsg stops,
         boolean fullControl,
@@ -21,7 +22,7 @@ public record ViewContext(
 
     /** Sicht eines Spielers ohne UI-Zustand – für Tests und den Lobby-Fall. */
     public static ViewContext plain(PlayerView me) {
-        return new ViewContext(me, c -> c.canBeShownTo(me), c -> false, c -> false, e -> false, Snapshot.PromptSnap.EMPTY,
-                new Messages.StopsMsg(List.of(), List.of()), false, false);
+        return new ViewContext(me, c -> c.canBeShownTo(me), c -> false, c -> false, e -> false, p -> false,
+                Snapshot.PromptSnap.EMPTY, new Messages.StopsMsg(List.of(), List.of()), false, false);
     }
 }

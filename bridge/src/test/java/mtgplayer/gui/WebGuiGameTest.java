@@ -252,4 +252,25 @@ class WebGuiGameTest {
     void manipulateCardListOhneKartenBlocktNicht() {
         assertTrue(gui.manipulateCardList("t", List.of(), List.of(), true, true, false).isEmpty());
     }
+
+    @Test
+    void logZeilenWerdenGesendetUndGepuffert() throws Exception {
+        // ohne GameView: recentLog leer; message() erzeugt eine LogLine ohne kind
+        assertTrue(gui.recentLog().isEmpty());
+        gui.message("Hallo", "Titel");
+        String s = sent.poll(5, TimeUnit.SECONDS);
+        JsonNode n = Json.parse(s);
+        assertEquals("log", n.get("type").asText());
+        assertEquals("Titel: Hallo", n.get("text").asText());
+        assertFalse(n.has("kind"));
+        assertEquals(1, gui.recentLog().size());
+    }
+
+    @Test
+    void logPufferIstAufZweihundertBegrenzt() {
+        for (int i = 0; i < 250; i++) gui.message("z" + i, "t");
+        assertEquals(200, gui.recentLog().size());
+        assertEquals("t: z249", gui.recentLog().get(199).text());
+        assertEquals("t: z50", gui.recentLog().get(0).text());
+    }
 }
