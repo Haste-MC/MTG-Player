@@ -64,10 +64,12 @@ select, input { padding: 6px; border-radius: 6px; border: 1px solid #555; backgr
 .detail .cost, .detail .type { color: #9aa; }
 .detail .text { white-space: pre-wrap; margin-top: 6px; }
 .player .header.highlighted { outline: 2px solid #ffd23f; border-radius: 4px; }
+.opt-label { font-weight: 500; }
 .opt-detail { font-size: 11px; color: #9aa; }
 .opt-detail .text { white-space: pre-wrap; color: #ccc; }
-.amount-row, .cardlist-row { display: flex; gap: 6px; align-items: center; }
-.amount-row .grow, .cardlist-row .grow { flex: 1; }
+.amount-row, .cardlist-row, .options-row { display: flex; gap: 6px; align-items: center; }
+.amount-row .grow, .cardlist-row .grow, .options-row .grow { flex: 1; }
 .amount-row input { width: 70px; }
 .cardlist-row .pos { width: 24px; color: #9aa; }
 .cardlist-row.movable { border-color: #2f6fd6; }
+.options-row .pos { color: #9aa; }

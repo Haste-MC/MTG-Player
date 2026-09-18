@@ -84,8 +84,9 @@ export default function ChoiceDialog({ choice }: { choice: Choice }) {
           <>
             <ul className="options">
               {choice.options.map((o) => (
-                <li key={o.index} className={picked.includes(o.index) ? "picked" : ""} onClick={() => toggle(o.index)}>
-                  {choice.kind === "order" && picked.includes(o.index) ? `${picked.indexOf(o.index) + 1}. ` : ""}{label(o)}
+                <li key={o.index} className={"options-row" + (picked.includes(o.index) ? " picked" : "")} onClick={() => toggle(o.index)}>
+                  {choice.kind === "order" && picked.includes(o.index) && <span className="pos">{picked.indexOf(o.index) + 1}. </span>}
+                  <div className="grow">{optionView(o)}</div>
                 </li>
               ))}
             </ul>
