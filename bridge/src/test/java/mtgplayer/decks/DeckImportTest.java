@@ -78,6 +78,15 @@ class DeckImportTest {
     }
 
     @Test
+    void nichtKopfzeilenartigeUnbekannteZeileSchaltetSektionNichtAb() {
+        DeckImport.Result r = DeckImport.parse("1 Sol Ring\nblabla kein kartenname\n1 Felothar the Steadfast\n");
+        assertEquals(1, r.problems().size(), r.problems().toString());
+        assertTrue(r.problems().get(0).contains("blabla"));
+        assertEquals(1, r.deck().getCommanders().size(), "Felothar wird trotz der Zwischenzeile noch Commander");
+        assertEquals("Felothar the Steadfast", r.deck().getCommanders().get(0).getName());
+    }
+
+    @Test
     void namensvorschlag() {
         DeckImport.Result r = DeckImport.parse(ARCHIDEKT);
         assertEquals("Felothar the Steadfast", DeckImport.suggestName(ARCHIDEKT, r.deck()));

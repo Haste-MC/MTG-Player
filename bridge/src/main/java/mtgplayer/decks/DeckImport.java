@@ -19,10 +19,11 @@ import java.util.regex.Pattern;
  * Liste → erster Commander-fähiger Eintrag aus dem Main wandert in die Commander-Sektion.
  * Karten, die Forge nur wegen eines nicht auflösbaren Set/Collector-Nummer-Paars als unbekannt
  * einstuft (der Kartenname selbst wurde erkannt), werden ein zweites Mal ohne Set-Angabe
- * aufgelöst, bevor sie als Problem gemeldet werden. Nicht erkannte Zeilen (z.B. Archidekts
- * "Maybeboard") und erkannte, aber nicht erlaubte Sektionen werden als Problem gemeldet;
- * Kartenzeilen, die Forge danach (mangels neuer erkannter Sektion) weiter der vorherigen Sektion
- * zuordnen würde, werden nicht importiert, sondern ebenfalls als Problem gemeldet.
+ * aufgelöst, bevor sie als Problem gemeldet werden. Nicht erkannte Zeilen werden immer als Problem
+ * gemeldet; nur kopfzeilen-artige davon (z.B. Archidekts "Maybeboard") sowie erkannte, aber nicht
+ * erlaubte Sektionen schalten zusätzlich die Sektion ab: Kartenzeilen, die Forge danach (mangels
+ * neuer erkannter Sektion) weiter der vorherigen Sektion zuordnen würde, werden dann nicht
+ * importiert, sondern ebenfalls als Problem gemeldet.
  */
 public final class DeckImport {
 
@@ -32,6 +33,7 @@ public final class DeckImport {
     private static final Pattern FOIL = Pattern.compile("\\s*\\*F\\*\\s*$");
     private static final Pattern NAME_LINE = Pattern.compile("^(?:name|deck)\\s*:\\s*(.+)$", Pattern.CASE_INSENSITIVE);
     private static final Pattern UNKNOWN_CARD_SET_SUFFIX = Pattern.compile("^(.*) \\[[^\\]]*\\]$");
+    private static final Pattern HEADER_LIKE = Pattern.compile("^[A-Za-z][A-Za-z ]{0,20}:?$");
 
     private DeckImport() { }
 
@@ -73,10 +75,13 @@ public final class DeckImport {
                 continue;
             }
             if (type == TokenType.UNKNOWN_TEXT) {
-                if (!t.getText().isBlank()) {
-                    problems.add("Nicht erkannt: " + t.getText());
+                String txt = t.getText();
+                if (!txt.isBlank()) {
+                    problems.add("Nicht erkannt: " + txt);
+                    if (looksLikeHeader(txt)) {
+                        unsupportedSection = true;
+                    }
                 }
-                unsupportedSection = true;
                 continue;
             }
             if (type == TokenType.UNSUPPORTED_DECK_SECTION) {
@@ -143,6 +148,20 @@ public final class DeckImport {
             return retry;
         }
         return null;
+    }
+
+    /**
+     * Nur kopfzeilen-artige unerkannte Zeilen (ein bis zwei Wörter, optional mit ":" abgeschlossen,
+     * z.B. "Maybeboard", "Tokens:", "Considering") schalten die Sektion ab – eine beliebige
+     * unerkannte Zeile mitten in einer kopflosen Arena-Liste (z.B. "blabla kein kartenname") soll
+     * nicht dazu führen, dass alle folgenden Karten fälschlich als "in nicht unterstützter
+     * Sektion" verworfen werden.
+     */
+    private static boolean looksLikeHeader(String text) {
+        String trimmed = text.trim();
+        if (!HEADER_LIKE.matcher(trimmed).matches()) return false;
+        String withoutColon = trimmed.endsWith(":") ? trimmed.substring(0, trimmed.length() - 1) : trimmed;
+        return withoutColon.trim().split("\\s+").length <= 2;
     }
 
     private static PaperCard firstCommanderCandidate(Deck deck) {
