@@ -11,7 +11,7 @@ export default function ChoiceDialog({ choice }: { choice: Choice }) {
 
   const answer = (value: unknown) => {
     send({ type: "answer", id: choice.id, value });
-    clear();
+    clear(choice.id);
   };
 
   const label = (o: { label: string; card?: number }) =>
@@ -29,7 +29,7 @@ export default function ChoiceDialog({ choice }: { choice: Choice }) {
               ))}
             </ul>
             <div className="buttons">
-              <button className="primary" onClick={() => clear()}>OK</button>
+              <button className="primary" onClick={() => clear(choice.id)}>OK</button>
             </div>
           </>
         );
@@ -45,7 +45,10 @@ export default function ChoiceDialog({ choice }: { choice: Choice }) {
         return (
           <form onSubmit={(e) => { e.preventDefault(); answer(choice.kind === "number" ? Number(text || 0) : text); }}>
             <input autoFocus type={choice.kind === "number" ? "number" : "text"} value={text} onChange={(e) => setText(e.target.value)} />
-            <button type="submit" className="primary">OK</button>
+            <div className="buttons">
+              <button type="submit" className="primary">OK</button>
+              <button type="button" onClick={() => answer(null)}>Abbrechen</button>
+            </div>
           </form>
         );
       case "one":

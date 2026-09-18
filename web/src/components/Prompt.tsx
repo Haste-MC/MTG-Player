@@ -5,11 +5,12 @@ import { send } from "../ws";
 
 export default function Prompt({ state }: { state: Snapshot }) {
   const p = state.prompt;
-  const choiceOpen = useStore((s) => s.choice !== undefined);
+  const choiceOpen = useStore((s) => s.choices.length > 0);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (choiceOpen) return;
       if (e.target instanceof HTMLInputElement) return;
+      if (e.target instanceof HTMLButtonElement) return;
       if ((e.key === "Enter" || e.key === " ") && p.okEnabled) { e.preventDefault(); send({ type: "ok" }); }
       if (e.key === "Escape" && p.cancelEnabled) { e.preventDefault(); send({ type: "cancel" }); }
     };

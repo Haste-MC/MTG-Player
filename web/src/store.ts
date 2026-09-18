@@ -5,14 +5,19 @@ export interface AppState {
   screen: "lobby" | "table";
   precons: string[];
   state?: Snapshot;
-  choice?: Choice;
+  choices: Choice[];
   log: string[];
   winner?: string | null;
 }
 
-export const initialState: AppState = { screen: "lobby", precons: [], log: [] };
+export const initialState: AppState = { screen: "lobby", precons: [], choices: [], log: [] };
 
 const LOG_MAX = 500;
+
+/** Fügt eine choice ein (oder ersetzt dieselbe id), aufsteigend nach id sortiert. */
+function addChoice(choices: Choice[], c: Choice): Choice[] {
+  return [...choices.filter((x) => x.id !== c.id), c].sort((a, b) => a.id - b.id);
+}
 
 /** Reine Übergangsfunktion – testbar ohne Socket oder React. */
 export function reduce(s: AppState, m: Inbound): AppState {
@@ -22,11 +27,11 @@ export function reduce(s: AppState, m: Inbound): AppState {
     case "state":
       return { ...s, state: m, screen: "table" };
     case "choice":
-      return { ...s, choice: m };
+      return { ...s, choices: addChoice(s.choices, m) };
     case "log":
       return { ...s, log: [...s.log, m.text].slice(-LOG_MAX) };
     case "gameOver":
-      return { ...s, winner: m.winner ?? null };
+      return { ...s, winner: m.winner ?? null, choices: [] };
     case "error":
       return { ...s, log: [...s.log, "⚠ " + m.text].slice(-LOG_MAX) };
     default:
@@ -36,13 +41,13 @@ export function reduce(s: AppState, m: Inbound): AppState {
 
 interface Store extends AppState {
   apply: (m: Inbound) => void;
-  clearChoice: () => void;
+  clearChoice: (id: number) => void;
   backToLobby: () => void;
 }
 
 export const useStore = create<Store>((set) => ({
   ...initialState,
   apply: (m) => set((s) => reduce(s, m)),
-  clearChoice: () => set({ choice: undefined }),
-  backToLobby: () => set({ screen: "lobby", state: undefined, winner: undefined, choice: undefined }),
+  clearChoice: (id) => set((s) => ({ choices: s.choices.filter((c) => c.id !== id) })),
+  backToLobby: () => set({ screen: "lobby", state: undefined, winner: undefined, choices: [] }),
 }));

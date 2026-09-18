@@ -5,7 +5,7 @@ import ChoiceDialog from "./components/ChoiceDialog";
 
 export default function App() {
   const screen = useStore((s) => s.screen);
-  const choice = useStore((s) => s.choice);
+  const choice = useStore((s) => s.choices[0]);
   return (
     <>
       {screen === "lobby" ? <Lobby /> : <Table />}

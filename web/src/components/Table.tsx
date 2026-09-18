@@ -31,10 +31,10 @@ export default function Table() {
         <Prompt state={state} />
         <Hand state={state} />
       </div>
-      {winner !== undefined && (
+      {(winner !== undefined || state.gameOver) && (
         <div className="overlay">
           <div className="dialog">
-            <h3>{winner ? `${winner} gewinnt` : "Unentschieden"}</h3>
+            <h3>{winner ? `${winner} gewinnt` : state.gameOver ? "Spiel beendet" : "Unentschieden"}</h3>
             <button className="primary" onClick={backToLobby}>Zur Lobby</button>
           </div>
         </div>
