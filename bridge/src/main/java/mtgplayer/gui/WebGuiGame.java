@@ -234,6 +234,15 @@ public class WebGuiGame extends AbstractGuiGame {
         out.send(line);
     }
 
+    /**
+     * Der Observer laeuft auf dem Game-Thread (ausgeloest von {@code GameLog.notifyObservers()}),
+     * {@code watchLogOf} auf dem UI-Thread (aus {@code setGameView}/{@code resetForNewMatch}) – ohne
+     * gemeinsames Lock koennte der Reset von {@code logSeen} mit dem Lesen/Hochzaehlen im Observer
+     * racen (z. B. ein veralteter Observer schreibt nach dem Reset noch in den neuen Cursor).
+     * Deshalb beides unter demselben Lock wie den Puffer ({@code recentLog}, reentrant); {@code
+     * out.send} bewusst erst danach, damit das Lock waehrend der (potenziell blockierenden) I/O nicht
+     * gehalten wird.
+     */
     @SuppressWarnings("deprecation")
     private void watchLogOf(GameView gv) {
         if (observedLog != null && logObserver != null) {
@@ -241,16 +250,22 @@ public class WebGuiGame extends AbstractGuiGame {
         }
         observedLog = null;
         logObserver = null;
-        logSeen = 0;
+        synchronized (recentLog) { logSeen = 0; }
         if (gv == null || gv.getGameLog() == null) return;
         GameLog log = gv.getGameLog();
         logObserver = (o, arg) -> {
-            List<GameLogEntry> all = log.getAllEntries();
-            for (; logSeen < all.size(); logSeen++) {
-                GameLogEntry e = all.get(logSeen);
-                sendLog(new Messages.LogLine(e.message(), e.type().name(),
-                        e.sourceCard() == null ? null : e.sourceCard().getId()));
+            List<Messages.LogLine> fresh = new ArrayList<>();
+            synchronized (recentLog) {
+                List<GameLogEntry> all = log.getAllEntries();
+                for (; logSeen < all.size(); logSeen++) {
+                    GameLogEntry e = all.get(logSeen);
+                    Messages.LogLine line = new Messages.LogLine(e.message(), e.type().name(),
+                            e.sourceCard() == null ? null : e.sourceCard().getId());
+                    remember(line);
+                    fresh.add(line);
+                }
             }
+            fresh.forEach(out::send);
         };
         observedLog = log;
         log.addObserver(logObserver);

@@ -273,4 +273,19 @@ class WebGuiGameTest {
         assertEquals("t: z249", gui.recentLog().get(199).text());
         assertEquals("t: z50", gui.recentLog().get(0).text());
     }
+
+    @Test
+    void resetForNewMatchLeertDenLogPuffer() throws Exception {
+        gui.message("altes Spiel", "t");
+        sent.poll(5, TimeUnit.SECONDS); // aus dem vorigen "Spiel" wegkonsumieren, nicht Teil dieses Tests
+        assertEquals(1, gui.recentLog().size());
+        gui.resetForNewMatch();
+        assertTrue(gui.recentLog().isEmpty());
+        gui.message("neues Spiel", "t");
+        String s = sent.poll(5, TimeUnit.SECONDS);
+        JsonNode n = Json.parse(s);
+        assertEquals("t: neues Spiel", n.get("text").asText());
+        assertEquals(1, gui.recentLog().size());
+        assertEquals("t: neues Spiel", gui.recentLog().get(0).text());
+    }
 }
