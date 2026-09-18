@@ -28,6 +28,11 @@ Browser: <http://127.0.0.1:8080>. Lobby → eigenes Precon und 1–5 KI-Precons 
 Steuerung: leuchtende Karten sind klickbar, Rechtsklick = andere Fähigkeit, Enter/Leertaste = OK,
 Esc = Abbrechen. Forge passt automatisch, wenn du nichts tun kannst (Arena-Stil).
 
+Phasenleiste über dem Prompt: Klick auf eine Phase setzt/entfernt einen Stop (getrennt für eigene und
+gegnerische Züge, je nachdem wessen Zug gerade ist). "Volle Kontrolle" hält in jeder Phase an und schaltet
+das automatische Passen ab. Tutor-Effekte (Bibliothek durchsuchen) öffnen einen Listen-Dialog mit Kartendetails.
+Veraltete Klicks (Prompt hat inzwischen gewechselt) werden von der Bridge ignoriert.
+
 Entwicklung am Frontend: `cd web && npm run dev` (Vite auf :5173, verbindet sich mit der Bridge auf :8081).
 
 ## Bridge
@@ -44,6 +49,6 @@ Ports: `-Dmtgplayer.wsPort=…`, `-Dmtgplayer.httpPort=…`; Bind-Adresse `-Dmtg
 Forges Nutzerdaten damit nach `~/.mtg-player/`; `bridge/assets/res` ist ein Symlink auf `forge/forge-gui/res`.
 Der Assets-Pfad ist mit `-Dmtgplayer.assets=<dir>` überschreibbar; Maven setzt ihn für `test` und `exec:java` automatisch.
 
-## Was noch fehlt (M3+)
+## Was noch fehlt (M4+)
 
-Phasen-Stops und "Volle Kontrolle", Dialog für Kampfschaden-Verteilung, Textlisten-Import, Kartenbilder, Archidekt.
+Textlisten-Import und Archidekt, Kartenbilder, Spiel-Log im Browser, Spieler-Markierung als Ziel.
