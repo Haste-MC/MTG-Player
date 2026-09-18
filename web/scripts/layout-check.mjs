@@ -57,9 +57,9 @@ try {
       }
     }
 
-    // 3. Kein Karten-Clipping im eigenen Spielfeld: Rechteck gegen jeden Vorfahren mit overflow != visible,
-    //    außerdem muss jede Karte innerhalb ihres .player-Panels liegen (sonst ragt sie in Phasenleiste/Prompt).
-    for (const c of document.querySelectorAll(".mine .battlefield .card")) {
+    // 3. Kein Karten-Clipping im eigenen Spielfeld und bei den Gegnern: Rechteck gegen jeden Vorfahren mit
+    //    overflow != visible, außerdem muss jede Karte innerhalb ihres .player-Panels liegen.
+    for (const c of document.querySelectorAll(".mine .battlefield .card, .opponents .card")) {
       if (!visible(c)) continue;
       const b = r(c);
       const panel = c.closest(".player");
@@ -78,7 +78,7 @@ try {
           const ab = r(a);
           const tol = 1;
           if (b.left < ab.left - tol || b.right > ab.right + tol || b.top < ab.top - tol || b.bottom > ab.bottom + tol) {
-            out.push(`Karte "${name(c)}" im eigenen Spielfeld wird von <${a.tagName.toLowerCase()} class="${a.className}"> abgeschnitten: Karte ${fmt(b)}, Vorfahre ${fmt(ab)}`);
+            out.push(`Karte "${name(c)}" wird von <${a.tagName.toLowerCase()} class="${a.className}"> abgeschnitten: Karte ${fmt(b)}, Vorfahre ${fmt(ab)}`);
             break;
           }
         }

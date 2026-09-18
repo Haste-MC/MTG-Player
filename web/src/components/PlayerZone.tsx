@@ -71,12 +71,10 @@ export default function PlayerZone({ p, state, compact }: { p: PlayerSnap; state
             {lands.map((c) => <CardBox key={c.id} card={c} />)}
           </div>
         </div>
-        {!compact && (
-          <div className="piles">
-            <Pile label="Grab" cards={cards(p.graveyard)} />
-            <Pile label="Exil" cards={cards(p.exile)} />
-          </div>
-        )}
+        <div className="piles">
+          <Pile label="Grab" cards={cards(p.graveyard)} />
+          <Pile label="Exil" cards={cards(p.exile)} />
+        </div>
       </div>
     </div>
   );

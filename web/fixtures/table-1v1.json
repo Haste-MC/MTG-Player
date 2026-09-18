@@ -1,0 +1,484 @@
+{
+  "type": "state",
+  "turn": 7,
+  "phase": "COMBAT_DECLARE_BLOCKERS",
+  "activePlayer": 3,
+  "priorityPlayer": 1,
+  "me": 1,
+  "gameOver": false,
+  "players": [
+    {
+      "id": 1,
+      "name": "Du",
+      "isAi": false,
+      "life": 34,
+      "commanderDamage": {},
+      "hand": [
+        230,
+        231,
+        232,
+        233,
+        234
+      ],
+      "librarySize": 42,
+      "graveyard": [
+        240,
+        241,
+        242
+      ],
+      "exile": [
+        250
+      ],
+      "command": [
+        220
+      ],
+      "battlefield": [
+        201,
+        202,
+        203,
+        204,
+        205,
+        210,
+        211,
+        212
+      ],
+      "manaPool": {
+        "G": 2,
+        "C": 1
+      },
+      "hasPriority": true
+    },
+    {
+      "id": 3,
+      "name": "KI 2",
+      "isAi": true,
+      "life": 22,
+      "commanderDamage": {
+        "220": 6
+      },
+      "hand": [
+        410,
+        411,
+        412
+      ],
+      "librarySize": 30,
+      "graveyard": [],
+      "exile": [
+        420
+      ],
+      "command": [],
+      "battlefield": [
+        401,
+        402,
+        403,
+        404,
+        405,
+        406,
+        305
+      ],
+      "manaPool": {},
+      "hasPriority": false
+    }
+  ],
+  "stack": [
+    {
+      "index": 0,
+      "text": "Beast Within (Ziel: Managorger Hydra)",
+      "sourceCard": 500,
+      "controller": 3,
+      "targetCards": [
+        211
+      ],
+      "targetPlayers": []
+    }
+  ],
+  "cards": {
+    "201": {
+      "id": 201,
+      "faceDown": false,
+      "name": "Forest",
+      "imageKey": "c:Forest|TDC|1",
+      "controller": 1,
+      "owner": 1,
+      "zone": "battlefield",
+      "tapped": false,
+      "typeLine": "Basic Land — Forest"
+    },
+    "202": {
+      "id": 202,
+      "faceDown": false,
+      "name": "Forest",
+      "imageKey": "c:Forest|TDC|1",
+      "controller": 1,
+      "owner": 1,
+      "zone": "battlefield",
+      "tapped": false,
+      "typeLine": "Basic Land — Forest"
+    },
+    "203": {
+      "id": 203,
+      "faceDown": false,
+      "name": "Forest",
+      "imageKey": "c:Forest|TDC|1",
+      "controller": 1,
+      "owner": 1,
+      "zone": "battlefield",
+      "tapped": true,
+      "typeLine": "Basic Land — Forest"
+    },
+    "204": {
+      "id": 204,
+      "faceDown": false,
+      "name": "Command Tower",
+      "imageKey": "c:Command Tower|C21|1",
+      "controller": 1,
+      "owner": 1,
+      "zone": "battlefield",
+      "tapped": false,
+      "typeLine": "Land"
+    },
+    "205": {
+      "id": 205,
+      "faceDown": false,
+      "name": "Command Tower",
+      "imageKey": "c:Command Tower|C21|1",
+      "controller": 1,
+      "owner": 1,
+      "zone": "battlefield",
+      "tapped": true,
+      "typeLine": "Land"
+    },
+    "210": {
+      "id": 210,
+      "faceDown": false,
+      "name": "Llanowar Elves",
+      "imageKey": "c:Llanowar Elves|DMU|1",
+      "controller": 1,
+      "owner": 1,
+      "zone": "battlefield",
+      "tapped": true,
+      "power": 1,
+      "toughness": 1,
+      "typeLine": "Creature — Elf Druid",
+      "manaCost": "{G}"
+    },
+    "211": {
+      "id": 211,
+      "faceDown": false,
+      "name": "Managorger Hydra",
+      "imageKey": "c:Managorger Hydra|C21|1",
+      "controller": 1,
+      "owner": 1,
+      "zone": "battlefield",
+      "tapped": false,
+      "attacking": false,
+      "power": 6,
+      "toughness": 6,
+      "counters": {
+        "P1P1": 4
+      },
+      "typeLine": "Creature — Hydra",
+      "manaCost": "{2}{G}",
+      "selectable": true
+    },
+    "212": {
+      "id": 212,
+      "faceDown": false,
+      "name": "Eternal Witness",
+      "imageKey": "c:Eternal Witness|C21|1",
+      "controller": 1,
+      "owner": 1,
+      "zone": "battlefield",
+      "tapped": false,
+      "power": 1,
+      "toughness": 1,
+      "typeLine": "Creature — Elf Shaman",
+      "manaCost": "{1}{G}{G}",
+      "blocking": true
+    },
+    "220": {
+      "id": 220,
+      "faceDown": false,
+      "name": "Felothar the Steadfast",
+      "imageKey": "c:Felothar the Steadfast|TDC|1",
+      "controller": 1,
+      "owner": 1,
+      "zone": "command",
+      "power": 2,
+      "toughness": 2,
+      "typeLine": "Legendary Creature — Elf Scout",
+      "manaCost": "{W}{G}",
+      "text": "Whenever Felothar the Steadfast attacks, exile the top card of your library. You may play it this turn."
+    },
+    "230": {
+      "id": 230,
+      "faceDown": false,
+      "name": "Sol Ring",
+      "imageKey": "c:Sol Ring|C21|1",
+      "controller": 1,
+      "owner": 1,
+      "zone": "hand",
+      "typeLine": "Artifact",
+      "manaCost": "{1}",
+      "text": "{T}: Add {C}{C}.",
+      "selectable": true
+    },
+    "231": {
+      "id": 231,
+      "faceDown": false,
+      "name": "Swords to Plowshares",
+      "imageKey": "c:Swords to Plowshares|C21|1",
+      "controller": 1,
+      "owner": 1,
+      "zone": "hand",
+      "typeLine": "Instant",
+      "manaCost": "{W}",
+      "text": "Exile target creature. Its controller gains life equal to its power.",
+      "actionable": true
+    },
+    "232": {
+      "id": 232,
+      "faceDown": false,
+      "name": "Arcane Signet",
+      "imageKey": "c:Arcane Signet|C21|1",
+      "controller": 1,
+      "owner": 1,
+      "zone": "hand",
+      "typeLine": "Artifact",
+      "manaCost": "{1}",
+      "text": "{T}: Add one mana of any color in your commander's color identity.",
+      "actionable": true
+    },
+    "233": {
+      "id": 233,
+      "faceDown": false,
+      "name": "Cultivate",
+      "imageKey": "c:Cultivate|C21|1",
+      "controller": 1,
+      "owner": 1,
+      "zone": "hand",
+      "typeLine": "Sorcery",
+      "manaCost": "{2}{G}",
+      "text": "Search your library for up to two basic land cards, reveal them, put one onto the battlefield tapped and the other into your hand."
+    },
+    "234": {
+      "id": 234,
+      "faceDown": false,
+      "name": "Beast Within",
+      "imageKey": "c:Beast Within|C21|1",
+      "controller": 1,
+      "owner": 1,
+      "zone": "hand",
+      "typeLine": "Instant",
+      "manaCost": "{2}{G}",
+      "text": "Destroy target permanent. Its controller creates a 3/3 green Beast creature token."
+    },
+    "401": {
+      "id": 401,
+      "faceDown": false,
+      "name": "Forest",
+      "imageKey": "c:Forest|TDC|1",
+      "controller": 3,
+      "owner": 3,
+      "zone": "battlefield",
+      "tapped": false,
+      "typeLine": "Basic Land — Forest"
+    },
+    "402": {
+      "id": 402,
+      "faceDown": false,
+      "name": "Command Tower",
+      "imageKey": "c:Command Tower|C21|1",
+      "controller": 3,
+      "owner": 3,
+      "zone": "battlefield",
+      "tapped": true,
+      "typeLine": "Land"
+    },
+    "403": {
+      "id": 403,
+      "faceDown": false,
+      "name": "Sol Ring",
+      "imageKey": "c:Sol Ring|C21|1",
+      "controller": 3,
+      "owner": 3,
+      "zone": "battlefield",
+      "tapped": false,
+      "typeLine": "Artifact",
+      "manaCost": "{1}"
+    },
+    "404": {
+      "id": 404,
+      "faceDown": false,
+      "name": "Eternal Witness",
+      "imageKey": "c:Eternal Witness|C21|1",
+      "controller": 3,
+      "owner": 3,
+      "zone": "battlefield",
+      "tapped": false,
+      "power": 1,
+      "toughness": 1,
+      "typeLine": "Creature — Elf Shaman",
+      "manaCost": "{1}{G}{G}"
+    },
+    "410": {
+      "id": 410,
+      "faceDown": true,
+      "controller": 3,
+      "owner": 3,
+      "zone": "hand"
+    },
+    "411": {
+      "id": 411,
+      "faceDown": true,
+      "controller": 3,
+      "owner": 3,
+      "zone": "hand"
+    },
+    "412": {
+      "id": 412,
+      "faceDown": true,
+      "controller": 3,
+      "owner": 3,
+      "zone": "hand"
+    },
+    "500": {
+      "id": 500,
+      "faceDown": false,
+      "name": "Beast Within",
+      "imageKey": "c:Beast Within|C21|1",
+      "controller": 3,
+      "owner": 3,
+      "zone": "stack",
+      "typeLine": "Instant",
+      "manaCost": "{2}{G}"
+    },
+    "240": {
+      "id": 240,
+      "faceDown": false,
+      "name": "Rampant Growth",
+      "imageKey": "c:Rampant Growth|C21|1",
+      "controller": 1,
+      "owner": 1,
+      "zone": "graveyard",
+      "typeLine": "Sorcery",
+      "manaCost": "{1}{G}",
+      "text": "Search your library for a basic land card, put that card onto the battlefield tapped, then shuffle."
+    },
+    "241": {
+      "id": 241,
+      "faceDown": false,
+      "name": "Llanowar Elves",
+      "imageKey": "c:Llanowar Elves|DMU|1",
+      "controller": 1,
+      "owner": 1,
+      "zone": "graveyard",
+      "typeLine": "Creature — Elf Druid",
+      "manaCost": "{G}",
+      "power": 1,
+      "toughness": 1
+    },
+    "242": {
+      "id": 242,
+      "faceDown": false,
+      "name": "Harmonize",
+      "imageKey": "c:Harmonize|C21|1",
+      "controller": 1,
+      "owner": 1,
+      "zone": "graveyard",
+      "typeLine": "Sorcery",
+      "manaCost": "{2}{G}{G}",
+      "text": "Draw three cards."
+    },
+    "250": {
+      "id": 250,
+      "faceDown": false,
+      "name": "Sakura-Tribe Elder",
+      "imageKey": "c:Sakura-Tribe Elder|C21|1",
+      "controller": 1,
+      "owner": 1,
+      "zone": "exile",
+      "typeLine": "Creature — Snake Shaman",
+      "manaCost": "{1}{G}",
+      "power": 1,
+      "toughness": 1
+    },
+    "305": {
+      "id": 305,
+      "faceDown": false,
+      "name": "Beast",
+      "controller": 3,
+      "owner": 3,
+      "zone": "battlefield",
+      "typeLine": "Token Creature — Beast",
+      "power": 3,
+      "toughness": 3,
+      "token": true,
+      "tapped": true,
+      "attacking": true,
+      "text": ""
+    },
+    "405": {
+      "id": 405,
+      "faceDown": false,
+      "name": "Managorger Hydra",
+      "imageKey": "c:Managorger Hydra|C21|1",
+      "controller": 3,
+      "owner": 3,
+      "zone": "battlefield",
+      "typeLine": "Creature — Hydra",
+      "manaCost": "{2}{G}",
+      "power": 4,
+      "toughness": 4,
+      "counters": {
+        "P1P1": 2
+      },
+      "tapped": true,
+      "attacking": true
+    },
+    "406": {
+      "id": 406,
+      "faceDown": false,
+      "name": "Forest",
+      "imageKey": "c:Forest|TDC|1",
+      "controller": 3,
+      "owner": 3,
+      "zone": "battlefield",
+      "typeLine": "Basic Land — Forest",
+      "tapped": true
+    },
+    "420": {
+      "id": 420,
+      "faceDown": false,
+      "name": "Cultivate",
+      "imageKey": "c:Cultivate|C21|1",
+      "controller": 3,
+      "owner": 3,
+      "zone": "exile",
+      "typeLine": "Sorcery",
+      "manaCost": "{2}{G}"
+    }
+  },
+  "stops": {
+    "own": [
+      "MAIN1",
+      "COMBAT_DECLARE_BLOCKERS",
+      "MAIN2"
+    ],
+    "opp": [
+      "COMBAT_BEGIN",
+      "COMBAT_DECLARE_ATTACKERS",
+      "COMBAT_DECLARE_BLOCKERS",
+      "END_OF_TURN"
+    ]
+  },
+  "fullControl": false,
+  "prompt": {
+    "message": "Declare blockers. Managorger Hydra and Beast attack you.",
+    "okLabel": "OK",
+    "cancelLabel": "Cancel",
+    "okEnabled": true,
+    "cancelEnabled": true,
+    "seq": 12
+  }
+}
