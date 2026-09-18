@@ -73,6 +73,8 @@ public class WebGuiGame extends AbstractGuiGame {
     private Observer logObserver;
     private GameLog observedLog;
     private int logSeen;
+    /** Fortlaufende id je Partie (siehe {@link #remember}), unter dem Puffer-Lock gepflegt. */
+    private int logId;
 
     public WebGuiGame(Transport out) {
         this.out = out;
@@ -211,27 +213,30 @@ public class WebGuiGame extends AbstractGuiGame {
     @Override
     public void resetForNewMatch() {
         super.resetForNewMatch();
-        synchronized (recentLog) { recentLog.clear(); }
+        synchronized (recentLog) { recentLog.clear(); logId = 0; }
         watchLogOf(null);
     }
 
-    /** Kopie der letzten Log-Zeilen (älteste zuerst) – für den Reconnect. */
+    /** Kopie der letzten Log-Zeilen (älteste zuerst, mit ihren ids) – für den Reconnect. */
     public List<Messages.LogLine> recentLog() {
         synchronized (recentLog) {
             return new ArrayList<>(recentLog);
         }
     }
 
-    private void remember(Messages.LogLine line) {
+    /** Vergibt die naechste id (je Partie fortlaufend, ab 1) und puffert die Zeile damit. Gibt die
+     *  Zeile MIT id zurueck, damit Aufrufer genau die gepufferte Fassung versenden. */
+    private Messages.LogLine remember(Messages.LogLine line) {
         synchronized (recentLog) {
-            recentLog.addLast(line);
+            Messages.LogLine withId = line.withId(++logId);
+            recentLog.addLast(withId);
             while (recentLog.size() > LOG_MAX) recentLog.removeFirst();
+            return withId;
         }
     }
 
     private void sendLog(Messages.LogLine line) {
-        remember(line);
-        out.send(line);
+        out.send(remember(line));
     }
 
     /**
@@ -256,13 +261,16 @@ public class WebGuiGame extends AbstractGuiGame {
         logObserver = (o, arg) -> {
             List<Messages.LogLine> fresh = new ArrayList<>();
             synchronized (recentLog) {
+                // Veralteter Observer eines vorigen Spiels (watchLogOf inzwischen erneut aufgerufen,
+                // observedLog zeigt schon auf den neuen Log) - nichts mehr tun, sonst schreibt er noch
+                // in den neuen Cursor/Puffer hinein.
+                if (observedLog != log) return;
                 List<GameLogEntry> all = log.getAllEntries();
                 for (; logSeen < all.size(); logSeen++) {
                     GameLogEntry e = all.get(logSeen);
                     Messages.LogLine line = new Messages.LogLine(e.message(), e.type().name(),
                             e.sourceCard() == null ? null : e.sourceCard().getId());
-                    remember(line);
-                    fresh.add(line);
+                    fresh.add(remember(line));
                 }
             }
             fresh.forEach(out::send);

@@ -45,10 +45,15 @@ public final class Messages {
         }
     }
 
-    /** kind = GameLogEntryType-Name (null für Bridge-eigene Zeilen), card = Quellkarte falls bekannt. */
-    public record LogLine(String type, String text, String kind, Integer card) {
-        public LogLine(String text) { this("log", text, null, null); }
-        public LogLine(String text, String kind, Integer card) { this("log", text, kind, card); }
+    /**
+     * kind = GameLogEntryType-Name (null für Bridge-eigene Zeilen), card = Quellkarte falls bekannt.
+     * id: fortlaufende Nummer je Partie (siehe WebGuiGame.remember) – macht den Reconnect-Replay
+     * idempotent; null für Zeilen, die (noch) keine id bekommen haben.
+     */
+    public record LogLine(String type, String text, String kind, Integer card, Integer id) {
+        public LogLine(String text) { this("log", text, null, null, null); }
+        public LogLine(String text, String kind, Integer card) { this("log", text, kind, card, null); }
+        public LogLine withId(int id) { return new LogLine(type, text, kind, card, id); }
     }
 
     public record GameOver(String type, String winner) {

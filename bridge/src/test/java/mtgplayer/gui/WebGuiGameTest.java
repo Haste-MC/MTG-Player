@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.fasterxml.jackson.databind.JsonNode;
 import mtgplayer.forge.ForgeBoot;
 import mtgplayer.protocol.Json;
+import mtgplayer.protocol.Messages;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -288,6 +289,39 @@ class WebGuiGameTest {
         assertEquals(200, gui.recentLog().size());
         assertEquals("t: z249", gui.recentLog().get(199).text());
         assertEquals("t: z50", gui.recentLog().get(0).text());
+    }
+
+    @Test
+    void logZeilenIdsSteigenStrengMonotonAn() throws Exception {
+        gui.message("eins", "t");
+        gui.message("zwei", "t");
+        gui.message("drei", "t");
+        int id1 = Json.parse(sent.poll(5, TimeUnit.SECONDS)).get("id").asInt();
+        int id2 = Json.parse(sent.poll(5, TimeUnit.SECONDS)).get("id").asInt();
+        int id3 = Json.parse(sent.poll(5, TimeUnit.SECONDS)).get("id").asInt();
+        assertTrue(id1 < id2, "id steigt streng monoton");
+        assertTrue(id2 < id3, "id steigt streng monoton");
+    }
+
+    @Test
+    void resetForNewMatchLaesstDieNaechsteIdBeiEinsNeuStarten() throws Exception {
+        gui.message("altes Spiel", "t");
+        sent.poll(5, TimeUnit.SECONDS); // wegkonsumieren, nicht Teil dieses Tests
+        gui.resetForNewMatch();
+        gui.message("neues Spiel", "t");
+        JsonNode n = Json.parse(sent.poll(5, TimeUnit.SECONDS));
+        assertEquals(1, n.get("id").asInt());
+    }
+
+    @Test
+    void recentLogTraegtDieselbenIdsWieDieGesendetenZeilen() throws Exception {
+        gui.message("eins", "t");
+        gui.message("zwei", "t");
+        int sentId1 = Json.parse(sent.poll(5, TimeUnit.SECONDS)).get("id").asInt();
+        int sentId2 = Json.parse(sent.poll(5, TimeUnit.SECONDS)).get("id").asInt();
+        List<Messages.LogLine> buffered = gui.recentLog();
+        assertEquals(sentId1, buffered.get(0).id().intValue());
+        assertEquals(sentId2, buffered.get(1).id().intValue());
     }
 
     @Test
