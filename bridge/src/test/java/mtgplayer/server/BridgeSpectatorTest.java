@@ -105,5 +105,27 @@ class BridgeSpectatorTest {
         send("{\"type\":\"concede\"}");
         JsonNode over = await("gameOver", n -> true, 30);
         assertNotNull(over);
+
+        // "Beenden" darf das Spiel nicht nur aus HostedMatchs Buchhaltung loesen, sondern muss den
+        // Game-Thread wirklich zum Stillstand bringen (siehe HumanMatch.end) - sonst kollidiert ein
+        // verwaister Thread mit dem naechsten Spiel. match.end() ist zu diesem Zeitpunkt bereits
+        // vollstaendig durchgelaufen: die gameOver-Nachricht wird erst NACH match.end() verschickt
+        // (Bridge.handle, case "concede"), beides im selben Runnable auf dem UI-Thread.
+        assertTrue(bridge.match().lastGameOver(), "Zuschauer-Spiel muss beim Beenden wirklich GameStage.GameOver erreichen");
+
+        // Ein zweites Spiel muss sauber starten - kein Zombie-Thread des ersten Spiels darf mehr in
+        // die geteilte WebGuiGame hineinfunken. Wie beim ersten Spiel (siehe oben) erst auf die
+        // vollstaendig eingerichtete "Pause"-Sitzung warten (seq>0 heisst: Forges InputPlaybackControl
+        // sitzt bereits auf der InputQueue) statt nur auf irgendeinen fruehen turn<=1-Zustand - sonst
+        // koennte @AfterAll/stop() dieses zweite Spiel schon mitten in seinem eigenen asynchronen
+        // Setup beenden und mit dessen "GameStarted"-Verarbeitung wettlaufen.
+        send("{\"type\":\"startGame\",\"spectate\":true,\"opponents\":["
+                + "{\"precon\":\"Abzan Armor [TDC] [2025]\",\"name\":\"KI 1\"},"
+                + "{\"precon\":\"Adaptive Enchantment [C18] [2018]\",\"name\":\"KI 2\"}]}");
+        JsonNode fresh = await("state", n -> n.path("spectator").asBoolean(false)
+                && n.path("turn").asInt() <= 1
+                && "Pause".equals(n.path("prompt").path("okLabel").asText())
+                && n.path("prompt").path("seq").asInt() > 0, 90);
+        assertNotNull(fresh);
     }
 }

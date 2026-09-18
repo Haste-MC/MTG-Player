@@ -45,6 +45,12 @@ public final class Bridge {
         ws.start();
     }
 
+    /** Fuer Tests (siehe BridgeSpectatorTest): Zugriff auf das HumanMatch, z. B. um nach dem
+     *  Beenden eines Zuschauer-Spiels {@code lastGameOver()} zu pruefen. */
+    HumanMatch match() {
+        return match;
+    }
+
     public void stop() throws InterruptedException {
         match.end();
         ws.stop(1000);
