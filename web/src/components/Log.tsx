@@ -31,9 +31,13 @@ export default function Log() {
     stuckToBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
   };
 
+  // Haengt am letzten Eintrag des vollen logs (nicht visible.length): sobald der Puffer bei 500 Zeilen
+  // deckelt, waechst visible.length nicht mehr fuer jede neue Zeile (alte fallen vorne raus, wenn eine
+  // neue hinten dazukommt) - der Effekt liefe sonst nicht mehr an und das Autoscroll blieb stehen.
+  const last = log[log.length - 1];
   useEffect(() => {
     if (stuckToBottom.current) ref.current?.scrollTo(0, ref.current.scrollHeight);
-  }, [visible.length]);
+  }, [log.length, last?.id, last?.text]);
 
   return (
     <div className="log">

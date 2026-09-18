@@ -73,7 +73,7 @@ describe("reduce", () => {
 
   it("neues spiel leert das log", () => {
     let s = reduce(initialState, { type: "log", text: "alt" });
-    s = reduce(s, { ...snap({ turn: 0 }), turn: 0 } as Snapshot);
+    s = reduce(s, snap({ turn: 0 }));
     // ein state mit turn 0 (Spielstart) leert das Log
     expect(s.log.length).toBe(0);
   });
@@ -90,6 +90,22 @@ describe("reduce", () => {
     const withChoices = reduce(reduce(initialState, c7), c3);
     const s = reduce(withChoices, { type: "gameOver", winner: "KI 1" });
     expect(s.choices).toEqual([]);
+  });
+
+  it("log verwirft wiederholte zeilen mit derselben id (reconnect-replay)", () => {
+    let s = reduce(initialState, { type: "log", text: "eins", id: 1 });
+    s = reduce(s, { type: "log", text: "zwei", id: 2 });
+    // Replay derselben zwei Zeilen (z. B. nach Reconnect) - keine zweite Kopie
+    s = reduce(s, { type: "log", text: "eins", id: 1 });
+    s = reduce(s, { type: "log", text: "zwei", id: 2 });
+    expect(s.log.map((l) => l.text)).toEqual(["eins", "zwei"]);
+  });
+
+  it("log akzeptiert ids einer neuen partie, die nach einem leeren-event wieder bei 1 starten", () => {
+    let s = reduce(initialState, { type: "log", text: "altes spiel", id: 5 });
+    s = reduce(s, snap({ turn: 0 })); // Spielstart: leert log und lastLogId
+    s = reduce(s, { type: "log", text: "neues spiel", id: 1 });
+    expect(s.log.map((l) => l.text)).toEqual(["neues spiel"]);
   });
 
   it("reveal-choice wird wie jede andere choice gespeichert", () => {
