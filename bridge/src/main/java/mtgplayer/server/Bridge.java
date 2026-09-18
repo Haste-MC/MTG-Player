@@ -4,8 +4,10 @@ import com.fasterxml.jackson.databind.JsonNode;
 import forge.deck.Deck;
 import forge.gui.GuiBase;
 import mtgplayer.forge.Precons;
+import mtgplayer.gui.Stops;
 import mtgplayer.gui.WebGuiGame;
 import mtgplayer.match.HumanMatch;
+import mtgplayer.protocol.Json;
 import mtgplayer.protocol.Messages;
 
 import java.util.ArrayList;
@@ -68,6 +70,13 @@ public final class Bridge {
                     ws.send(new Messages.ErrorMsg("Bridge: " + e));
                 }
             });
+            case "setStops" -> ui(() -> {
+                Stops s = gui.stops();
+                if (msg.has("own")) s = s.with(true, Stops.parse(Json.mapper().convertValue(msg.get("own"), new com.fasterxml.jackson.core.type.TypeReference<List<String>>() { })));
+                if (msg.has("opp")) s = s.with(false, Stops.parse(Json.mapper().convertValue(msg.get("opp"), new com.fasterxml.jackson.core.type.TypeReference<List<String>>() { })));
+                gui.setStops(s);
+            });
+            case "fullControl" -> ui(() -> gui.setFullControl(msg.path("value").asBoolean(false)));
             case "requestState" -> onClientConnected();
             default -> ws.send(new Messages.ErrorMsg("unbekannter Nachrichtentyp: " + type));
         }

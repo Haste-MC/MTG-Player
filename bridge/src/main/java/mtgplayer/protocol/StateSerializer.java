@@ -53,6 +53,8 @@ public final class StateSerializer {
                 players,
                 stack,
                 cards,
+                ctx.stops(),
+                ctx.fullControl(),
                 ctx.prompt());
     }
 

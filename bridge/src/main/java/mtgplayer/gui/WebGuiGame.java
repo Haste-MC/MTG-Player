@@ -49,6 +49,8 @@ public class WebGuiGame extends AbstractGuiGame {
     private final ChoiceBroker broker;
     private final AtomicBoolean dirty = new AtomicBoolean();
     private volatile Snapshot.PromptSnap prompt = Snapshot.PromptSnap.EMPTY;
+    private volatile Stops stops = Stops.defaults();
+    private volatile boolean fullControl;
     private final java.util.concurrent.atomic.AtomicInteger seq = new java.util.concurrent.atomic.AtomicInteger(1);
     @SuppressWarnings("deprecation")
     private java.util.Observer inputObserver;
@@ -82,7 +84,8 @@ public class WebGuiGame extends AbstractGuiGame {
         if (gv == null) return;
         PlayerView me = getLocalPlayers().isEmpty() ? null : getLocalPlayers().iterator().next();
         ViewContext ctx = new ViewContext(me, this::mayView, this::isSelectable, this::isWeaklySelectable,
-                this::isHighlighted, prompt);
+                this::isHighlighted, prompt,
+                new Messages.StopsMsg(Stops.names(stops.own()), Stops.names(stops.opp())), fullControl);
         out.send(StateSerializer.snapshot(gv, ctx));
     }
 
@@ -92,8 +95,8 @@ public class WebGuiGame extends AbstractGuiGame {
 
     /** Forges Input-Objekt hat gewechselt: neue Sequenz, damit veraltete Klicks verworfen werden. */
     void onInputChanged() {
-        int s = seq.incrementAndGet();
         synchronized (this) {
+            int s = seq.incrementAndGet();
             prompt = prompt.withSeq(s);
         }
         push();
@@ -118,8 +121,27 @@ public class WebGuiGame extends AbstractGuiGame {
         applyFullControlPref();
     }
 
-    /** M3 Task 2 füllt das; hier nur der Hook, damit Task 1 kompiliert. */
-    void applyFullControlPref() { }
+    public Stops stops() { return stops; }
+    public boolean fullControl() { return fullControl; }
+
+    public void setStops(Stops s) {
+        stops = s;
+        push();
+    }
+
+    public void setFullControl(boolean on) {
+        fullControl = on;
+        applyFullControlPref();
+        push();
+    }
+
+    /** Volle Kontrolle schaltet auch Forges Auto-Pass-ohne-Aktionen ab – pro Controller (wechselt je Spiel). */
+    void applyFullControlPref() {
+        IGameController c = getGameController();
+        if (c == null || c.getYieldController() == null) return;
+        c.getYieldController().setPref(forge.localinstance.properties.ForgePreferences.FPref.YIELD_AUTO_PASS_NO_ACTIONS,
+                fullControl ? "false" : "true");
+    }
 
     @Override public void setGameView(GameView gameView0) { super.setGameView(gameView0); push(); }
     @Override protected void updateCurrentPlayer(PlayerView player) { push(); }
@@ -259,7 +281,8 @@ public class WebGuiGame extends AbstractGuiGame {
         if (choices == null) return out;
         ViewContext ctx = getGameView() == null ? null : new ViewContext(
                 getLocalPlayers().isEmpty() ? null : getLocalPlayers().iterator().next(),
-                this::mayView, c -> false, c -> false, e -> false, Snapshot.PromptSnap.EMPTY);
+                this::mayView, c -> false, c -> false, e -> false, Snapshot.PromptSnap.EMPTY,
+                new Messages.StopsMsg(List.of(), List.of()), false);
         int i = 0;
         for (T t : choices) {
             String label = display != null ? display.apply(t) : String.valueOf(t);
@@ -498,9 +521,11 @@ public class WebGuiGame extends AbstractGuiGame {
     @Override public void hideZones(PlayerView controller, Iterable<PlayerZoneUpdate> zonesToUpdate) { }
     @Override public GameState getGamestate() { return null; }
 
-    /** M2: keine Stops – Forge passt per YIELD_AUTO_PASS_NO_ACTIONS selbst, wenn nichts spielbar ist. */
+    /** true = Phase überspringen. Ohne Spielzustand wird der eigene Zug angenommen. */
     @Override
     public boolean isUiSetToSkipPhase(PlayerView playerTurn, PhaseType phase) {
-        return false;
+        if (fullControl || phase == null) return false;
+        boolean ownTurn = playerTurn == null || getLocalPlayers().contains(playerTurn);
+        return !stops.stopsAt(ownTurn, phase);
     }
 }

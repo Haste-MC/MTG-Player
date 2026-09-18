@@ -50,4 +50,7 @@ public final class Messages {
     public record ErrorMsg(String type, String text) {
         public ErrorMsg(String text) { this("error", text); }
     }
+
+    /** Phasen, in denen angehalten wird (Namen der PhaseType-Konstanten), je eigener/gegnerischer Zug. */
+    public record StopsMsg(List<String> own, List<String> opp) { }
 }

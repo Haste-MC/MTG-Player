@@ -161,6 +161,18 @@ class WebGuiGameTest {
     }
 
     @Test
+    void isUiSetToSkipPhaseFolgtStopsUndFullControl() {
+        assertTrue(gui.isUiSetToSkipPhase(null, forge.game.phase.PhaseType.UPKEEP), "ohne Spiel: eigener Zug angenommen, UPKEEP wird übersprungen");
+        assertFalse(gui.isUiSetToSkipPhase(null, forge.game.phase.PhaseType.MAIN1));
+        gui.setFullControl(true);
+        assertFalse(gui.isUiSetToSkipPhase(null, forge.game.phase.PhaseType.UPKEEP));
+        gui.setFullControl(false);
+        gui.setStops(Stops.defaults().with(true, java.util.EnumSet.of(forge.game.phase.PhaseType.UPKEEP)));
+        assertFalse(gui.isUiSetToSkipPhase(null, forge.game.phase.PhaseType.UPKEEP));
+        assertTrue(gui.isUiSetToSkipPhase(null, forge.game.phase.PhaseType.MAIN1));
+    }
+
+    @Test
     void seqWechseltNurBeiInputWechsel() {
         int s0 = gui.currentSeq();
         gui.showPromptMessage(null, "a", null);

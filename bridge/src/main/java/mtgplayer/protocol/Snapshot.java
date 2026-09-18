@@ -19,6 +19,8 @@ public record Snapshot(
         List<PlayerSnap> players,
         List<StackSnap> stack,
         Map<Integer, CardSnap> cards,
+        Messages.StopsMsg stops,
+        boolean fullControl,
         PromptSnap prompt) {
 
     public static final String TYPE = "state";
