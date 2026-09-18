@@ -45,7 +45,7 @@ public final class Main {
             http.stop();
             throw e;
         }
-        System.out.println("Bereit. Browser: http://127.0.0.1:" + httpPort + "  (Dev: http://localhost:5173)");
+        System.out.println("Bereit. Browser: http://localhost:" + httpPort + "  (Dev: http://localhost:5173)");
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             http.stop();
             try { bridge.stop(); } catch (InterruptedException ignored) { }

@@ -28,7 +28,7 @@ public final class WsServer extends WebSocketServer implements Transport {
     private final CompletableFuture<Void> started = new CompletableFuture<>();
 
     public WsServer(int port, Consumer<JsonNode> inbound, Runnable onOpen) {
-        super(new InetSocketAddress("127.0.0.1", port));
+        super(new InetSocketAddress(bindAddress(), port));
         this.inbound = inbound;
         this.onOpen = onOpen;
         setReuseAddr(true);
@@ -43,6 +43,11 @@ public final class WsServer extends WebSocketServer implements Transport {
         } catch (InterruptedException | ExecutionException | TimeoutException e) {
             throw new IllegalStateException("WebSocket-Server konnte nicht starten", e);
         }
+    }
+
+    /** Bind-Adresse: -Dmtgplayer.bind, Standard 0.0.0.0 – noetig, damit Windows unter WSL2 den Server per localhost erreicht. */
+    static String bindAddress() {
+        return System.getProperty("mtgplayer.bind", "0.0.0.0");
     }
 
     @Override
@@ -95,7 +100,7 @@ public final class WsServer extends WebSocketServer implements Transport {
 
     @Override
     public void onStart() {
-        System.out.println("WebSocket auf ws://127.0.0.1:" + getPort());
+        System.out.println("WebSocket auf ws://" + bindAddress() + ":" + getPort());
         started.complete(null);
     }
 }
