@@ -108,9 +108,9 @@ class BridgeSpectatorTest {
 
         // "Beenden" darf das Spiel nicht nur aus HostedMatchs Buchhaltung loesen, sondern muss den
         // Game-Thread wirklich zum Stillstand bringen (siehe HumanMatch.end) - sonst kollidiert ein
-        // verwaister Thread mit dem naechsten Spiel. match.end() ist zu diesem Zeitpunkt bereits
-        // vollstaendig durchgelaufen: die gameOver-Nachricht wird erst NACH match.end() verschickt
-        // (Bridge.handle, case "concede"), beides im selben Runnable auf dem UI-Thread.
+        // verwaister Thread mit dem naechsten Spiel. match.end() laeuft dafuer als Hintergrund-Task
+        // (siehe Bridge.handle, case "concede") - die gameOver-Nachricht kommt danach vom selben Task,
+        // await() oben stellt also schon sicher, dass end() zu diesem Zeitpunkt durchgelaufen ist.
         assertTrue(bridge.match().lastGameOver(), "Zuschauer-Spiel muss beim Beenden wirklich GameStage.GameOver erreichen");
 
         // Ein zweites Spiel muss sauber starten - kein Zombie-Thread des ersten Spiels darf mehr in
@@ -127,5 +127,36 @@ class BridgeSpectatorTest {
                 && "Pause".equals(n.path("prompt").path("okLabel").asText())
                 && n.path("prompt").path("seq").asInt() > 0, 90);
         assertNotNull(fresh);
+
+        // Sauber abschliessen, damit dieses zweite Spiel nicht als "noch laeuft" in eine andere
+        // @Test-Methode dieser Klasse hineinragt (beide teilen sich denselben statischen Bridge/WS).
+        send("{\"type\":\"concede\"}");
+        assertNotNull(await("gameOver", n -> true, 30));
+    }
+
+    /**
+     * Regression fuer den Deadlock aus dem vorigen Fix-Versuch: "Beenden" sofort klicken, WAEHREND
+     * das Spiel noch laeuft (vor jedem "Pause"-Klick) - also bevor die Zuschauer-Sitzung ueberhaupt
+     * einmal einen vollstaendig "settled" Zustand erreicht hat. Frueher blockierte der UI-Thread
+     * dabei in HumanMatch.end() auf Game.isGameOver() (synchronized), waehrend der Game-Thread mitten
+     * in Game.setGameOver(...) (haelt denselben Monitor) synchron auf ebendiesen UI-Thread wartete
+     * (invokeInEdtAndWait) - klassischer Deadlock. Der Fix: end() pollt nur noch GameView.isGameOver()
+     * (kein Game-Monitor) und der Zuschauer-Concede-Zweig in Bridge laeuft als Hintergrund-Task, nicht
+     * mehr auf dem UI-Thread.
+     */
+    @Test
+    @Timeout(value = 1, unit = TimeUnit.MINUTES)
+    void spectatorSofortigesBeendenOhneDeadlock() throws Exception {
+        send("{\"type\":\"startGame\",\"spectate\":true,\"opponents\":["
+                + "{\"precon\":\"Abzan Armor [TDC] [2025]\",\"name\":\"KI 1\"},"
+                + "{\"precon\":\"Adaptive Enchantment [C18] [2018]\",\"name\":\"KI 2\"}]}");
+        // Nur bestaetigen, dass das Spiel ueberhaupt gestartet ist (irgendein spectator-Zustand) -
+        // absichtlich NICHT auf "Pause"/seq>0 warten, um moeglichst frueh, mitten im asynchronen
+        // Spielaufbau, aufzugeben.
+        assertNotNull(await("state", n -> n.path("spectator").asBoolean(false), 30));
+
+        send("{\"type\":\"concede\"}");
+        assertNotNull(await("gameOver", n -> true, 30), "kein Deadlock: gameOver kommt trotz sofortigem Beenden an");
+        assertTrue(bridge.match().lastGameOver(), "auch beim sofortigen Beenden muss das Spiel wirklich GameStage.GameOver erreichen");
     }
 }

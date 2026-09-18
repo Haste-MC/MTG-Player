@@ -82,10 +82,14 @@ public final class Bridge {
             case "concede" -> {
                 if (gui.getLocalPlayers().isEmpty()) {
                     // Zuschauer: kein Sitz, der AbstractGuiGame.concede() auslösen könnte (das fragt den
-                    // lokalen Spieler) - stattdessen das Spiel direkt beenden, synchron auf dem UI-Thread.
-                    ui(() -> {
+                    // lokalen Spieler) - stattdessen das Spiel direkt beenden. NICHT auf dem UI-Thread
+                    // (frueher ein Deadlock: match.end() wartet dort auf GameView.isGameOver(), waehrend
+                    // Game.setGameOver(...) auf dem Game-Thread synchron auf genau diesen UI-Thread wartet
+                    // (invokeInEdtAndWait) - siehe HumanMatch.end()). Stattdessen ein Hintergrund-Task, der
+                    // pushState()/das Senden selbst wieder auf den UI-Thread zurueckgibt.
+                    GuiBase.getInterface().runBackgroundTask("spectator-end", () -> {
                         match.end();
-                        gui.pushState();
+                        GuiBase.getInterface().invokeInEdtLater(gui::pushState);
                         ws.send(new Messages.GameOver(null));
                     });
                 } else {

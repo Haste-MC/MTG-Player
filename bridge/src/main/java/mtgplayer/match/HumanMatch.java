@@ -5,6 +5,7 @@ import forge.deck.Deck;
 import forge.game.Game;
 import forge.game.GameEndReason;
 import forge.game.GameRules;
+import forge.game.GameView;
 import forge.game.player.RegisteredPlayer;
 import forge.gamemodes.match.HostedMatch;
 import forge.gui.interfaces.IGuiGame;
@@ -23,7 +24,7 @@ import java.util.Map;
  */
 public final class HumanMatch {
 
-    private HostedMatch hosted;
+    private volatile HostedMatch hosted;
     private volatile boolean lastGameOver = true;
 
     public void start(String humanName, Deck humanDeck, List<Deck> aiDecks, List<String> aiNames, WebGuiGame gui) {
@@ -99,26 +100,61 @@ public final class HumanMatch {
      * ein neues Spiel im Hintergrund - genau der verwaiste Thread, der hier vermieden werden soll.
      * Ohne vorherige Spieler-Outcomes macht {@code Player.onGameOver()} jeden noch outcome-losen
      * Spieler automatisch zum Sieger, das reicht {@code Match.isMatchOver()} zum Abschluss.</p>
+     *
+     * <p><b>Deadlock-Falle (gefunden und gefixt):</b> {@code Game.isGameOver()} und
+     * {@code Game.setGameOver(...)} sind beide {@code synchronized} auf dasselbe {@code Game}-
+     * Objekt. {@code setGameOver(...)} haelt diesen Monitor waehrend es (ueber
+     * {@code view.updateGameOver}/{@code fireEvent}) synchron auf den UI-Thread wartet
+     * ({@code invokeInEdtAndWait}). Wuerde diese Methode hier {@code g.isGameOver()} pollen
+     * UND selbst auf dem UI-Thread laufen (frueher: {@code Bridge}s Zuschauer-Concede-Zweig lief
+     * ueber {@code ui(...)}), blockiert der UI-Thread auf dem Monitor, den der Game-Thread haelt,
+     * waehrend der Game-Thread auf genau diesen UI-Thread wartet – klassischer Deadlock, den ein
+     * dritter Thread (z. B. dieser Testlauf, der parallel {@code stop()} aufruft) noch verschaerfen
+     * kann. Deshalb hier ausschliesslich {@link GameView#isGameOver()} lesen (ein einfacher,
+     * synchronisationsfreier Trackable-Feldzugriff, den {@code Game.setGameOver} bereits VOR dem
+     * Event-Versand setzt) statt {@code Game.isGameOver()} – und {@code Bridge} ruft {@code end()}
+     * fuer den Zuschauer-Fall nicht mehr auf dem UI-Thread auf (siehe Bridge.handle, "concede").</p>
+     *
+     * <p><b>Zweite Falle (gefunden und gefixt):</b> concede fuer Zuschauer laeuft als eigener
+     * Hintergrund-Task pro Nachricht ({@code runBackgroundTask} startet jedes Mal einen neuen
+     * Thread) - ohne Schutz konnten zwei ueberlappende {@code end()}-Aufrufe (z. B. dieser hier und
+     * {@code Bridge.stop()} vom Testthread) beide den alten {@code if (hosted != null)}-Check
+     * bestehen, bevor einer von beiden {@code hosted} auf {@code null} setzte; der zweite griff dann
+     * auf das inzwischen genullte Feld zu (NullPointerException in {@code hosted.endCurrentGame()}).
+     * Deshalb {@code hosted} zuerst atomar "beanspruchen" (unter {@code synchronized(this)} lesen
+     * und sofort auf {@code null} setzen, das dauert nur Mikrosekunden) und erst DANACH - ausserhalb
+     * des Locks, damit ein zweiter Aufrufer nicht bis zu 5 s blockiert - mit der lokalen Kopie
+     * weiterarbeiten; ein zweiter, ueberlappender Aufruf sieht {@code hosted} bereits als
+     * {@code null} und kehrt sofort zurueck.</p>
      */
     public void end() {
-        if (hosted != null) {
-            Game g = hosted.getGame();
-            if (g != null && !g.isGameOver()) {
-                g.getAction().invoke(() -> g.setGameOver(GameEndReason.AllHumansLost));
-                long deadline = System.currentTimeMillis() + 5000;
-                while (!g.isGameOver() && System.currentTimeMillis() < deadline) {
-                    try {
-                        Thread.sleep(20);
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                        break;
-                    }
-                }
-            }
-            lastGameOver = g == null || g.isGameOver();
-            hosted.endCurrentGame();
+        HostedMatch h;
+        synchronized (this) {
+            h = hosted;
             hosted = null;
         }
+        if (h == null) {
+            return;
+        }
+        Game g = h.getGame();
+        GameView view = h.getGameView();
+        if (g != null && view != null && !view.isGameOver()) {
+            g.getAction().invoke(() -> g.setGameOver(GameEndReason.AllHumansLost));
+            long deadline = System.currentTimeMillis() + 5000;
+            while (!view.isGameOver() && System.currentTimeMillis() < deadline) {
+                try {
+                    Thread.sleep(20);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
+            if (!view.isGameOver()) {
+                System.err.println("[HumanMatch] end(): Spiel wurde nicht innerhalb von 5 s beendet (GameView.isGameOver() weiterhin false)");
+            }
+        }
+        lastGameOver = view == null || view.isGameOver();
+        h.endCurrentGame();
     }
 
     /** Fuer Tests (auch ausserhalb dieses Package, siehe Bridge#match): ob das zuletzt per
