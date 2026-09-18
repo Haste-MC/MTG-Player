@@ -235,6 +235,22 @@ class WebGuiGameTest {
     }
 
     @Test
+    void assignGenericAmountBeschriftetManaFarbenAufDeutsch() throws Exception {
+        java.util.Map<Object, Integer> target = new java.util.LinkedHashMap<>();
+        target.put(forge.card.MagicColor.Color.RED, 3);
+        target.put(forge.card.MagicColor.Color.GREEN, 3);
+        CompletableFuture<java.util.Map<Object, Integer>> r = CompletableFuture.supplyAsync(
+                () -> gui.assignGenericAmount(null, target, 3, true, "Mana"));
+        JsonNode c = nextChoice();
+        assertEquals("Rot", c.get("options").get(0).get("label").asText());
+        assertEquals("Grün", c.get("options").get(1).get("label").asText());
+        gui.broker().answer(c.get("id").asInt(), Json.parse("[1,2]"));
+        java.util.Map<Object, Integer> res = r.get(5, TimeUnit.SECONDS);
+        assertEquals(1, res.get(forge.card.MagicColor.Color.RED));
+        assertEquals(2, res.get(forge.card.MagicColor.Color.GREEN));
+    }
+
+    @Test
     void assignGenericAmountUngueltigeAntwortFaelltAufAllesAufDenErstenZurueck() throws Exception {
         java.util.Map<Object, Integer> target = new java.util.LinkedHashMap<>();
         target.put("A", 5);

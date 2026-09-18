@@ -707,7 +707,8 @@ public class WebGuiGame extends AbstractGuiGame {
             Integer card = k instanceof CardView cv ? cv.getId() : null;
             Integer player = k instanceof PlayerView pv ? pv.getId() : null;
             Integer max = target.get(k);
-            opts.add(new Messages.Option(i++, String.valueOf(k), card, player, null, max, null, null));
+            String label = k instanceof forge.card.MagicColor.Color col ? colorName(col) : String.valueOf(k);
+            opts.add(new Messages.Option(i++, label, card, player, null, max, null, null));
             maxPer.add(max);
         }
         String title = amount + " " + (amountLabel == null ? "" : amountLabel) + " verteilen";
@@ -722,6 +723,18 @@ public class WebGuiGame extends AbstractGuiGame {
             out.put(keys.get(k), a == null ? fallback : a.get(k));
         }
         return out;
+    }
+
+    private static String colorName(forge.card.MagicColor.Color col) {
+        return switch (col) {
+            case WHITE -> "Weiß";
+            case BLUE -> "Blau";
+            case BLACK -> "Schwarz";
+            case RED -> "Rot";
+            case GREEN -> "Grün";
+            case COLORLESS -> "Farblos";
+            default -> col.name();
+        };
     }
 
     // ---- Sonstiges ------------------------------------------------------------------

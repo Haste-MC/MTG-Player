@@ -45,6 +45,10 @@ Veraltete Klicks (Prompt hat inzwischen gewechselt) werden von der Bridge ignori
 Entwicklung am Frontend: `cd web && npm run dev` (Vite auf :5173, verbindet sich mit der Bridge auf :8081).
 `npm run shot -- http://127.0.0.1:8080 out.png fixtures/table.json` erzeugt einen Playwright-Screenshot (Fixture-Zustand, `?debug=1` wird automatisch angehängt).
 
+Log unten rechts: Kategorie-Chips blenden Zeilen ein/aus (Mana und Phase sind standardmäßig ausgeblendet).
+Spieler, die gerade als Ziel wählbar sind, bekommen einen gestrichelten Rahmen um den Kopfbereich.
+Alternative Bridge-Ports lassen sich per URL setzen: `?wsPort=8082` (gleicher Host) oder `?ws=ws://host:port` (eigene WebSocket-URL).
+
 ## Bridge
 
 ```bash
@@ -59,6 +63,6 @@ Ports: `-Dmtgplayer.wsPort=…`, `-Dmtgplayer.httpPort=…`; Bind-Adresse `-Dmtg
 Forges Nutzerdaten damit nach `~/.mtg-player/`; `bridge/assets/res` ist ein Symlink auf `forge/forge-gui/res`.
 Der Assets-Pfad ist mit `-Dmtgplayer.assets=<dir>` überschreibbar; Maven setzt ihn für `test` und `exec:java` automatisch.
 
-## Was noch fehlt (M5+)
+## Was noch fehlt (M6)
 
-Spiel-Log im Browser, Spieler-Markierung als Ziel, Archidekt-URL (M6).
+Archidekt-URL statt Textliste, gleiche Länder im Deckbau stapeln, UI-Feinschliff.
