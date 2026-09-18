@@ -56,7 +56,14 @@ public final class DeckStore {
             for (Path p : files.filter(x -> x.toString().endsWith(".dck")).toList()) {
                 if (name.equals(readDisplayName(p))) {
                     Deck d = DeckSerializer.fromFile(p.toFile());
-                    if (d != null) return d;
+                    if (d != null) {
+                        // DeckSerializer baut das Deck intern über new Deck(rawName), und
+                        // DeckBase(String)  ersetzt "/" durch "_" – siehe Klassen-Javadoc. Der
+                        // Anzeigename (roh, ohne diese Sanitisierung) wird hier nachträglich
+                        // wiederhergestellt, damit load(name).getName() == name gilt.
+                        d.setName(name);
+                        return d;
+                    }
                 }
             }
         } catch (IOException e) {

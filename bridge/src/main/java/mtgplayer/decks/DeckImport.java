@@ -19,7 +19,10 @@ import java.util.regex.Pattern;
  * Liste → erster Commander-fähiger Eintrag aus dem Main wandert in die Commander-Sektion.
  * Karten, die Forge nur wegen eines nicht auflösbaren Set/Collector-Nummer-Paars als unbekannt
  * einstuft (der Kartenname selbst wurde erkannt), werden ein zweites Mal ohne Set-Angabe
- * aufgelöst, bevor sie als Problem gemeldet werden.
+ * aufgelöst, bevor sie als Problem gemeldet werden. Nicht erkannte Zeilen (z.B. Archidekts
+ * "Maybeboard") und erkannte, aber nicht erlaubte Sektionen werden als Problem gemeldet;
+ * Kartenzeilen, die Forge danach (mangels neuer erkannter Sektion) weiter der vorherigen Sektion
+ * zuordnen würde, werden nicht importiert, sondern ebenfalls als Problem gemeldet.
  */
 public final class DeckImport {
 
@@ -49,6 +52,12 @@ public final class DeckImport {
         List<Token> tokens = rec.parseCardList(lines);
 
         DeckSection currentSection = null;
+        // Forge lässt eine nicht erkannte/nicht unterstützte "Sektion" (z.B. Archidekts
+        // "Maybeboard" oder eine erlaubte, aber nicht in allowedDeckSections enthaltene Sektion)
+        // die Referenz-Sektion unverändert – nachfolgende Kartenzeilen würden sonst still in der
+        // vorherigen (falschen) Sektion landen. Dieses Flag unterdrückt das, bis die nächste
+        // tatsächlich erkannte Sektion kommt.
+        boolean unsupportedSection = false;
         for (Token t : tokens) {
             TokenType type = t.getType();
             if (type == TokenType.DECK_NAME) {
@@ -57,15 +66,43 @@ public final class DeckImport {
             }
             if (type == TokenType.DECK_SECTION_NAME) {
                 currentSection = DeckSection.valueOf(t.getText());
+                unsupportedSection = false;
+                continue;
+            }
+            if (type == TokenType.COMMENT) {
+                continue;
+            }
+            if (type == TokenType.UNKNOWN_TEXT) {
+                if (!t.getText().isBlank()) {
+                    problems.add("Nicht erkannt: " + t.getText());
+                }
+                unsupportedSection = true;
+                continue;
+            }
+            if (type == TokenType.UNSUPPORTED_DECK_SECTION) {
+                problems.add("Sektion nicht unterstützt: " + t.getText());
+                unsupportedSection = true;
+                continue;
+            }
+            if (type == TokenType.WARNING_MESSAGE) {
+                problems.add(t.getText());
                 continue;
             }
             if (t.isTokenForDeck()) {
+                if (unsupportedSection) {
+                    problems.add("Karte in nicht unterstützter Sektion: " + t.getCard().getName());
+                    continue;
+                }
                 DeckSection section = t.getTokenSection() == null ? DeckSection.Main : t.getTokenSection();
                 deck.getOrCreate(section).add(t.getCard(), t.getQuantity());
                 continue;
             }
             if (type == TokenType.UNKNOWN_CARD || type == TokenType.UNSUPPORTED_CARD
                     || type == TokenType.CARD_FROM_INVALID_SET || type == TokenType.CARD_FROM_NOT_ALLOWED_SET) {
+                if (unsupportedSection) {
+                    problems.add("Karte in nicht unterstützter Sektion: " + t.getText());
+                    continue;
+                }
                 Token recovered = type == TokenType.UNKNOWN_CARD ? retryWithoutSet(rec, t, currentSection) : null;
                 if (recovered != null) {
                     DeckSection section = recovered.getTokenSection() == null

@@ -44,5 +44,6 @@ class DeckStoreTest {
         store.save("A/B: C?", Precons.load("Abzan Armor [TDC] [2025]"));
         assertEquals(List.of("A/B: C?"), store.names(), "Anzeigename bleibt, nur der Dateiname wird bereinigt");
         assertTrue(dir.resolve("A_B_ C_.dck").toFile().exists());
+        assertEquals("A/B: C?", store.load("A/B: C?").getName(), "geladenes Deck traegt den gespeicherten Anzeigenamen");
     }
 }

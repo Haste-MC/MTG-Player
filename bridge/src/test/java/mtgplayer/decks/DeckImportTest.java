@@ -61,6 +61,23 @@ class DeckImportTest {
     }
 
     @Test
+    void unbekannteSektionWirdGemeldetUndKartenDanachNichtStillUebernommen() {
+        DeckImport.Result r = DeckImport.parse("1 Sol Ring\nMaybeboard\n1 Felothar the Steadfast\n");
+        assertFalse(r.problems().isEmpty(), "Maybeboard wird nicht erkannt und muss als Problem auftauchen");
+        assertTrue(r.problems().stream().anyMatch(p -> p.contains("Maybeboard")), r.problems().toString());
+        assertTrue(r.deck().getCommanders().isEmpty(), "Felothar darf nicht automatisch Commander werden");
+        assertEquals(0, r.deck().has(DeckSection.Main) ? r.deck().get(DeckSection.Main).countAll(x -> x.getName().equals("Felothar the Steadfast")) : 0,
+                "Felothar darf nach der unerkannten Zeile nicht still im Main landen");
+    }
+
+    @Test
+    void nichtErkannteZeileIstGenauEinProblem() {
+        DeckImport.Result r = DeckImport.parse("1 Sol Ring\n1 Felothar the Steadfast\nblabla kein kartenname\n");
+        assertEquals(1, r.problems().size(), r.problems().toString());
+        assertTrue(r.problems().get(0).contains("blabla"));
+    }
+
+    @Test
     void namensvorschlag() {
         DeckImport.Result r = DeckImport.parse(ARCHIDEKT);
         assertEquals("Felothar the Steadfast", DeckImport.suggestName(ARCHIDEKT, r.deck()));
