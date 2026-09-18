@@ -19,8 +19,10 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Disk-Cache für Kartenbilder. Downloads laufen serialisiert mit Mindestabstand (Scryfall-Etikette);
- * Fehlschläge werden 10 Minuten lang nicht wiederholt.
+ * Disk-Cache für Kartenbilder. Downloads laufen serialisiert mit Mindestabstand (Scryfall-Etikette).
+ * Ein echtes "gibt es nicht" (Fetcher liefert null ohne Exception, i.d.R. Scryfall-404) wird 10
+ * Minuten lang nicht wiederholt; ein Transportfehler (IOException, z.B. Timeout/Verbindungsabbruch)
+ * nur 60 Sekunden - der ist eher voruebergehend und soll nicht so lange wie ein echtes 404 blockieren.
  */
 public final class ImageCache {
 
@@ -30,6 +32,7 @@ public final class ImageCache {
     }
 
     private static final long NEGATIVE_TTL_MS = 10 * 60 * 1000L;
+    private static final long TRANSPORT_ERROR_TTL_MS = 60 * 1000L;
 
     private final Path dir;
     private final Fetcher fetcher;
@@ -89,13 +92,16 @@ public final class ImageCache {
             }
             lastRequestAt = System.currentTimeMillis();
             byte[] data = null;
+            boolean transportError = false;
             try {
                 data = fetcher.fetch(url.get());
             } catch (IOException e) {
                 System.err.println("[images] " + url.get() + ": " + e);
+                transportError = true;
             }
             if (data == null || data.length == 0) {
-                failedUntil.put(imageKey, System.currentTimeMillis() + NEGATIVE_TTL_MS);
+                long ttl = transportError ? TRANSPORT_ERROR_TTL_MS : NEGATIVE_TTL_MS;
+                failedUntil.put(imageKey, System.currentTimeMillis() + ttl);
                 return Optional.empty();
             }
             try {

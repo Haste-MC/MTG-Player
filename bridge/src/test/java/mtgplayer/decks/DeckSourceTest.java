@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import forge.deck.Deck;
 import mtgplayer.forge.ForgeBoot;
 import mtgplayer.protocol.Json;
@@ -21,9 +22,16 @@ class DeckSourceTest {
         ForgeBoot.init();
     }
 
+    /** resolve() + save() (save laeuft in Bridge normalerweise erst nach ALLEN resolve()-Aufrufen). */
+    private static Deck resolveAndSave(DeckSource src, JsonNode node) {
+        DeckSource.Resolved r = src.resolve(node);
+        r.save().run();
+        return r.deck();
+    }
+
     @Test
     void precon(@TempDir Path dir) {
-        Deck d = new DeckSource(new DeckStore(dir)).resolve(Json.parse("{\"precon\":\"Abzan Armor [TDC] [2025]\"}"));
+        Deck d = resolveAndSave(new DeckSource(new DeckStore(dir)), Json.parse("{\"precon\":\"Abzan Armor [TDC] [2025]\"}"));
         assertEquals(1, d.getCommanders().size());
     }
 
@@ -31,18 +39,49 @@ class DeckSourceTest {
     void textWirdGeparstUndGespeichert(@TempDir Path dir) {
         DeckStore store = new DeckStore(dir);
         String text = "1 Sol Ring\\n1 Felothar the Steadfast\\n2 Forest\\n";
-        Deck d = new DeckSource(store).resolve(Json.parse("{\"text\":\"" + text + "\",\"name\":\"Testdeck\"}"));
+        Deck d = resolveAndSave(new DeckSource(store), Json.parse("{\"text\":\"" + text + "\",\"deckName\":\"Testdeck\"}"));
         assertEquals("Felothar the Steadfast", d.getCommanders().get(0).getName());
         assertEquals(List.of("Testdeck"), store.names());
-        Deck again = new DeckSource(store).resolve(Json.parse("{\"saved\":\"Testdeck\"}"));
+        Deck again = resolveAndSave(new DeckSource(store), Json.parse("{\"saved\":\"Testdeck\"}"));
         assertEquals(1, again.getCommanders().size());
     }
 
     @Test
     void textOhneNamenNimmtVorschlag(@TempDir Path dir) {
         DeckStore store = new DeckStore(dir);
-        new DeckSource(store).resolve(Json.parse("{\"text\":\"1 Sol Ring\\n1 Felothar the Steadfast\\n\"}"));
+        resolveAndSave(new DeckSource(store), Json.parse("{\"text\":\"1 Sol Ring\\n1 Felothar the Steadfast\\n\"}"));
         assertEquals(List.of("Felothar the Steadfast"), store.names());
+    }
+
+    @Test
+    void deckNameUeberschreibtSpielernameBeimSpeichern(@TempDir Path dir) {
+        // Regression: startGame.opponents[i].name ist der Spielername ("KI 1"), nicht der
+        // Speichername des Decks - der kommt aus dem eigenen Feld "deckName".
+        DeckStore store = new DeckStore(dir);
+        String text = "1 Sol Ring\\n1 Felothar the Steadfast\\n2 Forest\\n";
+        Deck d = resolveAndSave(new DeckSource(store),
+                Json.parse("{\"text\":\"" + text + "\",\"name\":\"KI 1\",\"deckName\":\"Mein Deck\"}"));
+        assertEquals("Felothar the Steadfast", d.getCommanders().get(0).getName());
+        assertEquals(List.of("Mein Deck"), store.names());
+    }
+
+    @Test
+    void ohneDeckNameWirdSpielernameNichtAlsSpeichernameGenutzt(@TempDir Path dir) {
+        DeckStore store = new DeckStore(dir);
+        String text = "1 Sol Ring\\n1 Felothar the Steadfast\\n";
+        resolveAndSave(new DeckSource(store), Json.parse("{\"text\":\"" + text + "\",\"name\":\"KI 1\"}"));
+        assertEquals(List.of("Felothar the Steadfast"), store.names());
+    }
+
+    @Test
+    void speichertErstNachAllenResolveAufrufen(@TempDir Path dir) {
+        // resolve() alleine darf noch nichts auf Platte schreiben - erst save().run().
+        DeckStore store = new DeckStore(dir);
+        String text = "1 Sol Ring\\n1 Felothar the Steadfast\\n";
+        DeckSource.Resolved r = new DeckSource(store).resolve(Json.parse("{\"text\":\"" + text + "\",\"deckName\":\"Spaeter\"}"));
+        assertEquals(List.of(), store.names());
+        r.save().run();
+        assertEquals(List.of("Spaeter"), store.names());
     }
 
     @Test

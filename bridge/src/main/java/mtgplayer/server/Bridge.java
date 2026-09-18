@@ -105,7 +105,8 @@ public final class Bridge {
 
     /**
      * {"type":"startGame","humanDeck":{deckAngabe},"opponents":[{deckAngabe,"name":"KI 1"}]}
-     * deckAngabe: {"precon":"..."} | {"saved":"..."} | {"text":"...", "name":"..."?}
+     * deckAngabe: {"precon":"..."} | {"saved":"..."} | {"text":"...", "deckName":"..."?}
+     * "name" bei einem Gegner-Eintrag ist der Spielername, nicht der Speichername des Decks.
      */
     private void startGame(JsonNode msg) {
         if (match.isRunning()) {
@@ -115,17 +116,25 @@ public final class Bridge {
         Deck human;
         List<Deck> ai = new ArrayList<>();
         List<String> names = new ArrayList<>();
+        List<Runnable> saves = new ArrayList<>();
         try {
-            human = decks.resolve(msg.path("humanDeck"));
+            DeckSource.Resolved humanR = decks.resolve(msg.path("humanDeck"));
+            human = humanR.deck();
+            saves.add(humanR.save());
             int i = 1;
             for (JsonNode o : msg.path("opponents")) {
-                ai.add(decks.resolve(o));
+                DeckSource.Resolved r = decks.resolve(o);
+                ai.add(r.deck());
+                saves.add(r.save());
                 names.add(o.path("name").asText("KI " + i++));
             }
         } catch (IllegalArgumentException e) {
             ws.send(new Messages.ErrorMsg(e.getMessage()));
             return;
         }
+        // Erst wenn ALLE Decks aufgeloest sind speichern - ein fehlgeschlagener KI-Import
+        // darf ein zuvor erfolgreich aufgeloestes Text-Deck nicht trotzdem auf Platte lassen.
+        saves.forEach(Runnable::run);
         ws.send(new Messages.Lobby(Precons.names(), store.names())); // ggf. neu gespeichertes Deck
         ui(() -> {
             try {

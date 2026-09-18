@@ -1,14 +1,22 @@
 package mtgplayer.images;
 
 import forge.ImageKeys;
+import forge.StaticData;
+import forge.card.CardEdition;
+import forge.item.IPaperCard;
 import forge.item.PaperCard;
 import forge.util.ImageUtil;
 
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 
-/** Forge-imageKey ("c:Name|SET|art", optional "$alt") → Scryfall-Bild-URL. */
+/**
+ * Forge-imageKey ("c:Name|SET|art", optional "$alt") → Scryfall-Bild-URL.
+ *
+ * <p>Die eigentliche URL baut Forges {@link ImageUtil#getScryfallDownloadUrl}, damit
+ * Sonderfaelle (Split/Transform/Meld/Specialize, umgeschriebene Planechase-Sets, "Funny"-
+ * Sammlernummern, ...) nicht hier nochmal nachgebaut werden. Das Set-Kuerzel kommt, wo
+ * bekannt, von Forges eigener {@link CardEdition} statt aus dem rohen Edition-Code.</p>
+ */
 public final class ImageKeys2Scryfall {
 
     private ImageKeys2Scryfall() { }
@@ -25,12 +33,17 @@ public final class ImageKeys2Scryfall {
         } catch (RuntimeException e) {
             return Optional.empty();
         }
-        if (pc == null || pc.getEdition() == null || pc.getCollectorNumber() == null || pc.getCollectorNumber().isBlank()) {
+        if (pc == null || pc.getEdition() == null) {
             return Optional.empty();
         }
-        String set = pc.getEdition().toLowerCase();
-        String num = URLEncoder.encode(pc.getCollectorNumber(), StandardCharsets.UTF_8);
-        String url = "https://api.scryfall.com/cards/" + set + "/" + num + "?format=image&version=normal";
-        return Optional.of(back ? url + "&face=back" : url);
+        String num = pc.getCollectorNumber();
+        if (num == null || num.isBlank() || IPaperCard.NO_COLLECTOR_NUMBER.equals(num)) {
+            return Optional.empty();
+        }
+        CardEdition ed = StaticData.instance().getCardEdition(pc.getEdition());
+        String code = ed != null ? ed.getScryfallCode() : pc.getEdition().toLowerCase();
+        String url = "https://api.scryfall.com/cards/"
+                + ImageUtil.getScryfallDownloadUrl(pc, back ? "back" : "front", code, "", false);
+        return Optional.of(url);
     }
 }

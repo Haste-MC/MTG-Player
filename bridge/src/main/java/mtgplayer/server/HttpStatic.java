@@ -1,5 +1,6 @@
 package mtgplayer.server;
 
+import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 
 import java.io.IOException;
@@ -7,7 +8,12 @@ import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
 
 /**
  * Liefert das gebaute Frontend (web/dist). Unbekannte Pfade fallen auf index.html zurück (SPA).
@@ -17,6 +23,12 @@ import java.util.Map;
  * einen eigenen Pool ab, damit langsame Scryfall-Downloads diesen Server-Pool nicht belegen; der
  * Pool hier ist trotzdem auf 8 Threads angehoben, damit `/`-Requests immer einen freien Thread
  * finden, auch wenn der Image-Pool gleichzeitig ausgelastet ist.</p>
+ *
+ * <p>Threads in beiden Pools laufen als Daemon: ein fehlgeschlagener Start (z.B. Port belegt,
+ * siehe {@code Main}) darf die JVM nicht am Leben halten, nur weil irgendwo noch ein Pool-Thread
+ * wartet. {@link #stop()} faehrt den eigenen Pool trotzdem sauber via {@code shutdownNow()} herunter
+ * und schliesst alle {@link AutoCloseable}-Handler, die ueber {@link #addContext} registriert wurden
+ * (siehe {@link mtgplayer.images.ImageHandler#close()}).</p>
  */
 public final class HttpStatic {
 
@@ -26,11 +38,22 @@ public final class HttpStatic {
 
     private final HttpServer server;
     private final Path dir;
+    private final ExecutorService executor;
+    private final List<AutoCloseable> closeables = new ArrayList<>();
+
+    static ThreadFactory daemonThreads(String prefix) {
+        return r -> {
+            Thread t = new Thread(r, prefix + "-" + System.identityHashCode(r));
+            t.setDaemon(true);
+            return t;
+        };
+    }
 
     public HttpStatic(int port, Path dir) throws IOException {
         this.dir = dir.toAbsolutePath().normalize();
         this.server = HttpServer.create(new InetSocketAddress(bindAddress(), port), 0);
-        server.setExecutor(java.util.concurrent.Executors.newFixedThreadPool(8));
+        this.executor = Executors.newFixedThreadPool(8, daemonThreads("http-static"));
+        server.setExecutor(executor);
         server.createContext("/", ex -> {
             String p = ex.getRequestURI().getPath();
             String rel = p.length() > 1 ? p.substring(1) : "";
@@ -58,8 +81,11 @@ public final class HttpStatic {
         return System.getProperty("mtgplayer.bind", "0.0.0.0");
     }
 
-    public void addContext(String path, com.sun.net.httpserver.HttpHandler handler) {
+    public void addContext(String path, HttpHandler handler) {
         server.createContext(path, handler);
+        if (handler instanceof AutoCloseable c) {
+            closeables.add(c);
+        }
     }
 
     public void start() {
@@ -69,5 +95,13 @@ public final class HttpStatic {
 
     public void stop() {
         server.stop(0);
+        executor.shutdownNow();
+        for (AutoCloseable c : closeables) {
+            try {
+                c.close();
+            } catch (Exception e) {
+                System.err.println("[http] Handler schliessen: " + e);
+            }
+        }
     }
 }

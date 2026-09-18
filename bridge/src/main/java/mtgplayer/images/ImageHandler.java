@@ -10,6 +10,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
 
 /**
  * GET/HEAD /img/{urlencoded imageKey} → JPEG aus dem ImageCache, sonst 404.
@@ -23,14 +25,34 @@ import java.util.concurrent.Executors;
  * {@link ImageCache#get}) läuft im Pool-Thread, der die Exchange auch abschließt – das ist beim
  * JDK-{@code HttpServer} zulässig, die Exchange muss nicht vom Server-Thread selbst beendet
  * werden.</p>
+ *
+ * <p>Der Pool laeuft als Daemon-Threads, damit ein fehlgeschlagener Start die JVM nicht am
+ * Leben haelt; {@link #close()} faehrt ihn trotzdem sauber herunter (wird von
+ * {@link mtgplayer.server.HttpStatic#stop()} fuer alle {@link AutoCloseable}-Handler aufgerufen).</p>
  */
-public final class ImageHandler implements HttpHandler {
+public final class ImageHandler implements HttpHandler, AutoCloseable {
+
+    private static final ThreadFactory DAEMON_THREADS = r -> {
+        Thread t = new Thread(r, "image-handler-" + System.identityHashCode(r));
+        t.setDaemon(true);
+        return t;
+    };
 
     private final ImageCache cache;
-    private final ExecutorService imagePool = Executors.newFixedThreadPool(8);
+    private final ExecutorService imagePool = Executors.newFixedThreadPool(8, DAEMON_THREADS);
 
     public ImageHandler(ImageCache cache) {
         this.cache = cache;
+    }
+
+    @Override
+    public void close() {
+        imagePool.shutdownNow();
+        try {
+            imagePool.awaitTermination(5, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     @Override
@@ -48,8 +70,11 @@ public final class ImageHandler implements HttpHandler {
             }
             String path = ex.getRequestURI().getRawPath();
             String raw = path.length() > 5 ? path.substring(5) : "";
-            // Der Client kodiert mit encodeURIComponent, das '+' nicht anfasst; URLDecoder würde
-            // ein woertliches '+' faelschlich als Leerzeichen interpretieren, deshalb vorher escapen.
+            // Der Client kodiert mit JS encodeURIComponent, das ein woertliches '+' im Key als
+            // "%2B" ueberträgt (encodeURIComponent laesst '+' NICHT unangetastet) - ein roher,
+            // unkodierter '+' im Pfad kann also nur von einem anderen Absender stammen. URLDecoder
+            // wuerde so ein rohes '+' faelschlich als Leerzeichen lesen, deshalb wird es vorsorglich
+            // zu "%2B" escaped, bevor decodiert wird.
             String key = raw.isEmpty() ? "" : URLDecoder.decode(raw.replace("+", "%2B"), StandardCharsets.UTF_8);
             Optional<byte[]> img = key.isBlank() ? Optional.empty() : cache.get(key);
             if (img.isEmpty()) {
