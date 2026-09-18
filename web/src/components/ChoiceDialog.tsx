@@ -3,6 +3,7 @@ import type { Choice, Option } from "../protocol";
 import { useStore } from "../store";
 import { send } from "../ws";
 import { amountsValid, cardlistDirections, isPermutation, remaining } from "../dialogs";
+import CardImage from "./CardImage";
 
 export default function ChoiceDialog({ choice }: { choice: Choice }) {
   const clear = useStore((s) => s.clearChoice);
@@ -22,16 +23,19 @@ export default function ChoiceDialog({ choice }: { choice: Choice }) {
       ? `${o.label} [${cards[String(o.card)].name}]` : o.label;
 
   const optionView = (o: Option) => (
-    <>
-      <div className="opt-label">{label(o)}</div>
-      {o.detail && (
-        <div className="opt-detail">
-          <span className="type">{o.detail.typeLine}</span>
-          {o.detail.power !== undefined && <span className="pt"> {o.detail.power}/{o.detail.toughness}</span>}
-          <div className="text">{o.detail.text}</div>
-        </div>
-      )}
-    </>
+    <div className={o.detail?.imageKey ? "opt-with-img" : undefined}>
+      {o.detail?.imageKey && <CardImage imageKey={o.detail.imageKey} className="art-small" />}
+      <div>
+        <div className="opt-label">{label(o)}</div>
+        {o.detail && (
+          <div className="opt-detail">
+            <span className="type">{o.detail.typeLine}</span>
+            {o.detail.power !== undefined && <span className="pt"> {o.detail.power}/{o.detail.toughness}</span>}
+            <div className="text">{o.detail.text}</div>
+          </div>
+        )}
+      </div>
+    </div>
   );
 
   const body = () => {

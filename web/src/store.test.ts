@@ -24,6 +24,13 @@ describe("reduce", () => {
     expect(s.screen).toBe("lobby");
   });
 
+  it("lobby setzt gespeicherte decks", () => {
+    const s = reduce(initialState, { type: "lobby", precons: ["A"], decks: ["Mein Deck"] });
+    expect(s.decks).toEqual(["Mein Deck"]);
+    const s2 = reduce(s, { type: "lobby", precons: ["A"] });
+    expect(s2.decks).toEqual([]);
+  });
+
   it("state wechselt auf den tisch und ersetzt den snapshot", () => {
     const s = reduce(initialState, snap({ turn: 3 }));
     expect(s.screen).toBe("table");

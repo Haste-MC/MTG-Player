@@ -4,6 +4,7 @@ import type { Choice, Inbound, Snapshot } from "./protocol";
 export interface AppState {
   screen: "lobby" | "table";
   precons: string[];
+  decks: string[];
   state?: Snapshot;
   choices: Choice[];
   log: string[];
@@ -11,7 +12,7 @@ export interface AppState {
   hover?: number;
 }
 
-export const initialState: AppState = { screen: "lobby", precons: [], choices: [], log: [] };
+export const initialState: AppState = { screen: "lobby", precons: [], decks: [], choices: [], log: [] };
 
 const LOG_MAX = 500;
 
@@ -24,7 +25,7 @@ function addChoice(choices: Choice[], c: Choice): Choice[] {
 export function reduce(s: AppState, m: Inbound): AppState {
   switch (m.type) {
     case "lobby":
-      return { ...s, precons: m.precons, screen: s.state ? s.screen : "lobby" };
+      return { ...s, precons: m.precons, decks: m.decks ?? [], screen: s.state ? s.screen : "lobby" };
     case "state":
       return { ...s, state: m, screen: "table" };
     case "choice":

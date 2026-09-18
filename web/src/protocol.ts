@@ -106,7 +106,8 @@ export interface Choice {
   flags?: string[];
 }
 
-export interface Lobby { type: "lobby"; precons: string[]; }
+export interface Lobby { type: "lobby"; precons: string[]; decks?: string[]; }
+export type DeckRef = { precon: string } | { saved: string } | { text: string; name?: string };
 export interface LogLine { type: "log"; text: string; }
 export interface GameOver { type: "gameOver"; winner?: string; }
 export interface ErrorMsg { type: "error"; text: string; }
@@ -114,7 +115,7 @@ export interface ErrorMsg { type: "error"; text: string; }
 export type Inbound = Snapshot | Choice | Lobby | LogLine | GameOver | ErrorMsg;
 
 export type Outbound =
-  | { type: "startGame"; humanDeck: { precon: string }; opponents: { precon: string; name: string }[] }
+  | { type: "startGame"; humanDeck: DeckRef; opponents: (DeckRef & { name: string })[] }
   | { type: "selectCard"; id: number; alt?: boolean; seq?: number }
   | { type: "selectPlayer"; id: number; seq?: number }
   | { type: "ok"; seq?: number }

@@ -1,14 +1,18 @@
+import { useState } from "react";
 import type { MouseEvent } from "react";
 import type { CardSnap } from "../protocol";
 import { useStore } from "../store";
 import { send } from "../ws";
+import CardImage from "./CardImage";
 
 export default function CardBox({ card }: { card: CardSnap }) {
   const seq = useStore((s) => s.state?.prompt.seq);
   const setHover = useStore((s) => s.setHover);
+  const [noImg, setNoImg] = useState(!card.imageKey);
   if (card.faceDown) return <div className="card back" />;
   const cls = ["card", card.tapped ? "tapped" : "", card.selectable ? "selectable" : "",
-    card.actionable ? "actionable" : "", card.attacking ? "attacking" : "", card.blocking ? "blocking" : ""]
+    card.actionable ? "actionable" : "", card.attacking ? "attacking" : "", card.blocking ? "blocking" : "",
+    !noImg ? "has-img" : ""]
     .filter(Boolean).join(" ");
   const click = (e: MouseEvent) => {
     e.preventDefault();
@@ -17,9 +21,14 @@ export default function CardBox({ card }: { card: CardSnap }) {
   return (
     <div className={cls} title={card.text ?? ""} onClick={click} onContextMenu={click}
       onMouseEnter={() => setHover(card.id)} onMouseLeave={() => setHover(undefined)}>
-      <div className="name">{card.name}</div>
-      <div className="meta">{card.manaCost ?? ""}</div>
-      <div className="type">{card.typeLine ?? ""}</div>
+      <CardImage imageKey={card.imageKey} className="art" onFail={() => setNoImg(true)} />
+      {noImg && (
+        <>
+          <div className="name">{card.name}</div>
+          <div className="meta">{card.manaCost ?? ""}</div>
+          <div className="type">{card.typeLine ?? ""}</div>
+        </>
+      )}
       {card.power !== undefined && (
         <div className="pt">{card.power}/{card.toughness}{card.damage ? ` (${card.damage} dmg)` : ""}</div>
       )}
