@@ -3,7 +3,6 @@ package mtgplayer.match;
 import forge.ai.LobbyPlayerAi;
 import forge.deck.Deck;
 import forge.game.GameRules;
-import forge.game.GameType;
 import forge.game.player.RegisteredPlayer;
 import forge.gamemodes.match.HostedMatch;
 import forge.gui.interfaces.IGuiGame;
@@ -41,8 +40,7 @@ public final class HumanMatch {
         Map<RegisteredPlayer, IGuiGame> guis = new HashMap<>();
         guis.put(human, gui);
 
-        GameRules rules = new GameRules(GameType.Commander);
-        rules.setGamesPerMatch(1);
+        GameRules rules = CommanderRules.create();
         // Forge zeigt sonst beim Start eine Liste von Karten, die die KI nicht spielen kann – Rauschen für den menschlichen Sitz
         rules.setWarnAboutAICards(false);
         hosted = new HostedMatch();

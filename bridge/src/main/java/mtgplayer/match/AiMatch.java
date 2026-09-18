@@ -8,7 +8,6 @@ import forge.game.GameEndReason;
 import forge.game.GameLogEntry;
 import forge.game.GameOutcome;
 import forge.game.GameRules;
-import forge.game.GameType;
 import forge.game.Match;
 import forge.game.event.GameEventTurnEnded;
 import forge.game.player.Player;
@@ -52,8 +51,7 @@ public final class AiMatch {
             players.add(rp);
         }
 
-        GameRules rules = new GameRules(GameType.Commander);
-        rules.setGamesPerMatch(1);
+        GameRules rules = CommanderRules.create();
         Match match = new Match(rules, players, "AI Commander");
         Game game = match.createGame();
 
