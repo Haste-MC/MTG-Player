@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import type { DeckRef } from "../protocol";
 import { type Pick, toRef } from "../deckref";
+import { buildStartGame } from "../lobbyPayload";
 import { useStore } from "../store";
 import { send } from "../ws";
 
@@ -12,6 +12,7 @@ export default function Lobby() {
   const log = useStore((s) => s.log);
   const [human, setHuman] = useState<Pick>(EMPTY);
   const [ais, setAis] = useState<Pick[]>([EMPTY]);
+  const [spectate, setSpectate] = useState(false);
   const [shownError, setShownError] = useState<string>();
 
   // Neue Fehler (letzte Log-Zeile) automatisch zeigen - unabhaengig davon, ob eine fruehere
@@ -23,8 +24,17 @@ export default function Lobby() {
 
   const humanRef = toRef(human);
   const aiRefs = ais.map(toRef);
-  const ready = humanRef !== undefined && aiRefs.every((r) => r !== undefined);
+  const maxAis = spectate ? 6 : 5;
+  const minAis = spectate ? 2 : 1;
+  const msg = buildStartGame(spectate, humanRef, aiRefs);
+  const ready = msg !== undefined;
 
+  const toggleSpectate = (on: boolean) => {
+    setShownError(undefined);
+    setSpectate(on);
+    // Zuschauer-Modus braucht mindestens 2 KIs (Forges Spectator-Pfad, siehe HumanMatch.startSpectator).
+    if (on && ais.length < 2) setAis([...ais, EMPTY]);
+  };
   const editHuman = (n: Pick) => {
     setShownError(undefined);
     setHuman(n);
@@ -36,12 +46,7 @@ export default function Lobby() {
 
   const start = () => {
     setShownError(undefined);
-    if (!ready) return;
-    send({
-      type: "startGame",
-      humanDeck: humanRef!,
-      opponents: aiRefs.map((r, i) => ({ ...(r as DeckRef), name: `KI ${i + 1}` })),
-    });
+    if (msg) send(msg);
   };
 
   const picker = (p: Pick, onChange: (n: Pick) => void) => (
@@ -81,19 +86,25 @@ export default function Lobby() {
           <p className="subtitle">Commander gegen die Forge-KI – Deck wählen, Gegner hinzufügen, losspielen.</p>
           {precons.length === 0 && <p className="connecting">Verbinde mit der Bridge …</p>}
         </div>
-        <section className="lobby-section">
-          <label>Dein Deck</label>
-          {picker(human, editHuman)}
-        </section>
+        <label className="spectate-toggle">
+          <input type="checkbox" checked={spectate} onChange={(e) => toggleSpectate(e.target.checked)} />
+          Nur KI – zuschauen
+        </label>
+        {!spectate && (
+          <section className="lobby-section">
+            <label>Dein Deck</label>
+            {picker(human, editHuman)}
+          </section>
+        )}
         {ais.map((a, i) => (
           <section key={i} className="lobby-section">
-            <label>KI {i + 1} {ais.length > 1 && (
+            <label>KI {i + 1} {ais.length > minAis && (
               <button className="quiet small" title="Gegner entfernen" onClick={() => { setShownError(undefined); setAis(ais.filter((_, j) => j !== i)); }}>entfernen</button>
             )}</label>
             {picker(a, (n) => editAi(i, n))}
           </section>
         ))}
-        {ais.length < 5 && (
+        {ais.length < maxAis && (
           <button className="ghost" onClick={() => { setShownError(undefined); setAis([...ais, EMPTY]); }}>+ Gegner hinzufügen</button>
         )}
         <button className="primary big" disabled={!ready} onClick={start}>Spiel starten</button>

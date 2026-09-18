@@ -76,6 +76,8 @@ export interface Snapshot {
   stops: { own: string[]; opp: string[] };
   fullControl: boolean;
   prompt: PromptSnap;
+  /** true nur im KI-only-Zuschauer-Sitz (kein "me", alle Haende sichtbar); sonst fehlt das Feld. */
+  spectator?: boolean;
 }
 
 export interface Option {
@@ -117,7 +119,8 @@ export interface ErrorMsg { type: "error"; text: string; }
 export type Inbound = Snapshot | Choice | Lobby | LogLine | GameOver | ErrorMsg;
 
 export type Outbound =
-  | { type: "startGame"; humanDeck: DeckRef; opponents: (DeckRef & { name: string })[] }
+  // humanDeck fehlt bei spectate:true (KI-only-Modus, kein eigener Sitz - siehe lobbyPayload.ts)
+  | { type: "startGame"; spectate?: boolean; humanDeck?: DeckRef; opponents: (DeckRef & { name: string })[] }
   | { type: "selectCard"; id: number; alt?: boolean; seq?: number }
   | { type: "selectPlayer"; id: number; seq?: number }
   | { type: "ok"; seq?: number }

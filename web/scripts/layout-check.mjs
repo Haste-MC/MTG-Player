@@ -48,8 +48,9 @@ try {
       out.push(`Seite scrollt horizontal: scrollWidth ${document.documentElement.scrollWidth} > innerWidth ${vw}`);
     }
 
-    // 2. Jede Handkarte liegt vollständig im Viewport.
-    for (const c of document.querySelectorAll(".hand .card")) {
+    // 2. Jede Handkarte liegt vollständig im Viewport (eigene Hand oder, im Zuschauer-Modus ohne
+    //    eigenen Sitz, die sichtbaren Haende aller Spieler unter ihrem Spielfeld, siehe PlayerZone).
+    for (const c of document.querySelectorAll(".hand .card, .spectator-hand .card")) {
       if (!visible(c)) continue;
       const b = r(c);
       if (b.left < 0 || b.top < 0 || b.right > vw || b.bottom > vh) {
@@ -57,9 +58,10 @@ try {
       }
     }
 
-    // 3. Kein Karten-Clipping im eigenen Spielfeld und bei den Gegnern: Rechteck gegen jeden Vorfahren mit
-    //    overflow != visible, außerdem muss jede Karte innerhalb ihres .player-Panels liegen.
-    for (const c of document.querySelectorAll(".mine .battlefield .card, .opponents .card")) {
+    // 3. Kein Karten-Clipping im eigenen Spielfeld, bei den Gegnern und (Zuschauer-Modus ohne
+    //    eigenen Sitz, siehe Table.tsx) im 2-spaltigen Zuschauer-Raster: Rechteck gegen jeden
+    //    Vorfahren mit overflow != visible, außerdem muss jede Karte innerhalb ihres .player-Panels liegen.
+    for (const c of document.querySelectorAll(".mine .battlefield .card, .opponents .card, .spectator-grid .card")) {
       if (!visible(c)) continue;
       const b = r(c);
       const panel = c.closest(".player");
@@ -87,7 +89,10 @@ try {
     }
 
     // 4. Gegner-Panels ohne leeres Band: Panelhöhe minus Inhaltshöhe darf nicht > 40 % sein (bei 1600x900).
-    if (vw === 1600 && vh === 900) {
+    //    Setzt die Vier-Panel-Flexreihe der normalen Tischansicht voraus (kalibriert auf deren
+    //    Seitenverhaeltnis) - im Zuschauer-Modus gibt es kein .mine und die Panels sitzen in einem
+    //    2-spaltigen Raster mit anderen Proportionen, also uebersprungen statt falsch kalibriert.
+    if (vw === 1600 && vh === 900 && document.querySelector(".mine")) {
       for (const p of document.querySelectorAll(".opponents .player")) {
         const pb = r(p);
         let contentBottom = pb.top, contentTop = pb.bottom;

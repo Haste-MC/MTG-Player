@@ -26,7 +26,7 @@ function Pile({ label, cards }: { label: string; cards: CardSnap[] }) {
   );
 }
 
-export default function PlayerZone({ p, state, compact }: { p: PlayerSnap; state: Snapshot; compact: boolean }) {
+export default function PlayerZone({ p, state, compact, spectator }: { p: PlayerSnap; state: Snapshot; compact: boolean; spectator?: boolean }) {
   const seq = useStore((s) => s.state?.prompt.seq);
   const cards = (ids: number[]) => ids.map((id) => state.cards[String(id)]).filter(Boolean);
   const bf = cards(p.battlefield);
@@ -76,6 +76,12 @@ export default function PlayerZone({ p, state, compact }: { p: PlayerSnap; state
           <Pile label="Exil" cards={cards(p.exile)} />
         </div>
       </div>
+      {spectator && (
+        <div className="spectator-hand">
+          <div className="zone-label">Hand</div>
+          <div className="row">{cards(p.hand).map((c) => <CardBox key={c.id} card={c} />)}</div>
+        </div>
+      )}
     </div>
   );
 }

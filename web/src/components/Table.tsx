@@ -12,14 +12,21 @@ export default function Table() {
   const winner = useStore((s) => s.winner);
   const backToLobby = useStore((s) => s.backToLobby);
   if (!state) return <div className="lobby"><div className="lobby-card"><p className="muted">Warte auf Spielzustand …</p></div></div>;
+  const spectator = !!state.spectator;
   const me = state.players.find((p) => p.id === state.me);
   const foes = state.players.filter((p) => p.id !== state.me);
   const stack = [...state.stack].reverse(); // oberstes Element (löst zuerst auf) zuerst
   return (
-    <div className="table">
-      <div className="opponents">
-        {foes.map((p) => <PlayerZone key={p.id} p={p} state={state} compact={true} />)}
-      </div>
+    <div className={"table" + (spectator ? " spectator" : "")}>
+      {spectator ? (
+        <div className="spectator-grid">
+          {state.players.map((p) => <PlayerZone key={p.id} p={p} state={state} compact={true} spectator={true} />)}
+        </div>
+      ) : (
+        <div className="opponents">
+          {foes.map((p) => <PlayerZone key={p.id} p={p} state={state} compact={true} />)}
+        </div>
+      )}
       <div className="side">
         <CardDetail />
         <div className="stack">
@@ -46,12 +53,16 @@ export default function Table() {
         </div>
         <Log />
       </div>
-      <div className="mine">
-        {me && <PlayerZone p={me} state={state} compact={false} />}
-        <PhaseBar state={state} />
-        <Prompt state={state} />
-        <Hand state={state} />
-      </div>
+      {spectator ? (
+        <Prompt state={state} dangerLabel="Beenden" />
+      ) : (
+        <div className="mine">
+          {me && <PlayerZone p={me} state={state} compact={false} />}
+          <PhaseBar state={state} />
+          <Prompt state={state} />
+          <Hand state={state} />
+        </div>
+      )}
       {(winner !== undefined || state.gameOver) && (
         <div className="overlay">
           <div className="dialog">

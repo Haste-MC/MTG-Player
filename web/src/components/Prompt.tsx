@@ -3,7 +3,7 @@ import type { Snapshot } from "../protocol";
 import { useStore } from "../store";
 import { send } from "../ws";
 
-export default function Prompt({ state }: { state: Snapshot }) {
+export default function Prompt({ state, dangerLabel = "Aufgeben" }: { state: Snapshot; dangerLabel?: string }) {
   const p = state.prompt;
   const choiceOpen = useStore((s) => s.choices.length > 0);
   useEffect(() => {
@@ -24,7 +24,7 @@ export default function Prompt({ state }: { state: Snapshot }) {
       <span className="actions">
         <button className="primary" disabled={!p.okEnabled} onClick={() => send({ type: "ok", seq: p.seq })}>{p.okLabel}</button>
         <button disabled={!p.cancelEnabled} onClick={() => send({ type: "cancel", seq: p.seq })}>{p.cancelLabel}</button>
-        <button className="quiet danger" onClick={() => send({ type: "concede" })}>Aufgeben</button>
+        <button className="quiet danger" onClick={() => send({ type: "concede" })}>{dangerLabel}</button>
       </span>
     </div>
   );
