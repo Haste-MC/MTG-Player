@@ -88,6 +88,17 @@ public final class Bridge {
                     // (invokeInEdtAndWait) - siehe HumanMatch.end()). Stattdessen ein Hintergrund-Task, der
                     // pushState()/das Senden selbst wieder auf den UI-Thread zurueckgibt.
                     GuiBase.getInterface().runBackgroundTask("spectator-end", () -> {
+                        // Ist das Spiel pausiert (Forges "Pause"-Zustand, siehe FControlGamePlayback),
+                        // haengt der Game-Thread in einem CyclicBarrier fest, bis jemand "Resume"/"Step"
+                        // ausloest - unser erzwungenes setGameOver() in match.end() erreichte den
+                        // Game-Thread in diesem Zustand nicht zuverlaessig innerhalb der Frist. Deshalb
+                        // erst fortsetzen (auf dem UI-Thread, wie ein normaler "Resume"-Klick, und
+                        // synchron abgewartet, bevor wir end() aufrufen) und danach erst beenden.
+                        GuiBase.getInterface().invokeInEdtAndWait(() -> {
+                            if (gui.isGamePaused()) {
+                                gui.resumeMatch();
+                            }
+                        });
                         match.end();
                         GuiBase.getInterface().invokeInEdtLater(gui::pushState);
                         ws.send(new Messages.GameOver(null));
