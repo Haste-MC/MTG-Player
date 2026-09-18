@@ -51,3 +51,23 @@ select, input { padding: 6px; border-radius: 6px; border: 1px solid #555; backgr
 .options li:hover { background: #2c3138; }
 .options li.picked { border-color: #2f6fd6; background: #1f3355; }
 .buttons { display: flex; gap: 8px; margin-top: 8px; }
+
+.phasebar { display: flex; gap: 4px; align-items: center; padding: 4px 6px; background: #14171b; border-radius: 8px; font-size: 12px; }
+.phasebar .side { color: #9aa; margin-right: 6px; white-space: nowrap; }
+.phasebar .phase { padding: 2px 6px; font-size: 11px; opacity: 0.5; }
+.phasebar .phase.stop { opacity: 1; border-color: #d6a72f; }
+.phasebar .phase.current { background: #2f6fd6; opacity: 1; }
+.phasebar .fullcontrol { margin-left: auto; display: flex; gap: 4px; align-items: center; }
+.detail { border: 1px solid #333; border-radius: 8px; padding: 8px; font-size: 12px; min-height: 120px; }
+.detail.empty { color: #666; }
+.detail .name { font-weight: 600; font-size: 14px; }
+.detail .cost, .detail .type { color: #9aa; }
+.detail .text { white-space: pre-wrap; margin-top: 6px; }
+.player .header.highlighted { outline: 2px solid #ffd23f; border-radius: 4px; }
+.opt-detail { font-size: 11px; color: #9aa; }
+.opt-detail .text { white-space: pre-wrap; color: #ccc; }
+.amount-row, .cardlist-row { display: flex; gap: 6px; align-items: center; }
+.amount-row .grow, .cardlist-row .grow { flex: 1; }
+.amount-row input { width: 70px; }
+.cardlist-row .pos { width: 24px; color: #9aa; }
+.cardlist-row.movable { border-color: #2f6fd6; }

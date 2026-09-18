@@ -3,6 +3,8 @@ import PlayerZone from "./PlayerZone";
 import Hand from "./Hand";
 import Prompt from "./Prompt";
 import Log from "./Log";
+import PhaseBar from "./PhaseBar";
+import CardDetail from "./CardDetail";
 
 export default function Table() {
   const state = useStore((s) => s.state);
@@ -17,6 +19,7 @@ export default function Table() {
         {foes.map((p) => <PlayerZone key={p.id} p={p} state={state} compact={foes.length > 1} />)}
       </div>
       <div className="side">
+        <CardDetail />
         <div className="stack">
           <b>Stack</b>
           {state.stack.length === 0 && <div className="empty">leer</div>}
@@ -28,6 +31,7 @@ export default function Table() {
       </div>
       <div className="mine">
         {me && <PlayerZone p={me} state={state} compact={false} />}
+        <PhaseBar state={state} />
         <Prompt state={state} />
         <Hand state={state} />
       </div>

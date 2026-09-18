@@ -8,6 +8,7 @@ export interface AppState {
   choices: Choice[];
   log: string[];
   winner?: string | null;
+  hover?: number;
 }
 
 export const initialState: AppState = { screen: "lobby", precons: [], choices: [], log: [] };
@@ -43,6 +44,7 @@ interface Store extends AppState {
   apply: (m: Inbound) => void;
   clearChoice: (id: number) => void;
   backToLobby: () => void;
+  setHover: (id?: number) => void;
 }
 
 export const useStore = create<Store>((set) => ({
@@ -50,4 +52,5 @@ export const useStore = create<Store>((set) => ({
   apply: (m) => set((s) => reduce(s, m)),
   clearChoice: (id) => set((s) => ({ choices: s.choices.filter((c) => c.id !== id) })),
   backToLobby: () => set({ screen: "lobby", state: undefined, winner: undefined, choices: [] }),
+  setHover: (id) => set({ hover: id }),
 }));

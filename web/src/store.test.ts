@@ -11,7 +11,9 @@ const snap = (over: Partial<Snapshot> = {}): Snapshot => ({
   players: [],
   stack: [],
   cards: {},
-  prompt: { message: "", okLabel: "OK", cancelLabel: "Cancel", okEnabled: false, cancelEnabled: false },
+  stops: { own: [], opp: [] },
+  fullControl: false,
+  prompt: { message: "", okLabel: "OK", cancelLabel: "Cancel", okEnabled: false, cancelEnabled: false, seq: 0 },
   ...over,
 });
 

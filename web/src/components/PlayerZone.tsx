@@ -1,8 +1,10 @@
 import type { PlayerSnap, Snapshot } from "../protocol";
 import CardBox from "./CardBox";
+import { useStore } from "../store";
 import { send } from "../ws";
 
 export default function PlayerZone({ p, state, compact }: { p: PlayerSnap; state: Snapshot; compact: boolean }) {
+  const seq = useStore((s) => s.state?.prompt.seq);
   const cards = (ids: number[]) => ids.map((id) => state.cards[String(id)]).filter(Boolean);
   const bf = cards(p.battlefield);
   const active = state.activePlayer === p.id;
@@ -10,7 +12,7 @@ export default function PlayerZone({ p, state, compact }: { p: PlayerSnap; state
   const cmdDmg = Object.entries(p.commanderDamage).map(([id, v]) => `${state.cards[id]?.name ?? id}: ${v}`).join(", ");
   return (
     <div className={"player" + (active ? " active" : "") + (compact ? " compact" : "")}>
-      <div className="header" onClick={() => send({ type: "selectPlayer", id: p.id })}>
+      <div className={"header" + (p.highlighted ? " highlighted" : "")} onClick={() => send({ type: "selectPlayer", id: p.id, seq })}>
         <b>{p.name}</b> {p.isAi ? "(KI)" : ""} · Leben {p.life}
         {p.counters?.POISON ? ` · Gift ${p.counters.POISON}` : ""}
         {" · Hand "}{p.hand.length}{" · Bib "}{p.librarySize}{" · Grab "}{p.graveyard.length}{" · Exil "}{p.exile.length}

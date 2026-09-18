@@ -1,13 +1,16 @@
 import { useState } from "react";
-import type { Choice } from "../protocol";
+import type { Choice, Option } from "../protocol";
 import { useStore } from "../store";
 import { send } from "../ws";
+import { amountsValid, isPermutation, remaining } from "../dialogs";
 
 export default function ChoiceDialog({ choice }: { choice: Choice }) {
   const clear = useStore((s) => s.clearChoice);
   const cards = useStore((s) => s.state?.cards ?? {});
   const [picked, setPicked] = useState<number[]>([]);
   const [text, setText] = useState("");
+  const [amounts, setAmounts] = useState<number[]>(() => choice.options.map(() => 0));
+  const [order, setOrder] = useState<number[]>(() => choice.options.map((o) => o.index));
 
   const answer = (value: unknown) => {
     send({ type: "answer", id: choice.id, value });
@@ -18,6 +21,19 @@ export default function ChoiceDialog({ choice }: { choice: Choice }) {
     o.card !== undefined && cards[String(o.card)]?.name && !o.label.includes(cards[String(o.card)].name!)
       ? `${o.label} [${cards[String(o.card)].name}]` : o.label;
 
+  const optionView = (o: Option) => (
+    <>
+      <div className="opt-label">{label(o)}</div>
+      {o.detail && (
+        <div className="opt-detail">
+          <span className="type">{o.detail.typeLine}</span>
+          {o.detail.power !== undefined && <span className="pt"> {o.detail.power}/{o.detail.toughness}</span>}
+          <div className="text">{o.detail.text}</div>
+        </div>
+      )}
+    </>
+  );
+
   const body = () => {
     switch (choice.kind) {
       case "reveal":
@@ -25,7 +41,7 @@ export default function ChoiceDialog({ choice }: { choice: Choice }) {
           <>
             <ul className="options">
               {choice.options.map((o) => (
-                <li key={o.index}>{label(o)}</li>
+                <li key={o.index}>{optionView(o)}</li>
               ))}
             </ul>
             <div className="buttons">
@@ -80,6 +96,64 @@ export default function ChoiceDialog({ choice }: { choice: Choice }) {
               </div>
             )}
             {single && choice.min === 0 && <div className="buttons"><button onClick={() => answer(bare ? null : [])}>Keine</button></div>}
+          </>
+        );
+      }
+      case "damage":
+      case "amount": {
+        const total = choice.amount ?? 0;
+        const maxPer = choice.options.map((o) => o.max);
+        const ok = amountsValid(amounts, total, maxPer, choice.atLeastOne ?? false);
+        const set = (i: number, v: number) => setAmounts(amounts.map((a, j) => (j === i ? v : a)));
+        return (
+          <>
+            <ul className="options">
+              {choice.options.map((o, i) => (
+                <li key={o.index} className="amount-row">
+                  <div className="grow">{optionView(o)}{o.lethal !== undefined && <span className="hint"> tödlich: {o.lethal}</span>}{o.max !== undefined && <span className="hint"> max {o.max}</span>}</div>
+                  <input type="number" min={0} max={o.max ?? total} value={amounts[i]} onChange={(e) => set(i, Number(e.target.value))} />
+                  {o.lethal !== undefined && <button onClick={() => set(i, Math.min(o.lethal!, remaining(amounts, total) + amounts[i]))}>tödlich</button>}
+                </li>
+              ))}
+            </ul>
+            <p className="hint">Rest: {remaining(amounts, total)}</p>
+            <div className="buttons">
+              <button className="primary" disabled={!ok} onClick={() => answer(amounts)}>OK</button>
+              <button onClick={() => answer(null)}>Automatisch</button>
+            </div>
+          </>
+        );
+      }
+      case "cardlist": {
+        const move = (from: number, to: number) => {
+          if (to < 0 || to >= order.length) return;
+          const next = [...order];
+          const [x] = next.splice(from, 1);
+          next.splice(to, 0, x);
+          setOrder(next);
+        };
+        return (
+          <>
+            <ul className="options">
+              {order.map((idx, pos) => {
+                const o = choice.options[idx];
+                return (
+                  <li key={o.index} className={"cardlist-row" + (o.movable ? " movable" : "")}>
+                    <span className="pos">{pos + 1}.</span>
+                    <div className="grow">{optionView(o)}</div>
+                    {o.movable && <>
+                      <button onClick={() => move(pos, 0)}>⤒</button>
+                      <button onClick={() => move(pos, pos - 1)}>↑</button>
+                      <button onClick={() => move(pos, pos + 1)}>↓</button>
+                      <button onClick={() => move(pos, order.length - 1)}>⤓</button>
+                    </>}
+                  </li>
+                );
+              })}
+            </ul>
+            <div className="buttons">
+              <button className="primary" disabled={!isPermutation(order, choice.options.length)} onClick={() => answer(order)}>OK</button>
+            </div>
           </>
         );
       }

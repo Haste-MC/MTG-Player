@@ -5,6 +5,7 @@ export interface PromptSnap {
   cancelLabel: string;
   okEnabled: boolean;
   cancelEnabled: boolean;
+  seq: number;
 }
 
 export interface CardSnap {
@@ -49,6 +50,7 @@ export interface PlayerSnap {
   battlefield: number[];
   manaPool: Record<string, number>;
   hasPriority: boolean;
+  highlighted?: boolean;
 }
 
 export interface StackSnap {
@@ -71,6 +73,8 @@ export interface Snapshot {
   players: PlayerSnap[];
   stack: StackSnap[];
   cards: Record<string, CardSnap>;
+  stops: { own: string[]; opp: string[] };
+  fullControl: boolean;
   prompt: PromptSnap;
 }
 
@@ -79,9 +83,13 @@ export interface Option {
   label: string;
   card?: number;
   player?: number;
+  detail?: CardSnap;
+  max?: number;
+  lethal?: number;
+  movable?: boolean;
 }
 
-export type ChoiceKind = "one" | "many" | "order" | "confirm" | "number" | "text" | "ability" | "entities" | "reveal";
+export type ChoiceKind = "one" | "many" | "order" | "confirm" | "number" | "text" | "ability" | "entities" | "reveal" | "damage" | "amount" | "cardlist";
 
 export interface Choice {
   type: "choice";
@@ -93,6 +101,8 @@ export interface Choice {
   min: number;
   max: number;
   card?: number;
+  amount?: number;
+  atLeastOne?: boolean;
 }
 
 export interface Lobby { type: "lobby"; precons: string[]; }
@@ -104,10 +114,20 @@ export type Inbound = Snapshot | Choice | Lobby | LogLine | GameOver | ErrorMsg;
 
 export type Outbound =
   | { type: "startGame"; humanDeck: { precon: string }; opponents: { precon: string; name: string }[] }
-  | { type: "selectCard"; id: number; alt?: boolean }
-  | { type: "selectPlayer"; id: number }
-  | { type: "ok" }
-  | { type: "cancel" }
+  | { type: "selectCard"; id: number; alt?: boolean; seq?: number }
+  | { type: "selectPlayer"; id: number; seq?: number }
+  | { type: "ok"; seq?: number }
+  | { type: "cancel"; seq?: number }
+  | { type: "setStops"; own?: string[]; opp?: string[] }
+  | { type: "fullControl"; value: boolean }
   | { type: "answer"; id: number; value: unknown }
   | { type: "concede" }
   | { type: "requestState" };
+
+export const PHASES: { id: string; short: string }[] = [
+  { id: "UNTAP", short: "UT" }, { id: "UPKEEP", short: "UP" }, { id: "DRAW", short: "DR" },
+  { id: "MAIN1", short: "M1" }, { id: "COMBAT_BEGIN", short: "BC" }, { id: "COMBAT_DECLARE_ATTACKERS", short: "DA" },
+  { id: "COMBAT_DECLARE_BLOCKERS", short: "DB" }, { id: "COMBAT_FIRST_STRIKE_DAMAGE", short: "FS" },
+  { id: "COMBAT_DAMAGE", short: "CD" }, { id: "COMBAT_END", short: "EC" }, { id: "MAIN2", short: "M2" },
+  { id: "END_OF_TURN", short: "END" }, { id: "CLEANUP", short: "CL" },
+];
