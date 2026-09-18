@@ -115,9 +115,24 @@ export default function ChoiceDialog({ choice }: { choice: Choice }) {
             <ul className="options">
               {choice.options.map((o, i) => (
                 <li key={o.index} className="amount-row">
-                  <div className="grow">{optionView(o)}{o.lethal !== undefined && <span className="hint"> tödlich: {o.lethal}</span>}{o.max !== undefined && <span className="hint"> max {o.max}</span>}</div>
-                  <input type="number" min={0} max={o.max ?? total} value={amounts[i]} onChange={(e) => set(i, Number(e.target.value))} />
-                  {o.lethal !== undefined && <button onClick={() => set(i, Math.min(o.lethal!, remaining(amounts, total) + amounts[i]))}>tödlich</button>}
+                  {o.detail?.imageKey && <CardImage imageKey={o.detail.imageKey} className="art-small" />}
+                  <div className="grow">
+                    <div className="opt-label-row">
+                      <span className="opt-label">{label(o)}</span>
+                      {o.lethal !== undefined && <span className="hint">tödlich: {o.lethal}</span>}
+                      {o.max !== undefined && <span className="hint">max {o.max}</span>}
+                    </div>
+                    {o.detail && (
+                      <div className="opt-detail">
+                        <span className="type">{o.detail.typeLine}</span>
+                        {o.detail.power !== undefined && <span className="pt"> {o.detail.power}/{o.detail.toughness}</span>}
+                      </div>
+                    )}
+                  </div>
+                  <div className="amount-input">
+                    <input type="number" min={0} max={o.max ?? total} value={amounts[i]} onChange={(e) => set(i, Number(e.target.value))} />
+                    {o.lethal !== undefined && <button onClick={() => set(i, Math.min(o.lethal!, remaining(amounts, total) + amounts[i]))}>tödlich</button>}
+                  </div>
                 </li>
               ))}
             </ul>

@@ -39,7 +39,7 @@ select, input, textarea { padding: 6px 8px; border-radius: var(--radius); border
 .lobby label { display: flex; gap: 8px; align-items: center; font-weight: 500; }
 
 .table { display: grid; grid-template-columns: 1fr 320px; grid-template-rows: 1fr auto; height: 100vh; gap: 8px; padding: 8px; overflow: hidden; }
-.opponents { grid-column: 1; grid-row: 1; display: flex; gap: 8px; overflow: auto; align-items: flex-start; min-height: 0; }
+.opponents { grid-column: 1; grid-row: 1; display: flex; gap: 8px; overflow: auto; align-items: stretch; min-height: 0; }
 .side { grid-column: 2; grid-row: 1 / span 2; display: flex; flex-direction: column; gap: 8px; min-height: 0; }
 .mine { grid-column: 1; grid-row: 2; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 
@@ -51,21 +51,29 @@ select, input, textarea { padding: 6px 8px; border-radius: var(--radius); border
 .player .ai-tag { font-size: 10px; color: var(--text-dim); font-weight: 400; margin-left: 4px; border: 1px solid var(--border-soft); border-radius: var(--radius-sm); padding: 0 3px; }
 .player .life { font-size: 20px; font-weight: 700; color: #fff; min-width: 26px; text-align: center; line-height: 1; }
 .player .badges { display: flex; gap: 4px; flex-wrap: wrap; margin-left: auto; }
-.badge { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; padding: 2px 7px; border-radius: 999px; background: var(--bg-elevate); color: var(--text-dim); white-space: nowrap; }
+.badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; padding: 2px 7px; border-radius: 999px; background: var(--bg-elevate); color: var(--text-dim); white-space: nowrap; }
 .badge.cmd { color: var(--red); }
 .badge.prio { color: var(--gold); }
 .badge.mana { color: var(--green); }
+.badge .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--gold); display: inline-block; flex: none; }
 
-.zone { display: flex; flex-wrap: wrap; gap: 6px; min-height: var(--card-h); padding: 2px 0; align-items: flex-start; }
+/* Kein vertikaler Wrap: viele Permanents scrollen horizontal statt eine zweite Zeile zu erzwingen
+   (die sonst bei schmaleren Viewports die Zeilenhöhe verdoppelt und die 1fr-Gegnerreihe verdrängt). */
+.zone { display: flex; flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; gap: 6px; min-height: var(--card-h); padding: 2px 0; align-items: flex-start; }
 .player.compact .zone { min-height: var(--card-h-opp); }
 
 .card-slot { flex: none; width: var(--card-w); height: var(--card-h); display: flex; align-items: center; justify-content: center; }
 .card-slot.tapped-slot { width: var(--card-h); }
+.card-slot.text-slot { height: auto; min-height: var(--card-h); align-items: flex-start; }
 .player.compact .card-slot { width: var(--card-w-opp); height: var(--card-h-opp); }
 .player.compact .card-slot.tapped-slot { width: var(--card-h-opp); }
+.player.compact .card-slot.text-slot { min-height: var(--card-h-opp); }
 
 .card { position: relative; width: var(--card-w); height: var(--card-h); border: 2px solid var(--border-soft); border-radius: var(--radius); padding: 4px 5px; background: var(--bg-elevate); font-size: 11px; cursor: pointer; user-select: none; overflow: hidden; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4); transition: transform .12s ease, box-shadow .12s ease; flex: none; }
 .player.compact .card { width: var(--card-w-opp); height: var(--card-h-opp); font-size: 10px; }
+/* Textkarten ohne Bild: feste Höhe aufheben, damit Name/Typ/P-T nie abgeschnitten werden. */
+.card:not(.has-img) { height: auto; min-height: var(--card-h); overflow: visible; }
+.player.compact .card:not(.has-img) { min-height: var(--card-h-opp); }
 .card .art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: calc(var(--radius) - 2px); }
 .card.has-img .pt, .card.has-img .counters { position: absolute; bottom: 3px; background: rgba(0, 0, 0, 0.8); padding: 1px 5px; border-radius: var(--radius-sm); font-weight: 600; }
 .card.has-img .pt { right: 3px; }
@@ -73,6 +81,8 @@ select, input, textarea { padding: 6px 8px; border-radius: var(--radius); border
 .card .name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .card .type, .card .meta { color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .card .pt { text-align: right; font-weight: 600; }
+.card-text { display: flex; flex-direction: column; gap: 2px; }
+.card-text .rules { font-size: 10px; line-height: 1.3; color: var(--text-dim); margin-top: 2px; white-space: normal; display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden; }
 .card.back { background: linear-gradient(135deg, #3a2f5c, #241d3d); border-color: #4a3d73; }
 .card.tapped { transform: rotate(90deg); }
 .card.selectable { border-color: var(--gold); box-shadow: 0 0 0 2px var(--gold), 0 0 14px 2px rgba(255, 210, 63, 0.55); }
@@ -80,7 +90,7 @@ select, input, textarea { padding: 6px 8px; border-radius: var(--radius); border
 .card.attacking { border-color: var(--red); }
 .card.blocking { border-color: var(--blue); }
 
-.hand { display: flex; align-items: flex-end; overflow-x: auto; overflow-y: visible; padding: 16px 16px 8px; background: var(--bg); border-radius: var(--radius); min-height: calc(var(--card-h) + 20px); }
+.hand { display: flex; align-items: flex-end; overflow-x: auto; overflow-y: visible; padding: 30px 16px 10px; background: var(--bg); border-radius: var(--radius); min-height: calc(var(--card-h) + 40px); }
 .hand .card-slot { margin-left: -28px; transition: transform .15s ease; }
 .hand .card-slot:first-child { margin-left: 0; }
 .hand .card-slot:hover { z-index: 20; }
@@ -126,8 +136,12 @@ select, input, textarea { padding: 6px 8px; border-radius: var(--radius); border
 .opt-with-img .art-small { width: 56px; border-radius: var(--radius-sm); flex: none; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4); }
 
 .amount-row, .cardlist-row, .options-row { display: flex; gap: 10px; align-items: center; }
+.amount-row { align-items: flex-start; }
+.amount-row .art-small { width: 56px; border-radius: var(--radius-sm); flex: none; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4); }
 .amount-row .grow, .cardlist-row .grow, .options-row .grow { flex: 1; min-width: 0; }
-.amount-row input { width: 64px; flex: none; }
+.opt-label-row { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.amount-input { display: flex; align-items: center; gap: 6px; flex: none; width: 132px; justify-content: flex-end; padding-top: 2px; }
+.amount-input input { width: 64px; flex: none; }
 .cardlist-row .pos { width: 24px; color: var(--text-dim); }
 .cardlist-row.movable { border-color: var(--accent); }
 .options-row .pos { color: var(--text-dim); }

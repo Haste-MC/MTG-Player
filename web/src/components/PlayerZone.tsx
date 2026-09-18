@@ -16,14 +16,14 @@ export default function PlayerZone({ p, state, compact }: { p: PlayerSnap; state
         <span className="pname">{p.name}{p.isAi && <span className="ai-tag">KI</span>}</span>
         <span className="life">{p.life}</span>
         <span className="badges">
-          <span className="badge" title="Hand">✋ {p.hand.length}</span>
-          <span className="badge" title="Bibliothek">📚 {p.librarySize}</span>
-          <span className="badge" title="Friedhof">☠ {p.graveyard.length}</span>
-          {p.exile.length > 0 && <span className="badge" title="Exil">⌫ {p.exile.length}</span>}
-          {!!p.counters?.POISON && <span className="badge cmd" title="Gift">☣ {p.counters.POISON}</span>}
-          {mana && <span className="badge mana" title="Mana">{mana}</span>}
-          {cmdDmg && <span className="badge cmd" title="Commander-Schaden">{cmdDmg}</span>}
-          {p.hasPriority && <span className="badge prio" title="Prio">⏵</span>}
+          <span className="badge" title="Hand">Hand {p.hand.length}</span>
+          <span className="badge" title="Bibliothek">Bib {p.librarySize}</span>
+          <span className="badge" title="Friedhof">Grab {p.graveyard.length}</span>
+          {p.exile.length > 0 && <span className="badge" title="Exil">Exil {p.exile.length}</span>}
+          {!!p.counters?.POISON && <span className="badge cmd" title="Gift">Gift {p.counters.POISON}</span>}
+          {mana && <span className="badge mana" title="Mana">Mana {mana}</span>}
+          {cmdDmg && <span className="badge cmd" title="Commander-Schaden">CMD {cmdDmg}</span>}
+          {p.hasPriority && <span className="badge prio" title="Hat Priorität"><span className="dot" /> Prio</span>}
         </span>
       </div>
       <div className="zone battlefield">

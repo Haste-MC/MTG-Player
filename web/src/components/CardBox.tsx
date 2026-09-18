@@ -19,16 +19,17 @@ export default function CardBox({ card }: { card: CardSnap }) {
     send({ type: "selectCard", id: card.id, alt: e.button === 2, seq });
   };
   return (
-    <div className={"card-slot" + (card.tapped ? " tapped-slot" : "")}>
+    <div className={"card-slot" + (card.tapped ? " tapped-slot" : "") + (noImg && !card.tapped ? " text-slot" : "")}>
       <div className={cls} title={card.text ?? ""} onClick={click} onContextMenu={click}
         onMouseEnter={() => setHover(card.id)} onMouseLeave={() => setHover(undefined)}>
         <CardImage imageKey={card.imageKey} className="art" onFail={() => setNoImg(true)} />
         {noImg && (
-          <>
+          <div className="card-text">
             <div className="name">{card.name}</div>
             <div className="meta">{card.manaCost ?? ""}</div>
             <div className="type">{card.typeLine ?? ""}</div>
-          </>
+            {card.text && <div className="rules">{card.text}</div>}
+          </div>
         )}
         {card.power !== undefined && (
           <div className="pt">{card.power}/{card.toughness}{card.damage ? ` (${card.damage} dmg)` : ""}</div>

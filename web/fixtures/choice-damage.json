@@ -11,10 +11,10 @@
   "options": [
     {
       "index": 0,
-      "label": "Elvish Warrior",
+      "label": "Llanowar Elves",
       "card": 700,
-      "lethal": 2,
-      "detail": { "id": 700, "faceDown": false, "name": "Elvish Warrior", "typeLine": "Creature — Elf Warrior", "text": "", "imageKey": "c:Llanowar Elves|DMU|1", "power": 2, "toughness": 2 }
+      "lethal": 1,
+      "detail": { "id": 700, "faceDown": false, "name": "Llanowar Elves", "typeLine": "Creature — Elf Druid", "text": "", "imageKey": "c:Llanowar Elves|DMU|1", "power": 1, "toughness": 1 }
     },
     {
       "index": 1,

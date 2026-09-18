@@ -11,10 +11,17 @@ if (!url || !out) {
   process.exit(1);
 }
 
+// Der Debug-Hook (window.mtgApply) ist im Produktions-Build nur mit ?debug aktiv.
+function withDebug(u) {
+  return /[?&]debug(=|&|$)/.test(u) ? u : u + (u.includes("?") ? "&" : "?") + "debug=1";
+}
+
+const [widthArg, heightArg] = (process.env.SHOT_VIEWPORT ?? "1600x900").split("x").map(Number);
+
 const browser = await chromium.launch();
 try {
-  const page = await browser.newPage({ viewport: { width: 1600, height: 900 }, deviceScaleFactor: 1 });
-  await page.goto(url, { waitUntil: "load" });
+  const page = await browser.newPage({ viewport: { width: widthArg, height: heightArg }, deviceScaleFactor: 1 });
+  await page.goto(withDebug(url), { waitUntil: "load" });
   await page.waitForFunction(() => (document.getElementById("root")?.childElementCount ?? 0) > 0);
 
   for (const fixturePath of fixturePaths) {
