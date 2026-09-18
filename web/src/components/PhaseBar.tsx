@@ -14,14 +14,16 @@ export default function PhaseBar({ state }: { state: Snapshot }) {
   return (
     <div className="phasebar">
       <span className="side">{ownTurn ? "Eigener Zug" : "Gegnerzug"}</span>
-      {PHASES.map((ph) => (
-        <button
-          key={ph.id}
-          title={ph.id + (stops.has(ph.id) ? " – Stop" : " – wird übersprungen")}
-          className={"phase" + (state.phase === ph.id ? " current" : "") + (stops.has(ph.id) ? " stop" : "")}
-          onClick={() => toggle(ph.id)}
-        >{ph.short}</button>
-      ))}
+      <span className="segments">
+        {PHASES.map((ph) => (
+          <button
+            key={ph.id}
+            title={ph.id + (stops.has(ph.id) ? " – Stop" : " – wird übersprungen")}
+            className={"phase" + (state.phase === ph.id ? " current" : "") + (stops.has(ph.id) ? " stop" : "")}
+            onClick={() => toggle(ph.id)}
+          >{ph.short}</button>
+        ))}
+      </span>
       <label className="fullcontrol">
         <input type="checkbox" checked={state.fullControl} onChange={(e) => send({ type: "fullControl", value: e.target.checked })} />
         Volle Kontrolle

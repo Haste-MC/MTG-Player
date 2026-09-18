@@ -6,8 +6,12 @@ export default function Log() {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => { ref.current?.scrollTo(0, ref.current.scrollHeight); }, [log.length]);
   return (
-    <div className="log" ref={ref}>
-      {log.map((l, i) => <div key={i}>{l}</div>)}
+    <div className="log">
+      <div className="panel-title">Log</div>
+      <div className="log-lines" ref={ref}>
+        {log.length === 0 && <div className="empty">noch nichts passiert</div>}
+        {log.map((l, i) => <div key={i} className={l.startsWith("⚠") ? "warn" : undefined}>{l}</div>)}
+      </div>
     </div>
   );
 }

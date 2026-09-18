@@ -19,11 +19,13 @@ export default function Prompt({ state }: { state: Snapshot }) {
   }, [p.okEnabled, p.cancelEnabled, choiceOpen, p.seq]);
   return (
     <div className="prompt">
-      <span className="phase">Zug {state.turn} · {state.phase ?? ""}</span>
+      <span className="phase-chip"><span className="turn">Zug {state.turn}</span><span className="sep">·</span>{state.phase ?? ""}</span>
       <span className="message">{p.message}</span>
-      <button className="primary" disabled={!p.okEnabled} onClick={() => send({ type: "ok", seq: p.seq })}>{p.okLabel}</button>
-      <button disabled={!p.cancelEnabled} onClick={() => send({ type: "cancel", seq: p.seq })}>{p.cancelLabel}</button>
-      <button className="danger" onClick={() => send({ type: "concede" })}>Aufgeben</button>
+      <span className="actions">
+        <button className="primary" disabled={!p.okEnabled} onClick={() => send({ type: "ok", seq: p.seq })}>{p.okLabel}</button>
+        <button disabled={!p.cancelEnabled} onClick={() => send({ type: "cancel", seq: p.seq })}>{p.cancelLabel}</button>
+        <button className="quiet danger" onClick={() => send({ type: "concede" })}>Aufgeben</button>
+      </span>
     </div>
   );
 }

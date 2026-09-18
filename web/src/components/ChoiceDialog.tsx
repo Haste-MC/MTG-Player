@@ -23,9 +23,9 @@ export default function ChoiceDialog({ choice }: { choice: Choice }) {
       ? `${o.label} [${cards[String(o.card)].name}]` : o.label;
 
   const optionView = (o: Option) => (
-    <div className={o.detail?.imageKey ? "opt-with-img" : undefined}>
-      {o.detail?.imageKey && <CardImage imageKey={o.detail.imageKey} className="art-small" />}
-      <div>
+    <div className="opt-with-img">
+      <div className="thumb">{o.detail?.imageKey && <CardImage imageKey={o.detail.imageKey} className="art-small" />}</div>
+      <div className="grow">
         <div className="opt-label">{label(o)}</div>
         {o.detail && (
           <div className="opt-detail">
@@ -56,8 +56,8 @@ export default function ChoiceDialog({ choice }: { choice: Choice }) {
       case "confirm":
         return (
           <div className="buttons">
-            <button className="primary" onClick={() => answer(true)}>{choice.options[0]?.label ?? "Ja"}</button>
             <button onClick={() => answer(false)}>{choice.options[1]?.label ?? "Nein"}</button>
+            <button className="primary" onClick={() => answer(true)}>{choice.options[0]?.label ?? "Ja"}</button>
           </div>
         );
       case "number":
@@ -66,8 +66,8 @@ export default function ChoiceDialog({ choice }: { choice: Choice }) {
           <form onSubmit={(e) => { e.preventDefault(); answer(choice.kind === "number" ? Number(text || 0) : text); }}>
             <input autoFocus type={choice.kind === "number" ? "number" : "text"} value={text} onChange={(e) => setText(e.target.value)} />
             <div className="buttons">
-              <button type="submit" className="primary">OK</button>
               <button type="button" onClick={() => answer(null)}>Abbrechen</button>
+              <button type="submit" className="primary">OK</button>
             </div>
           </form>
         );
@@ -96,8 +96,8 @@ export default function ChoiceDialog({ choice }: { choice: Choice }) {
             </ul>
             {!single && (
               <div className="buttons">
-                <button className="primary" disabled={!ok} onClick={() => answer(picked)}>OK</button>
                 {choice.min === 0 && <button onClick={() => answer([])}>Keine</button>}
+                <button className="primary" disabled={!ok} onClick={() => answer(picked)}>OK</button>
               </div>
             )}
             {single && choice.min === 0 && <div className="buttons"><button onClick={() => answer(bare ? null : [])}>Keine</button></div>}
@@ -114,13 +114,13 @@ export default function ChoiceDialog({ choice }: { choice: Choice }) {
           <>
             <ul className="options">
               {choice.options.map((o, i) => (
-                <li key={o.index} className="amount-row">
-                  {o.detail?.imageKey && <CardImage imageKey={o.detail.imageKey} className="art-small" />}
+                <li key={o.index} className={"amount-row" + (amounts[i] > 0 ? " picked" : "")}>
+                  <div className="thumb">{o.detail?.imageKey && <CardImage imageKey={o.detail.imageKey} className="art-small" />}</div>
                   <div className="grow">
                     <div className="opt-label-row">
                       <span className="opt-label">{label(o)}</span>
-                      {o.lethal !== undefined && <span className="hint">tödlich: {o.lethal}</span>}
-                      {o.max !== undefined && <span className="hint">max {o.max}</span>}
+                      {o.lethal !== undefined && <span className="chip lethal">tödlich {o.lethal}</span>}
+                      {o.max !== undefined && <span className="chip">max {o.max}</span>}
                     </div>
                     {o.detail && (
                       <div className="opt-detail">
@@ -136,10 +136,10 @@ export default function ChoiceDialog({ choice }: { choice: Choice }) {
                 </li>
               ))}
             </ul>
-            <p className="hint">Rest: {remaining(amounts, total)}</p>
             <div className="buttons">
-              <button className="primary" disabled={!ok} onClick={() => answer(amounts)}>OK</button>
+              <span className="hint grow">Rest: <b>{remaining(amounts, total)}</b> von {total}</span>
               <button onClick={() => answer(null)}>Automatisch</button>
+              <button className="primary" disabled={!ok} onClick={() => answer(amounts)}>OK</button>
             </div>
           </>
         );
@@ -185,7 +185,7 @@ export default function ChoiceDialog({ choice }: { choice: Choice }) {
     <div className="overlay">
       <div className="dialog">
         <h3>{choice.title}</h3>
-        {choice.message !== choice.title && <p>{choice.message}</p>}
+        {choice.message !== choice.title && <p className="dialog-message">{choice.message}</p>}
         {choice.kind === "order" && <p className="hint">In gewünschter Reihenfolge anklicken (oben zuerst).</p>}
         {choice.kind === "many" && <p className="hint">{choice.min}–{choice.max <= 0 ? "beliebig" : choice.max} auswählen</p>}
         {body()}

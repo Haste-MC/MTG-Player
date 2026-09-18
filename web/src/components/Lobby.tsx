@@ -75,23 +75,30 @@ export default function Lobby() {
 
   return (
     <div className="lobby">
-      <h1>MTG-Player</h1>
-      {precons.length === 0 && <p>Verbinde mit der Bridge …</p>}
-      <label>Dein Deck</label>
-      {picker(human, editHuman)}
-      {ais.map((a, i) => (
-        <div key={i}>
-          <label>KI {i + 1} {ais.length > 1 && (
-            <button onClick={() => { setShownError(undefined); setAis(ais.filter((_, j) => j !== i)); }}>–</button>
-          )}</label>
-          {picker(a, (n) => editAi(i, n))}
+      <div className="lobby-card">
+        <div className="lobby-head">
+          <h1>MTG-Player</h1>
+          <p className="subtitle">Commander gegen die Forge-KI – Deck wählen, Gegner hinzufügen, losspielen.</p>
+          {precons.length === 0 && <p className="connecting">Verbinde mit der Bridge …</p>}
         </div>
-      ))}
-      {ais.length < 5 && (
-        <button onClick={() => { setShownError(undefined); setAis([...ais, EMPTY]); }}>+ KI</button>
-      )}
-      <button className="primary" disabled={!ready} onClick={start}>Spiel starten</button>
-      {shownError && <pre className="import-error">{shownError}</pre>}
+        <section className="lobby-section">
+          <label>Dein Deck</label>
+          {picker(human, editHuman)}
+        </section>
+        {ais.map((a, i) => (
+          <section key={i} className="lobby-section">
+            <label>KI {i + 1} {ais.length > 1 && (
+              <button className="quiet small" title="Gegner entfernen" onClick={() => { setShownError(undefined); setAis(ais.filter((_, j) => j !== i)); }}>entfernen</button>
+            )}</label>
+            {picker(a, (n) => editAi(i, n))}
+          </section>
+        ))}
+        {ais.length < 5 && (
+          <button className="ghost" onClick={() => { setShownError(undefined); setAis([...ais, EMPTY]); }}>+ Gegner hinzufügen</button>
+        )}
+        <button className="primary big" disabled={!ready} onClick={start}>Spiel starten</button>
+        {shownError && <pre className="import-error">{shownError}</pre>}
+      </div>
     </div>
   );
 }
