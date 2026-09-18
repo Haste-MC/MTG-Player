@@ -75,9 +75,25 @@ class BridgeEndToEndTest {
      * Muenzwurf gewinnt (siehe PlayerControllerHuman#chooseStartingPlayer). Kein blindes
      * Wegklicken jedes enabled-ok-Prompts, damit ein unerwarteter dritter Prompt auffaellt statt
      * stillschweigend weggeklickt zu werden.
+     *
+     * <p>Der "Play"-Klick darf nur <b>einmal</b> gesendet werden, nicht einmal pro Nachricht: Forges
+     * {@code InputProxy.update()} zeigt den naechsten Prompt (hier den Mulligan-"Keep"-Dialog) ueber
+     * {@code FThreads.invokeInEdtLater(...)} verzoegert auf demselben Single-Thread-Executor an, den
+     * auch {@code WebGuiBase} fuer Klicks aus dem Browser nutzt (siehe {@code WebGuiGame.push()} und
+     * {@code Bridge.ui(...)}). Der Game-Thread laeuft nach dem "Play"-Klick sofort weiter (Untap,
+     * Upkeep, ...) und pusht dabei denselben, noch nicht aktualisierten "Play"-Prompt erneut - der
+     * eigentliche "Keep"-Prompt wird erst verzoegert auf dem Executor gesetzt. Ein zweiter, ueberfluessiger
+     * "ok"-Klick auf einen dieser Duplikate landet dann - abhaengig vom Scheduling auf demselben
+     * Executor - blind auf dem naechsten echten Input (dem Mulligan-Dialog) und beantwortet ihn, bevor
+     * der Test dessen "Keep"-Zustand je gesehen hat; da WebGuiGame.push() mehrere Zustandsaenderungen
+     * zu einem Snapshot buendelt, wird der "Keep"-Zustand dabei nie einzeln ueber den Draht geschickt.
+     * Ergebnis: der Test wartet 90 s auf ein "Keep", das nie ankommt, obwohl Bridge und Spiel korrekt
+     * arbeiten - der Test hat sich selbst durch den Mulligan geklickt. Fix: genau ein "ok" pro echtem
+     * "Play"-Prompt, kein Klick mehr fuer weitere Duplikate desselben Prompts.
      */
     private static JsonNode awaitMulliganPrompt(int seconds) throws InterruptedException {
         long end = System.currentTimeMillis() + seconds * 1000L;
+        boolean playClicked = false;
         while (System.currentTimeMillis() < end) {
             JsonNode n = inbox.poll(Math.max(1, end - System.currentTimeMillis()), TimeUnit.MILLISECONDS);
             if (n == null) break;
@@ -87,7 +103,8 @@ class BridgeEndToEndTest {
             if ("state".equals(n.path("type").asText())) {
                 String okLabel = n.path("prompt").path("okLabel").asText();
                 if ("Keep".equals(okLabel)) return n;
-                if ("Play".equals(okLabel) && n.path("prompt").path("okEnabled").asBoolean()) {
+                if (!playClicked && "Play".equals(okLabel) && n.path("prompt").path("okEnabled").asBoolean()) {
+                    playClicked = true;
                     send("{\"type\":\"ok\"}");
                 }
             }
