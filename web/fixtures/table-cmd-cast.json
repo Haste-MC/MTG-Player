@@ -29,10 +29,9 @@
       "exile": [
         250
       ],
-      "command": [
-        220
-      ],
+      "command": [],
       "battlefield": [
+        220,
         201,
         202,
         203,
@@ -230,13 +229,16 @@
       "imageKey": "c:Felothar the Steadfast|TDC|1",
       "controller": 1,
       "owner": 1,
-      "zone": "command",
+      "zone": "battlefield",
       "power": 2,
       "toughness": 2,
       "typeLine": "Legendary Creature — Elf Scout",
       "manaCost": "{W}{G}",
       "text": "Whenever Felothar the Steadfast attacks, exile the top card of your library. You may play it this turn.",
-      "commander": true
+      "commander": true,
+      "tapped": false,
+      "sick": true,
+      "damage": 0
     },
     "230": {
       "id": 230,

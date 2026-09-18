@@ -19,7 +19,7 @@ export default function Table() {
   return (
     <div className={"table" + (spectator ? " spectator" : "")}>
       {spectator ? (
-        <div className="spectator-grid">
+        <div className={"spectator-grid players-" + state.players.length}>
           {state.players.map((p) => <PlayerZone key={p.id} p={p} state={state} compact={true} spectator={true} />)}
         </div>
       ) : (

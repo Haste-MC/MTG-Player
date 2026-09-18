@@ -8,7 +8,8 @@ import CardImage from "./CardImage";
 /**
  * Aufbau: .card-slot (Platz in der Reihe) > .card-frame (sichtbare Box, bei getappt gedreht bemessen)
  * > .card (Bild/Text, wird bei getappt rotiert). P/T, Marken und Kampf-Tags liegen im Frame, nicht in
- * der Karte, damit sie bei getappten Karten aufrecht lesbar bleiben.
+ * der Karte, damit sie bei getappten Karten aufrecht lesbar bleiben. Ecken: Kampf-Tag oben links,
+ * CMD-Marke oben rechts, Marken unten links, P/T unten rechts.
  */
 export default function CardBox({ card }: { card: CardSnap }) {
   const seq = useStore((s) => s.state?.prompt.seq);
@@ -45,6 +46,7 @@ export default function CardBox({ card }: { card: CardSnap }) {
         {(card.attacking || card.blocking) && (
           <div className={"tag combat-tag " + (card.attacking ? "atk" : "blk")}>{card.attacking ? "Angriff" : "Block"}</div>
         )}
+        {card.commander && <div className="tag commander-tag" title="Commander">CMD</div>}
         {card.power !== undefined && (
           <div className={"tag pt" + (card.damage ? " hurt" : "")}>{card.power}/{card.toughness}{card.damage ? ` −${card.damage}` : ""}</div>
         )}

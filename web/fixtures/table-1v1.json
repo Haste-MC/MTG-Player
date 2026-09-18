@@ -208,7 +208,8 @@
       "toughness": 2,
       "typeLine": "Legendary Creature — Elf Scout",
       "manaCost": "{W}{G}",
-      "text": "Whenever Felothar the Steadfast attacks, exile the top card of your library. You may play it this turn."
+      "text": "Whenever Felothar the Steadfast attacks, exile the top card of your library. You may play it this turn.",
+      "commander": true
     },
     "230": {
       "id": 230,
