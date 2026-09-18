@@ -14,6 +14,8 @@ import java.util.List;
 /**
  * Verdrahtet WebSocket ↔ WebGuiGame/HumanMatch. Eingaben, die Forges Input-System berühren,
  * laufen über den UI-Thread; answer geht direkt an den ChoiceBroker (der Game-Thread wartet darauf).
+ * concede läuft als Hintergrund-Task, nicht auf dem UI-Thread – AbstractGuiGame.concede() marschalt
+ * seine Folgeaufrufe selbst, ein blockierender Dialog darin würde sonst den UI-Thread lahmlegen.
  */
 public final class Bridge {
 
@@ -37,8 +39,11 @@ public final class Bridge {
 
     private void onClientConnected() {
         ws.send(new Messages.Lobby(Precons.names()));
-        GuiBase.getInterface().invokeInEdtLater(gui::pushState);
-        gui.broker().pending().forEach(ws::send);
+        // state vor choice: beides in EINEM Runnable, sonst kann pending() vor pushState() beim Client ankommen
+        GuiBase.getInterface().invokeInEdtLater(() -> {
+            gui.pushState();
+            gui.broker().pending().forEach(ws::send);
+        });
     }
 
     void handle(JsonNode msg) {
@@ -55,7 +60,14 @@ public final class Bridge {
                     ws.send(new Messages.ErrorMsg("answer fuer unbekannte id " + id));
                 }
             }
-            case "concede" -> ui(gui::onConcede);
+            case "concede" -> GuiBase.getInterface().runBackgroundTask("concede", () -> {
+                try {
+                    gui.onConcede();
+                } catch (RuntimeException e) {
+                    e.printStackTrace();
+                    ws.send(new Messages.ErrorMsg("Bridge: " + e));
+                }
+            });
             case "requestState" -> onClientConnected();
             default -> ws.send(new Messages.ErrorMsg("unbekannter Nachrichtentyp: " + type));
         }
@@ -78,6 +90,10 @@ public final class Bridge {
      * M2 kennt nur Precons; Textlisten kommen in M4.
      */
     private void startGame(JsonNode msg) {
+        if (match.isRunning()) {
+            ws.send(new Messages.ErrorMsg("Spiel laeuft noch – erst aufgeben"));
+            return;
+        }
         Deck human = deck(msg.path("humanDeck"));
         List<Deck> ai = new ArrayList<>();
         List<String> names = new ArrayList<>();

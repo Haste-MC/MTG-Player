@@ -9,6 +9,10 @@ import org.java_websocket.handshake.ClientHandshake;
 import org.java_websocket.server.WebSocketServer;
 
 import java.net.InetSocketAddress;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 
 /**
@@ -21,6 +25,7 @@ public final class WsServer extends WebSocketServer implements Transport {
     private final Consumer<JsonNode> inbound;
     private final Runnable onOpen;
     private volatile WebSocket client;
+    private final CompletableFuture<Void> started = new CompletableFuture<>();
 
     public WsServer(int port, Consumer<JsonNode> inbound, Runnable onOpen) {
         super(new InetSocketAddress("127.0.0.1", port));
@@ -29,11 +34,28 @@ public final class WsServer extends WebSocketServer implements Transport {
         setReuseAddr(true);
     }
 
+    /** Blockiert, bis der Port gebunden ist (oder das Binden scheitert) – kein Rennen mit Clients, die sofort verbinden. */
+    @Override
+    public void start() {
+        super.start();
+        try {
+            started.get(10, TimeUnit.SECONDS);
+        } catch (InterruptedException | ExecutionException | TimeoutException e) {
+            throw new IllegalStateException("WebSocket-Server konnte nicht starten", e);
+        }
+    }
+
     @Override
     public void send(Object message) {
         WebSocket c = client;
         if (c != null && c.isOpen()) {
-            c.send(Json.toJson(message));
+            try {
+                c.send(Json.toJson(message));
+            } catch (RuntimeException e) {
+                // deckt WebsocketNotConnectedException (Subklasse) mit ab - ein Client, der mitten im
+                // Senden abreisst, darf den Game-Thread nicht mitreissen
+                e.printStackTrace();
+            }
         }
     }
 
@@ -64,11 +86,16 @@ public final class WsServer extends WebSocketServer implements Transport {
 
     @Override
     public void onError(WebSocket conn, Exception ex) {
+        if (conn == null) {
+            // Fehler ohne Verbindung betrifft den Server selbst (z. B. Port belegt) - start() muss das erfahren.
+            started.completeExceptionally(ex);
+        }
         ex.printStackTrace();
     }
 
     @Override
     public void onStart() {
         System.out.println("WebSocket auf ws://127.0.0.1:" + getPort());
+        started.complete(null);
     }
 }

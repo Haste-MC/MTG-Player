@@ -139,7 +139,14 @@ public class WebGuiGame extends AbstractGuiGame {
         out.send(new Messages.GameOver(winner));
     }
 
-    @Override public void afterGameEnd() { }
+    @Override
+    public void afterGameEnd() {
+        super.afterGameEnd();
+        // sonst ueberlebt die Auswahl/Prompt-Anzeige des letzten Spiels ins naechste
+        clearSelectables();
+        clearWeaklySelectable();
+        prompt = Snapshot.PromptSnap.EMPTY;
+    }
 
     // ---- Eingaben rein (UI-Thread) ------------------------------------------------
 
@@ -236,8 +243,8 @@ public class WebGuiGame extends AbstractGuiGame {
     public <T> List<T> getChoices(String message, int min, int max, List<T> choices, List<T> selected,
                                   FSerializableFunction<T, String> display) {
         if (choices == null || choices.isEmpty()) return new ArrayList<>();
-        // Forge nutzt min == max == -1 für "nur anzeigen" (reveal, z. B. revealAISkipCards bei
-        // UI_SHOW_ACTIONABLE_HIGHLIGHTS) – informativ, blockiert den Game-Thread nicht.
+        // Forge nutzt min == max == -1 fuer reine Anzeige (reveal); kein Warten auf eine Antwort,
+        // sonst blockiert der Game-Thread.
         if (min < 0 && max < 0) {
             broker.notify(message, message, options(choices, display), null);
             return new ArrayList<>();

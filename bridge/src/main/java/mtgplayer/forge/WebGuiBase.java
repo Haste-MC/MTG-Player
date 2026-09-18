@@ -51,7 +51,16 @@ public final class WebGuiBase implements IGuiBase {
     @Override public void invokeInEdtNow(Runnable runnable) {
         if (isGuiThread()) { runnable.run(); } else { invokeInEdtAndWait(runnable); }
     }
-    @Override public void invokeInEdtLater(Runnable runnable) { uiThread.submit(runnable); }
+    @Override public void invokeInEdtLater(Runnable runnable) {
+        uiThread.submit(() -> {
+            try {
+                runnable.run();
+            } catch (Throwable t) {
+                System.err.println("[bridge-ui] " + t);
+                t.printStackTrace();
+            }
+        });
+    }
     @Override public void invokeInEdtAndWait(Runnable proc) {
         if (isGuiThread()) { proc.run(); return; }
         Future<?> f = uiThread.submit(proc);

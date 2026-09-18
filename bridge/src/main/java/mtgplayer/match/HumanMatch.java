@@ -46,6 +46,7 @@ public final class HumanMatch {
         // Forge zeigt sonst beim Start eine Liste von Karten, die die KI nicht spielen kann – Rauschen für den menschlichen Sitz
         rules.setWarnAboutAICards(false);
         hosted = new HostedMatch();
+        gui.resetForNewMatch(); // sonst haengt Auswahl/Prompt-Zustand aus dem vorigen Spiel noch dran
         hosted.startMatch(rules, null, players, guis, null);
     }
 

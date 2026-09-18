@@ -61,6 +61,13 @@ public final class ForgeBoot {
             prefs.setPref(FPref.PLAYER_NAME, "Du");
             return null;
         });
+        if (Thread.getDefaultUncaughtExceptionHandler() == null) {
+            // M2-Minimum: sichtbar im Log statt stillschweigend verschluckt. Weiterleitung an den Browser kommt in M3.
+            Thread.setDefaultUncaughtExceptionHandler((t, e) -> {
+                System.err.println("[uncaught] " + t.getName());
+                e.printStackTrace();
+            });
+        }
         initialized = true;
     }
 
