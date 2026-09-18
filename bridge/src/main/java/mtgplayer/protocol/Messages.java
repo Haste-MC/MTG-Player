@@ -7,8 +7,8 @@ public final class Messages {
 
     private Messages() { }
 
-    public record Lobby(String type, List<String> precons) {
-        public Lobby(List<String> precons) { this("lobby", precons); }
+    public record Lobby(String type, List<String> precons, List<String> decks) {
+        public Lobby(List<String> precons, List<String> decks) { this("lobby", precons, decks); }
     }
 
     /**

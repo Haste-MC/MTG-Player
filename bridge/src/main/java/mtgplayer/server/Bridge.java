@@ -3,6 +3,8 @@ package mtgplayer.server;
 import com.fasterxml.jackson.databind.JsonNode;
 import forge.deck.Deck;
 import forge.gui.GuiBase;
+import mtgplayer.decks.DeckSource;
+import mtgplayer.decks.DeckStore;
 import mtgplayer.forge.Precons;
 import mtgplayer.gui.Stops;
 import mtgplayer.gui.WebGuiGame;
@@ -24,6 +26,8 @@ public final class Bridge {
     private final WsServer ws;
     private final WebGuiGame gui;
     private final HumanMatch match = new HumanMatch();
+    private final DeckStore store = DeckStore.standard();
+    private final DeckSource decks = new DeckSource(store);
 
     public Bridge(int wsPort) {
         this.ws = new WsServer(wsPort, this::handle, this::onClientConnected);
@@ -40,7 +44,7 @@ public final class Bridge {
     }
 
     private void onClientConnected() {
-        ws.send(new Messages.Lobby(Precons.names()));
+        ws.send(new Messages.Lobby(Precons.names(), store.names()));
         // state vor choice: beides in EINEM Runnable, sonst kann pending() vor pushState() beim Client ankommen
         GuiBase.getInterface().invokeInEdtLater(() -> {
             gui.pushState();
@@ -100,22 +104,29 @@ public final class Bridge {
     }
 
     /**
-     * {"type":"startGame","humanDeck":{"precon":"..."},"opponents":[{"precon":"...","name":"KI 1"}]}
-     * M2 kennt nur Precons; Textlisten kommen in M4.
+     * {"type":"startGame","humanDeck":{deckAngabe},"opponents":[{deckAngabe,"name":"KI 1"}]}
+     * deckAngabe: {"precon":"..."} | {"saved":"..."} | {"text":"...", "name":"..."?}
      */
     private void startGame(JsonNode msg) {
         if (match.isRunning()) {
             ws.send(new Messages.ErrorMsg("Spiel laeuft noch – erst aufgeben"));
             return;
         }
-        Deck human = deck(msg.path("humanDeck"));
+        Deck human;
         List<Deck> ai = new ArrayList<>();
         List<String> names = new ArrayList<>();
-        int i = 1;
-        for (JsonNode o : msg.path("opponents")) {
-            ai.add(deck(o));
-            names.add(o.path("name").asText("KI " + i++));
+        try {
+            human = decks.resolve(msg.path("humanDeck"));
+            int i = 1;
+            for (JsonNode o : msg.path("opponents")) {
+                ai.add(decks.resolve(o));
+                names.add(o.path("name").asText("KI " + i++));
+            }
+        } catch (IllegalArgumentException e) {
+            ws.send(new Messages.ErrorMsg(e.getMessage()));
+            return;
         }
+        ws.send(new Messages.Lobby(Precons.names(), store.names())); // ggf. neu gespeichertes Deck
         ui(() -> {
             try {
                 match.start("Du", human, ai, names, gui);
@@ -124,13 +135,5 @@ public final class Bridge {
                 e.printStackTrace();
             }
         });
-    }
-
-    private static Deck deck(JsonNode node) {
-        String precon = node.path("precon").asText(null);
-        if (precon == null) {
-            throw new IllegalArgumentException("Deck braucht ein Feld 'precon'");
-        }
-        return Precons.load(precon);
     }
 }
