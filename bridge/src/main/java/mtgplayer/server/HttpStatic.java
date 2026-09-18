@@ -9,7 +9,15 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
 
-/** Liefert das gebaute Frontend (web/dist). Unbekannte Pfade fallen auf index.html zurück (SPA). */
+/**
+ * Liefert das gebaute Frontend (web/dist). Unbekannte Pfade fallen auf index.html zurück (SPA).
+ *
+ * <p>Threading: der JDK-{@code HttpServer} nutzt einen einzigen Executor für alle Contexts eines
+ * Servers. {@code /img/} (siehe {@link mtgplayer.images.ImageHandler}) gibt Requests sofort an
+ * einen eigenen Pool ab, damit langsame Scryfall-Downloads diesen Server-Pool nicht belegen; der
+ * Pool hier ist trotzdem auf 8 Threads angehoben, damit `/`-Requests immer einen freien Thread
+ * finden, auch wenn der Image-Pool gleichzeitig ausgelastet ist.</p>
+ */
 public final class HttpStatic {
 
     private static final Map<String, String> MIME = Map.of(
@@ -22,7 +30,7 @@ public final class HttpStatic {
     public HttpStatic(int port, Path dir) throws IOException {
         this.dir = dir.toAbsolutePath().normalize();
         this.server = HttpServer.create(new InetSocketAddress(bindAddress(), port), 0);
-        server.setExecutor(java.util.concurrent.Executors.newFixedThreadPool(4));
+        server.setExecutor(java.util.concurrent.Executors.newFixedThreadPool(8));
         server.createContext("/", ex -> {
             String p = ex.getRequestURI().getPath();
             String rel = p.length() > 1 ? p.substring(1) : "";

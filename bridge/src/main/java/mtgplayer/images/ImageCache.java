@@ -78,6 +78,8 @@ public final class ImageCache {
         if (until != null && until > System.currentTimeMillis()) return Optional.empty();
 
         synchronized (downloadLock) {
+            Long untilLocked = failedUntil.get(imageKey); // ein anderer Thread hat es gerade als fehlgeschlagen markiert
+            if (untilLocked != null && untilLocked > System.currentTimeMillis()) return Optional.empty();
             if (Files.isRegularFile(file)) { // ein anderer Thread hat es gerade geladen
                 try { return Optional.of(Files.readAllBytes(file)); } catch (IOException ignored) { }
             }

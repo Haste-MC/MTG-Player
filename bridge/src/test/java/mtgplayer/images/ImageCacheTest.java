@@ -15,6 +15,12 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 class ImageCacheTest {
 
@@ -54,6 +60,31 @@ class ImageCacheTest {
         ImageCache cache = new ImageCache(dir, url -> { calls.add(url); return new byte[] {1}; }, 0);
         assertTrue(cache.get("t:goblin_r_1_1").isEmpty());
         assertEquals(0, calls.size());
+    }
+
+    @Test
+    void gleichzeitigeFehlschlaegeFragenNurEinmalAn(@TempDir Path dir) throws Exception {
+        AtomicInteger calls = new AtomicInteger();
+        ImageCache cache = new ImageCache(dir, url -> { calls.incrementAndGet(); return null; }, 0);
+        int n = 4;
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService pool = Executors.newFixedThreadPool(n);
+        try {
+            List<Future<Optional<byte[]>>> futures = new ArrayList<>();
+            for (int i = 0; i < n; i++) {
+                futures.add(pool.submit(() -> {
+                    start.await();
+                    return cache.get(key);
+                }));
+            }
+            start.countDown();
+            for (Future<Optional<byte[]>> f : futures) {
+                assertTrue(f.get(5, TimeUnit.SECONDS).isEmpty());
+            }
+        } finally {
+            pool.shutdown();
+        }
+        assertEquals(1, calls.get(), "gleichzeitige Anfragen auf denselben Key fragen den Fetcher nur einmal an");
     }
 
     @Test

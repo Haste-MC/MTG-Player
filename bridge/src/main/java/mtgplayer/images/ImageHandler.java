@@ -8,31 +8,78 @@ import java.io.OutputStream;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Optional;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
-/** GET /img/{urlencoded imageKey} → JPEG aus dem ImageCache, sonst 404. */
+/**
+ * GET/HEAD /img/{urlencoded imageKey} → JPEG aus dem ImageCache, sonst 404.
+ *
+ * <p>Threading: der JDK-{@code HttpServer} hat pro Server genau einen Executor (siehe
+ * {@link mtgplayer.server.HttpStatic}), der auch die statischen {@code /}-Requests bedient. Ein
+ * langsamer Scryfall-Download darf diesen Pool nicht blockieren, sonst hungert er die restliche
+ * Seite aus. Deshalb reicht {@link #handle} die {@link HttpExchange} sofort an einen eigenen,
+ * fest dimensionierten {@link ExecutorService} weiter und kehrt selbst zurück; der Server-Thread
+ * ist damit sofort wieder frei. Der eigentliche Request (inkl. eventuellem Download über
+ * {@link ImageCache#get}) läuft im Pool-Thread, der die Exchange auch abschließt – das ist beim
+ * JDK-{@code HttpServer} zulässig, die Exchange muss nicht vom Server-Thread selbst beendet
+ * werden.</p>
+ */
 public final class ImageHandler implements HttpHandler {
 
     private final ImageCache cache;
+    private final ExecutorService imagePool = Executors.newFixedThreadPool(8);
 
     public ImageHandler(ImageCache cache) {
         this.cache = cache;
     }
 
     @Override
-    public void handle(HttpExchange ex) throws IOException {
-        String path = ex.getRequestURI().getRawPath();
-        String key = path.length() > 5 ? URLDecoder.decode(path.substring(5), StandardCharsets.UTF_8) : "";
-        Optional<byte[]> img = key.isBlank() ? Optional.empty() : cache.get(key);
-        if (img.isEmpty()) {
-            ex.sendResponseHeaders(404, -1);
+    public void handle(HttpExchange ex) {
+        imagePool.submit(() -> serve(ex));
+    }
+
+    private void serve(HttpExchange ex) {
+        try {
+            String method = ex.getRequestMethod();
+            if (!"GET".equals(method) && !"HEAD".equals(method)) {
+                ex.sendResponseHeaders(405, -1);
+                ex.close();
+                return;
+            }
+            String path = ex.getRequestURI().getRawPath();
+            String raw = path.length() > 5 ? path.substring(5) : "";
+            // Der Client kodiert mit encodeURIComponent, das '+' nicht anfasst; URLDecoder würde
+            // ein woertliches '+' faelschlich als Leerzeichen interpretieren, deshalb vorher escapen.
+            String key = raw.isEmpty() ? "" : URLDecoder.decode(raw.replace("+", "%2B"), StandardCharsets.UTF_8);
+            Optional<byte[]> img = key.isBlank() ? Optional.empty() : cache.get(key);
+            if (img.isEmpty()) {
+                ex.sendResponseHeaders(404, -1);
+                ex.close();
+                return;
+            }
+            ex.getResponseHeaders().add("Content-Type", "image/jpeg");
+            ex.getResponseHeaders().add("Cache-Control", "public, max-age=604800");
+            if ("HEAD".equals(method)) {
+                ex.sendResponseHeaders(200, -1);
+                ex.close();
+                return;
+            }
+            ex.sendResponseHeaders(200, img.get().length);
+            try (OutputStream os = ex.getResponseBody()) {
+                os.write(img.get());
+            }
+        } catch (IOException e) {
+            System.err.println("[images] " + ex.getRequestURI() + ": " + e);
             ex.close();
-            return;
-        }
-        ex.getResponseHeaders().add("Content-Type", "image/jpeg");
-        ex.getResponseHeaders().add("Cache-Control", "public, max-age=604800");
-        ex.sendResponseHeaders(200, img.get().length);
-        try (OutputStream os = ex.getResponseBody()) {
-            os.write(img.get());
+        } catch (RuntimeException e) {
+            e.printStackTrace();
+            try {
+                ex.sendResponseHeaders(500, -1);
+            } catch (IOException ignored) {
+                // Verbindung vermutlich schon weg – nichts mehr zu tun
+            } finally {
+                ex.close();
+            }
         }
     }
 }
