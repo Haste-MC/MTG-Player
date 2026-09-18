@@ -19,11 +19,10 @@ import java.util.regex.Pattern;
  * Liste → erster Commander-fähiger Eintrag aus dem Main wandert in die Commander-Sektion.
  * Karten, die Forge nur wegen eines nicht auflösbaren Set/Collector-Nummer-Paars als unbekannt
  * einstuft (der Kartenname selbst wurde erkannt), werden ein zweites Mal ohne Set-Angabe
- * aufgelöst, bevor sie als Problem gemeldet werden. Nicht erkannte Zeilen werden immer als Problem
- * gemeldet; nur kopfzeilen-artige davon (z.B. Archidekts "Maybeboard") sowie erkannte, aber nicht
- * erlaubte Sektionen schalten zusätzlich die Sektion ab: Kartenzeilen, die Forge danach (mangels
- * neuer erkannter Sektion) weiter der vorherigen Sektion zuordnen würde, werden dann nicht
- * importiert, sondern ebenfalls als Problem gemeldet.
+ * aufgelöst, bevor sie als Problem gemeldet werden. Jede nicht interpretierbare Zeile (unbekannter
+ * Text, eine erkannte, aber nicht erlaubte Sektion, eine Forge-Warnung) wird als genau ein Problem
+ * gemeldet – wo Forge danach folgende Karten einsortiert, spielt keine Rolle, denn ein Import mit
+ * nicht-leerer {@code problems}-Liste wird ohnehin nicht übernommen (siehe {@code DeckSource}).
  */
 public final class DeckImport {
 
@@ -33,7 +32,6 @@ public final class DeckImport {
     private static final Pattern FOIL = Pattern.compile("\\s*\\*F\\*\\s*$");
     private static final Pattern NAME_LINE = Pattern.compile("^(?:name|deck)\\s*:\\s*(.+)$", Pattern.CASE_INSENSITIVE);
     private static final Pattern UNKNOWN_CARD_SET_SUFFIX = Pattern.compile("^(.*) \\[[^\\]]*\\]$");
-    private static final Pattern HEADER_LIKE = Pattern.compile("^[A-Za-z][A-Za-z ]{0,20}:?$");
 
     private DeckImport() { }
 
@@ -54,12 +52,6 @@ public final class DeckImport {
         List<Token> tokens = rec.parseCardList(lines);
 
         DeckSection currentSection = null;
-        // Forge lässt eine nicht erkannte/nicht unterstützte "Sektion" (z.B. Archidekts
-        // "Maybeboard" oder eine erlaubte, aber nicht in allowedDeckSections enthaltene Sektion)
-        // die Referenz-Sektion unverändert – nachfolgende Kartenzeilen würden sonst still in der
-        // vorherigen (falschen) Sektion landen. Dieses Flag unterdrückt das, bis die nächste
-        // tatsächlich erkannte Sektion kommt.
-        boolean unsupportedSection = false;
         for (Token t : tokens) {
             TokenType type = t.getType();
             if (type == TokenType.DECK_NAME) {
@@ -68,7 +60,6 @@ public final class DeckImport {
             }
             if (type == TokenType.DECK_SECTION_NAME) {
                 currentSection = DeckSection.valueOf(t.getText());
-                unsupportedSection = false;
                 continue;
             }
             if (type == TokenType.COMMENT) {
@@ -78,15 +69,11 @@ public final class DeckImport {
                 String txt = t.getText();
                 if (!txt.isBlank()) {
                     problems.add("Nicht erkannt: " + txt);
-                    if (looksLikeHeader(txt)) {
-                        unsupportedSection = true;
-                    }
                 }
                 continue;
             }
             if (type == TokenType.UNSUPPORTED_DECK_SECTION) {
                 problems.add("Sektion nicht unterstützt: " + t.getText());
-                unsupportedSection = true;
                 continue;
             }
             if (type == TokenType.WARNING_MESSAGE) {
@@ -94,20 +81,12 @@ public final class DeckImport {
                 continue;
             }
             if (t.isTokenForDeck()) {
-                if (unsupportedSection) {
-                    problems.add("Karte in nicht unterstützter Sektion: " + t.getCard().getName());
-                    continue;
-                }
                 DeckSection section = t.getTokenSection() == null ? DeckSection.Main : t.getTokenSection();
                 deck.getOrCreate(section).add(t.getCard(), t.getQuantity());
                 continue;
             }
             if (type == TokenType.UNKNOWN_CARD || type == TokenType.UNSUPPORTED_CARD
                     || type == TokenType.CARD_FROM_INVALID_SET || type == TokenType.CARD_FROM_NOT_ALLOWED_SET) {
-                if (unsupportedSection) {
-                    problems.add("Karte in nicht unterstützter Sektion: " + t.getText());
-                    continue;
-                }
                 Token recovered = type == TokenType.UNKNOWN_CARD ? retryWithoutSet(rec, t, currentSection) : null;
                 if (recovered != null) {
                     DeckSection section = recovered.getTokenSection() == null
@@ -148,20 +127,6 @@ public final class DeckImport {
             return retry;
         }
         return null;
-    }
-
-    /**
-     * Nur kopfzeilen-artige unerkannte Zeilen (ein bis zwei Wörter, optional mit ":" abgeschlossen,
-     * z.B. "Maybeboard", "Tokens:", "Considering") schalten die Sektion ab – eine beliebige
-     * unerkannte Zeile mitten in einer kopflosen Arena-Liste (z.B. "blabla kein kartenname") soll
-     * nicht dazu führen, dass alle folgenden Karten fälschlich als "in nicht unterstützter
-     * Sektion" verworfen werden.
-     */
-    private static boolean looksLikeHeader(String text) {
-        String trimmed = text.trim();
-        if (!HEADER_LIKE.matcher(trimmed).matches()) return false;
-        String withoutColon = trimmed.endsWith(":") ? trimmed.substring(0, trimmed.length() - 1) : trimmed;
-        return withoutColon.trim().split("\\s+").length <= 2;
     }
 
     private static PaperCard firstCommanderCandidate(Deck deck) {

@@ -65,9 +65,6 @@ class DeckImportTest {
         DeckImport.Result r = DeckImport.parse("1 Sol Ring\nMaybeboard\n1 Felothar the Steadfast\n");
         assertFalse(r.problems().isEmpty(), "Maybeboard wird nicht erkannt und muss als Problem auftauchen");
         assertTrue(r.problems().stream().anyMatch(p -> p.contains("Maybeboard")), r.problems().toString());
-        assertTrue(r.deck().getCommanders().isEmpty(), "Felothar darf nicht automatisch Commander werden");
-        assertEquals(0, r.deck().has(DeckSection.Main) ? r.deck().get(DeckSection.Main).countAll(x -> x.getName().equals("Felothar the Steadfast")) : 0,
-                "Felothar darf nach der unerkannten Zeile nicht still im Main landen");
     }
 
     @Test
@@ -78,12 +75,10 @@ class DeckImportTest {
     }
 
     @Test
-    void nichtKopfzeilenartigeUnbekannteZeileSchaltetSektionNichtAb() {
+    void nichtErkannteZeileMittendrinIstGenauEinProblem() {
         DeckImport.Result r = DeckImport.parse("1 Sol Ring\nblabla kein kartenname\n1 Felothar the Steadfast\n");
         assertEquals(1, r.problems().size(), r.problems().toString());
         assertTrue(r.problems().get(0).contains("blabla"));
-        assertEquals(1, r.deck().getCommanders().size(), "Felothar wird trotz der Zwischenzeile noch Commander");
-        assertEquals("Felothar the Steadfast", r.deck().getCommanders().get(0).getName());
     }
 
     @Test
