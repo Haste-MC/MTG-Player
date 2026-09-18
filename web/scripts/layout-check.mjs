@@ -3,6 +3,7 @@
 // Aufruf (aus web/): node scripts/layout-check.mjs [url] [fixture.json ...]
 //   Standard: http://localhost:8080 mit fixtures/table.json
 //   Viewport per Env: VIEWPORT=1280x720 (Standard 1600x900). Exit 1 mit Meldung bei Verstoß.
+// Der WebSocket wird stillgelegt, damit ein laufendes Spiel auf 8081 die Fixtures nicht überschreibt.
 import { chromium } from "playwright";
 import { readFile } from "node:fs/promises";
 
@@ -14,12 +15,17 @@ function withDebug(u) {
   return /[?&]debug(=|&|$)/.test(u) ? u : u + (u.includes("?") ? "&" : "?") + "debug=1";
 }
 
+function stubWebSocket() {
+  window.WebSocket = class { static OPEN = 1; readyState = 0; send() {} close() {} };
+}
+
 const [width, height] = (process.env.VIEWPORT ?? process.env.SHOT_VIEWPORT ?? "1600x900").split("x").map(Number);
 
 const browser = await chromium.launch();
 let problems = [];
 try {
   const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: 1 });
+  await page.addInitScript(stubWebSocket);
   await page.goto(withDebug(url), { waitUntil: "load" });
   await page.waitForFunction(() => (document.getElementById("root")?.childElementCount ?? 0) > 0);
   for (const fixturePath of fixturePaths) {
@@ -34,6 +40,8 @@ try {
     const r = (el) => el.getBoundingClientRect();
     const fmt = (b) => `${Math.round(b.left)},${Math.round(b.top)} ${Math.round(b.width)}x${Math.round(b.height)}`;
     const name = (el) => el.querySelector(".name")?.textContent || el.querySelector(".art")?.getAttribute("src") || el.className;
+    // Karten in zugeklappten <details> (Friedhof/Exil-Liste) haben in Chromium trotzdem Layout-Boxen – überspringen.
+    const visible = (el) => typeof el.checkVisibility !== "function" || el.checkVisibility();
 
     // 1. Kein horizontaler Seiten-Scroll.
     if (document.documentElement.scrollWidth > vw) {
@@ -42,15 +50,26 @@ try {
 
     // 2. Jede Handkarte liegt vollständig im Viewport.
     for (const c of document.querySelectorAll(".hand .card")) {
+      if (!visible(c)) continue;
       const b = r(c);
       if (b.left < 0 || b.top < 0 || b.right > vw || b.bottom > vh) {
         out.push(`Handkarte "${name(c)}" ragt aus dem Viewport: ${fmt(b)} (Viewport ${vw}x${vh})`);
       }
     }
 
-    // 3. Kein Karten-Clipping im eigenen Spielfeld: Rechteck gegen jeden Vorfahren mit overflow != visible.
+    // 3. Kein Karten-Clipping im eigenen Spielfeld: Rechteck gegen jeden Vorfahren mit overflow != visible,
+    //    außerdem muss jede Karte innerhalb ihres .player-Panels liegen (sonst ragt sie in Phasenleiste/Prompt).
     for (const c of document.querySelectorAll(".mine .battlefield .card")) {
+      if (!visible(c)) continue;
       const b = r(c);
+      const panel = c.closest(".player");
+      if (panel) {
+        const pb = r(panel);
+        if (b.left < pb.left - 1 || b.right > pb.right + 1 || b.top < pb.top - 1 || b.bottom > pb.bottom + 1) {
+          out.push(`Karte "${name(c)}" ragt aus dem eigenen Panel: Karte ${fmt(b)}, Panel ${fmt(pb)}`);
+          continue;
+        }
+      }
       let a = c.parentElement;
       while (a && a !== document.body) {
         const cs = getComputedStyle(a);
