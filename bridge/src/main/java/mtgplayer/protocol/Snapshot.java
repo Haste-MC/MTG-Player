@@ -67,11 +67,13 @@ public record Snapshot(
             Boolean token,
             Boolean selectable,
             Boolean actionable,
-            Boolean highlighted) {
+            Boolean highlighted,
+            /** {@code true} nur fuer Commander (CardView.isCommander), sonst {@code null}. */
+            Boolean commander) {
 
         public static CardSnap hidden(int id) {
             return new CardSnap(id, true, null, null, null, null, null, null, null, null, null, null, null,
-                    null, null, null, null, null, null, null, null, null, null, null);
+                    null, null, null, null, null, null, null, null, null, null, null, null);
         }
     }
 

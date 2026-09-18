@@ -33,6 +33,8 @@ export interface CardSnap {
   selectable?: boolean;
   actionable?: boolean;
   highlighted?: boolean;
+  /** true nur für Commander (CardView.isCommander), sonst fehlt das Feld. */
+  commander?: boolean;
 }
 
 export interface PlayerSnap {

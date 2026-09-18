@@ -34,6 +34,7 @@ class StateSerializerTest {
     private static Card myHandCard;
     private static Card foeHandCard;
     private static Card myPermanent;
+    private static Card myCommander;
 
     @BeforeAll
     static void boardAufbauen() {
@@ -56,6 +57,24 @@ class StateSerializerTest {
         me.getZone(ZoneType.Battlefield).add(myPermanent);
         foeHandCard = Card.fromPaperCard(bCards.get(0), foe);
         foe.getZone(ZoneType.Hand).add(foeHandCard);
+        // Commander wie in Player.initVariantsZones: Card.setCommander(true) ueber Player.addCommander,
+        // das ruft CardView.updateCommander -> CardView.isCommander() == true.
+        myCommander = Card.fromPaperCard(a.get(DeckSection.Commander).toFlatList().get(0), me);
+        me.addCommander(myCommander);
+        me.getZone(ZoneType.Battlefield).add(myCommander);
+    }
+
+    @Test
+    void commanderFlagNurBeimCommander() {
+        Snapshot s = StateSerializer.snapshot(game.getView(), ViewContext.plain(me.getView()));
+        Snapshot.CardSnap cmd = s.cards().get(myCommander.getId());
+        assertNotNull(cmd);
+        assertEquals(Boolean.TRUE, cmd.commander());
+        assertEquals("Battlefield", cmd.zone());
+        assertNull(s.cards().get(myPermanent.getId()).commander(), "normale Karte traegt kein commander-Feld");
+        JsonNode json = Json.parse(Json.toJson(s));
+        assertTrue(json.get("cards").get(String.valueOf(myCommander.getId())).get("commander").asBoolean());
+        assertFalse(json.get("cards").get(String.valueOf(myPermanent.getId())).has("commander"));
     }
 
     @Test
