@@ -48,6 +48,31 @@ public final class HumanMatch {
         hosted.startMatch(rules, null, players, guis, null);
     }
 
+    /**
+     * KI-only-Sitz: 2–6 Forge-KIs spielen gegeneinander, der Browser sieht als Zuschauer zu
+     * (Forges eigener Spectator-Pfad, siehe {@code HostedMatch.startGame}: bei leerer guis-Map
+     * ruft es {@code GuiBase.getInterface().getNewGuiGame()} und registriert das Ergebnis als
+     * Zuschauer-Sitz – {@code WebGuiBase.setGuiSupplier} liefert dafuer dieselbe {@code gui}).
+     */
+    public void startSpectator(List<Deck> aiDecks, List<String> aiNames, WebGuiGame gui) {
+        if (aiDecks.size() != aiNames.size() || aiDecks.size() < 2 || aiDecks.size() > 6) {
+            throw new IllegalArgumentException("2–6 KI-Decks mit gleich vielen Namen");
+        }
+        end();
+        List<RegisteredPlayer> players = new ArrayList<>();
+        for (int i = 0; i < aiDecks.size(); i++) {
+            RegisteredPlayer rp = RegisteredPlayer.forCommander(aiDecks.get(i));
+            rp.setPlayer(new LobbyPlayerAi(aiNames.get(i), null));
+            players.add(rp);
+        }
+
+        GameRules rules = CommanderRules.create();
+        rules.setWarnAboutAICards(false);
+        hosted = new HostedMatch();
+        gui.resetForNewMatch(); // sonst haengt Auswahl/Prompt-Zustand aus dem vorigen Spiel noch dran
+        hosted.startMatch(rules, null, players, Map.of(), null);
+    }
+
     public boolean isRunning() {
         return hosted != null && hosted.getGame() != null && !hosted.getGame().isGameOver();
     }

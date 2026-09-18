@@ -6,6 +6,7 @@ import forge.gui.GuiBase;
 import mtgplayer.decks.DeckSource;
 import mtgplayer.decks.DeckStore;
 import mtgplayer.forge.Precons;
+import mtgplayer.forge.WebGuiBase;
 import mtgplayer.gui.Stops;
 import mtgplayer.gui.WebGuiGame;
 import mtgplayer.match.HumanMatch;
@@ -32,6 +33,12 @@ public final class Bridge {
     public Bridge(int wsPort) {
         this.ws = new WsServer(wsPort, this::handle, this::onClientConnected);
         this.gui = new WebGuiGame(ws);
+        // KI-only-Modus: HostedMatch.startGame holt sich bei einer leeren guis-Map (Zuschauer, kein
+        // menschlicher Sitz) sein IGuiGame ueber GuiBase.getInterface().getNewGuiGame() - liefert unsere
+        // eine WebGuiGame-Instanz statt der Standard-Exception.
+        if (GuiBase.getInterface() instanceof WebGuiBase wgb) {
+            wgb.setGuiSupplier(() -> gui);
+        }
     }
 
     public void start() {
@@ -66,14 +73,26 @@ public final class Bridge {
                     ws.send(new Messages.ErrorMsg("answer fuer unbekannte id " + id));
                 }
             }
-            case "concede" -> GuiBase.getInterface().runBackgroundTask("concede", () -> {
-                try {
-                    gui.onConcede();
-                } catch (RuntimeException e) {
-                    e.printStackTrace();
-                    ws.send(new Messages.ErrorMsg("Bridge: " + e));
+            case "concede" -> {
+                if (gui.getLocalPlayers().isEmpty()) {
+                    // Zuschauer: kein Sitz, der AbstractGuiGame.concede() auslösen könnte (das fragt den
+                    // lokalen Spieler) - stattdessen das Spiel direkt beenden, synchron auf dem UI-Thread.
+                    ui(() -> {
+                        match.end();
+                        gui.pushState();
+                        ws.send(new Messages.GameOver(null));
+                    });
+                } else {
+                    GuiBase.getInterface().runBackgroundTask("concede", () -> {
+                        try {
+                            gui.onConcede();
+                        } catch (RuntimeException e) {
+                            e.printStackTrace();
+                            ws.send(new Messages.ErrorMsg("Bridge: " + e));
+                        }
+                    });
                 }
-            });
+            }
             case "setStops" -> ui(() -> {
                 Stops s = gui.stops();
                 if (msg.has("own")) s = s.with(true, Stops.parse(Json.mapper().convertValue(msg.get("own"), new com.fasterxml.jackson.core.type.TypeReference<List<String>>() { })));
@@ -105,6 +124,8 @@ public final class Bridge {
 
     /**
      * {"type":"startGame","humanDeck":{deckAngabe},"opponents":[{deckAngabe,"name":"KI 1"}]}
+     * KI-only-Modus (Zuschauer, kein humanDeck): {"type":"startGame","spectate":true,
+     * "opponents":[{deckAngabe,"name":"KI 1"}, ... 2–6 Eintraege]}
      * deckAngabe: {"precon":"..."} | {"saved":"..."} | {"text":"...", "deckName":"..."?}
      * "name" bei einem Gegner-Eintrag ist der Spielername, nicht der Speichername des Decks.
      */
@@ -113,14 +134,21 @@ public final class Bridge {
             ws.send(new Messages.ErrorMsg("Spiel laeuft noch – erst aufgeben"));
             return;
         }
-        Deck human;
+        boolean spectate = msg.path("spectate").asBoolean(false);
+        if (spectate && msg.path("opponents").size() < 2) {
+            ws.send(new Messages.ErrorMsg("KI-Modus braucht mindestens 2 Decks"));
+            return;
+        }
+        Deck human = null;
         List<Deck> ai = new ArrayList<>();
         List<String> names = new ArrayList<>();
         List<Runnable> saves = new ArrayList<>();
         try {
-            DeckSource.Resolved humanR = decks.resolve(msg.path("humanDeck"));
-            human = humanR.deck();
-            saves.add(humanR.save());
+            if (!spectate) {
+                DeckSource.Resolved humanR = decks.resolve(msg.path("humanDeck"));
+                human = humanR.deck();
+                saves.add(humanR.save());
+            }
             int i = 1;
             for (JsonNode o : msg.path("opponents")) {
                 DeckSource.Resolved r = decks.resolve(o);
@@ -136,9 +164,14 @@ public final class Bridge {
         // darf ein zuvor erfolgreich aufgeloestes Text-Deck nicht trotzdem auf Platte lassen.
         saves.forEach(Runnable::run);
         ws.send(new Messages.Lobby(Precons.names(), store.names())); // ggf. neu gespeichertes Deck
+        Deck humanDeck = human;
         ui(() -> {
             try {
-                match.start("Du", human, ai, names, gui);
+                if (spectate) {
+                    match.startSpectator(ai, names, gui);
+                } else {
+                    match.start("Du", humanDeck, ai, names, gui);
+                }
             } catch (RuntimeException e) {
                 ws.send(new Messages.ErrorMsg("Spielstart fehlgeschlagen: " + e));
                 e.printStackTrace();

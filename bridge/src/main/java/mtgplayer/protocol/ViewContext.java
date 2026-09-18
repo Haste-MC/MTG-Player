@@ -16,11 +16,12 @@ public record ViewContext(
         Predicate<GameEntityView> highlighted,
         Snapshot.PromptSnap prompt,
         Messages.StopsMsg stops,
-        boolean fullControl) {
+        boolean fullControl,
+        boolean spectator) {
 
     /** Sicht eines Spielers ohne UI-Zustand – für Tests und den Lobby-Fall. */
     public static ViewContext plain(PlayerView me) {
         return new ViewContext(me, c -> c.canBeShownTo(me), c -> false, c -> false, e -> false, Snapshot.PromptSnap.EMPTY,
-                new Messages.StopsMsg(List.of(), List.of()), false);
+                new Messages.StopsMsg(List.of(), List.of()), false, false);
     }
 }

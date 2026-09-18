@@ -21,6 +21,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 /**
  * Forges Andockpunkt für eine UI. Wir haben keine – der Browser kommt später
@@ -36,6 +37,10 @@ public final class WebGuiBase implements IGuiBase {
         return t;
     });
     private volatile Thread uiThreadRef;
+    /** KI-only-Sitz (Zuschauer): HostedMatch.startGame ruft getNewGuiGame() nur, wenn keine
+     *  menschlichen Spieler dabei sind (humanCount == 0) – dann liefert dieser Supplier die
+     *  eine WebGuiGame-Instanz der Bridge statt der Standard-UnsupportedOperationException. */
+    private volatile Supplier<IGuiGame> guiSupplier;
 
     /** @param assetsDir absoluter Pfad mit abschließendem "/" – darin liegt "res/" */
     public WebGuiBase(String assetsDir) {
@@ -123,7 +128,15 @@ public final class WebGuiBase implements IGuiBase {
     @Override public void showSpellShop() { }
     @Override public void showBazaar() { }
 
+    public void setGuiSupplier(Supplier<IGuiGame> supplier) {
+        guiSupplier = supplier;
+    }
+
     @Override public IGuiGame getNewGuiGame() {
+        Supplier<IGuiGame> s = guiSupplier;
+        if (s != null) {
+            return s.get();
+        }
         throw new UnsupportedOperationException("kein IGuiGame in M1 – kommt mit dem menschlichen Sitz");
     }
     @Override public HostedMatch hostMatch() { return new HostedMatch(); }

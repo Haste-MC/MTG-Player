@@ -55,7 +55,8 @@ public final class StateSerializer {
                 cards,
                 ctx.stops(),
                 ctx.fullControl(),
-                ctx.prompt());
+                ctx.prompt(),
+                ctx.spectator() ? Boolean.TRUE : null);
     }
 
     private static Snapshot.PlayerSnap player(PlayerView p, FCollectionView<PlayerView> all, ViewContext ctx,

@@ -89,10 +89,11 @@ public class WebGuiGame extends AbstractGuiGame {
     public void pushState() {
         GameView gv = getGameView();
         if (gv == null) return;
-        PlayerView me = getLocalPlayers().isEmpty() ? null : getLocalPlayers().iterator().next();
+        boolean isSpectator = getLocalPlayers().isEmpty();
+        PlayerView me = isSpectator ? null : getLocalPlayers().iterator().next();
         ViewContext ctx = new ViewContext(me, this::mayView, this::isSelectable, this::isWeaklySelectable,
                 this::isHighlighted, prompt,
-                new Messages.StopsMsg(Stops.names(stops.own()), Stops.names(stops.opp())), fullControl);
+                new Messages.StopsMsg(Stops.names(stops.own()), Stops.names(stops.opp())), fullControl, isSpectator);
         out.send(StateSerializer.snapshot(gv, ctx));
     }
 
@@ -120,15 +121,34 @@ public class WebGuiGame extends AbstractGuiGame {
     @SuppressWarnings("deprecation")
     public void setOriginalGameController(PlayerView player, IGameController gameController) {
         super.setOriginalGameController(player, gameController);
+        watchInputQueueOf(gameController);
+        applyFullControlPref();
+    }
+
+    /**
+     * Zuschauer-Sitz (KI-only-Spiel, siehe {@code HostedMatch.registerSpectator}): kein
+     * {@link #setOriginalGameController} wird je aufgerufen (kein lokaler Spieler), also muss die
+     * seq-Beobachtung hier ansetzen – sonst bleibt {@code seq} auf ihrem Startwert stehen, waehrend
+     * Forges Pause/Resume-Input ({@code InputPlaybackControl}) laengst gewechselt hat, und jeder
+     * Klick des Browsers wird als veraltet verworfen (siehe {@link #seqOk}).
+     */
+    @Override
+    @SuppressWarnings("deprecation")
+    public void setSpectator(IGameController spectator) {
+        super.setSpectator(spectator);
+        watchInputQueueOf(spectator);
+    }
+
+    @SuppressWarnings("deprecation")
+    private void watchInputQueueOf(IGameController controller) {
         if (observedQueue != null && inputObserver != null) {
             observedQueue.deleteObserver(inputObserver);
         }
-        if (gameController instanceof PlayerControllerHuman pch) {
+        if (controller instanceof PlayerControllerHuman pch) {
             observedQueue = pch.getInputQueue();
             inputObserver = (o, arg) -> onInputChanged();
             observedQueue.addObserver(inputObserver);
         }
-        applyFullControlPref();
     }
 
     public Stops stops() { return stops; }
@@ -297,7 +317,7 @@ public class WebGuiGame extends AbstractGuiGame {
         ViewContext ctx = getGameView() == null ? null : new ViewContext(
                 getLocalPlayers().isEmpty() ? null : getLocalPlayers().iterator().next(),
                 this::mayView, c -> false, c -> false, e -> false, Snapshot.PromptSnap.EMPTY,
-                new Messages.StopsMsg(List.of(), List.of()), false);
+                new Messages.StopsMsg(List.of(), List.of()), false, getLocalPlayers().isEmpty());
         int i = 0;
         for (T t : choices) {
             String label = display != null ? display.apply(t) : String.valueOf(t);
@@ -630,6 +650,12 @@ public class WebGuiGame extends AbstractGuiGame {
     @Override
     public boolean isUiSetToSkipPhase(PlayerView playerTurn, PhaseType phase) {
         if (fullControl || phase == null) return false;
+        if (getGameView() != null && getLocalPlayers().isEmpty()) {
+            // Echter Zuschauer-Sitz (KI-only-Spiel laeuft): niemand ist "der eigene Sitz" –
+            // jeder Zug zaehlt wie ein Gegnerzug. Ausserhalb eines Spiels (getGameView() == null,
+            // z. B. vor dem ersten Spielstart) bleibt es bei der bisherigen Annahme unten (eigener Zug).
+            return !stops.stopsAt(false, phase);
+        }
         boolean ownTurn = playerTurn == null || getLocalPlayers().contains(playerTurn);
         return !stops.stopsAt(ownTurn, phase);
     }

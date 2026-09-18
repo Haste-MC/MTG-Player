@@ -21,7 +21,8 @@ public record Snapshot(
         Map<Integer, CardSnap> cards,
         Messages.StopsMsg stops,
         boolean fullControl,
-        PromptSnap prompt) {
+        PromptSnap prompt,
+        Boolean spectator) {
 
     public static final String TYPE = "state";
 

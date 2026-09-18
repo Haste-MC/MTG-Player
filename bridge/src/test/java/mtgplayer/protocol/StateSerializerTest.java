@@ -109,10 +109,25 @@ class StateSerializerTest {
         Snapshot.PromptSnap p = new Snapshot.PromptSnap("Wähle", null, "Keep", "Mulligan", true, true, 1);
         ViewContext ctx = new ViewContext(me.getView(), c -> c.canBeShownTo(me.getView()),
                 c -> c.getId() == myHandCard.getId(), c -> false, e -> false, p,
-                new Messages.StopsMsg(List.of(), List.of()), false);
+                new Messages.StopsMsg(List.of(), List.of()), false, false);
         Snapshot s = StateSerializer.snapshot(game.getView(), ctx);
         assertEquals("Keep", s.prompt().okLabel());
         assertEquals(Boolean.TRUE, s.cards().get(myHandCard.getId()).selectable());
         assertNull(s.cards().get(myPermanent.getId()).selectable());
+    }
+
+    @Test
+    void spectatorFlagNurBeiZuschauerGesetzt() {
+        Snapshot human = StateSerializer.snapshot(game.getView(), ViewContext.plain(me.getView()));
+        assertNull(human.spectator(), "menschlicher Sitz traegt kein spectator-Feld");
+        JsonNode humanJson = Json.parse(Json.toJson(human));
+        assertFalse(humanJson.has("spectator"), "null-Feld wird weggelassen");
+
+        ViewContext spectatorCtx = new ViewContext(null, c -> true, c -> false, c -> false,
+                e -> false, Snapshot.PromptSnap.EMPTY, new Messages.StopsMsg(List.of(), List.of()), false, true);
+        Snapshot spectator = StateSerializer.snapshot(game.getView(), spectatorCtx);
+        assertEquals(Boolean.TRUE, spectator.spectator());
+        JsonNode spectatorJson = Json.parse(Json.toJson(spectator));
+        assertTrue(spectatorJson.get("spectator").asBoolean());
     }
 }

@@ -1,0 +1,109 @@
+package mtgplayer.server;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import mtgplayer.forge.ForgeBoot;
+import mtgplayer.protocol.Json;
+import org.java_websocket.client.WebSocketClient;
+import org.java_websocket.handshake.ServerHandshake;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
+
+import java.net.URI;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
+import java.util.function.Predicate;
+
+/**
+ * Spielt den Anfang eines KI-only-Spiels (Zuschauer-Sitz, Forges Spectator-Pfad über
+ * HostedMatch/WatchLocalGame/InputPlaybackControl) über das echte Protokoll: Lobby → Spielstart
+ * mit spectate:true → laufender Zuschauer-Zustand ("Pause") → Pause-Klick ("Resume") → Beenden.
+ * Eigener Port (18084), damit dieser Test nicht mit {@link BridgeEndToEndTest} (18081) kollidiert.
+ */
+class BridgeSpectatorTest {
+
+    private static final int PORT = 18084;
+    private static Bridge bridge;
+    private static WebSocketClient client;
+    private static final BlockingQueue<JsonNode> inbox = new LinkedBlockingQueue<>();
+
+    @BeforeAll
+    static void start() throws Exception {
+        ForgeBoot.init();
+        bridge = new Bridge(PORT);
+        bridge.start();
+        client = new WebSocketClient(new URI("ws://127.0.0.1:" + PORT)) {
+            @Override public void onOpen(ServerHandshake h) { }
+            @Override public void onMessage(String m) { inbox.add(Json.parse(m)); }
+            @Override public void onClose(int code, String reason, boolean remote) { }
+            @Override public void onError(Exception ex) { ex.printStackTrace(); }
+        };
+        assertTrue(client.connectBlocking(10, TimeUnit.SECONDS), "WebSocket-Verbindung");
+    }
+
+    @AfterAll
+    static void stop() throws Exception {
+        client.closeBlocking();
+        bridge.stop();
+    }
+
+    private static JsonNode await(String type, Predicate<JsonNode> cond, int seconds) throws InterruptedException {
+        long end = System.currentTimeMillis() + seconds * 1000L;
+        while (System.currentTimeMillis() < end) {
+            JsonNode n = inbox.poll(Math.max(1, end - System.currentTimeMillis()), TimeUnit.MILLISECONDS);
+            if (n == null) break;
+            if ("error".equals(n.path("type").asText())) {
+                System.err.println("[bridge error] " + n.path("text").asText());
+            }
+            if (type.equals(n.path("type").asText()) && cond.test(n)) return n;
+        }
+        throw new AssertionError("keine Nachricht '" + type + "' innerhalb " + seconds + " s");
+    }
+
+    private static void send(String json) {
+        client.send(json);
+    }
+
+    @Test
+    @Timeout(value = 5, unit = TimeUnit.MINUTES)
+    void spectatorLobbyStartPauseEnd() throws Exception {
+        JsonNode lobby = await("lobby", n -> true, 10);
+        assertTrue(lobby.get("precons").size() > 100);
+
+        send("{\"type\":\"startGame\",\"spectate\":true,\"opponents\":["
+                + "{\"precon\":\"Abzan Armor [TDC] [2025]\",\"name\":\"KI 1\"},"
+                + "{\"precon\":\"Adaptive Enchantment [C18] [2018]\",\"name\":\"KI 2\"}]}");
+
+        // Der Spielstart pusht zuerst mehrfach den laufenden Zustand mit seq==0 (Forges
+        // InputPlaybackControl setzt beim Erzeugen sofort die Pause/Tempo-Buttons, bevor die
+        // InputQueue ueberhaupt ein Input traegt) - erst wenn Forge den Input tatsaechlich auf die
+        // Queue legt (GameEventGameStarted), bumpt WebGuiGame.onInputChanged die seq einmalig und
+        // bleibt danach fuer den Rest der Zuschauer-Sitzung stabil (siehe watchInputQueueOf). Auf
+        // genau dieses Signal warten, statt auf die erste "Pause"-Nachricht, sonst schickt der Test
+        // ein "ok" mit einer laengst ueberholten seq (siehe seqOk) und der Klick wird verworfen.
+        JsonNode running = await("state", n -> n.path("spectator").asBoolean(false)
+                && "Pause".equals(n.path("prompt").path("okLabel").asText())
+                && n.path("prompt").path("seq").asInt() > 0, 90);
+        assertFalse(running.has("me"), "Zuschauer hat keinen eigenen Sitz");
+        assertEquals(2, running.get("players").size());
+        for (JsonNode p : running.get("players")) {
+            assertTrue(p.get("isAi").asBoolean(), "beide Sitze sind KIs");
+        }
+
+        int seq = running.path("prompt").path("seq").asInt();
+        send("{\"type\":\"ok\",\"seq\":" + seq + "}");
+        JsonNode paused = await("state", n -> "Resume".equals(n.path("prompt").path("okLabel").asText()), 30);
+        assertTrue(paused.path("spectator").asBoolean(false));
+
+        send("{\"type\":\"concede\"}");
+        JsonNode over = await("gameOver", n -> true, 30);
+        assertNotNull(over);
+    }
+}
