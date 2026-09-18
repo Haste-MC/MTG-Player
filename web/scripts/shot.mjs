@@ -1,6 +1,7 @@
 // Screenshot-Loop für Styling-Iterationen: öffnet die App, spielt Fixtures über
 // window.mtgApply ein (kein WebSocket nötig) und schreibt einen Full-Page-Screenshot.
 // Aufruf (aus web/): node scripts/shot.mjs <url> <out.png> [fixture.json ...]
+// Viewport per Env: VIEWPORT=1280x720 (Standard 1600x900; SHOT_VIEWPORT wird weiter akzeptiert).
 import { chromium } from "playwright";
 import { readFile } from "node:fs/promises";
 
@@ -16,7 +17,7 @@ function withDebug(u) {
   return /[?&]debug(=|&|$)/.test(u) ? u : u + (u.includes("?") ? "&" : "?") + "debug=1";
 }
 
-const [widthArg, heightArg] = (process.env.SHOT_VIEWPORT ?? "1600x900").split("x").map(Number);
+const [widthArg, heightArg] = (process.env.VIEWPORT ?? process.env.SHOT_VIEWPORT ?? "1600x900").split("x").map(Number);
 
 const browser = await chromium.launch();
 try {
