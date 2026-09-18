@@ -1,0 +1,17 @@
+{
+  "type": "choice",
+  "id": 900,
+  "kind": "many",
+  "title": "Bibliothek durchsuchen",
+  "message": "Wähle eine Karte, die auf deine Hand kommt.",
+  "min": 1,
+  "max": 1,
+  "options": [
+    { "index": 0, "label": "Sol Ring", "card": 600, "detail": { "id": 600, "faceDown": false, "name": "Sol Ring", "typeLine": "Artifact", "text": "{T}: Add {C}{C}.", "imageKey": "c:Sol Ring|C21|1" } },
+    { "index": 1, "label": "Arcane Signet", "card": 601, "detail": { "id": 601, "faceDown": false, "name": "Arcane Signet", "typeLine": "Artifact", "text": "{T}: Add one mana of any color in your commander's color identity.", "imageKey": "c:Arcane Signet|C21|1" } },
+    { "index": 2, "label": "Command Tower", "card": 602, "detail": { "id": 602, "faceDown": false, "name": "Command Tower", "typeLine": "Land", "text": "{T}: Add one mana of any color in your commander's color identity.", "imageKey": "c:Command Tower|C21|1" } },
+    { "index": 3, "label": "Cultivate", "card": 603, "detail": { "id": 603, "faceDown": false, "name": "Cultivate", "typeLine": "Sorcery", "text": "Search your library for up to two basic land cards, reveal them, put one onto the battlefield tapped and the other into your hand. Then shuffle.", "imageKey": "c:Cultivate|C21|1" } },
+    { "index": 4, "label": "Swords to Plowshares", "card": 604, "detail": { "id": 604, "faceDown": false, "name": "Swords to Plowshares", "typeLine": "Instant", "text": "Exile target creature. Its controller gains life equal to its power.", "imageKey": "c:Swords to Plowshares|C21|1" } },
+    { "index": 5, "label": "Beast Within", "card": 605, "detail": { "id": 605, "faceDown": false, "name": "Beast Within", "typeLine": "Instant", "text": "Destroy target permanent. Its controller creates a 3/3 green Beast creature token.", "imageKey": "c:Beast Within|C21|1" } }
+  ]
+}

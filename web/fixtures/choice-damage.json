@@ -1,0 +1,32 @@
+{
+  "type": "choice",
+  "id": 901,
+  "kind": "damage",
+  "title": "Schaden zuweisen",
+  "message": "Weise 6 Kampfschaden zu.",
+  "min": 0,
+  "max": 0,
+  "amount": 6,
+  "atLeastOne": true,
+  "options": [
+    {
+      "index": 0,
+      "label": "Elvish Warrior",
+      "card": 700,
+      "lethal": 2,
+      "detail": { "id": 700, "faceDown": false, "name": "Elvish Warrior", "typeLine": "Creature — Elf Warrior", "text": "", "imageKey": "c:Llanowar Elves|DMU|1", "power": 2, "toughness": 2 }
+    },
+    {
+      "index": 1,
+      "label": "Eternal Witness",
+      "card": 701,
+      "lethal": 3,
+      "detail": { "id": 701, "faceDown": false, "name": "Eternal Witness", "typeLine": "Creature — Elf Shaman", "text": "", "imageKey": "c:Eternal Witness|C21|1", "power": 1, "toughness": 3 }
+    },
+    {
+      "index": 2,
+      "label": "Verteidiger (Trample)",
+      "player": 3
+    }
+  ]
+}

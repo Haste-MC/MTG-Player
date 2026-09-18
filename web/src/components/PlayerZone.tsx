@@ -13,18 +13,22 @@ export default function PlayerZone({ p, state, compact }: { p: PlayerSnap; state
   return (
     <div className={"player" + (active ? " active" : "") + (compact ? " compact" : "")}>
       <div className={"header" + (p.highlighted ? " highlighted" : "")} onClick={() => send({ type: "selectPlayer", id: p.id, seq })}>
-        <b>{p.name}</b> {p.isAi ? "(KI)" : ""} · Leben {p.life}
-        {p.counters?.POISON ? ` · Gift ${p.counters.POISON}` : ""}
-        {" · Hand "}{p.hand.length}{" · Bib "}{p.librarySize}{" · Grab "}{p.graveyard.length}{" · Exil "}{p.exile.length}
-        {mana ? ` · Mana ${mana}` : ""}
-        {cmdDmg ? ` · CMD-Schaden ${cmdDmg}` : ""}
-        {p.hasPriority ? " · ⏵ Prio" : ""}
+        <span className="pname">{p.name}{p.isAi && <span className="ai-tag">KI</span>}</span>
+        <span className="life">{p.life}</span>
+        <span className="badges">
+          <span className="badge" title="Hand">✋ {p.hand.length}</span>
+          <span className="badge" title="Bibliothek">📚 {p.librarySize}</span>
+          <span className="badge" title="Friedhof">☠ {p.graveyard.length}</span>
+          {p.exile.length > 0 && <span className="badge" title="Exil">⌫ {p.exile.length}</span>}
+          {!!p.counters?.POISON && <span className="badge cmd" title="Gift">☣ {p.counters.POISON}</span>}
+          {mana && <span className="badge mana" title="Mana">{mana}</span>}
+          {cmdDmg && <span className="badge cmd" title="Commander-Schaden">{cmdDmg}</span>}
+          {p.hasPriority && <span className="badge prio" title="Prio">⏵</span>}
+        </span>
       </div>
-      <div className="zone command">{cards(p.command).map((c) => <CardBox key={c.id} card={c} />)}</div>
       <div className="zone battlefield">
+        {cards(p.command).map((c) => <CardBox key={c.id} card={c} />)}
         {bf.filter((c) => !c.typeLine?.includes("Land")).map((c) => <CardBox key={c.id} card={c} />)}
-      </div>
-      <div className="zone lands">
         {bf.filter((c) => c.typeLine?.includes("Land")).map((c) => <CardBox key={c.id} card={c} />)}
       </div>
       {!compact && (

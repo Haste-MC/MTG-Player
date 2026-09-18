@@ -9,7 +9,7 @@ export default function CardBox({ card }: { card: CardSnap }) {
   const seq = useStore((s) => s.state?.prompt.seq);
   const setHover = useStore((s) => s.setHover);
   const [noImg, setNoImg] = useState(!card.imageKey);
-  if (card.faceDown) return <div className="card back" />;
+  if (card.faceDown) return <div className="card-slot"><div className="card back" /></div>;
   const cls = ["card", card.tapped ? "tapped" : "", card.selectable ? "selectable" : "",
     card.actionable ? "actionable" : "", card.attacking ? "attacking" : "", card.blocking ? "blocking" : "",
     !noImg ? "has-img" : ""]
@@ -19,20 +19,22 @@ export default function CardBox({ card }: { card: CardSnap }) {
     send({ type: "selectCard", id: card.id, alt: e.button === 2, seq });
   };
   return (
-    <div className={cls} title={card.text ?? ""} onClick={click} onContextMenu={click}
-      onMouseEnter={() => setHover(card.id)} onMouseLeave={() => setHover(undefined)}>
-      <CardImage imageKey={card.imageKey} className="art" onFail={() => setNoImg(true)} />
-      {noImg && (
-        <>
-          <div className="name">{card.name}</div>
-          <div className="meta">{card.manaCost ?? ""}</div>
-          <div className="type">{card.typeLine ?? ""}</div>
-        </>
-      )}
-      {card.power !== undefined && (
-        <div className="pt">{card.power}/{card.toughness}{card.damage ? ` (${card.damage} dmg)` : ""}</div>
-      )}
-      {card.counters && <div className="counters">{Object.entries(card.counters).map(([k, v]) => `${k}×${v}`).join(" ")}</div>}
+    <div className={"card-slot" + (card.tapped ? " tapped-slot" : "")}>
+      <div className={cls} title={card.text ?? ""} onClick={click} onContextMenu={click}
+        onMouseEnter={() => setHover(card.id)} onMouseLeave={() => setHover(undefined)}>
+        <CardImage imageKey={card.imageKey} className="art" onFail={() => setNoImg(true)} />
+        {noImg && (
+          <>
+            <div className="name">{card.name}</div>
+            <div className="meta">{card.manaCost ?? ""}</div>
+            <div className="type">{card.typeLine ?? ""}</div>
+          </>
+        )}
+        {card.power !== undefined && (
+          <div className="pt">{card.power}/{card.toughness}{card.damage ? ` (${card.damage} dmg)` : ""}</div>
+        )}
+        {card.counters && <div className="counters">{Object.entries(card.counters).map(([k, v]) => `${k}×${v}`).join(" ")}</div>}
+      </div>
     </div>
   );
 }
