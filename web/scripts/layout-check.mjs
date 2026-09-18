@@ -30,7 +30,9 @@ try {
   await page.waitForFunction(() => (document.getElementById("root")?.childElementCount ?? 0) > 0);
   for (const fixturePath of fixturePaths) {
     const json = JSON.parse(await readFile(fixturePath, "utf8"));
-    await page.evaluate((m) => window.mtgApply(m), json);
+    // Wie shot.mjs: ein Array von Nachrichten in einer Fixture-Datei einzeln anwenden.
+    const messages = Array.isArray(json) ? json : [json];
+    for (const m of messages) await page.evaluate((msg) => window.mtgApply(msg), m);
     await page.waitForTimeout(1200);
   }
 

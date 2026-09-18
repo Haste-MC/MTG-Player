@@ -148,6 +148,7 @@ input[type="checkbox"] { accent-color: var(--accent); width: 14px; height: 14px;
 .player.own { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
 .player .header { display: flex; align-items: center; gap: 10px; padding: 0 2px 5px; margin-bottom: 6px; cursor: pointer; border-bottom: 1px solid var(--line); flex-wrap: wrap; row-gap: 4px; }
 .player .header.highlighted { outline: 2px solid var(--gold); outline-offset: 4px; border-radius: var(--radius-sm); }
+.player .header.targetable { outline: 2px dashed var(--gold); outline-offset: 4px; border-radius: var(--radius-sm); cursor: crosshair; }
 .player .pname { font-weight: 600; font-size: 15px; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
 .player .ai-tag { font-size: 10px; color: var(--muted); font-weight: 500; border: 1px solid var(--line-2); border-radius: 4px; padding: 0 4px; line-height: 15px; letter-spacing: 0.04em; }
 .player .life { font-size: 27px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1; letter-spacing: -0.02em; min-width: 32px; }
@@ -396,10 +397,22 @@ input[type="checkbox"] { accent-color: var(--accent); width: 14px; height: 14px;
 .stack-body .muted { font-size: 11px; }
 
 .log { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; padding: 10px; }
+.log .panel-title { flex-wrap: wrap; row-gap: 4px; }
+.log-filter { display: flex; flex-wrap: wrap; gap: 4px; margin-left: auto; }
+.log-filter .chip { font-size: 9.5px; padding: 1px 6px; border-radius: 999px; border: 1px solid var(--line-2); background: transparent; color: var(--muted); cursor: pointer; text-transform: uppercase; letter-spacing: 0.03em; line-height: 1.5; }
+.log-filter .chip:hover { border-color: var(--accent); color: var(--text); }
+.log-filter .chip.off { opacity: 0.4; border-style: dashed; }
 .log-lines { flex: 1; min-height: 0; overflow: auto; font-family: var(--mono); font-size: 11.5px; line-height: 1.5; color: var(--muted); scrollbar-width: thin; }
-.log-lines > div { padding: 1px 0; border-bottom: 1px dashed rgba(255, 255, 255, 0.04); }
-.log-lines > div:last-child { color: var(--text); }
-.log-lines .warn { color: #ff9b9e; }
+.log-line { padding: 1px 6px 1px 7px; border-left: 3px solid transparent; border-bottom: 1px dashed rgba(255, 255, 255, 0.04); }
+.log-line:last-child { color: var(--text); }
+.log-line.warn { color: #ff9b9e; border-left-color: #ff9b9e; }
+.log-line[data-kind="DAMAGE"] { border-left-color: #e0656b; }
+.log-line[data-kind="LIFE"] { border-left-color: #7bc88a; }
+.log-line[data-kind="COMBAT"] { border-left-color: #e0954e; }
+.log-line[data-kind="ZONE_CHANGE"], .log-line[data-kind="LAND"] { border-left-color: var(--line-2); }
+.log-line[data-kind="STACK_ADD"], .log-line[data-kind="STACK_RESOLVE"] { border-left-color: var(--accent); }
+.log-line.turn { margin-top: 5px; padding-top: 4px; border-top: 1px solid var(--line-2); border-left-color: var(--gold-line); font-weight: 700; color: var(--gold-text); text-transform: uppercase; font-size: 10.5px; letter-spacing: 0.05em; }
+.log-line[data-kind="MANA"], .log-line[data-kind="PHASE"] { opacity: 0.5; }
 
 /* ---------- Dialoge ----------------------------------------------------------------------- */
 .overlay { position: fixed; inset: 0; background: rgba(6, 9, 12, 0.66); backdrop-filter: blur(3px); display: flex; align-items: center; justify-content: center; z-index: 50; }

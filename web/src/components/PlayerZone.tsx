@@ -65,7 +65,7 @@ export default function PlayerZone({ p, state, compact, spectator }: { p: Player
     : undefined;
   return (
     <div className={"player" + (active ? " active" : "") + (compact ? " compact" : " own") + (spectator ? " spectator" : "")} style={sizing}>
-      <div className={"header" + (p.highlighted ? " highlighted" : "")} onClick={() => send({ type: "selectPlayer", id: p.id, seq })}>
+      <div className={"header" + (p.highlighted ? " highlighted" : "") + (p.targetable ? " targetable" : "")} onClick={() => send({ type: "selectPlayer", id: p.id, seq })}>
         <span className="pname">{p.name}{p.isAi && <span className="ai-tag">KI</span>}</span>
         <span className="life" title="Lebenspunkte">{p.life}</span>
         {p.hasPriority && <span className="prio" title="Hat Priorität"><span className="dot" />Prio</span>}

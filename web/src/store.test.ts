@@ -53,11 +53,29 @@ describe("reduce", () => {
     expect(s.choices.map((c) => c.id)).toEqual([3, 7]);
   });
 
+  it("log speichert kind und card", () => {
+    const s = reduce(initialState, { type: "log", text: "KI 1 spielt Forest", kind: "LAND", card: 12 });
+    expect(s.log[0]).toEqual({ text: "KI 1 spielt Forest", kind: "LAND", card: 12 });
+  });
+
+  it("error landet als warn-eintrag im log", () => {
+    const s = reduce(initialState, { type: "error", text: "kaputt" });
+    expect(s.log[0].warn).toBe(true);
+    expect(s.log[0].text).toContain("kaputt");
+  });
+
   it("log haengt an und ist auf 500 zeilen begrenzt", () => {
     let s = initialState;
     for (let i = 0; i < 600; i++) s = reduce(s, { type: "log", text: "z" + i });
     expect(s.log.length).toBe(500);
-    expect(s.log[499]).toBe("z599");
+    expect(s.log[499].text).toBe("z599");
+  });
+
+  it("neues spiel leert das log", () => {
+    let s = reduce(initialState, { type: "log", text: "alt" });
+    s = reduce(s, { ...snap({ turn: 0 }), turn: 0 } as Snapshot);
+    // ein state mit turn 0 (Spielstart) leert das Log
+    expect(s.log.length).toBe(0);
   });
 
   it("gameOver setzt winner, state bleibt", () => {
@@ -72,11 +90,6 @@ describe("reduce", () => {
     const withChoices = reduce(reduce(initialState, c7), c3);
     const s = reduce(withChoices, { type: "gameOver", winner: "KI 1" });
     expect(s.choices).toEqual([]);
-  });
-
-  it("error landet im log", () => {
-    const s = reduce(initialState, { type: "error", text: "kaputt" });
-    expect(s.log[0]).toContain("kaputt");
   });
 
   it("reveal-choice wird wie jede andere choice gespeichert", () => {

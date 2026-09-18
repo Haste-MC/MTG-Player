@@ -104,7 +104,8 @@
         305
       ],
       "manaPool": {},
-      "hasPriority": false
+      "hasPriority": false,
+      "targetable": true
     }
   ],
   "stack": [

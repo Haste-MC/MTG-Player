@@ -19,7 +19,7 @@ export default function Lobby() {
   // Fehlermeldung gerade per editPicker/start weggewischt wurde.
   useEffect(() => {
     const last = log[log.length - 1];
-    if (last && last.startsWith("⚠")) setShownError(last);
+    if (last?.warn) setShownError(last.text);
   }, [log]);
 
   const humanRef = toRef(human);

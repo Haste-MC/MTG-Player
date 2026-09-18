@@ -53,6 +53,8 @@ export interface PlayerSnap {
   manaPool: Record<string, number>;
   hasPriority: boolean;
   highlighted?: boolean;
+  /** true, wenn der Spieler gerade als Ziel waehlbar ist (gestrichelter Rahmen statt vollem). */
+  targetable?: boolean;
 }
 
 export interface StackSnap {
@@ -114,7 +116,7 @@ export interface Lobby { type: "lobby"; precons: string[]; decks?: string[]; }
 // "name" bei einem Gegner-Eintrag (siehe Outbound.startGame) ist der Spielername ("KI 1") -
 // das ist NICHT der Speichername eines Textdecks, dafuer gibt es "deckName".
 export type DeckRef = { precon: string } | { saved: string } | { text: string; deckName?: string };
-export interface LogLine { type: "log"; text: string; }
+export interface LogLine { type: "log"; text: string; kind?: string; card?: number; }
 export interface GameOver { type: "gameOver"; winner?: string; }
 export interface ErrorMsg { type: "error"; text: string; }
 

@@ -1,0 +1,14 @@
+[
+  { "type": "log", "text": "Zug 8 beginnt", "kind": "TURN" },
+  { "type": "log", "text": "Du spielst Forest", "kind": "LAND", "card": 201 },
+  { "type": "log", "text": "Sol Ring betritt das Spielfeld", "kind": "ZONE_CHANGE", "card": 230 },
+  { "type": "log", "text": "Managorger Hydra fügt 6 Schaden zu", "kind": "DAMAGE", "card": 211 },
+  { "type": "log", "text": "KI 2 verliert 6 Lebenspunkte", "kind": "LIFE" },
+  { "type": "log", "text": "Eternal Witness greift an", "kind": "COMBAT", "card": 212 },
+  { "type": "log", "text": "Du legst Swords to Plowshares auf den Stack", "kind": "STACK_ADD", "card": 231 },
+  { "type": "log", "text": "Beast Within löst auf", "kind": "STACK_RESOLVE", "card": 500 },
+  { "type": "log", "text": "Du wirfst Cultivate ab", "kind": "DISCARD", "card": 233 },
+  { "type": "log", "text": "Priorität wechselt zu KI 1", "kind": "INFORMATION" },
+  { "type": "log", "text": "Du tippst Forest für {G}", "kind": "MANA", "card": 201 },
+  { "type": "log", "text": "Hauptphase 2 beginnt", "kind": "PHASE" }
+]

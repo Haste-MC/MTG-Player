@@ -1,6 +1,7 @@
 import type { Inbound, Outbound } from "./protocol";
 
-const url = `ws://${location.hostname}:8081`;
+const params = new URLSearchParams(location.search);
+const url = params.get("ws") ?? `ws://${location.hostname}:${params.get("wsPort") ?? "8081"}`;
 let socket: WebSocket | undefined;
 let listener: ((m: Inbound) => void) | undefined;
 

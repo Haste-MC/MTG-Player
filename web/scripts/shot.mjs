@@ -34,7 +34,10 @@ try {
 
   for (const fixturePath of fixturePaths) {
     const json = JSON.parse(await readFile(fixturePath, "utf8"));
-    await page.evaluate((m) => window.mtgApply(m), json);
+    // Eine Fixture-Datei kann ein Array von Nachrichten sein (z. B. fixtures/log.json) - dann jede
+    // einzeln anwenden statt des Arrays selbst, das window.mtgApply nicht kennt.
+    const messages = Array.isArray(json) ? json : [json];
+    for (const m of messages) await page.evaluate((msg) => window.mtgApply(msg), m);
     await page.waitForTimeout(1500); // Kartenbilder nachladen lassen
   }
 
