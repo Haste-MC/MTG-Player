@@ -1,17 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { DeckRef } from "../protocol";
+import { type Pick, toRef } from "../deckref";
 import { useStore } from "../store";
 import { send } from "../ws";
 
-type Pick = { kind: "precon" | "saved" | "text"; value: string; name: string };
-
 const EMPTY: Pick = { kind: "precon", value: "", name: "" };
-
-function toRef(p: Pick): DeckRef | undefined {
-  if (p.kind === "text") return p.value.trim() ? { text: p.value, name: p.name.trim() || undefined } : undefined;
-  if (!p.value) return undefined;
-  return p.kind === "precon" ? { precon: p.value } : { saved: p.value };
-}
 
 export default function Lobby() {
   const precons = useStore((s) => s.precons);
@@ -19,13 +12,30 @@ export default function Lobby() {
   const log = useStore((s) => s.log);
   const [human, setHuman] = useState<Pick>(EMPTY);
   const [ais, setAis] = useState<Pick[]>([EMPTY]);
+  const [shownError, setShownError] = useState<string>();
+
+  // Neue Fehler (letzte Log-Zeile) automatisch zeigen - unabhaengig davon, ob eine fruehere
+  // Fehlermeldung gerade per editPicker/start weggewischt wurde.
+  useEffect(() => {
+    const last = log[log.length - 1];
+    if (last && last.startsWith("⚠")) setShownError(last);
+  }, [log]);
 
   const humanRef = toRef(human);
   const aiRefs = ais.map(toRef);
   const ready = humanRef !== undefined && aiRefs.every((r) => r !== undefined);
-  const lastError = [...log].reverse().find((l) => l.startsWith("⚠"));
+
+  const editHuman = (n: Pick) => {
+    setShownError(undefined);
+    setHuman(n);
+  };
+  const editAi = (i: number, n: Pick) => {
+    setShownError(undefined);
+    setAis(ais.map((x, j) => (j === i ? n : x)));
+  };
 
   const start = () => {
+    setShownError(undefined);
     if (!ready) return;
     send({
       type: "startGame",
@@ -68,16 +78,20 @@ export default function Lobby() {
       <h1>MTG-Player</h1>
       {precons.length === 0 && <p>Verbinde mit der Bridge …</p>}
       <label>Dein Deck</label>
-      {picker(human, setHuman)}
+      {picker(human, editHuman)}
       {ais.map((a, i) => (
         <div key={i}>
-          <label>KI {i + 1} {ais.length > 1 && <button onClick={() => setAis(ais.filter((_, j) => j !== i))}>–</button>}</label>
-          {picker(a, (n) => setAis(ais.map((x, j) => (j === i ? n : x))))}
+          <label>KI {i + 1} {ais.length > 1 && (
+            <button onClick={() => { setShownError(undefined); setAis(ais.filter((_, j) => j !== i)); }}>–</button>
+          )}</label>
+          {picker(a, (n) => editAi(i, n))}
         </div>
       ))}
-      {ais.length < 5 && <button onClick={() => setAis([...ais, EMPTY])}>+ KI</button>}
+      {ais.length < 5 && (
+        <button onClick={() => { setShownError(undefined); setAis([...ais, EMPTY]); }}>+ KI</button>
+      )}
       <button className="primary" disabled={!ready} onClick={start}>Spiel starten</button>
-      {lastError && <pre className="import-error">{lastError}</pre>}
+      {shownError && <pre className="import-error">{shownError}</pre>}
     </div>
   );
 }
