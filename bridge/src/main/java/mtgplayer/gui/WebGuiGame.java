@@ -455,9 +455,26 @@ public class WebGuiGame extends AbstractGuiGame {
     @Override
     public List<CardView> manipulateCardList(String title, Iterable<CardView> cards, Iterable<CardView> manipulable,
                                              boolean toTop, boolean toBottom, boolean toAnywhere) {
+        List<CardView> all = new ArrayList<>();
+        if (cards != null) for (CardView c : cards) all.add(c);
+        if (all.isEmpty()) return all;
+        java.util.Set<Integer> movable = new java.util.HashSet<>();
+        if (manipulable != null) for (CardView c : manipulable) movable.add(c.getId());
+        List<Messages.Option> opts = new ArrayList<>();
+        int i = 0;
+        for (CardView c : all) {
+            Messages.Option base = options(List.of(c), null).get(0);
+            opts.add(new Messages.Option(i++, base.label(), base.card(), null, base.detail(), null, null,
+                    movable.contains(c.getId()) ? Boolean.TRUE : null));
+        }
+        String where = toAnywhere ? "beliebig" : (toTop && toBottom ? "oben oder unten" : toTop ? "nur oben" : "nur unten");
+        JsonNode v = broker.ask("cardlist", title, "Verschiebbare Karten: " + where + ". Oberste Karte zuerst.",
+                opts, all.size(), all.size(), null);
+        List<Integer> idx = indices(v, all.size(), all.size(), all.size());
+        if (idx.size() != all.size()) return all; // keine gültige Permutation → unverändert
         List<CardView> out = new ArrayList<>();
-        if (cards != null) for (CardView c : cards) out.add(c);
-        return out; // M2: unverändert lassen; Dialog kommt in M3
+        for (int k : idx) out.add(all.get(k));
+        return out;
     }
 
     @Override
@@ -465,27 +482,73 @@ public class WebGuiGame extends AbstractGuiGame {
         return new ArrayList<>(); // kein Sideboarding
     }
 
-    /**
-     * M2: automatische Verteilung – jedem Blocker in Reihenfolge tödlichen Schaden, Rest auf den letzten
-     * (bzw. bei Trample auf den Verteidiger, Schlüssel null). Dialog kommt in M3.
-     */
+    /** Zahlen-Liste je Option; null, wenn Antwort fehlt/ungültig oder die Summe nicht passt. */
+    private static List<Integer> amounts(JsonNode v, int n, int total, List<Integer> maxPer, boolean atLeastOne) {
+        if (v == null || !v.isArray() || v.size() != n) return null;
+        List<Integer> out = new ArrayList<>();
+        int sum = 0;
+        for (int i = 0; i < n; i++) {
+            int a = v.get(i).asInt(-1);
+            if (a < 0) return null;
+            if (atLeastOne && a < 1) return null;
+            Integer max = maxPer.get(i);
+            if (max != null && max > 0 && a > max) return null;
+            out.add(a);
+            sum += a;
+        }
+        return sum == total ? out : null;
+    }
+
     @Override
     public Map<CardView, Integer> assignCombatDamage(CardView attacker, List<CardView> blockers, int damage,
                                                      GameEntityView defender, boolean overrideOrder, boolean maySkip) {
         Map<CardView, Integer> out = new LinkedHashMap<>();
+        if (damage <= 0) return out;
+        List<CardView> targets = blockers == null ? new ArrayList<>() : new ArrayList<>(blockers);
+        boolean trample = attacker != null && attacker.getCurrentState().hasTrample() && defender != null;
+        List<Messages.Option> opts = new ArrayList<>();
+        List<Integer> maxPer = new ArrayList<>();
+        int i = 0;
+        for (CardView b : targets) {
+            opts.add(new Messages.Option(i++, b.getCurrentState().getName(), b.getId(), null, null, null,
+                    Math.max(1, b.getLethalDamage()), null));
+            maxPer.add(null);
+        }
+        if (trample) {
+            Integer pid = defender instanceof PlayerView pv ? pv.getId() : null;
+            Integer cid = defender instanceof CardView dc ? dc.getId() : null;
+            opts.add(new Messages.Option(i++, "Verteidiger (Trample)", cid, pid, null, null, null, null));
+            maxPer.add(null);
+        }
+        if (opts.isEmpty()) return out; // keine Blocker, kein Trample-Ziel → nichts zu fragen
+        String title = (attacker == null ? "Angreifer" : attacker.getCurrentState().getName()) + " – " + damage + " Schaden verteilen";
+        JsonNode v = broker.ask("damage", title, "Jedem Blocker in Reihenfolge tödlichen Schaden zuweisen, bevor der nächste etwas bekommt.",
+                opts, opts.size(), opts.size(), attacker == null ? null : attacker.getId(), damage, Boolean.FALSE);
+        List<Integer> a = amounts(v, opts.size(), damage, maxPer, false);
+        if (a == null) {
+            return autoAssign(targets, damage, trample);
+        }
+        for (int k = 0; k < targets.size(); k++) {
+            if (a.get(k) > 0) out.put(targets.get(k), a.get(k));
+        }
+        if (trample && a.get(targets.size()) > 0) {
+            out.put(null, a.get(targets.size()));
+        }
+        return out.isEmpty() ? autoAssign(targets, damage, trample) : out;
+    }
+
+    /** M2-Verhalten als Rückfallebene: tödlich in Reihenfolge, Rest auf den letzten bzw. bei Trample auf den Verteidiger. */
+    private static Map<CardView, Integer> autoAssign(List<CardView> blockers, int damage, boolean trample) {
+        Map<CardView, Integer> out = new LinkedHashMap<>();
         int rest = damage;
-        if (blockers != null) {
-            for (CardView b : blockers) {
-                int lethal = Math.max(1, b.getLethalDamage());
-                int give = Math.min(lethal, rest);
-                out.put(b, give);
-                rest -= give;
-                if (rest <= 0) break;
-            }
+        for (CardView b : blockers) {
+            int give = Math.min(Math.max(1, b.getLethalDamage()), rest);
+            out.put(b, give);
+            rest -= give;
+            if (rest <= 0) break;
         }
         if (rest > 0) {
-            boolean trample = attacker != null && attacker.getCurrentState().hasTrample();
-            if (trample && defender != null) {
+            if (trample) {
                 out.put(null, rest);
             } else if (!out.isEmpty()) {
                 CardView last = null;
@@ -501,10 +564,25 @@ public class WebGuiGame extends AbstractGuiGame {
                                                     boolean atLeastOne, String amountLabel) {
         Map<Object, Integer> out = new LinkedHashMap<>();
         if (target == null || target.isEmpty()) return out;
-        Object first = target.keySet().iterator().next();
-        for (Object k : target.keySet()) out.put(k, 0);
-        out.put(first, amount);
-        return out; // M2: alles auf den ersten Eintrag; Dialog kommt in M3
+        List<Object> keys = new ArrayList<>(target.keySet());
+        List<Messages.Option> opts = new ArrayList<>();
+        List<Integer> maxPer = new ArrayList<>();
+        int i = 0;
+        for (Object k : keys) {
+            Integer card = k instanceof CardView cv ? cv.getId() : null;
+            Integer player = k instanceof PlayerView pv ? pv.getId() : null;
+            Integer max = target.get(k);
+            opts.add(new Messages.Option(i++, String.valueOf(k), card, player, null, max, null, null));
+            maxPer.add(max);
+        }
+        String title = amount + " " + (amountLabel == null ? "" : amountLabel) + " verteilen";
+        JsonNode v = broker.ask("amount", title, effectSource == null ? "" : effectSource.getCurrentState().getName(),
+                opts, opts.size(), opts.size(), effectSource == null ? null : effectSource.getId(), amount, atLeastOne);
+        List<Integer> a = amounts(v, keys.size(), amount, maxPer, atLeastOne);
+        for (int k = 0; k < keys.size(); k++) {
+            out.put(keys.get(k), a == null ? (k == 0 ? amount : 0) : a.get(k));
+        }
+        return out;
     }
 
     // ---- Sonstiges ------------------------------------------------------------------

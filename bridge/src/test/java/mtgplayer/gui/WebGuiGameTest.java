@@ -215,4 +215,41 @@ class WebGuiGameTest {
         assertEquals("reveal", c.get("kind").asText());
         assertEquals(2, c.get("options").size());
     }
+
+    @Test
+    void assignGenericAmountFragtUndVerteilt() throws Exception {
+        java.util.Map<Object, Integer> target = new java.util.LinkedHashMap<>();
+        target.put("Rot", 3);
+        target.put("Grün", 3);
+        CompletableFuture<java.util.Map<Object, Integer>> r = CompletableFuture.supplyAsync(
+                () -> gui.assignGenericAmount(null, target, 3, true, "Mana"));
+        JsonNode c = nextChoice();
+        assertEquals("amount", c.get("kind").asText());
+        assertEquals(3, c.get("amount").asInt());
+        assertEquals(true, c.get("atLeastOne").asBoolean());
+        assertEquals(3, c.get("options").get(0).get("max").asInt());
+        gui.broker().answer(c.get("id").asInt(), Json.parse("[1,2]"));
+        java.util.Map<Object, Integer> res = r.get(5, TimeUnit.SECONDS);
+        assertEquals(1, res.get("Rot"));
+        assertEquals(2, res.get("Grün"));
+    }
+
+    @Test
+    void assignGenericAmountUngueltigeAntwortFaelltAufAllesAufDenErstenZurueck() throws Exception {
+        java.util.Map<Object, Integer> target = new java.util.LinkedHashMap<>();
+        target.put("A", 5);
+        target.put("B", 5);
+        CompletableFuture<java.util.Map<Object, Integer>> r = CompletableFuture.supplyAsync(
+                () -> gui.assignGenericAmount(null, target, 4, false, "x"));
+        JsonNode c = nextChoice();
+        gui.broker().answer(c.get("id").asInt(), Json.parse("[1,1]")); // Summe 2 != 4
+        java.util.Map<Object, Integer> res = r.get(5, TimeUnit.SECONDS);
+        assertEquals(4, res.get("A"));
+        assertEquals(0, res.get("B"));
+    }
+
+    @Test
+    void manipulateCardListOhneKartenBlocktNicht() {
+        assertTrue(gui.manipulateCardList("t", List.of(), List.of(), true, true, false).isEmpty());
+    }
 }
