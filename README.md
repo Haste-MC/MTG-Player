@@ -33,6 +33,8 @@ Eigene Decks: in der Lobby "Textliste" wählen und einen Archidekt- oder Arena-E
 unter `~/.mtg-player/decks/` gespeichert und erscheint danach unter "Eigenes Deck". Unbekannte Karten
 werden mit Zeile gemeldet, das Spiel startet dann nicht.
 
+Archidekt: Deck-URL (oder nur die ID) einfügen – öffentliche Decks; der Deckname wird übernommen.
+
 Kartenbilder kommen von Scryfall und werden unter `~/.mtg-player/cache/images/` gecacht (erstes Spiel mit
 neuen Karten lädt ein paar Sekunden nach; ohne Internet bleiben es Textboxen).
 
@@ -63,6 +65,6 @@ Ports: `-Dmtgplayer.wsPort=…`, `-Dmtgplayer.httpPort=…`; Bind-Adresse `-Dmtg
 Forges Nutzerdaten damit nach `~/.mtg-player/`; `bridge/assets/res` ist ein Symlink auf `forge/forge-gui/res`.
 Der Assets-Pfad ist mit `-Dmtgplayer.assets=<dir>` überschreibbar; Maven setzt ihn für `test` und `exec:java` automatisch.
 
-## Was noch fehlt (M6)
+## Offen
 
-Archidekt-URL statt Textliste, gleiche Länder im Deckbau stapeln, UI-Feinschliff.
+Gleiche Länder im Deckbau stapeln, UI-Feinschliff (Hover-Panel feste Höhe), Moxfield bewusst nicht.
