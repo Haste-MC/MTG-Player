@@ -116,7 +116,14 @@ export interface Choice {
   flags?: string[];
 }
 
-export interface Lobby { type: "lobby"; precons: string[]; decks?: string[]; }
+export interface Lobby {
+  type: "lobby";
+  precons: string[];
+  decks?: string[];
+  aiModes?: string[];
+  aiProfiles?: string[];
+  aiTimeout?: number;
+}
 // "name" bei einem Gegner-Eintrag (siehe Outbound.startGame) ist der Spielername ("KI 1") -
 // das ist NICHT der Speichername eines Textdecks, dafuer gibt es "deckName".
 export type DeckRef =
@@ -124,6 +131,9 @@ export type DeckRef =
   | { saved: string }
   | { text: string; deckName?: string }
   | { archidekt: string; deckName?: string };
+/** KI-Wahl je Gegner-Slot - "mode" steuert Forges Entscheidungspfad, "profile" den Namen des
+ * AiConfig-Profils (siehe Lobby.aiModes/aiProfiles). Fehlt bei einem Gegner-Eintrag, gilt Standard/Default. */
+export interface AiPick { mode: "standard" | "hybrid" | "sim"; profile: string }
 export interface LogLine { type: "log"; text: string; kind?: string; card?: number; id?: number; }
 export interface GameOver { type: "gameOver"; winner?: string; }
 export interface ErrorMsg { type: "error"; text: string; }
@@ -132,7 +142,7 @@ export type Inbound = Snapshot | Choice | Lobby | LogLine | GameOver | ErrorMsg;
 
 export type Outbound =
   // humanDeck fehlt bei spectate:true (KI-only-Modus, kein eigener Sitz - siehe lobbyPayload.ts)
-  | { type: "startGame"; spectate?: boolean; humanDeck?: DeckRef; opponents: (DeckRef & { name: string })[] }
+  | { type: "startGame"; spectate?: boolean; humanDeck?: DeckRef; opponents: (DeckRef & { name: string; ai?: AiPick })[]; aiTimeout?: number }
   | { type: "selectCard"; id: number; alt?: boolean; seq?: number }
   | { type: "selectPlayer"; id: number; seq?: number }
   | { type: "ok"; seq?: number }

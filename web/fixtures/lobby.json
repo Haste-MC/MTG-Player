@@ -1,5 +1,8 @@
 {
   "type": "lobby",
   "precons": ["Tinker Time (TDC)", "Eldrazi Incursion (TDC)", "Aetherdrift Living Energy (DRC)", "Elven Empire (C21)"],
-  "decks": ["Felothar Landfall", "Kalamax Storm"]
+  "decks": ["Felothar Landfall", "Kalamax Storm"],
+  "aiModes": ["standard", "hybrid", "sim"],
+  "aiProfiles": ["Default", "Cautious", "Experimental", "Reckless"],
+  "aiTimeout": 5
 }

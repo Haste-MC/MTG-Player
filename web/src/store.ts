@@ -7,6 +7,10 @@ export interface AppState {
   screen: "lobby" | "table";
   precons: string[];
   decks: string[];
+  /** Von der Bridge angebotene KI-Modi/-Profile und die Standard-Bedenkzeit (Sekunden) - siehe Lobby.tsx. */
+  aiModes: string[];
+  aiProfiles: string[];
+  aiTimeout: number;
   state?: Snapshot;
   choices: Choice[];
   log: LogEntry[];
@@ -24,6 +28,7 @@ export interface AppState {
 
 export const initialState: AppState = {
   screen: "lobby", precons: [], decks: [], choices: [], log: [], hiddenKinds: ["MANA", "PHASE"], lastLogId: 0,
+  aiModes: ["standard", "hybrid", "sim"], aiProfiles: ["Default"], aiTimeout: 5,
 };
 
 const LOG_MAX = 500;
@@ -39,7 +44,15 @@ function addChoice(choices: Choice[], c: Choice): Choice[] {
 export function reduce(s: AppState, m: Inbound): AppState {
   switch (m.type) {
     case "lobby":
-      return { ...s, precons: m.precons, decks: m.decks ?? [], screen: s.state ? s.screen : "lobby" };
+      return {
+        ...s,
+        precons: m.precons,
+        decks: m.decks ?? [],
+        aiModes: m.aiModes ?? initialState.aiModes,
+        aiProfiles: m.aiProfiles ?? initialState.aiProfiles,
+        aiTimeout: m.aiTimeout ?? initialState.aiTimeout,
+        screen: s.state ? s.screen : "lobby",
+      };
     case "state": {
       // Spielstart nach der Lobby (erster Snapshot, s.state war noch undefined): Log der Vorpartie leeren.
       const isNewMatch = m.turn === 0 && s.state === undefined;

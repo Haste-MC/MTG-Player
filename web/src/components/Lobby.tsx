@@ -1,6 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { loadAiSettings, saveAiSettings } from "../aiSettings";
 import { type Pick, toRef } from "../deckref";
-import { buildStartGame } from "../lobbyPayload";
+import { buildStartGame, DEFAULT_AI } from "../lobbyPayload";
+import type { AiPick } from "../protocol";
 import { useStore } from "../store";
 import { send } from "../ws";
 
@@ -10,10 +12,15 @@ export default function Lobby() {
   const precons = useStore((s) => s.precons);
   const decks = useStore((s) => s.decks);
   const log = useStore((s) => s.log);
+  const aiProfiles = useStore((s) => s.aiProfiles);
   const [human, setHuman] = useState<Pick>(EMPTY);
   const [ais, setAis] = useState<Pick[]>([EMPTY]);
+  const [aiPicks, setAiPicks] = useState<AiPick[]>([DEFAULT_AI]);
+  const [aiTimeout, setAiTimeout] = useState(5);
   const [spectate, setSpectate] = useState(false);
   const [shownError, setShownError] = useState<string>();
+  // Erste echte "lobby"-Nachricht (precons gefuellt): einmalig die gespeicherte KI-Auswahl laden.
+  const settingsLoaded = useRef(false);
 
   // Neue Fehler (letzte Log-Zeile) automatisch zeigen - unabhaengig davon, ob eine fruehere
   // Fehlermeldung gerade per editPicker/start weggewischt wurde.
@@ -22,18 +29,35 @@ export default function Lobby() {
     if (last?.warn) setShownError(last.text);
   }, [log]);
 
+  useEffect(() => {
+    if (settingsLoaded.current || precons.length === 0) return;
+    settingsLoaded.current = true;
+    const loaded = loadAiSettings(localStorage, aiProfiles);
+    setAiTimeout(loaded.timeout);
+    setAiPicks((prev) => prev.map((_, i) => loaded.picks[i] ?? DEFAULT_AI));
+  }, [precons, aiProfiles]);
+
+  // Auswahl merken, sobald sie geladen ist (kein Ueberschreiben des Storage vor dem obigen Laden).
+  useEffect(() => {
+    if (!settingsLoaded.current) return;
+    saveAiSettings(localStorage, { picks: aiPicks, timeout: aiTimeout });
+  }, [aiPicks, aiTimeout]);
+
   const humanRef = toRef(human);
   const aiRefs = ais.map(toRef);
   const maxAis = spectate ? 6 : 5;
   const minAis = spectate ? 2 : 1;
-  const msg = buildStartGame(spectate, humanRef, aiRefs);
+  const msg = buildStartGame(spectate, humanRef, aiRefs, aiPicks, aiTimeout);
   const ready = msg !== undefined;
 
   const toggleSpectate = (on: boolean) => {
     setShownError(undefined);
     setSpectate(on);
     // Zuschauer-Modus braucht mindestens 2 KIs (Forges Spectator-Pfad, siehe HumanMatch.startSpectator).
-    if (on && ais.length < 2) setAis([...ais, EMPTY]);
+    if (on && ais.length < 2) {
+      setAis([...ais, EMPTY]);
+      setAiPicks([...aiPicks, DEFAULT_AI]);
+    }
   };
   const editHuman = (n: Pick) => {
     setShownError(undefined);
@@ -42,6 +66,19 @@ export default function Lobby() {
   const editAi = (i: number, n: Pick) => {
     setShownError(undefined);
     setAis(ais.map((x, j) => (j === i ? n : x)));
+  };
+  const editAiPick = (i: number, n: AiPick) => {
+    setAiPicks(aiPicks.map((x, j) => (j === i ? n : x)));
+  };
+  const addAi = () => {
+    setShownError(undefined);
+    setAis([...ais, EMPTY]);
+    setAiPicks([...aiPicks, DEFAULT_AI]);
+  };
+  const removeAi = (i: number) => {
+    setShownError(undefined);
+    setAis(ais.filter((_, j) => j !== i));
+    setAiPicks(aiPicks.filter((_, j) => j !== i));
   };
 
   const start = () => {
@@ -103,16 +140,46 @@ export default function Lobby() {
             {picker(human, editHuman)}
           </section>
         )}
+        <section className="lobby-section">
+          <label>KI-Bedenkzeit</label>
+          <div className="ai-timeout">
+            <input
+              type="number"
+              min={1}
+              max={60}
+              value={aiTimeout}
+              onChange={(e) => setAiTimeout(Math.min(60, Math.max(1, Number(e.target.value) || 1)))}
+            /> s
+            <span className="hint">Simulation braucht 10–20 s</span>
+          </div>
+        </section>
         {ais.map((a, i) => (
           <section key={i} className="lobby-section">
             <label>KI {i + 1} {ais.length > minAis && (
-              <button className="quiet small" title="Gegner entfernen" onClick={() => { setShownError(undefined); setAis(ais.filter((_, j) => j !== i)); }}>entfernen</button>
+              <button className="quiet small" title="Gegner entfernen" onClick={() => removeAi(i)}>entfernen</button>
             )}</label>
             {picker(a, (n) => editAi(i, n))}
+            <div className="ai-pick">
+              <select
+                title="Standard: Forges Regel-KI. Hybrid: simuliert nur die Zauberwahl. Simulation: rechnet Züge vor – stärker, langsamer"
+                value={aiPicks[i]?.mode ?? DEFAULT_AI.mode}
+                onChange={(e) => editAiPick(i, { ...(aiPicks[i] ?? DEFAULT_AI), mode: e.target.value as AiPick["mode"] })}
+              >
+                <option value="standard">Standard</option>
+                <option value="hybrid">Hybrid</option>
+                <option value="sim">Simulation</option>
+              </select>
+              <select
+                value={aiPicks[i]?.profile ?? DEFAULT_AI.profile}
+                onChange={(e) => editAiPick(i, { ...(aiPicks[i] ?? DEFAULT_AI), profile: e.target.value })}
+              >
+                {aiProfiles.map((p) => <option key={p} value={p}>{p}</option>)}
+              </select>
+            </div>
           </section>
         ))}
         {ais.length < maxAis && (
-          <button className="ghost" onClick={() => { setShownError(undefined); setAis([...ais, EMPTY]); }}>+ Gegner hinzufügen</button>
+          <button className="ghost" onClick={addAi}>+ Gegner hinzufügen</button>
         )}
         <button className="primary big" disabled={!ready} onClick={start}>Spiel starten</button>
         {shownError && <pre className="import-error">{shownError}</pre>}

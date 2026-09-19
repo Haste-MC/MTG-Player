@@ -31,6 +31,25 @@ describe("reduce", () => {
     expect(s2.decks).toEqual([]);
   });
 
+  it("lobby ohne KI-Felder -> Standardwerte (Modi, Default-Profil, 5s)", () => {
+    const s = reduce(initialState, { type: "lobby", precons: ["A"] });
+    expect(s.aiModes).toEqual(["standard", "hybrid", "sim"]);
+    expect(s.aiProfiles).toEqual(["Default"]);
+    expect(s.aiTimeout).toBe(5);
+  });
+
+  it("lobby uebernimmt aiModes/aiProfiles/aiTimeout von der Bridge", () => {
+    const s = reduce(initialState, {
+      type: "lobby",
+      precons: ["A"],
+      aiModes: ["standard", "hybrid", "sim"],
+      aiProfiles: ["Default", "Cautious", "Experimental", "Reckless"],
+      aiTimeout: 5,
+    });
+    expect(s.aiProfiles).toEqual(["Default", "Cautious", "Experimental", "Reckless"]);
+    expect(s.aiTimeout).toBe(5);
+  });
+
   it("state wechselt auf den tisch und ersetzt den snapshot", () => {
     const s = reduce(initialState, snap({ turn: 3 }));
     expect(s.screen).toBe("table");
