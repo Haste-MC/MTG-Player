@@ -3,6 +3,7 @@ package mtgplayer.server;
 import com.fasterxml.jackson.databind.JsonNode;
 import forge.deck.Deck;
 import forge.gui.GuiBase;
+import mtgplayer.ai.AiConfig;
 import mtgplayer.decks.DeckSource;
 import mtgplayer.decks.DeckStore;
 import mtgplayer.forge.Precons;
@@ -145,12 +146,15 @@ public final class Bridge {
     }
 
     /**
-     * {"type":"startGame","humanDeck":{deckAngabe},"opponents":[{deckAngabe,"name":"KI 1"}]}
+     * {"type":"startGame","humanDeck":{deckAngabe},"opponents":[{deckAngabe,"name":"KI 1",
+     * "ai":{"mode":"sim","profile":"Reckless"}}],"aiTimeout":10}
      * KI-only-Modus (Zuschauer, kein humanDeck): {"type":"startGame","spectate":true,
      * "opponents":[{deckAngabe,"name":"KI 1"}, ... 2–6 Eintraege]}
      * deckAngabe: {"precon":"..."} | {"saved":"..."} | {"text":"...", "deckName":"..."?}
      * | {"archidekt":"https://archidekt.com/decks/...", "deckName":"..."?}
      * "name" bei einem Gegner-Eintrag ist der Spielername, nicht der Speichername des Decks.
+     * "ai" (optional, je Gegner) und "aiTimeout" (optional, ganze Nachricht) – fehlt beides,
+     * gilt AiConfig.DEFAULT bzw. 5 s.
      */
     private void startGame(JsonNode msg) {
         if (match.isRunning()) {
@@ -165,8 +169,11 @@ public final class Bridge {
         Deck human = null;
         List<Deck> ai = new ArrayList<>();
         List<String> names = new ArrayList<>();
+        List<AiConfig> configs = new ArrayList<>();
         List<Runnable> saves = new ArrayList<>();
+        int aiTimeout;
         try {
+            aiTimeout = AiConfig.timeout(msg);
             if (!spectate) {
                 DeckSource.Resolved humanR = decks.resolve(msg.path("humanDeck"));
                 human = humanR.deck();
@@ -178,6 +185,7 @@ public final class Bridge {
                 ai.add(r.deck());
                 saves.add(r.save());
                 names.add(o.path("name").asText("KI " + i++));
+                configs.add(AiConfig.fromJson(o.path("ai")));
             }
         } catch (IllegalArgumentException e) {
             ws.send(new Messages.ErrorMsg(e.getMessage()));
@@ -188,12 +196,13 @@ public final class Bridge {
         saves.forEach(Runnable::run);
         ws.send(new Messages.Lobby(Precons.names(), store.names())); // ggf. neu gespeichertes Deck
         Deck humanDeck = human;
+        int timeout = aiTimeout;
         ui(() -> {
             try {
                 if (spectate) {
-                    match.startSpectator(ai, names, gui);
+                    match.startSpectator(ai, names, configs, timeout, gui);
                 } else {
-                    match.start("Du", humanDeck, ai, names, gui);
+                    match.start("Du", humanDeck, ai, names, configs, timeout, gui);
                 }
             } catch (RuntimeException e) {
                 ws.send(new Messages.ErrorMsg("Spielstart fehlgeschlagen: " + e));

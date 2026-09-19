@@ -1,7 +1,6 @@
 package mtgplayer.match;
 
 import com.google.common.eventbus.Subscribe;
-import forge.ai.LobbyPlayerAi;
 import forge.deck.Deck;
 import forge.game.Game;
 import forge.game.GameEndReason;
@@ -12,8 +11,10 @@ import forge.game.Match;
 import forge.game.event.GameEventTurnEnded;
 import forge.game.player.Player;
 import forge.game.player.RegisteredPlayer;
+import mtgplayer.ai.AiConfig;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Observer;
 import java.util.function.Consumer;
@@ -36,24 +37,39 @@ public final class AiMatch {
      *                 Spieler-Zug einzeln, nicht pro Runde; KI-Spiele können sich festfahren)
      * @param log      bekommt jede Forge-Logzeile, sobald sie entsteht
      */
-    @SuppressWarnings("deprecation")
     public static Result play(List<Deck> decks, List<String> names, int maxTurns, Consumer<String> log) {
+        return play(decks, names, Collections.nCopies(decks.size(), AiConfig.DEFAULT), AiConfig.DEFAULT_TIMEOUT, maxTurns, log);
+    }
+
+    /**
+     * @param decks    ein Deck pro Sitz, 2–6
+     * @param names    Anzeigenamen, gleiche Länge wie decks
+     * @param configs  KI-Modus/-Profil je Sitz, gleiche Länge wie decks
+     * @param aiTimeout Bedenkzeit je KI-Entscheidung in Sekunden ({@link Game#AI_TIMEOUT})
+     * @param maxTurns Spiel endet nach maxTurns Spieler-Zügen als Unentschieden (Forge zählt jeden
+     *                 Spieler-Zug einzeln, nicht pro Runde; KI-Spiele können sich festfahren)
+     * @param log      bekommt jede Forge-Logzeile, sobald sie entsteht
+     */
+    @SuppressWarnings("deprecation")
+    public static Result play(List<Deck> decks, List<String> names, List<AiConfig> configs, int aiTimeout,
+                               int maxTurns, Consumer<String> log) {
         if (maxTurns <= 0) {
             throw new IllegalArgumentException("maxTurns muss > 0 sein");
         }
-        if (decks.size() != names.size() || decks.size() < 2 || decks.size() > 6) {
+        if (decks.size() != names.size() || decks.size() != configs.size() || decks.size() < 2 || decks.size() > 6) {
             throw new IllegalArgumentException("2–6 Decks mit gleich vielen Namen");
         }
         List<RegisteredPlayer> players = new ArrayList<>();
         for (int i = 0; i < decks.size(); i++) {
             RegisteredPlayer rp = RegisteredPlayer.forCommander(decks.get(i));
-            rp.setPlayer(new LobbyPlayerAi(names.get(i), null));
+            rp.setPlayer(configs.get(i).newLobbyPlayer(names.get(i)));
             players.add(rp);
         }
 
         GameRules rules = CommanderRules.create();
         Match match = new Match(rules, players, "AI Commander");
         Game game = match.createGame();
+        game.AI_TIMEOUT = aiTimeout;
 
         int[] seen = {0};
         Observer observer = (o, arg) -> {

@@ -1,5 +1,7 @@
 package mtgplayer.protocol;
 
+import mtgplayer.ai.AiConfig;
+
 import java.util.List;
 
 /** Alle Nachrichten außer {@link Snapshot}. Jedes Record trägt sein {@code type} selbst. */
@@ -7,8 +9,11 @@ public final class Messages {
 
     private Messages() { }
 
-    public record Lobby(String type, List<String> precons, List<String> decks) {
-        public Lobby(List<String> precons, List<String> decks) { this("lobby", precons, decks); }
+    public record Lobby(String type, List<String> precons, List<String> decks,
+                        List<String> aiModes, List<String> aiProfiles, int aiTimeout) {
+        public Lobby(List<String> precons, List<String> decks) {
+            this("lobby", precons, decks, AiConfig.modes(), AiConfig.profiles(), AiConfig.DEFAULT_TIMEOUT);
+        }
     }
 
     /**

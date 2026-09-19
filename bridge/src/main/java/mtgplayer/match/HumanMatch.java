@@ -1,6 +1,5 @@
 package mtgplayer.match;
 
-import forge.ai.LobbyPlayerAi;
 import forge.deck.Deck;
 import forge.game.Game;
 import forge.game.GameEndReason;
@@ -9,10 +8,14 @@ import forge.game.GameView;
 import forge.game.player.RegisteredPlayer;
 import forge.gamemodes.match.HostedMatch;
 import forge.gui.interfaces.IGuiGame;
+import forge.localinstance.properties.ForgePreferences.FPref;
+import forge.model.FModel;
 import forge.player.LobbyPlayerHuman;
+import mtgplayer.ai.AiConfig;
 import mtgplayer.gui.WebGuiGame;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -28,7 +31,13 @@ public final class HumanMatch {
     private volatile boolean lastGameOver = true;
 
     public void start(String humanName, Deck humanDeck, List<Deck> aiDecks, List<String> aiNames, WebGuiGame gui) {
-        if (aiDecks.size() != aiNames.size() || aiDecks.isEmpty() || aiDecks.size() > 5) {
+        start(humanName, humanDeck, aiDecks, aiNames, Collections.nCopies(aiDecks.size(), AiConfig.DEFAULT),
+                AiConfig.DEFAULT_TIMEOUT, gui);
+    }
+
+    public void start(String humanName, Deck humanDeck, List<Deck> aiDecks, List<String> aiNames,
+                       List<AiConfig> aiConfigs, int aiTimeout, WebGuiGame gui) {
+        if (aiDecks.size() != aiNames.size() || aiDecks.size() != aiConfigs.size() || aiDecks.isEmpty() || aiDecks.size() > 5) {
             throw new IllegalArgumentException("1–5 KI-Decks mit gleich vielen Namen");
         }
         end();
@@ -38,7 +47,7 @@ public final class HumanMatch {
         players.add(human);
         for (int i = 0; i < aiDecks.size(); i++) {
             RegisteredPlayer rp = RegisteredPlayer.forCommander(aiDecks.get(i));
-            rp.setPlayer(new LobbyPlayerAi(aiNames.get(i), null));
+            rp.setPlayer(aiConfigs.get(i).newLobbyPlayer(aiNames.get(i)));
             players.add(rp);
         }
         Map<RegisteredPlayer, IGuiGame> guis = new HashMap<>();
@@ -49,6 +58,9 @@ public final class HumanMatch {
         rules.setWarnAboutAICards(false);
         hosted = new HostedMatch();
         gui.resetForNewMatch(); // sonst haengt Auswahl/Prompt-Zustand aus dem vorigen Spiel noch dran
+        // HostedMatch.startGame liest diese Preference beim Spielstart (setzt Game.AI_TIMEOUT) - kein save(),
+        // die Aenderung soll nur diese JVM/Session betreffen.
+        FModel.getPreferences().setPref(FPref.MATCH_AI_TIMEOUT, String.valueOf(aiTimeout));
         hosted.startMatch(rules, null, players, guis, null);
     }
 
@@ -59,14 +71,18 @@ public final class HumanMatch {
      * Zuschauer-Sitz – {@code WebGuiBase.setGuiSupplier} liefert dafuer dieselbe {@code gui}).
      */
     public void startSpectator(List<Deck> aiDecks, List<String> aiNames, WebGuiGame gui) {
-        if (aiDecks.size() != aiNames.size() || aiDecks.size() < 2 || aiDecks.size() > 6) {
+        startSpectator(aiDecks, aiNames, Collections.nCopies(aiDecks.size(), AiConfig.DEFAULT), AiConfig.DEFAULT_TIMEOUT, gui);
+    }
+
+    public void startSpectator(List<Deck> aiDecks, List<String> aiNames, List<AiConfig> aiConfigs, int aiTimeout, WebGuiGame gui) {
+        if (aiDecks.size() != aiNames.size() || aiDecks.size() != aiConfigs.size() || aiDecks.size() < 2 || aiDecks.size() > 6) {
             throw new IllegalArgumentException("2–6 KI-Decks mit gleich vielen Namen");
         }
         end();
         List<RegisteredPlayer> players = new ArrayList<>();
         for (int i = 0; i < aiDecks.size(); i++) {
             RegisteredPlayer rp = RegisteredPlayer.forCommander(aiDecks.get(i));
-            rp.setPlayer(new LobbyPlayerAi(aiNames.get(i), null));
+            rp.setPlayer(aiConfigs.get(i).newLobbyPlayer(aiNames.get(i)));
             players.add(rp);
         }
 
@@ -74,6 +90,7 @@ public final class HumanMatch {
         rules.setWarnAboutAICards(false);
         hosted = new HostedMatch();
         gui.resetForNewMatch(); // sonst haengt Auswahl/Prompt-Zustand aus dem vorigen Spiel noch dran
+        FModel.getPreferences().setPref(FPref.MATCH_AI_TIMEOUT, String.valueOf(aiTimeout));
         hosted.startMatch(rules, null, players, Map.of(), null);
     }
 

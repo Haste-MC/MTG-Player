@@ -12,7 +12,10 @@ import org.java_websocket.client.WebSocketClient;
 import org.java_websocket.handshake.ServerHandshake;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.MethodOrderer;
+import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestMethodOrder;
 import org.junit.jupiter.api.Timeout;
 
 import java.net.URI;
@@ -27,7 +30,15 @@ import java.util.function.Predicate;
 /**
  * Spielt die ersten Sekunden eines echten Spiels über das Protokoll: Lobby → Spielstart →
  * Mulligan-Prompt → Keep → Prio-Prompt in Zug 1 → Concede-Dialog → gameOver.
+ *
+ * <p>Beide Tests teilen sich eine statische WebSocket-Verbindung/Inbox (siehe start()); die
+ * Bridge schickt "lobby" nur einmal beim Connect. {@code @TestMethodOrder} stellt sicher, dass
+ * {@link #lobbyStartKeepPrioConcede()} (das dieses Connect-"lobby" konsumiert und auf
+ * {@code aiProfiles} prüft) vor {@link #aiConfigUndTimeoutWerdenAngenommenUnbekanntesProfilAbgelehnt()}
+ * läuft - sonst würde dessen erstes {@code await("error", ...)} das Connect-"lobby" stillschweigend
+ * verwerfen (await() verwirft jede Nachricht, die nicht zum gesuchten Typ passt).</p>
  */
+@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class BridgeEndToEndTest {
 
     private static final int PORT = 18081;
@@ -135,10 +146,13 @@ class BridgeEndToEndTest {
     }
 
     @Test
+    @Order(1)
     @Timeout(value = 5, unit = TimeUnit.MINUTES)
     void lobbyStartKeepPrioConcede() throws Exception {
         JsonNode lobby = await("lobby", n -> true, 10);
         assertTrue(lobby.get("precons").size() > 100);
+        assertTrue(Json.mapper().convertValue(lobby.get("aiProfiles"), List.class).contains("Default"),
+                "aiProfiles enthaelt Default: " + lobby.get("aiProfiles"));
 
         send("{\"type\":\"startGame\",\"humanDeck\":{\"precon\":\"Abzan Armor [TDC] [2025]\"},"
                 + "\"opponents\":[{\"precon\":\"Adaptive Enchantment [C18] [2018]\",\"name\":\"KI 1\"}]}");
@@ -202,5 +216,25 @@ class BridgeEndToEndTest {
 
         JsonNode over = await("gameOver", n -> true, 60);
         assertNotNull(over);
+    }
+
+    /** Deckt AiConfig/aiTimeout ueber das echte Protokoll ab: unbekanntes Profil wird abgelehnt
+     *  (Fehler statt Spielstart), ein gueltiger Modus/Profil/Timeout startet ein Spiel wie gewohnt. */
+    @Test
+    @Order(2)
+    @Timeout(value = 5, unit = TimeUnit.MINUTES)
+    void aiConfigUndTimeoutWerdenAngenommenUnbekanntesProfilAbgelehnt() throws Exception {
+        send("{\"type\":\"startGame\",\"humanDeck\":{\"precon\":\"Abzan Armor [TDC] [2025]\"},"
+            + "\"opponents\":[{\"precon\":\"Adaptive Enchantment [C18] [2018]\",\"name\":\"KI 1\",\"ai\":{\"mode\":\"sim\",\"profile\":\"Nope\"}}]}");
+        JsonNode err = await("error", n -> true, 10);
+        assertTrue(err.path("text").asText().contains("Nope"), err.toString());
+        send("{\"type\":\"startGame\",\"aiTimeout\":3,\"humanDeck\":{\"precon\":\"Abzan Armor [TDC] [2025]\"},"
+            + "\"opponents\":[{\"precon\":\"Adaptive Enchantment [C18] [2018]\",\"name\":\"KI 1\",\"ai\":{\"mode\":\"hybrid\",\"profile\":\"Cautious\"}}]}");
+        JsonNode mull = awaitMulliganPrompt(90);   // Spiel laeuft an
+        assertEquals(2, mull.get("players").size());
+        send("{\"type\":\"concede\"}");
+        JsonNode confirm = await("choice", n -> "confirm".equals(n.path("kind").asText()), 30);
+        send("{\"type\":\"answer\",\"id\":" + confirm.get("id").asInt() + ",\"value\":true}");
+        assertNotNull(await("gameOver", n -> true, 60));
     }
 }
