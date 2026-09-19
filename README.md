@@ -49,6 +49,12 @@ Entwicklung am Frontend: `cd web && npm run dev` (Vite auf :5173, verbindet sich
 
 Log unten rechts: Kategorie-Chips blenden Zeilen ein/aus (Mana und Phase sind standardmäßig ausgeblendet).
 Spieler, die gerade als Ziel wählbar sind, bekommen einen gestrichelten Rahmen um den Kopfbereich.
+
+Stapel: gleiche Länder und Token (gleicher Name, keine Auszeichnung) liegen als ein Stapel mit "×N" und
+"N getappt"; ein Klick tappt die erste ungetappte Karte. Sobald eine Karte des Stapels wählbar, im Kampf oder
+mit Marken ist, werden alle einzeln gezeigt. Getappte Karten drehen sich nur in der eigenen Zone, sonst sind
+sie abgedunkelt mit ⟳. Forges Effekt-Hilfskarten und Embleme erscheinen als Chips in der Zeile "Effekte"
+(Gegner: im Panelkopf), Hover zeigt den Text im Detail-Panel rechts.
 Alternative Bridge-Ports lassen sich per URL setzen: `?wsPort=8082` (gleicher Host) oder `?ws=ws://host:port` (eigene WebSocket-URL).
 
 ## Bridge
@@ -67,4 +73,5 @@ Der Assets-Pfad ist mit `-Dmtgplayer.assets=<dir>` überschreibbar; Maven setzt 
 
 ## Offen
 
-Gleiche Länder im Deckbau stapeln, UI-Feinschliff (Hover-Panel feste Höhe), Moxfield bewusst nicht.
+Gleiche Länder im Deckbau stapeln, 5–6-Spieler-Raster im Zuschauer-Modus nur per CSS vorbereitet (kein Fixture),
+sehr volle Zuschauer-Boards bei 1280×720 werden klein (Karten bis 42 px), Moxfield bewusst nicht.
