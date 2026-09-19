@@ -200,20 +200,38 @@ try {
       const rb = r(rows), lb = r(lands);
       if (rb.bottom - lb.bottom > 8) out.push(`Laenderreihe haengt ${Math.round(rb.bottom - lb.bottom)}px ueber der Unterkante (${rows.closest(".player")?.querySelector(".pname")?.textContent})`);
     }
-    // 10. Die Zuschauer-Hand (senkrechter Stapel in der linken Spalte) darf keine Karte im Spielfeld
-    //     desselben Panels ueberdecken - passiert, wenn der Hand-Stapel (Schritt an der Untergrenze 12px)
-    //     hoeher wird als sein Budget und in die "bf"-Spalte des Grids hineinragt.
+    // 10. Die Zuschauer-Hand (senkrechter Stapel in der linken Spalte, an die "hand"-Grid-Zeile gebunden,
+    //     Fix-Runde 3) darf weder eine Karte im Spielfeld noch die Stapel (Grab/Exil) noch die Kommandozone
+    //     desselben Panels ueberdecken - und auch ihr eigenes Element (inkl. "HAND"-Beschriftung) darf nicht
+    //     in die Stapel-Box hineinragen (Fix-Runde 2 lief bei vielen Handkarten/niedrigem Fenster nach oben
+    //     in .piles - passierte auch ohne dass eine einzelne Karte das Rechteck einer Stapel-Karte traf).
+    const intersects = (a, b) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
     for (const panel of document.querySelectorAll(".player.spectator")) {
       const handCards = [...panel.querySelectorAll(".spectator-hand .card")].filter(visible);
-      const bfCards = [...panel.querySelectorAll(".bf-rows .card")].filter(visible);
+      const zones = [
+        [".bf-rows .card", "bf-rows .card", true],
+        [".piles", "Stapel (Grab/Exil)", false],
+        [".command", "Kommandozone", false],
+      ];
       for (const hc of handCards) {
         const hb = r(hc);
-        for (const bc of bfCards) {
-          const bb = r(bc);
-          if (hb.left < bb.right && hb.right > bb.left && hb.top < bb.bottom && hb.bottom > bb.top) {
-            out.push(`Hand ueberdeckt Spielfeldkarte "${name(bc)}" (${panel.querySelector(".pname")?.textContent})`);
-            break;
+        for (const [sel, label, perCard] of zones) {
+          const targets = [...panel.querySelectorAll(sel)].filter(visible);
+          for (const t of targets) {
+            const tb = r(t);
+            if (intersects(hb, tb)) {
+              out.push(`Hand ueberdeckt ${perCard ? `Spielfeldkarte "${name(t)}"` : label} (${panel.querySelector(".pname")?.textContent})`);
+              break;
+            }
           }
+        }
+      }
+      const handEl = panel.querySelector(".spectator-hand");
+      const pilesEl = panel.querySelector(".piles");
+      if (handEl && pilesEl && visible(handEl) && visible(pilesEl)) {
+        const hb = r(handEl), pb = r(pilesEl);
+        if (intersects(hb, pb)) {
+          out.push(`Hand ueberdeckt Stapel (Grab/Exil) (${panel.querySelector(".pname")?.textContent})`);
         }
       }
     }

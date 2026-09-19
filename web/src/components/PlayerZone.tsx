@@ -122,7 +122,6 @@ export default function PlayerZone({ p, state, compact, spectator }: { p: Player
   const sizing = {
     ...(bw !== undefined ? { "--bw": `${bw}px` } : {}),
     ...(compact && !spectator ? { "--n-lands": lands.length } : {}),
-    ...(spectator ? { "--n": hand.length } : {}),
   } as CSSProperties;
   return (
     <div className={"player" + (active ? " active" : "") + (compact ? " compact" : " own") + (spectator ? " spectator" : "")} style={sizing}>

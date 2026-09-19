@@ -298,15 +298,41 @@ input[type="checkbox"] { accent-color: var(--accent); width: 14px; height: 14px;
    Zuschauer-Clamp statt --card-w/--land-w. Nach dem allgemeinen .bf-rows-Block, damit sie gewinnen. */
 .player.spectator .bf-rows .bf-creatures, .player.spectator .bf-rows .bf-other { --w: var(--w-spec); }
 .player.spectator .bf-rows .bf-lands { --w: calc(var(--w-spec) * 0.8); }
-/* Hand: senkrechter Stapel in der linken Spalte, jede Karte um --step nach unten versetzt (Namenszeile bleibt
-   sichtbar). Budget --hand-h = Kommandozonen-Hoehe + 90px; der Schritt schrumpft, bis n Karten hineinpassen,
-   mindestens 12px, hoechstens 30 % der Kartenhoehe. */
-.player.spectator { --w-spec-hand: calc(var(--cmd-w) * 0.9); --hand-h: calc(var(--cmd-w) * 1.4 + 90px); }
-.spectator-hand { grid-area: hand; align-self: end; min-width: 0; min-height: 0; width: calc(var(--cmd-w) + 14px); overflow: visible; }
-.spectator-hand .row { --w: var(--w-spec-hand); --h: calc(var(--w) * 1.4);
-  --step: clamp(12px, (var(--hand-h) - var(--h)) / max(1, var(--n, 1) - 1), var(--h) * 0.3);
-  flex-direction: column; flex-wrap: nowrap; align-items: center; gap: 0; padding: 2px; overflow: visible; }
-.spectator-hand .card-slot + .card-slot { margin-top: calc(-1 * (var(--h) - var(--step))); }
+/* Hand: senkrechter Stapel in der linken Spalte, an die tatsaechliche Zeilenhoehe der "hand"-Grid-Zeile
+   gebunden statt an eine geschaetzte feste Budget-Groesse (Fix-Runde 2 rechnete mit --hand-h als
+   statischer Schaetzung - lief bei vielen Handkarten/niedrigem Fenster nach oben in .piles). Reines CSS:
+   .spectator-hand streckt sich (align-self: stretch) ueber die dritte Grid-Zeile (minmax(0, 1fr)), jeder
+   Kartenslot ist per flex-shrink eine schrumpfbare Stufe (Namenszeile bleibt sichtbar), die letzte Karte
+   bleibt immer voll sichtbar. */
+.player.spectator { --w-spec-hand: calc(var(--cmd-w) * 0.9); }
+/* container-type: size gibt .spectator-hand einen abfragbaren Querycontainer fuer 1cqh = 1 % seiner
+   eigenen (per align-self: stretch fest zugewiesenen) Hoehe. Grund (Fix-Runde 3, zweite Iteration -
+   die erste Fassung dieser Runde uebernahm den Vorgabe-Codeblock woertlich: schrumpfbare Stufen mit
+   12px-Boden + eine starre letzte Karte in voller --h). Das genuegt nicht: die SICHTBARE Karte
+   (.card/.card-frame) liest --h aus einer eigenen, vom Slot-Kasten unabhaengigen Custom-Property -
+   ein geschrumpfter Slot-Kasten macht die davorliegenden (durch die naechste Karte verdeckten) Karten
+   kleiner aussehen, aendert aber nichts an der GROESSE der letzten, sichtbaren Karte. Bei mehreren
+   Handkarten in einer knappen "hand"-Zeile (z. B. spectator-rows.json KI 3, 5 Handkarten, 1280x720:
+   4 Stufen a 12px + eine volle letzte Karte von 71px > 100px verfuegbare Hoehe) ragte die letzte
+   Karte dadurch nachweisbar unter das Panel hinaus (Regel 3) bzw. in spectator.json KI 1 sogar bis in
+   die Effekte-Zeile (Regel 5) - kein Rand-, sondern ein reproduzierbarer Fall bei einer normalen,
+   im Brief vorgesehenen Handgroesse (2-5 Karten). Fix: --w-spec-hand (und damit --h, fuer ALLE
+   Handkarten der Zeile gleich) wird zusaetzlich auf einen Wert gedeckelt, der selbst im Worst-Case
+   von bis zu 6 Stufen a 12px (72px) noch in die tatsaechliche Containerhoehe passt - dadurch schrumpft
+   die GESAMTE Karte (nicht nur ihr Slot-Kasten), bevor die letzte Karte ueberhaupt Gefahr laeuft,
+   ueber den Rand zu ragen. */
+.spectator-hand { container-type: size; grid-area: hand; align-self: stretch; min-height: 0; display: flex; flex-direction: column; justify-content: flex-end; width: calc(var(--cmd-w) + 14px); }
+.spectator-hand .row {
+  height: 100%;
+  --w: min(var(--w-spec-hand), max(22px, calc((100cqh - 72px) / 1.4)));
+  --h: calc(var(--w) * 1.4);
+  display: flex; flex-direction: column; flex-wrap: nowrap; align-items: center; gap: 0; padding: 2px; min-height: 0; overflow: visible;
+}
+/* Slot = schrumpfbare Stufe: flex-basis 30 % der Kartenhoehe, schrumpft bis min-height 12px, wenn die
+   Zeile nicht genug Platz fuer alle Karten hat. Die letzte Karte behaelt ihre volle Hoehe (flex: none) -
+   die ist dank des cqh-Deckels oben bereits klein genug, um in die Zeile zu passen. */
+.spectator-hand .card-slot { flex: 0 1 calc(var(--h) * 0.3); min-height: 12px; height: auto; overflow: visible; align-items: flex-start; }
+.spectator-hand .card-slot:last-child { flex: none; height: var(--h); }
 .spectator-hand .card-slot:hover { z-index: 6; }
 .spectator-hand .card-slot:hover .card-frame { transform: translateY(-2px) scale(1.04); }
 .spectator-hand .row:empty::before { content: "keine Handkarten"; color: var(--faint); font-size: 11px; padding: 2px 4px; white-space: nowrap; }
