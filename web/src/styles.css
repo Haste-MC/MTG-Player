@@ -362,19 +362,29 @@ input[type="checkbox"] { accent-color: var(--accent); width: 14px; height: 14px;
 .tag.tapped-tag::before { content: "\27F3"; font-size: 18px; line-height: 1; font-weight: 400; }
 .player.compact .tag.tapped-tag { width: 20px; height: 20px; }
 .player.compact .tag.tapped-tag::before { font-size: 14px; }
-/* Tabletop-Stapel (groups.ts): bis zu 4 Ebenen hinter der obersten Karte, je 5px nach oben/rechts versetzt;
-   getappte Karten liegen als gedrehte, abgedunkelte Ebenen zuunterst und ragen links/rechts heraus. */
+/* Tabletop-Stapel (groups.ts): bis zu 4 Ebenen hinter der obersten Karte, je Ebene um --layer-dx nach
+   oben/rechts versetzt; getappte Karten liegen als gedrehte, abgedunkelte Ebenen zuunterst und ragen
+   links/rechts heraus. Versatz = 4 % der Kartenbreite (bei 125px Kartenbreite also 5px), NICHT ein fixer
+   Pixelwert - muss zu slotUnits() (boardSize.ts) passen, die fuer einen ungetappten Stapel ebenfalls
+   `1 + 0.04 * Ebenen` Einheiten reserviert (proportional zu w, nicht fix). Ein fixer Versatz wuerde bei
+   kleinen Kartenbreiten mehr Platz brauchen als reserviert (Layout-Check-Ueberlauf) und bei grossen
+   Breiten unnoetig viel reservieren. Untergrenze max(3px, ...): unter ~75px Kartenbreite waere 4 % sonst
+   kaum noch sichtbar (< 3px); slotUnits() reserviert dann bis zu 2px je Ebene zu wenig (bei w=50px: 3px
+   Versatz vs. 2px reserviert) - bei maximal 4 Ebenen also bis zu ~8px zu wenig fuer den ganzen Stapel;
+   das faengt der min:40-Fallback in useBoardSize/PlayerZone.tsx zusammen mit der ohnehin vorhandenen
+   Slot-Verbreiterung ab und ist bei so kleinen Kartenbreiten (Randfall, siehe PlayerZone.tsx-Kommentar)
+   akzeptiert statt weiter verschaerft zu werden. */
 .card-frame.stacked { isolation: isolate; }
 .stack-layers { position: absolute; inset: 0; z-index: -1; pointer-events: none; }
 .stack-layer { position: absolute; inset: 0; border-radius: 7px; background: #0c1013; box-shadow: var(--shadow-card); overflow: hidden;
-  transform: translate(calc(var(--i) * 5px), calc(var(--i) * -5px)); }
+  transform: translate(calc(var(--i) * var(--layer-dx)), calc(var(--i) * -1 * var(--layer-dx))); }
 .stack-layer .art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .stack-layer:not(:has(.art)) { border: 1px solid var(--line-2); background: linear-gradient(180deg, #232d35, #182027); }
 /* Slot waechst um den Versatz nach rechts, damit die Ebenen nicht in den Nachbarn ragen. */
-.card-slot:has(.stack-layers) { width: calc(var(--w) + var(--layers, 0) * 5px); justify-content: flex-start; }
+.card-slot:has(.stack-layers) { --layer-dx: max(3px, calc(var(--w) * 0.04)); width: calc(var(--w) + var(--layers, 0) * var(--layer-dx)); justify-content: flex-start; }
 /* Gemessene Reihen: getappte Ebenen gedreht (Slot 1,4 w breit, Karte mittig), Badge "n getappt" entfaellt. */
 .bf-rows .card-slot.stack-tapped-slot { width: var(--h); justify-content: center; }
-.bf-rows .stack-layer.tapped { transform: translate(calc(var(--i) * 5px), calc(var(--i) * -5px)) rotate(90deg); }
+.bf-rows .stack-layer.tapped { transform: translate(calc(var(--i) * var(--layer-dx)), calc(var(--i) * -1 * var(--layer-dx))) rotate(90deg); }
 .bf-rows .stack-layer.tapped .art { filter: brightness(0.55) saturate(0.8); }
 .bf-rows .tag.stack-tapped { display: none; }
 /* Gegnerzeile (ohne Drehung): Ebenen aufrecht, getappte nur abgedunkelt, Badge bleibt. */
