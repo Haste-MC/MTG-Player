@@ -17,6 +17,9 @@ export interface AppState {
   lastLogId: number;
   winner?: string | null;
   hover?: number;
+  /** Kurzer Hinweis am Prompt (z. B. Forges flashIncorrectAction) statt einer Log-Zeile; n zaehlt hoch,
+   *  damit ein wiederholter Hinweis den Ausblend-Timer neu startet (siehe Prompt.tsx). */
+  toast?: { text: string; n: number };
 }
 
 export const initialState: AppState = {
@@ -24,6 +27,8 @@ export const initialState: AppState = {
 };
 
 const LOG_MAX = 500;
+/** Forges flashIncorrectAction kommt als error mit genau diesem Text (WebGuiGame) – ist kein Log-Ereignis. */
+export const INCORRECT_ACTION_TEXT = "Das geht gerade nicht.";
 
 /** Fügt eine choice ein (oder ersetzt dieselbe id), aufsteigend nach id sortiert. */
 function addChoice(choices: Choice[], c: Choice): Choice[] {
@@ -53,6 +58,7 @@ export function reduce(s: AppState, m: Inbound): AppState {
     case "gameOver":
       return { ...s, winner: m.winner ?? null, choices: [] };
     case "error":
+      if (m.text === INCORRECT_ACTION_TEXT) return { ...s, toast: { text: m.text, n: (s.toast?.n ?? 0) + 1 } };
       return { ...s, log: [...s.log, { text: "⚠ " + m.text, warn: true }].slice(-LOG_MAX) };
     default:
       return s;
@@ -65,6 +71,7 @@ interface Store extends AppState {
   backToLobby: () => void;
   setHover: (id?: number) => void;
   toggleKind: (kind: string) => void;
+  clearToast: () => void;
 }
 
 export const useStore = create<Store>((set) => ({
@@ -73,6 +80,7 @@ export const useStore = create<Store>((set) => ({
   clearChoice: (id) => set((s) => ({ choices: s.choices.filter((c) => c.id !== id) })),
   backToLobby: () => set({ screen: "lobby", state: undefined, winner: undefined, choices: [] }),
   setHover: (id) => set({ hover: id }),
+  clearToast: () => set({ toast: undefined }),
   toggleKind: (kind) => set((s) => ({
     hiddenKinds: s.hiddenKinds.includes(kind) ? s.hiddenKinds.filter((k) => k !== kind) : [...s.hiddenKinds, kind],
   })),

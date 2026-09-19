@@ -6,6 +6,14 @@ import { send } from "../ws";
 export default function Prompt({ state, dangerLabel = "Aufgeben" }: { state: Snapshot; dangerLabel?: string }) {
   const p = state.prompt;
   const choiceOpen = useStore((s) => s.choices.length > 0);
+  const toast = useStore((s) => s.toast);
+  const clearToast = useStore((s) => s.clearToast);
+  // Toast (z. B. "Das geht gerade nicht.") nach 2 s ausblenden; toast.n startet den Timer bei Wiederholung neu.
+  useEffect(() => {
+    if (!toast) return;
+    const t = window.setTimeout(clearToast, 2000);
+    return () => window.clearTimeout(t);
+  }, [toast, clearToast]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (choiceOpen) return;
@@ -21,6 +29,7 @@ export default function Prompt({ state, dangerLabel = "Aufgeben" }: { state: Sna
     <div className="prompt">
       <span className="phase-chip"><span className="turn">Zug {state.turn}</span><span className="sep">·</span>{state.phase ?? ""}</span>
       <span className="message">{p.message}</span>
+      {toast && <span className="toast" role="status" key={toast.n}>{toast.text}</span>}
       <span className="actions">
         <button className="primary" disabled={!p.okEnabled} onClick={() => send({ type: "ok", seq: p.seq })}>{p.okLabel}</button>
         <button disabled={!p.cancelEnabled} onClick={() => send({ type: "cancel", seq: p.seq })}>{p.cancelLabel}</button>

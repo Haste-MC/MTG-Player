@@ -64,6 +64,15 @@ describe("reduce", () => {
     expect(s.log[0].text).toContain("kaputt");
   });
 
+  it("'das geht gerade nicht' wird ein toast statt einer log-zeile", () => {
+    const s = reduce(initialState, { type: "error", text: "Das geht gerade nicht." });
+    expect(s.log).toEqual([]);
+    expect(s.toast?.text).toBe("Das geht gerade nicht.");
+    // ein zweiter Hinweis zaehlt hoch, damit der Ausblend-Timer neu startet
+    const s2 = reduce(s, { type: "error", text: "Das geht gerade nicht." });
+    expect(s2.toast?.n).toBe(2);
+  });
+
   it("log haengt an und ist auf 500 zeilen begrenzt", () => {
     let s = initialState;
     for (let i = 0; i < 600; i++) s = reduce(s, { type: "log", text: "z" + i });

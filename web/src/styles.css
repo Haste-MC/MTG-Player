@@ -35,12 +35,15 @@
   --card-w-opp: clamp(60px, 9vh, 92px);
   --land-w-opp: clamp(46px, 6.6vh, 68px);
   --side-w: clamp(260px, 20vw, 340px);
+  /* Detail-Panel rechts hat eine feste Hoehe (Inhalt scrollt innen), damit ein Hover nichts verschiebt. */
+  --detail-h: 320px;
   --gap: 8px;
   --pad: 10px;
 }
+@media (min-height: 900px) { :root { --detail-h: 420px; } }
 /* Niedrige Fenster (z. B. 1280x720): engere Abstände, damit eigene Zone + Hand ohne Überlauf passen. */
 @media (max-height: 800px) {
-  :root { --card-w: clamp(80px, 12vh, 132px); --land-w: clamp(54px, 8vh, 96px); --gap: 6px; --pad: 8px; }
+  :root { --card-w: clamp(80px, 12vh, 132px); --land-w: clamp(54px, 8vh, 96px); --gap: 6px; --pad: 8px; --detail-h: 300px; }
 }
 
 * { box-sizing: border-box; }
@@ -364,6 +367,10 @@ input[type="checkbox"] { accent-color: var(--accent); width: 14px; height: 14px;
 .phasebar .fullcontrol { margin-left: auto; display: flex; gap: 6px; align-items: center; color: var(--muted); cursor: pointer; white-space: nowrap; }
 
 .prompt { display: flex; gap: 12px; align-items: center; padding: 6px 10px 6px 6px; flex: none; border-radius: var(--radius); background: var(--panel-2); border: 1px solid var(--line); box-shadow: var(--shadow); }
+/* Kurzer Hinweis (Forges flashIncorrectAction) als Pille neben der Prompt-Nachricht, blendet nach 2 s aus (Prompt.tsx). */
+.prompt .toast { flex: none; padding: 4px 12px; border-radius: 999px; background: rgba(229, 72, 77, 0.16); border: 1px solid rgba(229, 72, 77, 0.45); color: #ff9b9e; font-size: 12px; font-weight: 600; white-space: nowrap; animation: toast-in .15s ease, toast-out .3s ease 1.7s forwards; pointer-events: none; }
+@keyframes toast-in { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
+@keyframes toast-out { to { opacity: 0; } }
 .prompt .phase-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: rgba(0, 0, 0, 0.3); border: 1px solid var(--line); font-size: 11px; font-weight: 600; letter-spacing: 0.03em; color: var(--text); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .prompt .phase-chip .turn { color: var(--muted); font-weight: 500; }
 .prompt .phase-chip .sep { color: var(--faint); }
@@ -373,11 +380,15 @@ input[type="checkbox"] { accent-color: var(--accent); width: 14px; height: 14px;
 .prompt .actions button.quiet { padding: 6px 12px; }
 
 /* ---------- Rechte Spalte ----------------------------------------------------------------- */
+/* Feste Aufteilung: Detail fest hoch (auch leer), Stack hoechstens 30 %, das Log nimmt den ganzen Rest.
+   So verschiebt ein Hover ueber eine Log-Zeile (Detail fuellt sich) das Log nicht – kein Flackern. */
 .side > * { border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); box-shadow: var(--shadow); }
-.detail { flex: none; padding: 10px; font-size: 12px; min-height: 120px; }
-.detail.empty { color: var(--faint); display: flex; align-items: center; justify-content: center; min-height: 140px; border-style: dashed; background: transparent; box-shadow: none; }
-.detail .art-frame { width: 100%; max-width: 250px; margin: 0 auto 10px; padding: 4px; border-radius: 12px; background: rgba(0, 0, 0, 0.35); border: 1px solid var(--line-2); box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45); }
+.detail { flex: none; height: var(--detail-h); padding: var(--pad); font-size: 12px; display: flex; flex-direction: column; min-height: 0; }
+.detail.empty { color: var(--faint); align-items: center; justify-content: center; border-style: dashed; background: transparent; box-shadow: none; }
+/* Bild so breit, dass unter ihm noch ~120px fuer Name/Typ/Text bleiben; der Text scrollt bei Bedarf. */
+.detail .art-frame { flex: none; width: 100%; max-width: min(250px, calc((var(--detail-h) - 150px) / 1.4)); margin: 0 auto 8px; padding: 4px; border-radius: 12px; background: rgba(0, 0, 0, 0.35); border: 1px solid var(--line-2); box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45); }
 .detail .art-large { width: 100%; display: block; border-radius: 9px; }
+.detail-body { flex: 1; min-height: 0; overflow: auto; scrollbar-width: thin; }
 .detail .name { font-weight: 600; font-size: 15px; }
 .detail .cost { color: var(--muted); font-weight: 400; font-size: 12px; }
 .detail .type { color: var(--muted); }
@@ -385,7 +396,7 @@ input[type="checkbox"] { accent-color: var(--accent); width: 14px; height: 14px;
 .detail .text { white-space: pre-wrap; margin-top: 8px; line-height: 1.45; }
 .detail .counters { margin-top: 6px; color: var(--green); }
 
-.stack { flex: 0 1 auto; padding: 10px; max-height: 38%; overflow: auto; min-height: 60px; }
+.stack { flex: 0 1 auto; padding: var(--pad); max-height: 30%; overflow: auto; min-height: 60px; scrollbar-width: thin; }
 .stack .empty { font-size: 12px; }
 .stack-item { font-size: 12px; }
 .stack-arrow { text-align: center; color: var(--faint); font-size: 11px; line-height: 1.2; padding: 2px 0; }
@@ -396,7 +407,7 @@ input[type="checkbox"] { accent-color: var(--accent); width: 14px; height: 14px;
 .stack-text { line-height: 1.35; }
 .stack-body .muted { font-size: 11px; }
 
-.log { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; padding: 10px; }
+.log { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; padding: var(--pad); }
 .log .panel-title { flex-wrap: wrap; row-gap: 4px; }
 .log-filter { display: flex; flex-wrap: wrap; gap: 4px; margin-left: auto; }
 .log-filter .chip { font-size: 9.5px; padding: 1px 6px; border-radius: 999px; border: 1px solid var(--line-2); background: transparent; color: var(--muted); cursor: pointer; text-transform: uppercase; letter-spacing: 0.03em; line-height: 1.5; }

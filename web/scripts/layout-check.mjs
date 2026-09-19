@@ -113,6 +113,28 @@ try {
     }
     return out;
   });
+
+  // 5. Hover ueber eine Log-Zeile mit Karte (Detail-Panel fuellt sich) darf das Log-Panel nicht verschieben
+  //    oder verkleinern - sonst rutscht die Zeile unter dem Zeiger weg, das Detail leert sich wieder und
+  //    es flackert (feste Detailhoehe, siehe styles.css .side). Ein ResizeObserver protokolliert jede
+  //    Groessenaenderung des Log-Panels waehrend des Hovers; am Ende muss das Detail noch gefuellt sein
+  //    (bei der alten, mitwachsenden Detailhoehe ist das Detail nach dem Hover leer - Chromium schickt nach
+  //    dem Layoutwechsel einen mousemove, die Zeile ist weg, das Detail leert sich wieder).
+  const logLine = page.locator(".log-line[data-card]").first();
+  if (await logLine.count()) {
+    await page.evaluate(() => {
+      const fmt = (el) => { const b = el.getBoundingClientRect(); return `${Math.round(b.left)},${Math.round(b.top)} ${Math.round(b.width)}x${Math.round(b.height)}`; };
+      const log = document.querySelector(".log");
+      window.__logRects = [fmt(log)];
+      new ResizeObserver(() => { const r = fmt(log); if (window.__logRects.at(-1) !== r) window.__logRects.push(r); }).observe(log);
+    });
+    await logLine.hover();
+    await page.waitForTimeout(400);
+    const rects = await page.evaluate(() => window.__logRects);
+    if (rects.length > 1) problems.push(`Log-Panel veraendert sich beim Hover ueber eine Log-Zeile: ${rects.join(" -> ")}`);
+    const detailFilled = await page.locator(".detail:not(.empty)").count();
+    if (!detailFilled) problems.push("Hover ueber Log-Zeile: Detail-Panel ist (nicht mehr) gefuellt - die Zeile ist unter dem Zeiger weggerutscht");
+  }
 } finally {
   await browser.close();
 }

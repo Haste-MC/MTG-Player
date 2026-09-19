@@ -59,7 +59,7 @@ export default function Log() {
         {visible.map((l, i) => {
           const hoverable = l.card !== undefined && !!cards?.[String(l.card)];
           return (
-            <div key={i} className={lineClass(l)} data-kind={l.kind}
+            <div key={i} className={lineClass(l)} data-kind={l.kind} data-card={hoverable ? l.card : undefined}
               onMouseEnter={hoverable ? () => setHover(l.card) : undefined}
               onMouseLeave={hoverable ? () => setHover(undefined) : undefined}>
               {l.text}
