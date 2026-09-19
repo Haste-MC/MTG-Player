@@ -13,11 +13,23 @@ describe("fitCardWidth", () => {
   });
 
   it("eine reihe mit 4 karten in 600x500: umbruch in zwei zeilen statt vier winzige nebeneinander", () => {
-    // 4 nebeneinander: (4w + 18) <= 600 -> w <= 145. Zwei Zeilen a 2: Hoehe 2*1.4w + 4 <= 500 -> w <= 177,
-    // Breite 2w + 6 <= 600 -> w <= 297. Also passt 177, nicht nur 145.
+    // 4 nebeneinander: (4w + 18) <= 600 -> w <= 145. Zwei Zeilen: Hoehe 2*1.4w + 4 <= 500 -> w <= 177,
+    // und bei diesem w packt greedy nicht 2+2, sondern 3+1 (Zeile 1 nimmt Karten, bis die naechste nicht
+    // mehr passt) - fuer die Hoehenrechnung zaehlt nur die Zeilenzahl (2), nicht die Aufteilung der Karten
+    // darauf. Breite 2w + 6 <= 600 -> w <= 297 (fuer die erste, volle Zeile allemal genug). Also passt 177,
+    // nicht nur 145.
     const w = fitCardWidth(600, 500, [row(4)]);
     expect(w).toBeGreaterThan(160);
     expect(w).toBeLessThanOrEqual(180);
+  });
+
+  it("zeilenzahl bindend: 5 karten, breite fuer genau 2 pro zeile bei w=60 -> 3 zeilen (greedy 2+2+1)", () => {
+    // width = 2*60 + 6 = 126: bei w=60 passen genau 2 Karten pro Zeile (60 + 6 + 60 = 126), 5 Karten also
+    // 3 Zeilen. Hoehe fuer genau 3 Zeilen bei w=60: 3 * 1.4*60 + 2*6 = 3*84 + 12 = 264. Bei w=61 passt das
+    // zweite Paar nicht mehr (61 + 6 + 61 = 128 > 126) - greedy packt dann nur noch 1 Karte pro Zeile, 5
+    // Zeilen brauchen deutlich mehr als 264px Hoehe. fitCardWidth muss also bei 60 bleiben, nicht bei 61.
+    const w = fitCardWidth(126, 264, [row(5)]);
+    expect(w).toBe(60);
   });
 
   it("getappte karten (1.4 einheiten) verbreitern die reihe", () => {
@@ -36,6 +48,18 @@ describe("fitCardWidth", () => {
     expect(fitCardWidth(100, 60, [row(10)])).toBe(50);
     expect(fitCardWidth(5000, 5000, [row(1)])).toBe(180);
     expect(fitCardWidth(5000, 5000, [row(1)], { max: 132 })).toBe(132);
+  });
+
+  it("ein slot allein breiter als der container: groesste breite <= container", () => {
+    // Hoehe ist hier grosszuegig (1000px) - allein die Breite muss den einzelnen Slot begrenzen.
+    // fitCardWidth(100, 1000, [row(1)]): groesste Breite <= 100 ist 100 selbst.
+    expect(fitCardWidth(100, 1000, [row(1)])).toBe(100);
+  });
+
+  it("ein slot allein breiter als der container: faellt auf min zurueck, wenn selbst min zu breit ist", () => {
+    // fitCardWidth(30, 1000, [row(1)]): selbst die Untergrenze (50) ist breiter als der Container (30) ->
+    // fits(min) scheitert sofort, Rueckfall auf min.
+    expect(fitCardWidth(30, 1000, [row(1)])).toBe(50);
   });
 
   it("hoehe ist bindend: drei reihen muessen uebereinander passen", () => {

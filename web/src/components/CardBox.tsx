@@ -14,7 +14,8 @@ export interface StackInfo { count: number; tapped: number }
  * der Karte, damit sie bei getappten Karten aufrecht lesbar bleiben. Ecken: Kampf-Tag/Stapelzaehler/
  * EMBLEM oben links, CMD-Marke oben rechts, Marken/getappt-Hinweis unten links, P/T unten rechts
  * (links, weil in ueberlappenden Reihen nur die linke Kante jeder Karte frei bleibt).
- * Getappt: nur die eigene Zone dreht (CSS .player.own); ueberall sonst abgedunkelt + ⟳-Marke.
+ * Getappt: gedreht ueberall in .bf-rows (CSS) - eigene Zone und Zuschauer-Panels; nur die kompakte
+ * Gegnerzeile der Tischansicht (kein .bf-rows) bleibt aufrecht, abgedunkelt + ⟳-Marke.
  */
 export default function CardBox({ card, stack }: { card: CardSnap; stack?: StackInfo }) {
   const seq = useStore((s) => s.state?.prompt.seq);
@@ -45,14 +46,14 @@ export default function CardBox({ card, stack }: { card: CardSnap; stack?: Stack
   };
   return (
     <div className={"card-slot" + (rotated ? " tapped-slot" : "") + (stackTappedSlot ? " stack-tapped-slot" : "") + (noImg ? " text-slot" : "")}
-      style={{ "--layers": layers } as CSSProperties}>
+      style={layers > 0 ? ({ "--layers": layers } as CSSProperties) : undefined}>
       <div className={"card-frame" + (rotated ? " tapped" : "") + (stacked ? " stacked" : "")}>
         {layers > 0 && (
           <div className="stack-layers" aria-hidden>
             {Array.from({ length: layers }, (_, i) => (
               <div key={i} className={"stack-layer" + (i < tappedLayers ? " tapped" : "")}
                 style={{ "--i": layers - i } as CSSProperties}>
-                {!noImg && <CardImage imageKey={card.imageKey} className="art" />}
+                {!noImg && <CardImage key={card.imageKey} imageKey={card.imageKey} className="art" />}
               </div>
             ))}
           </div>

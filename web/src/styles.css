@@ -170,7 +170,7 @@ input[type="checkbox"] { accent-color: var(--accent); width: 14px; height: 14px;
 .battlefield { display: flex; gap: 12px; align-items: flex-start; min-width: 0; }
 .player.own .battlefield { flex: 1; min-height: 0; align-items: stretch; }
 .rows { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
-.player.own .rows { justify-content: center; }
+.player.own .rows:not(.bf-rows) { justify-content: center; }
 .row { display: flex; flex-wrap: wrap; gap: 6px; align-items: flex-start; min-width: 0; }
 /* Reihen mit zu vielen Karten scrollen horizontal, mit weichem Rand statt hartem Abschneiden. */
 .row.scroll { flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; padding: 3px 20px 3px 3px; scrollbar-width: none; }
@@ -187,15 +187,20 @@ input[type="checkbox"] { accent-color: var(--accent); width: 14px; height: 14px;
 .player.own .command { align-self: center; }
 /* --card-w statt --bw: die Commander-Karte darf sich vom Spielfeld unterscheiden (wie vor Task 2) - sonst
    dieselbe Rueckkopplung wie beim Zuschauer-Panel (siehe --cmd-w unten): groesseres --bw -> breitere
-   Kommandozone -> schmaleres .bf-rows in derselben Flex-Zeile -> kleineres --bw -> ... */
-.player.own .command { --w: var(--card-w); }
+   Kommandozone -> schmaleres .bf-rows in derselben Flex-Zeile -> kleineres --bw -> ...
+   (Die eigentliche Regel dazu ist die Basisregel .command oben, die --w bereits auf --card-w setzt -
+   eine eigene .player.own .command-Regel dafuer war redundant und wurde entfernt.) */
 /* overflow-y: auto statt hidden (Fix-Runde 1, B): Boards, die selbst bei der fitCardWidth-Untergrenze
    (50px) nicht mehr passen (viele nicht stapelbare Kreaturen in einem kleinen Panel), sollen scrollen
    statt Karten hart abzuschneiden - mit dem scroll-bewussten Vergleich in layout-check.mjs (Regel 3) ist
    das dann legitim nicht "abgeschnitten". overflow-x bleibt hidden (Reihen brechen um, kein horizontales
    Scrollen). ResizeObserver misst weiterhin die Content-Box von .bf-rows selbst (unveraendert durch den
    internen Scroll-Inhalt), keine neue Rueckkopplung fuer --bw. */
-.bf-rows { position: relative; overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; min-height: 0; gap: 4px; justify-content: flex-start; }
+.bf-rows { position: relative; overflow-y: auto; overflow-x: hidden; scrollbar-width: none; min-height: 0; gap: 4px; justify-content: flex-start; }
+/* scrollbar-width: none statt thin - eine sichtbare Scrollbar aendert die Content-Box-Breite, die
+   useBoardSize/ResizeObserver misst, und wirkt so als Rueckkopplung in die Messung (Radscrollen bleibt
+   unveraendert moeglich, nur die Leiste selbst ist unsichtbar). */
+.bf-rows::-webkit-scrollbar { display: none; }
 /* .player .bf-rows .row statt .bf-rows .row: ".player.own .row" (drei Klassen) ist sonst spezifischer als
    ".bf-rows .row" (zwei Klassen) und gewinnt trotz spaeterer Reihenfolge - die eigene Zone würde dann
    scrollen statt umbrechen. padding: 0 statt 2px - useBoardSize/fitCardWidth (Task 1) rechnen mit der
@@ -293,7 +298,7 @@ input[type="checkbox"] { accent-color: var(--accent); width: 14px; height: 14px;
 .player.spectator .command { grid-area: cmd; --w: var(--cmd-w); width: auto; align-self: start; padding: 4px 6px 6px; }
 .player.spectator .command .zone-label { font-size: 8px; letter-spacing: 0.08em; margin-bottom: 4px; }
 .player.spectator .piles { grid-area: piles; --pw: calc(var(--cmd-w) * 0.5); flex-direction: row; justify-content: center; padding: 0; border: 0; gap: 6px; }
-.player.spectator .rows { grid-area: bf; grid-row: 1 / span 3; flex-direction: column; gap: 4px; min-width: 0; min-height: 0; justify-content: flex-start; }
+.player.spectator .rows { grid-area: bf; flex-direction: column; gap: 4px; min-width: 0; min-height: 0; justify-content: flex-start; }
 /* --w-spec hat sonst keinen Verbraucher: vor der ersten Messung (--bw ungesetzt) gilt hier der
    Zuschauer-Clamp statt --card-w/--land-w. Nach dem allgemeinen .bf-rows-Block, damit sie gewinnen. */
 .player.spectator .bf-rows .bf-creatures, .player.spectator .bf-rows .bf-other { --w: var(--w-spec); }
@@ -376,7 +381,13 @@ input[type="checkbox"] { accent-color: var(--accent); width: 14px; height: 14px;
    akzeptiert statt weiter verschaerft zu werden. */
 .card-frame.stacked { isolation: isolate; }
 .stack-layers { position: absolute; inset: 0; z-index: -1; pointer-events: none; }
-.stack-layer { position: absolute; inset: 0; border-radius: 7px; background: #0c1013; box-shadow: var(--shadow-card); overflow: hidden;
+/* Immer die aufrechte Kartenbox (var(--w)/var(--h)), unabhaengig davon, ob der umgebende .card-frame
+   bei einem ganz getappten Stapel selbst schon querformatig bemessen ist (width: var(--h); height:
+   var(--w), siehe .bf-rows .card-frame.tapped) - inset: 0 wuerde diese vertauschten Masse uebernehmen
+   und rotate(90deg) drehte die Ebene dann zurueck ins Hochformat, die oben/unten aus dem Frame ragt.
+   left/top 50% + translate zentriert die Box zuerst (translate wird vor transform angewendet), das
+   bestehende transform (Faecher-Versatz, ggf. + rotate(90deg)) bleibt danach unveraendert wirksam. */
+.stack-layer { position: absolute; left: 50%; top: 50%; width: var(--w); height: var(--h); translate: -50% -50%; border-radius: 7px; background: #0c1013; box-shadow: var(--shadow-card); overflow: hidden;
   transform: translate(calc(var(--i) * var(--layer-dx)), calc(var(--i) * -1 * var(--layer-dx))); }
 .stack-layer .art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .stack-layer:not(:has(.art)) { border: 1px solid var(--line-2); background: linear-gradient(180deg, #232d35, #182027); }
@@ -385,6 +396,13 @@ input[type="checkbox"] { accent-color: var(--accent); width: 14px; height: 14px;
 /* Gemessene Reihen: getappte Ebenen gedreht (Slot 1,4 w breit, Karte mittig), Badge "n getappt" entfaellt. */
 .bf-rows .card-slot.stack-tapped-slot { width: var(--h); justify-content: center; }
 .bf-rows .stack-layer.tapped { transform: translate(calc(var(--i) * var(--layer-dx)), calc(var(--i) * -1 * var(--layer-dx))) rotate(90deg); }
+/* Ganz getappter Stapel (der Frame selbst ist .tapped, quer bemessen): ALLE Ebenen drehen mit, nicht
+   nur die per tappedLayers als .tapped markierten - der sichtbar gedrehte Hauptkarte braucht dahinter
+   durchgaengig gedrehte Schattenkarten, sonst ragen die restlichen (rechnerisch "ungetappten") Ebenen
+   oben/unten aus dem querformatigen Frame. Bei einem vollstaendig getappten Stapel tragen ohnehin alle
+   Ebenen auch .tapped (siehe CardBox.tsx) - beide Selektoren liefern dann dieselbe Transformation, das
+   ist okay (keine doppelte Drehung, nur dieselbe Regel zweimal getroffen). */
+.bf-rows .card-frame.tapped .stack-layer { transform: translate(calc(var(--i) * var(--layer-dx)), calc(var(--i) * -1 * var(--layer-dx))) rotate(90deg); }
 .bf-rows .stack-layer.tapped .art { filter: brightness(0.55) saturate(0.8); }
 .bf-rows .tag.stack-tapped { display: none; }
 /* Gegnerzeile (ohne Drehung): Ebenen aufrecht, getappte nur abgedunkelt, Badge bleibt. */

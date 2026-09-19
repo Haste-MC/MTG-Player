@@ -31,6 +31,9 @@ function fits(w: number, width: number, height: number, rows: RowSpec[], gap: nu
     let x = 0;
     for (const u of r.units) {
       const sw = u * w * r.scale;
+      // Ein Slot allein breiter als der Container passt auf keine Zeile, egal wie oft umgebrochen wird -
+      // ohne diese Sperre wuerde er stillschweigend ueber den Rand ragen statt fits() scheitern zu lassen.
+      if (sw > width) return false;
       if (x > 0 && x + gap + sw > width) { lines++; x = sw; } else { x = x === 0 ? sw : x + gap + sw; }
     }
     total += lines * lineH + (lines - 1) * gap + (filled > 0 ? rowGap : 0);

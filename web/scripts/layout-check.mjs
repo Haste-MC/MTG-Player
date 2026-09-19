@@ -147,15 +147,19 @@ try {
     }
     // 7. Ersetzt die feste 110/120px-Schwelle (bei drei belegten Reihen physikalisch unerreichbar,
     //    3,92*w + 8 <= Hoehe): a) kein ungenutztes Band (Fix-Runde 1, B.1), b) absolute Untergrenze (B.2).
+    //    w kommt aus --bw (dem Panel-eigenen, von useBoardSize gesetzten Wert) statt aus der ersten
+    //    ungetappten Karte der ersten Zeile - die faellt aus, wenn die Reihe komplett getappt ist (z. B.
+    //    ein ganz getapptes Laender-Band), waehrend --bw immer gesetzt ist, sobald ueberhaupt gemessen wurde.
     for (const rows of document.querySelectorAll(".bf-rows")) {
       const rb = r(rows);
       const rowEls = [...rows.querySelectorAll(":scope > .row")].filter((el) => r(el).height > 0);
       if (rowEls.length === 0) continue;
-      const firstRowEl = rowEls[0];
-      const isLandOnly = firstRowEl.classList.contains("bf-lands");
-      const first = firstRowEl.querySelector(".card:not(.tapped)");
-      if (!first) continue;
-      const w = r(first).width / (isLandOnly ? 0.8 : 1);
+      const player = rows.closest(".player");
+      const w = parseFloat(player?.style.getPropertyValue("--bw") ?? "");
+      if (!Number.isFinite(w)) {
+        console.log(`Regel 7: --bw fehlt (${player?.querySelector(".pname")?.textContent}), Panel uebersprungen`);
+        continue;
+      }
       // a) Kein ungenutztes Band: Hoehe frei UND Breite frei in der breitesten Zeile. usedH als Summe der
       // Reihenhoehen + Gaps (nicht Unterkante letzte - Oberkante erste), damit der margin-top:auto-Spalt
       // vor .bf-lands (schiebt sie an die Unterkante) nicht faelschlich als "genutzt" zaehlt.
@@ -200,6 +204,15 @@ try {
       const rb = r(rows), lb = r(lands);
       if (rb.bottom - lb.bottom > 8) out.push(`Laenderreihe haengt ${Math.round(rb.bottom - lb.bottom)}px ueber der Unterkante (${rows.closest(".player")?.querySelector(".pname")?.textContent})`);
     }
+    // 11. Ab 1600px Viewport-Breite ist genug Platz, dass kein .bf-rows mehr scrollen darf - der
+    //     Scroll-Fallback (Regel 3/B, overflow-y: auto) ist nur fuer schmalere Viewports (< 1600) gedacht.
+    if (vw >= 1600) {
+      for (const rows of document.querySelectorAll(".bf-rows")) {
+        if (rows.scrollHeight > rows.clientHeight + 1) {
+          out.push(`Spielfeld scrollt (${rows.closest(".player")?.querySelector(".pname")?.textContent}): Inhalt ${rows.scrollHeight}px > ${rows.clientHeight}px`);
+        }
+      }
+    }
     // 10. Die Zuschauer-Hand (senkrechter Stapel in der linken Spalte, an die "hand"-Grid-Zeile gebunden,
     //     Fix-Runde 3) darf weder eine Karte im Spielfeld noch die Stapel (Grab/Exil) noch die Kommandozone
     //     desselben Panels ueberdecken - und auch ihr eigenes Element (inkl. "HAND"-Beschriftung) darf nicht
@@ -208,20 +221,23 @@ try {
     const intersects = (a, b) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
     for (const panel of document.querySelectorAll(".player.spectator")) {
       const handCards = [...panel.querySelectorAll(".spectator-hand .card")].filter(visible);
+      // perCard-Zone (Spielfeld) braucht kein eigenes Label - die Meldung nennt stattdessen den Kartennamen.
       const zones = [
-        [".bf-rows .card", "bf-rows .card", true],
-        [".piles", "Stapel (Grab/Exil)", false],
-        [".command", "Kommandozone", false],
+        { sel: ".bf-rows .card", perCard: true },
+        { sel: ".piles", label: "Stapel (Grab/Exil)" },
+        { sel: ".command", label: "Kommandozone" },
       ];
       for (const hc of handCards) {
         const hb = r(hc);
-        for (const [sel, label, perCard] of zones) {
+        // Nach der ersten Ueberlappung fuer diese Handkarte alle Zonen-Schleifen verlassen - sonst meldet
+        // eine Karte, die gleich mehrere Zonen ueberdeckt, mehrfach statt einmal.
+        outer: for (const { sel, label, perCard } of zones) {
           const targets = [...panel.querySelectorAll(sel)].filter(visible);
           for (const t of targets) {
             const tb = r(t);
             if (intersects(hb, tb)) {
               out.push(`Hand ueberdeckt ${perCard ? `Spielfeldkarte "${name(t)}"` : label} (${panel.querySelector(".pname")?.textContent})`);
-              break;
+              break outer;
             }
           }
         }
@@ -238,11 +254,31 @@ try {
     return out;
   });
 
-  // 9. Messung stabil: --bw jedes Panels nach 400ms unveraendert (sonst waechst der Container mit den Karten).
-  const bw1 = await page.evaluate(() => [...document.querySelectorAll(".player")].map((p) => p.style.getPropertyValue("--bw")));
-  await page.waitForTimeout(400);
-  const bw2 = await page.evaluate(() => [...document.querySelectorAll(".player")].map((p) => p.style.getPropertyValue("--bw")));
-  if (JSON.stringify(bw1) !== JSON.stringify(bw2)) problems.push(`Kartenbreite pendelt: ${bw1.join(" ")} -> ${bw2.join(" ")}`);
+  // 9. Messung stabil: --bw jedes Panels bleibt 400ms unveraendert (sonst waechst der Container mit den
+  //    Karten). Statt zweier Stichproben (vorher/nachher, konnte ein Pendeln dazwischen verpassen) ein
+  //    MutationObserver je .player auf das style-Attribut waehrend der ganzen 400ms - jede tatsaechliche
+  //    Aenderung von --bw ist ein Fehler.
+  const pendulum = await page.evaluate(() => new Promise((resolve) => {
+    const players = [...document.querySelectorAll(".player")];
+    const out = [];
+    const observers = players.map((p) => {
+      let last = p.style.getPropertyValue("--bw");
+      const mo = new MutationObserver(() => {
+        const cur = p.style.getPropertyValue("--bw");
+        if (cur !== last) {
+          out.push(`Kartenbreite pendelt (${p.querySelector(".pname")?.textContent}): ${last} -> ${cur}`);
+          last = cur;
+        }
+      });
+      mo.observe(p, { attributes: true, attributeFilter: ["style"] });
+      return mo;
+    });
+    setTimeout(() => {
+      for (const mo of observers) mo.disconnect();
+      resolve(out);
+    }, 400);
+  }));
+  problems.push(...pendulum);
 
   // 6. Hover ueber eine Log-Zeile mit Karte (Detail-Panel fuellt sich) darf das Log-Panel nicht verschieben
   //    oder verkleinern - sonst rutscht die Zeile unter dem Zeiger weg, das Detail leert sich wieder und

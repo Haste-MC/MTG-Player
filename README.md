@@ -52,8 +52,9 @@ Spieler, die gerade als Ziel wählbar sind, bekommen einen gestrichelten Rahmen 
 
 Gleiche Länder/Token liegen als Stapel (bis zu vier sichtbare Ebenen, ×N); getappte Karten des Stapels
 liegen gedreht darunter. Klick tappt die erste ungetappte. Sobald eine Karte des Stapels wählbar, im Kampf
-oder mit Marken ist, werden alle einzeln gezeigt. Getappte Karten drehen sich nur in der eigenen Zone, sonst
-sind sie abgedunkelt mit ⟳. Forges Effekt-Hilfskarten und Embleme erscheinen als Chips in der Zeile "Effekte"
+oder mit Marken ist, werden alle einzeln gezeigt. Getappte Karten drehen sich in der eigenen Zone und in den
+Zuschauer-Panels; nur die kompakten Gegnerzeilen der Tischansicht zeigen sie abgedunkelt mit ⟳. Forges
+Effekt-Hilfskarten und Embleme erscheinen als Chips in der Zeile "Effekte"
 (Gegner: im Panelkopf), Hover zeigt den Text im Detail-Panel rechts.
 Zuschauer-Panels und eigene Zone: Kreaturen oben, übrige bleibende Karten in der Mitte, Länder unten; die
 Kartengröße passt sich der Panelgröße an.
