@@ -4,9 +4,17 @@ import com.fasterxml.jackson.databind.JsonNode;
 import forge.ai.AIOption;
 import forge.ai.AiProfileUtil;
 import forge.ai.LobbyPlayerAi;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.Locale;
+import java.util.Objects;
+import java.util.Set;
 
-/** KI-Einstellungen eines Sitzes: Forge-Modus (Standard/Hybrid/Voll-Simulation) und Profil (res/ai/*.ai). */
+/** KI-Einstellungen eines Sitzes: Forge-Modus (Standard/Hybrid/Voll-Simulation) und Profil (res/ai/*.ai).
+ *  {@code parse}/{@code fromJson}/{@code profiles()} brauchen {@code ForgeBoot.init()}; der Konstruktor und
+ *  {@code DEFAULT} nicht. */
 public record AiConfig(Mode mode, String profile) {
     public enum Mode {
         STANDARD, HYBRID, SIM;
@@ -25,7 +33,20 @@ public record AiConfig(Mode mode, String profile) {
 
     public AiConfig {
         Objects.requireNonNull(mode);
-        if (!profiles().contains(profile)) throw new IllegalArgumentException("Unbekanntes KI-Profil: " + profile);
+        Objects.requireNonNull(profile);
+    }
+
+    /** Profilpruefung ausgelagert aus dem Konstruktor: {@code profiles()} greift auf Forges
+     *  AiProfileUtil zu und braeuchte damit ForgeBoot.init() schon beim Klassenstart, weil
+     *  {@link #DEFAULT} eine statische Instanz ist - ein Konstruktoraufruf vor ForgeBoot.init()
+     *  (z. B. durch den blossen Zugriff auf diese Klasse) haette sonst den statischen Initialisierer
+     *  mit einer NPE zum Absturz gebracht und die Klasse fuer den Rest der JVM vergiftet
+     *  (ExceptionInInitializerError, danach NoClassDefFoundError bei jedem weiteren Zugriff). */
+    private static AiConfig validated(AiConfig c) {
+        if (!profiles().contains(c.profile())) {
+            throw new IllegalArgumentException("Unbekanntes KI-Profil: " + c.profile());
+        }
+        return c;
     }
 
     public static List<String> profiles() {
@@ -37,12 +58,15 @@ public record AiConfig(Mode mode, String profile) {
     public static List<String> modes() { return Arrays.stream(Mode.values()).map(Mode::json).toList(); }
 
     public static AiConfig parse(String spec) {
+        if (spec == null) {
+            throw new IllegalArgumentException("Unbekannter KI-Modus: null");
+        }
         String[] parts = spec.split(":", 2);
-        return new AiConfig(Mode.parse(parts[0]), parts.length > 1 && !parts[1].isBlank() ? parts[1].trim() : "Default");
+        return validated(new AiConfig(Mode.parse(parts[0]), parts.length > 1 && !parts[1].isBlank() ? parts[1].trim() : "Default"));
     }
     public static AiConfig fromJson(JsonNode ai) {
         if (ai == null || ai.isMissingNode() || ai.isNull()) return DEFAULT;
-        return new AiConfig(Mode.parse(ai.path("mode").asText("standard")), ai.path("profile").asText("Default"));
+        return validated(new AiConfig(Mode.parse(ai.path("mode").asText("standard")), ai.path("profile").asText("Default")));
     }
     public static int timeout(JsonNode msg) {
         int t = msg.path("aiTimeout").asInt(DEFAULT_TIMEOUT);
