@@ -60,7 +60,7 @@ Neuer Hook `useBoardSize(ref, rows, enabled)` in `web/src/boardSize.ts` (+ reine
 
 ## Bestand
 
-- Kommandozone links oben, Zuschauer-Hand links unten (Breite = Kommandozone, wie bisher),
+- Kommandozone links oben, Zuschauer-Hand links unten (überlappend, max. 2,2 Kartenbreiten wie bisher),
   Friedhof/Exil rechts – Grid bleibt.
 - Effekt-Chips, Token-Rahmen, Prompt, Log: unverändert.
 
