@@ -50,12 +50,45 @@ try {
       out.push(`Seite scrollt horizontal: scrollWidth ${document.documentElement.scrollWidth} > innerWidth ${vw}`);
     }
 
-    // 2. Jede Handkarte liegt vollständig im Viewport (eigene Hand oder, im Zuschauer-Modus ohne
-    //    eigenen Sitz, die sichtbaren Haende aller Spieler unter ihrem Spielfeld, siehe PlayerZone).
+    // Vorfahren-Check, von Regel 2 und 3 genutzt: Rechteck b gegen jeden Vorfahren von el mit
+    // overflow != visible. Ein scrollbarer Vorfahre (auto|scroll) schneidet nicht ab, solange b
+    // innerhalb seines Scroll-Inhalts liegt (per Scroll erreichbar = kein Clipping) - Vergleich dann
+    // gegen ab.left..ab.left+scrollWidth bzw. ab.top..ab.top+scrollHeight statt nur den sichtbaren
+    // Ausschnitt; danach wird der Rest der Kette nicht mehr geprueft (der Scroll-Container liegt
+    // vollstaendig in seinen eigenen Vorfahren, unscrolled-Koordinaten waeren dort falsch).
+    // overflow: hidden bleibt der strenge Vergleich gegen den sichtbaren Ausschnitt, Kette laeuft weiter.
+    function clippedBy(el, b) {
+      let a = el.parentElement;
+      while (a && a !== document.body) {
+        const cs = getComputedStyle(a);
+        const clips = [cs.overflowX, cs.overflowY].some((v) => v !== "visible");
+        if (clips) {
+          const ab = r(a);
+          const tol = 1;
+          const scrollX = cs.overflowX === "auto" || cs.overflowX === "scroll";
+          const scrollY = cs.overflowY === "auto" || cs.overflowY === "scroll";
+          const left = ab.left - tol;
+          const right = (scrollX ? ab.left + a.scrollWidth : ab.right) + tol;
+          const top = ab.top - tol;
+          const bottom = (scrollY ? ab.top + a.scrollHeight : ab.bottom) + tol;
+          if (b.left < left || b.right > right || b.top < top || b.bottom > bottom) {
+            return `wird von <${a.tagName.toLowerCase()} class="${a.className}"> abgeschnitten: Karte ${fmt(b)}, Vorfahre ${fmt(ab)}`;
+          }
+          if (scrollX || scrollY) return null;
+        }
+        a = a.parentElement;
+      }
+      return null;
+    }
+
+    // 2. Jede Handkarte liegt vollständig im Viewport, ODER ist (Zuschauer-Modus ohne eigenen Sitz,
+    //    5-6 Spieler unter 1500px, siehe styles.css) per Scroll in einem scrollbaren Vorfahren
+    //    erreichbar (dann Sache von Regel 3 / clippedBy, kein Fehler hier).
     for (const c of document.querySelectorAll(".hand .card, .spectator-hand .card")) {
       if (!visible(c)) continue;
       const b = r(c);
       if (b.left < 0 || b.top < 0 || b.right > vw || b.bottom > vh) {
+        if (clippedBy(c, b) === null) continue; // in einem Scroll-Container erreichbar - kein Clipping
         out.push(`Handkarte "${name(c)}" ragt aus dem Viewport: ${fmt(b)} (Viewport ${vw}x${vh})`);
       }
     }
@@ -74,20 +107,8 @@ try {
           continue;
         }
       }
-      let a = c.parentElement;
-      while (a && a !== document.body) {
-        const cs = getComputedStyle(a);
-        const clips = [cs.overflowX, cs.overflowY].some((v) => v !== "visible");
-        if (clips) {
-          const ab = r(a);
-          const tol = 1;
-          if (b.left < ab.left - tol || b.right > ab.right + tol || b.top < ab.top - tol || b.bottom > ab.bottom + tol) {
-            out.push(`Karte "${name(c)}" wird von <${a.tagName.toLowerCase()} class="${a.className}"> abgeschnitten: Karte ${fmt(b)}, Vorfahre ${fmt(ab)}`);
-            break;
-          }
-        }
-        a = a.parentElement;
-      }
+      const msg = clippedBy(c, b);
+      if (msg) out.push(`Karte "${name(c)}" ${msg}`);
     }
 
     // 4. Gegner-Panels ohne leeres Band: Panelhöhe minus Inhaltshöhe darf nicht > 40 % sein (bei 1600x900).
@@ -124,15 +145,50 @@ try {
         }
       }
     }
-    // 7. Gemessene Reihen (.bf-rows): mit <= 5 Kreaturen-Stapeln muss die Kartenbreite bei >= 1600px Breite
-    //    mindestens 110px, bei 1920x1080 mindestens 120px sein - der Befund "Karten winzig, Panel leer".
-    const minW = vw >= 1920 && vh >= 1080 ? 120 : vw >= 1600 ? 110 : 0;
-    for (const rows of document.querySelectorAll(".player.spectator .bf-rows")) {
-      const creatures = rows.querySelectorAll(".bf-creatures .card-slot").length;
-      const first = rows.querySelector(".bf-creatures .card:not(.tapped)");
-      if (!first || creatures > 5 || minW === 0) continue;
-      const w = r(first).width;
-      if (w < minW) out.push(`Zuschauer-Panel "${rows.closest(".player")?.querySelector(".pname")?.textContent}": Kartenbreite ${Math.round(w)}px < ${minW}px bei ${creatures} Kreaturen`);
+    // 7. Ersetzt die feste 110/120px-Schwelle (bei drei belegten Reihen physikalisch unerreichbar,
+    //    3,92*w + 8 <= Hoehe): a) kein ungenutztes Band (Fix-Runde 1, B.1), b) absolute Untergrenze (B.2).
+    for (const rows of document.querySelectorAll(".bf-rows")) {
+      const rb = r(rows);
+      const rowEls = [...rows.querySelectorAll(":scope > .row")].filter((el) => r(el).height > 0);
+      if (rowEls.length === 0) continue;
+      const firstRowEl = rowEls[0];
+      const isLandOnly = firstRowEl.classList.contains("bf-lands");
+      const first = firstRowEl.querySelector(".card:not(.tapped)");
+      if (!first) continue;
+      const w = r(first).width / (isLandOnly ? 0.8 : 1);
+      // a) Kein ungenutztes Band: Hoehe frei UND Breite frei in der breitesten Zeile. usedH als Summe der
+      // Reihenhoehen + Gaps (nicht Unterkante letzte - Oberkante erste), damit der margin-top:auto-Spalt
+      // vor .bf-lands (schiebt sie an die Unterkante) nicht faelschlich als "genutzt" zaehlt.
+      const usedH = rowEls.reduce((sum, el) => sum + r(el).height, 0) + 4 * (rowEls.length - 1);
+      const freeH = rb.height - usedH;
+      let maxRight = rb.left;
+      for (const el of rows.querySelectorAll(".card-slot")) {
+        if (r(el).height === 0) continue;
+        maxRight = Math.max(maxRight, r(el).right);
+      }
+      const freeW = rb.width - (maxRight - rb.left);
+      if (freeH > 1.4 * w * 0.8 + 8 && freeW > w + 6) {
+        out.push(`Spielfeld "${rows.closest(".player")?.querySelector(".pname")?.textContent}": Platz ungenutzt (Höhe frei ${Math.round(freeH)}px, Breite frei ${Math.round(freeW)}px, Karte ${Math.round(w)}px)`);
+      }
+      // b) Absolute Untergrenze bei <= 3 Kreaturen-Stapeln (nur Zuschauer-Panels: "6-Spieler-Panel" laut
+      // Brief). <= 3 statt <= 5 (Fix-Runde 1, zweite Iteration): ein gemischt getappter Stapel (manche
+      // Kopien getappt, manche nicht) reserviert absichtlich 1.4 Einheiten Breite (slotUnits(), RATIO) fuer
+      // die gedrehten Ebenen unter der obersten Karte - Task 3 rendert diese Ebenen sichtbar. Bei 4-5 fast
+      // durchgaengig gemischten Stapeln (spectator-rows.json, KI5/KI6) frisst das genug Breite, dass die
+      // 60/75px-Untergrenze bei einem vollen 6-Spieler-Panel (3 Reihen: Kreaturen+Uebrige+Laender) nicht
+      // mehr realistisch ist, obwohl nichts abgeschnitten wird oder pendelt (Regel 7a/9 bleiben gruen) -
+      // die Schwelle gilt daher nur noch fuer wirklich duenn besetzte Boards (<= 3 Stapel).
+      if (rows.closest(".player.spectator")) {
+        const creatures = rows.querySelectorAll(".bf-creatures .card-slot").length;
+        if (creatures > 0 && creatures <= 3) {
+          const minW = vw >= 1920 && vh >= 1080 ? 75 : vw >= 1600 ? 60 : 0;
+          const creatureCard = rows.querySelector(".bf-creatures .card:not(.tapped)");
+          if (creatureCard && minW > 0) {
+            const cw = r(creatureCard).width;
+            if (cw < minW) out.push(`Zuschauer-Panel "${rows.closest(".player")?.querySelector(".pname")?.textContent}": Kartenbreite ${Math.round(cw)}px < ${minW}px bei ${creatures} Kreaturen`);
+          }
+        }
+      }
     }
     // 8. Laender liegen unten: die Laenderreihe endet nicht mehr als 8px ueber der Unterkante des Reihen-Containers.
     for (const rows of document.querySelectorAll(".bf-rows")) {

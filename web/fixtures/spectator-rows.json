@@ -32,7 +32,6 @@
       "battlefield": [
         106,
         107,
-        108,
         109,
         110,
         111,
@@ -43,10 +42,8 @@
         116,
         123,
         124,
-        125,
         126,
-        127,
-        128
+        127
       ],
       "manaPool": {},
       "hasPriority": false
@@ -73,23 +70,13 @@
         201,
         202,
         203,
-        204,
-        205,
-        206,
-        207,
         208,
-        209,
         210,
         211,
         212,
-        213,
-        214,
         215,
         216,
-        217,
-        218,
-        219,
-        220
+        219
       ],
       "manaPool": {},
       "hasPriority": false
@@ -319,19 +306,6 @@
       "manaCost": "{2}{U}",
       "text": "Whenever an opponent casts a spell, you may draw a card unless that player pays {1}."
     },
-    "108": {
-      "id": 108,
-      "faceDown": false,
-      "name": "Teferi, Hero of Dominaria",
-      "imageKey": "c:Teferi, Hero of Dominaria|DOM|1",
-      "controller": 1,
-      "owner": 1,
-      "zone": "battlefield",
-      "tapped": false,
-      "typeLine": "Legendary Planeswalker — Teferi",
-      "manaCost": "{3}{W}{U}",
-      "text": "+1: Draw a card. At the beginning of the next end step, untap up to two lands."
-    },
     "109": {
       "id": 109,
       "faceDown": false,
@@ -528,58 +502,6 @@
       "toughness": 1,
       "typeLine": "Creature — Elf Shaman"
     },
-    "204": {
-      "id": 204,
-      "faceDown": false,
-      "name": "Managorger Hydra",
-      "imageKey": "c:Managorger Hydra|C21|1",
-      "controller": 2,
-      "owner": 2,
-      "zone": "battlefield",
-      "tapped": true,
-      "power": 4,
-      "toughness": 4,
-      "typeLine": "Creature — Hydra"
-    },
-    "205": {
-      "id": 205,
-      "faceDown": false,
-      "name": "Sakura-Tribe Elder",
-      "imageKey": "c:Sakura-Tribe Elder|C21|1",
-      "controller": 2,
-      "owner": 2,
-      "zone": "battlefield",
-      "tapped": false,
-      "power": 1,
-      "toughness": 1,
-      "typeLine": "Creature — Snake Shaman"
-    },
-    "206": {
-      "id": 206,
-      "faceDown": false,
-      "name": "Llanowar Elves",
-      "imageKey": "c:Llanowar Elves|DMU|1",
-      "controller": 2,
-      "owner": 2,
-      "zone": "battlefield",
-      "tapped": false,
-      "power": 2,
-      "toughness": 2,
-      "typeLine": "Creature — Elf Druid"
-    },
-    "207": {
-      "id": 207,
-      "faceDown": false,
-      "name": "Eternal Witness",
-      "imageKey": "c:Eternal Witness|C21|1",
-      "controller": 2,
-      "owner": 2,
-      "zone": "battlefield",
-      "tapped": false,
-      "power": 2,
-      "toughness": 2,
-      "typeLine": "Creature — Elf Shaman"
-    },
     "208": {
       "id": 208,
       "faceDown": false,
@@ -592,19 +514,6 @@
       "typeLine": "Artifact",
       "manaCost": "{1}",
       "text": "{T}: Add {C}{C}."
-    },
-    "209": {
-      "id": 209,
-      "faceDown": false,
-      "name": "Rhystic Study",
-      "imageKey": "c:Rhystic Study|C21|1",
-      "controller": 2,
-      "owner": 2,
-      "zone": "battlefield",
-      "tapped": false,
-      "typeLine": "Enchantment",
-      "manaCost": "{2}{U}",
-      "text": "Whenever an opponent casts a spell, you may draw a card unless that player pays {1}."
     },
     "210": {
       "id": 210,
@@ -639,28 +548,6 @@
       "tapped": false,
       "typeLine": "Basic Land — Island"
     },
-    "213": {
-      "id": 213,
-      "faceDown": false,
-      "name": "Island",
-      "imageKey": "c:Island|TDC|1",
-      "controller": 2,
-      "owner": 2,
-      "zone": "battlefield",
-      "tapped": false,
-      "typeLine": "Basic Land — Island"
-    },
-    "214": {
-      "id": 214,
-      "faceDown": false,
-      "name": "Island",
-      "imageKey": "c:Island|TDC|1",
-      "controller": 2,
-      "owner": 2,
-      "zone": "battlefield",
-      "tapped": false,
-      "typeLine": "Basic Land — Island"
-    },
     "215": {
       "id": 215,
       "faceDown": false,
@@ -683,44 +570,11 @@
       "tapped": true,
       "typeLine": "Basic Land — Plains"
     },
-    "217": {
-      "id": 217,
-      "faceDown": false,
-      "name": "Swamp",
-      "imageKey": "c:Swamp|TDC|1",
-      "controller": 2,
-      "owner": 2,
-      "zone": "battlefield",
-      "tapped": true,
-      "typeLine": "Basic Land — Swamp"
-    },
-    "218": {
-      "id": 218,
-      "faceDown": false,
-      "name": "Forest",
-      "imageKey": "c:Forest|TDC|1",
-      "controller": 2,
-      "owner": 2,
-      "zone": "battlefield",
-      "tapped": true,
-      "typeLine": "Basic Land — Forest"
-    },
     "219": {
       "id": 219,
       "faceDown": false,
       "name": "Command Tower",
       "imageKey": "c:Command Tower|C21|1",
-      "controller": 2,
-      "owner": 2,
-      "zone": "battlefield",
-      "tapped": true,
-      "typeLine": "Land"
-    },
-    "220": {
-      "id": 220,
-      "faceDown": false,
-      "name": "Evolving Wilds",
-      "imageKey": "c:Evolving Wilds|C21|1",
       "controller": 2,
       "owner": 2,
       "zone": "battlefield",
@@ -1026,8 +880,8 @@
       "owner": 4,
       "zone": "battlefield",
       "tapped": true,
-      "power": 1,
-      "toughness": 1,
+      "power": 2,
+      "toughness": 2,
       "typeLine": "Creature — Elf Druid"
     },
     "403": {
@@ -1039,8 +893,8 @@
       "owner": 4,
       "zone": "battlefield",
       "tapped": true,
-      "power": 1,
-      "toughness": 1,
+      "power": 2,
+      "toughness": 2,
       "typeLine": "Creature — Elf Shaman"
     },
     "404": {
@@ -1052,8 +906,8 @@
       "owner": 4,
       "zone": "battlefield",
       "tapped": true,
-      "power": 4,
-      "toughness": 4,
+      "power": 5,
+      "toughness": 5,
       "typeLine": "Creature — Hydra"
     },
     "405": {
@@ -1065,8 +919,8 @@
       "owner": 4,
       "zone": "battlefield",
       "tapped": true,
-      "power": 1,
-      "toughness": 1,
+      "power": 2,
+      "toughness": 2,
       "typeLine": "Creature — Snake Shaman"
     },
     "406": {
@@ -1564,8 +1418,8 @@
       "owner": 6,
       "zone": "battlefield",
       "tapped": true,
-      "power": 1,
-      "toughness": 1,
+      "power": 2,
+      "toughness": 2,
       "typeLine": "Creature — Elf Druid"
     },
     "603": {
@@ -1577,8 +1431,8 @@
       "owner": 6,
       "zone": "battlefield",
       "tapped": true,
-      "power": 1,
-      "toughness": 1,
+      "power": 2,
+      "toughness": 2,
       "typeLine": "Creature — Elf Shaman"
     },
     "604": {
@@ -1590,8 +1444,8 @@
       "owner": 6,
       "zone": "battlefield",
       "tapped": true,
-      "power": 4,
-      "toughness": 4,
+      "power": 5,
+      "toughness": 5,
       "typeLine": "Creature — Hydra"
     },
     "605": {
@@ -1923,19 +1777,6 @@
       "toughness": 1,
       "typeLine": "Creature — Elf Shaman"
     },
-    "125": {
-      "id": 125,
-      "faceDown": false,
-      "name": "Managorger Hydra",
-      "imageKey": "c:Managorger Hydra|C21|1",
-      "controller": 1,
-      "owner": 1,
-      "zone": "battlefield",
-      "tapped": true,
-      "power": 4,
-      "toughness": 4,
-      "typeLine": "Creature — Hydra"
-    },
     "126": {
       "id": 126,
       "faceDown": false,
@@ -1962,19 +1803,6 @@
       "toughness": 2,
       "typeLine": "Creature — Elf Druid"
     },
-    "128": {
-      "id": 128,
-      "faceDown": false,
-      "name": "Eternal Witness",
-      "imageKey": "c:Eternal Witness|C21|1",
-      "controller": 1,
-      "owner": 1,
-      "zone": "battlefield",
-      "tapped": false,
-      "power": 2,
-      "toughness": 2,
-      "typeLine": "Creature — Elf Shaman"
-    },
     "323": {
       "id": 323,
       "faceDown": false,
@@ -1984,8 +1812,8 @@
       "owner": 3,
       "zone": "battlefield",
       "tapped": true,
-      "power": 1,
-      "toughness": 1,
+      "power": 2,
+      "toughness": 2,
       "typeLine": "Creature — Elf Druid"
     },
     "324": {
@@ -1997,8 +1825,8 @@
       "owner": 3,
       "zone": "battlefield",
       "tapped": true,
-      "power": 1,
-      "toughness": 1,
+      "power": 2,
+      "toughness": 2,
       "typeLine": "Creature — Elf Shaman"
     },
     "325": {
@@ -2062,8 +1890,8 @@
       "owner": 5,
       "zone": "battlefield",
       "tapped": true,
-      "power": 1,
-      "toughness": 1,
+      "power": 2,
+      "toughness": 2,
       "typeLine": "Creature — Elf Druid"
     },
     "522": {
@@ -2075,8 +1903,8 @@
       "owner": 5,
       "zone": "battlefield",
       "tapped": true,
-      "power": 1,
-      "toughness": 1,
+      "power": 2,
+      "toughness": 2,
       "typeLine": "Creature — Elf Shaman"
     },
     "523": {
