@@ -692,15 +692,14 @@
     "308": {
       "id": 308,
       "faceDown": false,
-      "name": "Sol Ring",
-      "imageKey": "c:Sol Ring|C21|1",
+      "name": "Arcane Signet",
+      "imageKey": "c:Arcane Signet|C21|1",
       "controller": 3,
       "owner": 3,
       "zone": "battlefield",
       "tapped": false,
       "typeLine": "Artifact",
-      "manaCost": "{1}",
-      "text": "{T}: Add {C}{C}."
+      "manaCost": "{1}"
     },
     "309": {
       "id": 309,
@@ -1542,15 +1541,14 @@
     "612": {
       "id": 612,
       "faceDown": false,
-      "name": "Sol Ring",
-      "imageKey": "c:Sol Ring|C21|1",
+      "name": "Arcane Signet",
+      "imageKey": "c:Arcane Signet|C21|1",
       "controller": 6,
       "owner": 6,
       "zone": "battlefield",
       "tapped": false,
       "typeLine": "Artifact",
-      "manaCost": "{1}",
-      "text": "{T}: Add {C}{C}."
+      "manaCost": "{1}"
     },
     "613": {
       "id": 613,

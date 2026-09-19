@@ -191,11 +191,31 @@ try {
       }
     }
     // 8. Laender liegen unten: die Laenderreihe endet nicht mehr als 8px ueber der Unterkante des Reihen-Containers.
+    //    Ausnahme: der Scroll-Fallback (Regel 3/B, overflow-y: auto) ist aktiv - dann liegen Laender ggf.
+    //    unter der sichtbaren Kante, aber per Scroll erreichbar; das ist kein "haengt ueber der Unterkante".
     for (const rows of document.querySelectorAll(".bf-rows")) {
       const lands = rows.querySelector(".bf-lands");
       if (!lands) continue;
+      if (rows.scrollHeight > rows.clientHeight + 1) continue;
       const rb = r(rows), lb = r(lands);
       if (rb.bottom - lb.bottom > 8) out.push(`Laenderreihe haengt ${Math.round(rb.bottom - lb.bottom)}px ueber der Unterkante (${rows.closest(".player")?.querySelector(".pname")?.textContent})`);
+    }
+    // 10. Die Zuschauer-Hand (senkrechter Stapel in der linken Spalte) darf keine Karte im Spielfeld
+    //     desselben Panels ueberdecken - passiert, wenn der Hand-Stapel (Schritt an der Untergrenze 12px)
+    //     hoeher wird als sein Budget und in die "bf"-Spalte des Grids hineinragt.
+    for (const panel of document.querySelectorAll(".player.spectator")) {
+      const handCards = [...panel.querySelectorAll(".spectator-hand .card")].filter(visible);
+      const bfCards = [...panel.querySelectorAll(".bf-rows .card")].filter(visible);
+      for (const hc of handCards) {
+        const hb = r(hc);
+        for (const bc of bfCards) {
+          const bb = r(bc);
+          if (hb.left < bb.right && hb.right > bb.left && hb.top < bb.bottom && hb.bottom > bb.top) {
+            out.push(`Hand ueberdeckt Spielfeldkarte "${name(bc)}" (${panel.querySelector(".pname")?.textContent})`);
+            break;
+          }
+        }
+      }
     }
     return out;
   });

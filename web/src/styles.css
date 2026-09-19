@@ -276,13 +276,9 @@ input[type="checkbox"] { accent-color: var(--accent); width: 14px; height: 14px;
    ist bewusst breitenunabhaengig von --bw (--cmd-w, fix): war sie an --bw gekoppelt (frueher --w-spec
    fuer Kommandozone/Hand), entstand eine Rueckkopplung - groesseres --bw macht die Spalte breiter,
    macht .bf-rows schmaler, macht --bw kleiner, ... (Fix-Runde 1, Regel 9 "Kartenbreite pendelt"). */
-.spectator-grid { --cols: 2; }
-@media (min-width: 1800px) { .spectator-grid.players-5, .spectator-grid.players-6 { --cols: 3; } }
 .player.spectator {
   --cmd-w: clamp(56px, 11vh - 30px, 96px); /* 1080: 89px, 900: 69px, 720: 56px - unabhaengig von --bw */
   --w-spec: var(--bw, clamp(60px, 21vh - 70px, 170px));
-  --w-spec-hand: calc(var(--cmd-w) * 0.9);
-  --hand-max: calc(var(--cmd-w) + 14px); /* Hand nie breiter als die Kommandozone: die Spalte bleibt schmal */
   display: flex; flex-direction: column; min-height: 0;
 }
 .player.spectator .header { flex: none; }
@@ -298,11 +294,21 @@ input[type="checkbox"] { accent-color: var(--accent); width: 14px; height: 14px;
 .player.spectator .command .zone-label { font-size: 8px; letter-spacing: 0.08em; margin-bottom: 4px; }
 .player.spectator .piles { grid-area: piles; --pw: calc(var(--cmd-w) * 0.5); flex-direction: row; justify-content: center; padding: 0; border: 0; gap: 6px; }
 .player.spectator .rows { grid-area: bf; grid-row: 1 / span 3; flex-direction: column; gap: 4px; min-width: 0; min-height: 0; justify-content: flex-start; }
-/* Hand: ueberlappende Reihe unter Kommandozone/Stapeln; der Schritt schrumpft, bis n Karten in --hand-max passen. */
-.spectator-hand { grid-area: hand; align-self: end; min-width: 0; max-width: var(--hand-max); }
-.spectator-hand .row { --w: var(--w-spec-hand); flex-wrap: nowrap; padding: 2px 4px 2px 2px; }
-.spectator-hand .card-slot + .card-slot { margin-left: calc(-1 * (var(--w) - min(var(--w) * 0.55, (var(--hand-max) - var(--w) - 8px) / max(1, var(--n, 1) - 1)))); }
+/* --w-spec hat sonst keinen Verbraucher: vor der ersten Messung (--bw ungesetzt) gilt hier der
+   Zuschauer-Clamp statt --card-w/--land-w. Nach dem allgemeinen .bf-rows-Block, damit sie gewinnen. */
+.player.spectator .bf-rows .bf-creatures, .player.spectator .bf-rows .bf-other { --w: var(--w-spec); }
+.player.spectator .bf-rows .bf-lands { --w: calc(var(--w-spec) * 0.8); }
+/* Hand: senkrechter Stapel in der linken Spalte, jede Karte um --step nach unten versetzt (Namenszeile bleibt
+   sichtbar). Budget --hand-h = Kommandozonen-Hoehe + 90px; der Schritt schrumpft, bis n Karten hineinpassen,
+   mindestens 12px, hoechstens 30 % der Kartenhoehe. */
+.player.spectator { --w-spec-hand: calc(var(--cmd-w) * 0.9); --hand-h: calc(var(--cmd-w) * 1.4 + 90px); }
+.spectator-hand { grid-area: hand; align-self: end; min-width: 0; min-height: 0; width: calc(var(--cmd-w) + 14px); overflow: visible; }
+.spectator-hand .row { --w: var(--w-spec-hand); --h: calc(var(--w) * 1.4);
+  --step: clamp(12px, (var(--hand-h) - var(--h)) / max(1, var(--n, 1) - 1), var(--h) * 0.3);
+  flex-direction: column; flex-wrap: nowrap; align-items: center; gap: 0; padding: 2px; overflow: visible; }
+.spectator-hand .card-slot + .card-slot { margin-top: calc(-1 * (var(--h) - var(--step))); }
 .spectator-hand .card-slot:hover { z-index: 6; }
+.spectator-hand .card-slot:hover .card-frame { transform: translateY(-2px) scale(1.04); }
 .spectator-hand .row:empty::before { content: "keine Handkarten"; color: var(--faint); font-size: 11px; padding: 2px 4px; white-space: nowrap; }
 
 /* ---------- Karten ------------------------------------------------------------------------ */
