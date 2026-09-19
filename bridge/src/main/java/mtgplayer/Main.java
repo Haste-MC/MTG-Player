@@ -3,11 +3,13 @@ package mtgplayer;
 import forge.deck.Deck;
 import mtgplayer.bench.Bench;
 import mtgplayer.bench.BenchArgs;
+import mtgplayer.bench.GameRecord;
 import mtgplayer.forge.ForgeBoot;
 import mtgplayer.forge.Precons;
 import mtgplayer.images.ImageCache;
 import mtgplayer.images.ImageHandler;
 import mtgplayer.match.AiMatch;
+import mtgplayer.protocol.Json;
 import mtgplayer.server.Bridge;
 import mtgplayer.server.HttpStatic;
 
@@ -23,6 +25,8 @@ import java.util.Random;
  * Standard: Bridge-Server für den Browser (WebSocket 8081, HTTP 8080).
  * {@code --ai-demo [seed]}: vier zufällige Precons spielen headless (M1-Verhalten).
  * {@code --bench [Optionen]}: N Spiele KI gegen KI headless, siehe README Abschnitt "Bench".
+ * {@code --bench-one <i> [Optionen]}: genau ein Bench-Spiel, fuer den internen Aufruf durch
+ * {@code SubprocessRunner} - nicht fuer den direkten Gebrauch gedacht.
  */
 public final class Main {
 
@@ -35,6 +39,20 @@ public final class Main {
 
         if (args.length > 0 && args[0].equals("--ai-demo")) {
             aiDemo(args.length > 1 ? Long.parseLong(args[1]) : System.currentTimeMillis());
+            return;
+        }
+
+        if (args.length > 0 && args[0].equals("--bench-one")) {
+            // Von SubprocessRunner aufgerufen: genau ein Spiel, Ergebnis als JSON-Zeile auf stdout - siehe
+            // README Abschnitt "Bench". args[1] ist der Spielindex, args[2..] dieselben Optionen wie bei
+            // --bench (siehe SubprocessRunner.cliArgs).
+            int i = Integer.parseInt(args[1]);
+            BenchArgs benchArgs = BenchArgs.parse(Arrays.copyOfRange(args, 2, args.length));
+            GameRecord record = Bench.playOne(benchArgs, i, System.out::println);
+            System.out.println("BENCH_RESULT " + Json.mapper().writeValueAsString(record));
+            // Forge/Swing koennen nicht-daemon Threads hinterlassen, die ein blosses return ueberleben
+            // wuerden - der Kindprozess soll aber zuverlaessig enden, sobald sein einziges Spiel fertig ist.
+            System.exit(0);
             return;
         }
 

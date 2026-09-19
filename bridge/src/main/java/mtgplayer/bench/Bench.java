@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import mtgplayer.ai.AiConfig;
@@ -24,10 +25,14 @@ import mtgplayer.protocol.Json;
 
 /**
  * Fuehrt {@code args.games()} KI-gegen-KI-Spiele aus, Sitz A (Config/Deck {@code args.a()}/{@code
- * args.deckA()}) gegen Sitz B, sequenziell im aufrufenden Thread – Forge haengt an globalem Zustand
- * ({@link MyRandom}, {@code FModel}, Profil-Cache), parallele Spiele gehen deshalb nicht. Schreibt am
- * Ende (oder bei Ctrl-C ueber einen Shutdown-Hook mit dem bisherigen Stand) einen Markdown- und einen
- * JSON-Bericht unter {@code args.out()}.
+ * args.deckA()}) gegen Sitz B. Jedes einzelne Spiel laeuft ueber {@link GameRunner} entweder direkt im
+ * aufrufenden Thread ({@link InProcessRunner}, fuer Tests und {@code --in-process}) oder standardmaessig
+ * in einem frischen JVM-Kindprozess ({@link SubprocessRunner}): ein Forge-eigener Absturz waehrend der
+ * Simulation (z. B. {@code GameCopier} "Couldn't map") vergiftet globalen Zustand
+ * ({@link MyRandom}, {@code FModel}, Profil-Cache) so, dass Folgespiele in derselben JVM reihenweise
+ * abstuerzen - siehe {@code .superpowers/sdd/bench-subprocess-brief.md}. Schreibt am Ende (oder bei
+ * Ctrl-C ueber einen Shutdown-Hook mit dem bisherigen Stand) einen Markdown- und einen JSON-Bericht
+ * unter {@code args.out()}.
  */
 public final class Bench {
 
@@ -42,12 +47,14 @@ public final class Bench {
     private Bench() { }
 
     public static Summary run(BenchArgs args, PrintStream progress) {
-        Deck deckA = loadDeck(args.deckA());
-        Deck deckB = loadDeck(args.deckB());
-
         List<GameRecord> records = new ArrayList<>();
         AtomicBoolean written = new AtomicBoolean(false);
+        GameRunner runner = args.inProcess() ? new InProcessRunner()
+                : new SubprocessRunner(progress, args.gameTimeoutMinutes());
         Thread hook = new Thread(() -> {
+            // Ein laufender Kindprozess soll Ctrl-C nicht ueberleben, sonst spielt er nach dem Abbruch
+            // der Bench weiter.
+            runner.shutdown();
             if (written.compareAndSet(false, true)) {
                 List<GameRecord> snapshot;
                 synchronized (records) {
@@ -62,57 +69,26 @@ public final class Bench {
         Summary summary = null;
         try {
             for (int i = 0; i < args.games(); i++) {
-                MyRandom.setRandom(new Random(args.seed() + i));
-                // Sitzreihenfolge in der RegisteredPlayer-Liste wechselt; Forge lost den Startspieler
-                // trotzdem zusaetzlich aus (s. FIRST_TURN oben) - Namen "A"/"B" bleiben an Config/Deck
-                // gebunden, nur die Position in der Liste dreht sich.
-                boolean swap = i % 2 != 0;
-                List<Deck> decks = swap ? List.of(deckB, deckA) : List.of(deckA, deckB);
-                List<String> names = swap ? List.of("B", "A") : List.of("A", "B");
-                List<AiConfig> configs = swap ? List.of(args.b(), args.a()) : List.of(args.a(), args.b());
-
-                String[] firstSeat = {null};
-                long t0 = System.currentTimeMillis();
-                AiMatch.Result r;
-                try {
-                    r = AiMatch.play(decks, names, configs, args.timeout(), args.turns(), line -> {
-                        if (firstSeat[0] == null) {
-                            Matcher m = FIRST_TURN.matcher(line);
-                            if (m.matches()) {
-                                firstSeat[0] = m.group(1);
-                            }
-                        }
-                    });
-                } catch (RuntimeException e) {
-                    // Forge-eigener Absturz (z. B. GameCopier "Couldn't map" in der Simulation): das Spiel
-                    // als Crash festhalten und weitermachen - ein Absturz in Spiel 3 darf nicht 37 Spiele kosten.
-                    long millis = System.currentTimeMillis() - t0;
-                    GameRecord record = GameRecord.crash(i, args.seed() + i, firstSeat[0] == null ? "?" : firstSeat[0], e, millis);
-                    synchronized (records) {
-                        records.add(record);
-                    }
-                    crashes++;
-                    progress.printf("#%d Absturz (%d s): %s  A %d – B %d – U %d – X %d%n",
-                            i + 1, millis / 1000, record.reason(), winsA, winsB, draws, crashes);
-                    continue;
-                }
-                long millis = System.currentTimeMillis() - t0;
-
-                GameRecord record = new GameRecord(i, args.seed() + i, firstSeat[0] == null ? "?" : firstSeat[0],
-                        r.winner(), r.reason(), r.turns(), millis, r.turnCapped());
+                GameRecord record = runner.play(args, i);
                 synchronized (records) {
                     records.add(record);
                 }
-                if ("A".equals(r.winner())) {
+                if (record.crashed()) {
+                    crashes++;
+                    progress.printf("#%d Absturz (%d s): %s  A %d – B %d – U %d – X %d%n",
+                            i + 1, record.millis() / 1000, record.reason(), winsA, winsB, draws, crashes);
+                    continue;
+                }
+                if ("A".equals(record.winner())) {
                     winsA++;
-                } else if ("B".equals(r.winner())) {
+                } else if ("B".equals(record.winner())) {
                     winsB++;
                 } else {
                     draws++;
                 }
-                String outcome = r.winner() == null ? "Unentschieden" : r.winner() + " gewinnt";
+                String outcome = record.winner() == null ? "Unentschieden" : record.winner() + " gewinnt";
                 progress.printf("#%d %s (Zug %d, %d s)  A %d – B %d – U %d – X %d%n",
-                        i + 1, outcome, r.turns(), millis / 1000, winsA, winsB, draws, crashes);
+                        i + 1, outcome, record.turns(), record.millis() / 1000, winsA, winsB, draws, crashes);
             }
             // Bericht schreiben, WAEHREND der Shutdown-Hook noch registriert ist (s. u.): sonst gaebe es
             // ein Fenster zwischen removeShutdownHook und diesem Aufruf, in dem ein Ctrl-C weder den Hook
@@ -143,6 +119,53 @@ public final class Bench {
         }
 
         return summary;
+    }
+
+    /**
+     * Genau ein Spiel: Seed setzen, Sitzreihenfolge bestimmen, {@link AiMatch#play} aufrufen, ersten
+     * Zug/Zeit/Absturz auswerten. Laeuft identisch im aufrufenden Thread ({@link InProcessRunner}) wie im
+     * JVM-Kindprozess (ueber {@code Main --bench-one}, siehe {@link SubprocessRunner}) - deshalb laedt
+     * diese Methode die Decks selbst statt sie vom Aufrufer zu bekommen: im Kindprozess gibt es keine
+     * bereits geladenen {@link Deck}-Objekte, die man herueberreichen koennte.
+     *
+     * @param log bekommt jede Forge-Logzeile (z. B. zum Weiterreichen an stdout im Kindprozess); ohne
+     *            Verwendung einfach {@code line -> {}}
+     */
+    public static GameRecord playOne(BenchArgs args, int i, Consumer<String> log) {
+        Deck deckA = loadDeck(args.deckA());
+        Deck deckB = loadDeck(args.deckB());
+        long seed = args.seed() + i;
+        MyRandom.setRandom(new Random(seed));
+        // Sitzreihenfolge in der RegisteredPlayer-Liste wechselt; Forge lost den Startspieler
+        // trotzdem zusaetzlich aus (s. FIRST_TURN oben) - Namen "A"/"B" bleiben an Config/Deck
+        // gebunden, nur die Position in der Liste dreht sich.
+        boolean swap = i % 2 != 0;
+        List<Deck> decks = swap ? List.of(deckB, deckA) : List.of(deckA, deckB);
+        List<String> names = swap ? List.of("B", "A") : List.of("A", "B");
+        List<AiConfig> configs = swap ? List.of(args.b(), args.a()) : List.of(args.a(), args.b());
+
+        String[] firstSeat = {null};
+        long t0 = System.currentTimeMillis();
+        AiMatch.Result r;
+        try {
+            r = AiMatch.play(decks, names, configs, args.timeout(), args.turns(), line -> {
+                log.accept(line);
+                if (firstSeat[0] == null) {
+                    Matcher m = FIRST_TURN.matcher(line);
+                    if (m.matches()) {
+                        firstSeat[0] = m.group(1);
+                    }
+                }
+            });
+        } catch (RuntimeException e) {
+            // Forge-eigener Absturz (z. B. GameCopier "Couldn't map" in der Simulation): als Crash
+            // zurueckgeben statt zu werfen - der Aufrufer (Bench.run oder Main --bench-one) macht weiter.
+            long millis = System.currentTimeMillis() - t0;
+            return GameRecord.crash(i, seed, firstSeat[0] == null ? "?" : firstSeat[0], e, millis);
+        }
+        long millis = System.currentTimeMillis() - t0;
+        return new GameRecord(i, seed, firstSeat[0] == null ? "?" : firstSeat[0],
+                r.winner(), r.reason(), r.turns(), millis, r.turnCapped());
     }
 
     private static Deck loadDeck(String ref) {

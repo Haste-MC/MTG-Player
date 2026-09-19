@@ -36,9 +36,11 @@ class BenchSmokeTest {
         // (USE_HYBRID_SIMULATION) simuliert nur die Zauberauswahl, ist in Sekunden statt Minuten fertig
         // und bleibt eine echte nicht-Standard-AiConfig fuer den Smoke-Test. Der sim-Pfad selbst wird
         // durch SimMemoryProbe abgedeckt (manuell, -Dprobe.run=true, siehe dort).
+        // inProcess = true: dieser Smoke-Test bleibt bewusst in-process (schnell, keine Kindprozess-
+        // Semantik noetig) - Kindprozess-Isolation deckt BenchSubprocessTest ab.
         BenchArgs args = new BenchArgs(2, AiConfig.parse("hybrid:Default"), AiConfig.parse("std:Default"),
                 "precon:Abzan Armor [TDC] [2025]", "precon:Adaptive Enchantment [C18] [2018]",
-                30, 2, 1, tmp);
+                30, 2, 1, tmp, 30, true);
 
         Summary summary = Bench.run(args, new PrintStream(OutputStream.nullOutputStream()));
 

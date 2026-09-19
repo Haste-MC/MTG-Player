@@ -9,12 +9,19 @@ import mtgplayer.forge.Precons;
 /**
  * Parameter eines Bench-Laufs, siehe README Abschnitt "Bench (KI gegen KI)". {@code parse} braucht
  * {@code ForgeBoot.init()}, sobald Deck-Defaults ueber {@link Precons#names()} ermittelt werden muessen.
+ *
+ * @param gameTimeoutMinutes Zeitlimit je Spiel im Kindprozess (siehe {@code SubprocessRunner}), danach
+ *                           {@code destroyForcibly} und das Spiel zaehlt als Absturz
+ * @param inProcess          {@code true}: jedes Spiel im aufrufenden Thread statt in einem eigenen
+ *                           JVM-Kindprozess (kein Isolationsschutz gegen einen Forge-eigenen Absturz,
+ *                           s. {@code Bench}-Klassenkommentar) - {@code --in-process}
  */
 public record BenchArgs(int games, AiConfig a, AiConfig b, String deckA, String deckB, int turns, int timeout,
-                         long seed, Path out) {
+                         long seed, Path out, int gameTimeoutMinutes, boolean inProcess) {
 
     private static final int DEFAULT_GAMES = 40;
     private static final int DEFAULT_TURNS = 200;
+    private static final int DEFAULT_GAME_TIMEOUT_MINUTES = 30;
 
     /**
      * Argumente paarweise {@code --key value}. Aus {@code Main} kommen Schluessel und Wert als zwei
@@ -33,12 +40,20 @@ public record BenchArgs(int games, AiConfig a, AiConfig b, String deckA, String 
         int timeout = AiConfig.DEFAULT_TIMEOUT;
         long seed = System.currentTimeMillis();
         Path out = ForgeBoot.dataDir().resolve("bench");
+        int gameTimeoutMinutes = DEFAULT_GAME_TIMEOUT_MINUTES;
+        boolean inProcess = false;
 
         int i = 0;
         while (i < args.length) {
             String token = args[i];
             if (!token.startsWith("--")) {
                 throw new IllegalArgumentException("Erwarte eine Option (--…), war: " + token);
+            }
+            if (token.equals("--in-process")) {
+                // Flag ohne Wert, anders als alle anderen Optionen unten.
+                inProcess = true;
+                i += 1;
+                continue;
             }
             String key;
             String value;
@@ -65,6 +80,7 @@ public record BenchArgs(int games, AiConfig a, AiConfig b, String deckA, String 
                 case "--timeout" -> timeout = Integer.parseInt(value);
                 case "--seed" -> seed = Long.parseLong(value);
                 case "--out" -> out = Path.of(value);
+                case "--game-timeout" -> gameTimeoutMinutes = Integer.parseInt(value);
                 default -> throw new IllegalArgumentException("Unbekannte Bench-Option: " + key);
             }
         }
@@ -76,6 +92,9 @@ public record BenchArgs(int games, AiConfig a, AiConfig b, String deckA, String 
         }
         if (timeout < AiConfig.MIN_TIMEOUT || timeout > AiConfig.MAX_TIMEOUT) {
             throw new IllegalArgumentException("--timeout muss " + AiConfig.MIN_TIMEOUT + "-" + AiConfig.MAX_TIMEOUT + " sein");
+        }
+        if (gameTimeoutMinutes <= 0) {
+            throw new IllegalArgumentException("--game-timeout muss > 0 sein");
         }
         if (deckA == null || deckB == null) {
             List<String> precons = Precons.names();
@@ -89,6 +108,6 @@ public record BenchArgs(int games, AiConfig a, AiConfig b, String deckA, String 
                 deckB = "precon:" + precons.get(1);
             }
         }
-        return new BenchArgs(games, a, b, deckA, deckB, turns, timeout, seed, out);
+        return new BenchArgs(games, a, b, deckA, deckB, turns, timeout, seed, out, gameTimeoutMinutes, inProcess);
     }
 }
