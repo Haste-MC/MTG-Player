@@ -41,6 +41,7 @@ public final class Bench {
      *  = "Turn {0} ({1})"); daraus lesen wir, wer tatsaechlich zuerst dran war (Forge lost das zusaetzlich
      *  zur Sitzreihenfolge aus, s. u.). */
     private static final Pattern FIRST_TURN = Pattern.compile("Turn 1 \\((.+)\\)");
+    private static final Pattern ANY_TURN = Pattern.compile("Turn (\\d+) \\(.+\\)");
     private static final DateTimeFormatter FILE_STAMP = DateTimeFormatter.ofPattern("yyyy-MM-dd-HHmmss");
     private static final DateTimeFormatter DISPLAY_STAMP = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
@@ -145,23 +146,29 @@ public final class Bench {
         List<AiConfig> configs = swap ? List.of(args.b(), args.a()) : List.of(args.a(), args.b());
 
         String[] firstSeat = {null};
+        int[] lastTurn = {0};
         long t0 = System.currentTimeMillis();
         AiMatch.Result r;
         try {
             r = AiMatch.play(decks, names, configs, args.timeout(), args.turns(), line -> {
                 log.accept(line);
-                if (firstSeat[0] == null) {
-                    Matcher m = FIRST_TURN.matcher(line);
-                    if (m.matches()) {
-                        firstSeat[0] = m.group(1);
+                Matcher t = ANY_TURN.matcher(line);
+                if (t.matches()) {
+                    lastTurn[0] = Integer.parseInt(t.group(1));
+                    if (firstSeat[0] == null) {
+                        Matcher m = FIRST_TURN.matcher(line);
+                        if (m.matches()) {
+                            firstSeat[0] = m.group(1);
+                        }
                     }
                 }
             });
         } catch (RuntimeException e) {
             // Forge-eigener Absturz (z. B. GameCopier "Couldn't map" in der Simulation): als Crash
             // zurueckgeben statt zu werfen - der Aufrufer (Bench.run oder Main --bench-one) macht weiter.
+            // turns = letzter im Log gesehener Zug, damit der Bericht zeigt, wann es passierte.
             long millis = System.currentTimeMillis() - t0;
-            return GameRecord.crash(i, seed, firstSeat[0] == null ? "?" : firstSeat[0], e, millis);
+            return GameRecord.crash(i, seed, firstSeat[0] == null ? "?" : firstSeat[0], e, millis, lastTurn[0]);
         }
         long millis = System.currentTimeMillis() - t0;
         return new GameRecord(i, seed, firstSeat[0] == null ? "?" : firstSeat[0],
@@ -214,19 +221,20 @@ public final class Bench {
                 .append(" · Seed: ").append(args.seed())
                 .append(" · ").append(DISPLAY_STAMP.format(LocalDateTime.now()))
                 .append('\n');
-        sb.append("| | A | B | Unentschieden | Abstürze |\n|---|---|---|---|---|\n");
+        sb.append("| | A | B | Unentschieden | Abstürze | Sim defekt |\n|---|---|---|---|---|---|\n");
         sb.append("| Siege | ").append(summary.winsA()).append(" | ").append(summary.winsB()).append(" | ")
                 .append(summary.draws()).append(" (Zugdeckel ").append(summary.drawsByTurnCap()).append(") | ")
-                .append(summary.crashes()).append(" |\n");
+                .append(summary.crashes()).append(" | ").append(summary.simBroken()).append(" |\n");
         sb.append("Siegquote A (entschiedene Spiele): ").append(pct(summary.winRateA()))
                 .append(" % · 95-%-Intervall ").append(pct(summary.ciLow())).append('–').append(pct(summary.ciHigh()))
                 .append(" % · Ø Züge ").append(num1(summary.avgTurns())).append(" (Median ").append(num(summary.medianTurns()))
                 .append(") · Ø Dauer ").append(Math.round(summary.avgMillis() / 1000.0)).append(" s\n");
-        sb.append("## Spiele\n| # | Seed | Erster | Sieger | Grund | Züge | Dauer s |\n|---|---|---|---|---|---|---|\n");
+        sb.append("## Spiele\n| # | Seed | Erster | Sieger | Grund | Züge | Dauer s | Sim-Fehler |\n|---|---|---|---|---|---|---|---|\n");
         for (GameRecord g : records) {
             sb.append("| ").append(g.index() + 1).append(" | ").append(g.seed()).append(" | ").append(g.firstSeat())
                     .append(" | ").append(g.winner() == null ? "–" : g.winner()).append(" | ").append(g.reason())
-                    .append(" | ").append(g.turns()).append(" | ").append(g.millis() / 1000).append(" |\n");
+                    .append(" | ").append(g.turns()).append(" | ").append(g.millis() / 1000)
+                    .append(" | ").append(g.simErrors()).append(" |\n");
         }
         return sb.toString();
     }

@@ -53,4 +53,15 @@ class BenchStatsTest {
         assertEquals(30.0, s.avgTurns(), 1e-9);
         assertEquals(30.0, s.medianTurns(), 1e-9);
     }
+
+    @Test
+    void simDefekteSpieleZaehlenGetrennt() {
+        GameRecord broken = g(1, "B", 16).withSimErrors(3);
+        assertTrue(broken.simBroken());
+        var s = BenchStats.summarize(List.of(g(0, "A", 20), broken));
+        assertEquals(1, s.simBroken());
+        assertEquals(0, s.winsB());
+        assertEquals(1, s.winsA());
+        assertEquals(20.0, s.avgTurns(), 1e-9);
+    }
 }

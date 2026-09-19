@@ -109,12 +109,24 @@ final class SubprocessRunner implements GameRunner {
         progress.printf("Spiel %d/%d (Kindprozess pid %d)%n", i + 1, args.games(), p.pid());
 
         String[] result = {null};
+        int[] simErrors = {0};
+        Path outLog = logFile.resolveSibling("game-" + i + ".out.log");
         Thread stdout = new Thread(() -> {
-            try (BufferedReader r = new BufferedReader(new InputStreamReader(p.getInputStream(), StandardCharsets.UTF_8))) {
+            try (BufferedReader r = new BufferedReader(new InputStreamReader(p.getInputStream(), StandardCharsets.UTF_8));
+                 java.io.BufferedWriter w = Files.newBufferedWriter(outLog, StandardCharsets.UTF_8)) {
                 String line;
                 while ((line = r.readLine()) != null) {
                     if (line.startsWith(BENCH_RESULT_PREFIX)) {
                         result[0] = line.substring(BENCH_RESULT_PREFIX.length());
+                    } else if (!line.startsWith("Warning: default")) {
+                        // Forge-Spiellog und Forge-Fehlermeldungen (System.out) fuer die Nachschau aufheben;
+                        // "Couldn't map"/"Game copy error" = Simulation defekt (GameCopier), Forge faengt das
+                        // meist ab und die Sim-KI spielt dann still nichts mehr - siehe GameRecord.simErrors.
+                        w.write(line);
+                        w.newLine();
+                        if (line.startsWith("Couldn't map") || line.contains("Game copy error")) {
+                            simErrors[0]++;
+                        }
                     }
                 }
             } catch (IOException ignored) {
@@ -151,7 +163,7 @@ final class SubprocessRunner implements GameRunner {
         int exit = p.exitValue();
         if (!timedOut && exit == 0 && result[0] != null) {
             try {
-                return Json.mapper().readValue(result[0], GameRecord.class);
+                return Json.mapper().readValue(result[0], GameRecord.class).withSimErrors(simErrors[0]);
             } catch (IOException e) {
                 // Kaputtes JSON auf stdout - faellt unten durch zu Crash.
             }
