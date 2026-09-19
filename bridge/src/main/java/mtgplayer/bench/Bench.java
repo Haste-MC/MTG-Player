@@ -98,6 +98,18 @@ public final class Bench {
                 progress.printf("#%d %s (Zug %d, %d s)  A %d – B %d – U %d%n",
                         i + 1, outcome, r.turns(), millis / 1000, winsA, winsB, draws);
             }
+        } catch (RuntimeException | Error e) {
+            // Eine Forge-Ausnahme mitten im Lauf darf Stunden an Ergebnissen nicht verwerfen:
+            // bisherigen Stand schreiben, dann weiterwerfen.
+            progress.println("Bench abgebrochen nach " + records.size() + " Spielen: " + e);
+            if (written.compareAndSet(false, true)) {
+                List<GameRecord> snapshot;
+                synchronized (records) {
+                    snapshot = new ArrayList<>(records);
+                }
+                writeReports(args, snapshot, BenchStats.summarize(snapshot));
+            }
+            throw e;
         } finally {
             try {
                 Runtime.getRuntime().removeShutdownHook(hook);
