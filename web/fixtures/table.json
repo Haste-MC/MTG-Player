@@ -30,7 +30,9 @@
         250
       ],
       "command": [
-        220
+        220,
+        260,
+        261
       ],
       "battlefield": [
         201,
@@ -93,7 +95,9 @@
       "exile": [
         420
       ],
-      "command": [],
+      "command": [
+        460
+      ],
       "battlefield": [
         401,
         402,
@@ -573,6 +577,39 @@
       "zone": "exile",
       "typeLine": "Sorcery",
       "manaCost": "{2}{G}"
+    },
+    "260": {
+      "id": 260,
+      "faceDown": false,
+      "name": "Giant Growth",
+      "controller": 1,
+      "owner": 1,
+      "zone": "command",
+      "typeLine": "Effect",
+      "text": "Target creature gets +3/+3 until end of turn.",
+      "effect": true
+    },
+    "261": {
+      "id": 261,
+      "faceDown": false,
+      "name": "Emblem — Garruk, Apex Predator",
+      "controller": 1,
+      "owner": 1,
+      "zone": "command",
+      "typeLine": "Emblem",
+      "text": "Whenever a creature attacks you, it gets +5/+5 and gains trample until end of turn.",
+      "emblem": true
+    },
+    "460": {
+      "id": 460,
+      "faceDown": false,
+      "name": "Heroic Intervention",
+      "controller": 3,
+      "owner": 3,
+      "zone": "command",
+      "typeLine": "Effect",
+      "text": "Permanents you control gain hexproof and indestructible until end of turn.",
+      "effect": true
     }
   },
   "stops": {

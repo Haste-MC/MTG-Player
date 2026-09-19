@@ -1,9 +1,9 @@
 {
   "type": "state",
-  "turn": 7,
-  "phase": "COMBAT_DECLARE_BLOCKERS",
-  "activePlayer": 2,
-  "priorityPlayer": 3,
+  "turn": 51,
+  "phase": "MAIN1",
+  "activePlayer": 4,
+  "priorityPlayer": 4,
   "gameOver": false,
   "spectator": true,
   "players": [
@@ -24,9 +24,7 @@
       ],
       "exile": [],
       "command": [
-        106,
-        160,
-        161
+        106
       ],
       "battlefield": [
         101,
@@ -63,7 +61,13 @@
         202,
         203,
         204,
-        205
+        205,
+        240,
+        241,
+        242,
+        243,
+        244,
+        245
       ],
       "manaPool": {},
       "hasPriority": false
@@ -101,40 +105,52 @@
       "id": 4,
       "name": "KI 4",
       "isAi": true,
-      "life": 40,
+      "life": 36,
       "commanderDamage": {},
       "hand": [
         410,
         411
       ],
-      "librarySize": 38,
+      "librarySize": 46,
       "graveyard": [
         420
       ],
       "exile": [],
-      "command": [],
+      "command": [
+        470,
+        471,
+        472
+      ],
       "battlefield": [
-        401,
-        402,
-        403,
-        404
+        450,
+        451,
+        452,
+        453,
+        454,
+        455,
+        456,
+        457,
+        458,
+        459,
+        460,
+        430,
+        431,
+        432,
+        433,
+        434,
+        435,
+        436,
+        437,
+        438,
+        439,
+        440,
+        441
       ],
       "manaPool": {},
       "hasPriority": false
     }
   ],
-  "stack": [
-    {
-      "index": 0,
-      "text": "Beast Within (Ziel: Arcane Signet)",
-      "sourceCard": 500,
-      "controller": 3,
-      "targetCards": [
-        203
-      ],
-      "targetPlayers": []
-    }
-  ],
+  "stack": [],
   "cards": {
     "101": {
       "id": 101,
@@ -303,7 +319,6 @@
       "owner": 2,
       "zone": "battlefield",
       "tapped": true,
-      "attacking": true,
       "power": 6,
       "toughness": 6,
       "counters": {
@@ -420,7 +435,6 @@
       "owner": 3,
       "zone": "battlefield",
       "tapped": false,
-      "blocking": true,
       "power": 1,
       "toughness": 1,
       "typeLine": "Creature — Elf Shaman",
@@ -526,7 +540,6 @@
       "toughness": 3,
       "token": true,
       "tapped": true,
-      "attacking": true,
       "text": ""
     },
     "410": {
@@ -575,27 +588,391 @@
       "typeLine": "Instant",
       "manaCost": "{2}{G}"
     },
-    "160": {
-      "id": 160,
+    "430": {
+      "id": 430,
+      "faceDown": false,
+      "name": "Forest",
+      "controller": 4,
+      "owner": 4,
+      "zone": "battlefield",
+      "typeLine": "Basic Land — Forest",
+      "imageKey": "c:Forest|TDC|1",
+      "tapped": true
+    },
+    "431": {
+      "id": 431,
+      "faceDown": false,
+      "name": "Forest",
+      "controller": 4,
+      "owner": 4,
+      "zone": "battlefield",
+      "typeLine": "Basic Land — Forest",
+      "imageKey": "c:Forest|TDC|1",
+      "tapped": true
+    },
+    "432": {
+      "id": 432,
+      "faceDown": false,
+      "name": "Forest",
+      "controller": 4,
+      "owner": 4,
+      "zone": "battlefield",
+      "typeLine": "Basic Land — Forest",
+      "imageKey": "c:Forest|TDC|1",
+      "tapped": true
+    },
+    "433": {
+      "id": 433,
+      "faceDown": false,
+      "name": "Forest",
+      "controller": 4,
+      "owner": 4,
+      "zone": "battlefield",
+      "typeLine": "Basic Land — Forest",
+      "imageKey": "c:Forest|TDC|1",
+      "tapped": false
+    },
+    "434": {
+      "id": 434,
+      "faceDown": false,
+      "name": "Forest",
+      "controller": 4,
+      "owner": 4,
+      "zone": "battlefield",
+      "typeLine": "Basic Land — Forest",
+      "imageKey": "c:Forest|TDC|1",
+      "tapped": false
+    },
+    "435": {
+      "id": 435,
+      "faceDown": false,
+      "name": "Island",
+      "controller": 4,
+      "owner": 4,
+      "zone": "battlefield",
+      "typeLine": "Basic Land — Island",
+      "imageKey": "c:Island|TDC|1",
+      "tapped": true
+    },
+    "436": {
+      "id": 436,
+      "faceDown": false,
+      "name": "Island",
+      "controller": 4,
+      "owner": 4,
+      "zone": "battlefield",
+      "typeLine": "Basic Land — Island",
+      "imageKey": "c:Island|TDC|1",
+      "tapped": false
+    },
+    "437": {
+      "id": 437,
+      "faceDown": false,
+      "name": "Island",
+      "controller": 4,
+      "owner": 4,
+      "zone": "battlefield",
+      "typeLine": "Basic Land — Island",
+      "imageKey": "c:Island|TDC|1",
+      "tapped": false
+    },
+    "438": {
+      "id": 438,
+      "faceDown": false,
+      "name": "Command Tower",
+      "controller": 4,
+      "owner": 4,
+      "zone": "battlefield",
+      "typeLine": "Land",
+      "imageKey": "c:Command Tower|C21|1",
+      "tapped": false
+    },
+    "439": {
+      "id": 439,
+      "faceDown": false,
+      "name": "Evolving Wilds",
+      "controller": 4,
+      "owner": 4,
+      "zone": "battlefield",
+      "typeLine": "Land",
+      "imageKey": "c:Evolving Wilds|C21|1",
+      "tapped": false
+    },
+    "440": {
+      "id": 440,
+      "faceDown": false,
+      "name": "Bojuka Bog",
+      "controller": 4,
+      "owner": 4,
+      "zone": "battlefield",
+      "typeLine": "Land",
+      "imageKey": "c:Bojuka Bog|C21|1",
+      "tapped": true
+    },
+    "441": {
+      "id": 441,
+      "faceDown": false,
+      "name": "Rogue's Passage",
+      "controller": 4,
+      "owner": 4,
+      "zone": "battlefield",
+      "typeLine": "Land",
+      "imageKey": "c:Rogue's Passage|C21|1",
+      "tapped": false
+    },
+    "450": {
+      "id": 450,
+      "faceDown": false,
+      "name": "Insect",
+      "controller": 4,
+      "owner": 4,
+      "zone": "battlefield",
+      "typeLine": "Token Creature — Insect",
+      "token": true,
+      "power": 1,
+      "toughness": 1,
+      "text": "Flying",
+      "tapped": false
+    },
+    "451": {
+      "id": 451,
+      "faceDown": false,
+      "name": "Insect",
+      "controller": 4,
+      "owner": 4,
+      "zone": "battlefield",
+      "typeLine": "Token Creature — Insect",
+      "token": true,
+      "power": 1,
+      "toughness": 1,
+      "text": "Flying",
+      "tapped": false
+    },
+    "452": {
+      "id": 452,
+      "faceDown": false,
+      "name": "Insect",
+      "controller": 4,
+      "owner": 4,
+      "zone": "battlefield",
+      "typeLine": "Token Creature — Insect",
+      "token": true,
+      "power": 1,
+      "toughness": 1,
+      "text": "Flying",
+      "tapped": false
+    },
+    "453": {
+      "id": 453,
+      "faceDown": false,
+      "name": "Insect",
+      "controller": 4,
+      "owner": 4,
+      "zone": "battlefield",
+      "typeLine": "Token Creature — Insect",
+      "token": true,
+      "power": 1,
+      "toughness": 1,
+      "text": "Flying",
+      "tapped": true
+    },
+    "454": {
+      "id": 454,
+      "faceDown": false,
+      "name": "Managorger Hydra",
+      "controller": 4,
+      "owner": 4,
+      "zone": "battlefield",
+      "typeLine": "Creature — Hydra",
+      "imageKey": "c:Managorger Hydra|C21|1",
+      "power": 5,
+      "toughness": 5,
+      "counters": {
+        "P1P1": 3
+      },
+      "manaCost": "{2}{G}"
+    },
+    "455": {
+      "id": 455,
+      "faceDown": false,
+      "name": "Eternal Witness",
+      "controller": 4,
+      "owner": 4,
+      "zone": "battlefield",
+      "typeLine": "Creature — Elf Shaman",
+      "imageKey": "c:Eternal Witness|C21|1",
+      "power": 2,
+      "toughness": 1,
+      "manaCost": "{1}{G}{G}"
+    },
+    "456": {
+      "id": 456,
+      "faceDown": false,
+      "name": "Llanowar Elves",
+      "controller": 4,
+      "owner": 4,
+      "zone": "battlefield",
+      "typeLine": "Creature — Elf Druid",
+      "imageKey": "c:Llanowar Elves|DMU|1",
+      "power": 1,
+      "toughness": 1,
+      "manaCost": "{G}",
+      "tapped": true
+    },
+    "457": {
+      "id": 457,
+      "faceDown": false,
+      "name": "Sol Ring",
+      "controller": 4,
+      "owner": 4,
+      "zone": "battlefield",
+      "typeLine": "Artifact",
+      "imageKey": "c:Sol Ring|C21|1",
+      "manaCost": "{1}",
+      "tapped": true
+    },
+    "458": {
+      "id": 458,
+      "faceDown": false,
+      "name": "Arcane Signet",
+      "controller": 4,
+      "owner": 4,
+      "zone": "battlefield",
+      "typeLine": "Artifact",
+      "imageKey": "c:Arcane Signet|C21|1",
+      "manaCost": "{1}"
+    },
+    "459": {
+      "id": 459,
+      "faceDown": false,
+      "name": "Sakura-Tribe Elder",
+      "controller": 4,
+      "owner": 4,
+      "zone": "battlefield",
+      "typeLine": "Creature — Snake Shaman",
+      "imageKey": "c:Sakura-Tribe Elder|C21|1",
+      "power": 1,
+      "toughness": 1,
+      "manaCost": "{1}{G}"
+    },
+    "460": {
+      "id": 460,
+      "faceDown": false,
+      "name": "Sakura-Tribe Elder",
+      "controller": 4,
+      "owner": 4,
+      "zone": "battlefield",
+      "typeLine": "Creature — Snake Shaman",
+      "imageKey": "c:Sakura-Tribe Elder|C21|1",
+      "power": 1,
+      "toughness": 1,
+      "manaCost": "{1}{G}"
+    },
+    "470": {
+      "id": 470,
       "faceDown": false,
       "name": "Giant Growth",
-      "controller": 1,
-      "owner": 1,
+      "controller": 4,
+      "owner": 4,
       "zone": "command",
       "typeLine": "Effect",
       "text": "Target creature gets +3/+3 until end of turn.",
       "effect": true
     },
-    "161": {
-      "id": 161,
+    "471": {
+      "id": 471,
+      "faceDown": false,
+      "name": "Heroic Intervention",
+      "controller": 4,
+      "owner": 4,
+      "zone": "command",
+      "typeLine": "Effect",
+      "text": "Permanents you control gain hexproof and indestructible until end of turn.",
+      "effect": true
+    },
+    "472": {
+      "id": 472,
       "faceDown": false,
       "name": "Emblem — Garruk, Apex Predator",
-      "controller": 1,
-      "owner": 1,
+      "controller": 4,
+      "owner": 4,
       "zone": "command",
       "typeLine": "Emblem",
       "text": "Whenever a creature attacks you, it gets +5/+5 and gains trample until end of turn.",
       "emblem": true
+    },
+    "240": {
+      "id": 240,
+      "faceDown": false,
+      "name": "Beast",
+      "controller": 2,
+      "owner": 2,
+      "zone": "battlefield",
+      "typeLine": "Token Creature — Beast",
+      "power": 3,
+      "toughness": 3,
+      "token": true,
+      "text": ""
+    },
+    "241": {
+      "id": 241,
+      "faceDown": false,
+      "name": "Beast",
+      "controller": 2,
+      "owner": 2,
+      "zone": "battlefield",
+      "typeLine": "Token Creature — Beast",
+      "power": 3,
+      "toughness": 3,
+      "token": true,
+      "text": ""
+    },
+    "242": {
+      "id": 242,
+      "faceDown": false,
+      "name": "Beast",
+      "controller": 2,
+      "owner": 2,
+      "zone": "battlefield",
+      "typeLine": "Token Creature — Beast",
+      "power": 3,
+      "toughness": 3,
+      "token": true,
+      "text": ""
+    },
+    "243": {
+      "id": 243,
+      "faceDown": false,
+      "name": "Forest",
+      "imageKey": "c:Forest|TDC|1",
+      "controller": 2,
+      "owner": 2,
+      "zone": "battlefield",
+      "tapped": true,
+      "typeLine": "Basic Land — Forest"
+    },
+    "244": {
+      "id": 244,
+      "faceDown": false,
+      "name": "Forest",
+      "imageKey": "c:Forest|TDC|1",
+      "controller": 2,
+      "owner": 2,
+      "zone": "battlefield",
+      "tapped": false,
+      "typeLine": "Basic Land — Forest"
+    },
+    "245": {
+      "id": 245,
+      "faceDown": false,
+      "name": "Forest",
+      "imageKey": "c:Forest|TDC|1",
+      "controller": 2,
+      "owner": 2,
+      "zone": "battlefield",
+      "tapped": false,
+      "typeLine": "Basic Land — Forest",
+      "selectable": true
     }
   },
   "stops": {
@@ -613,11 +990,11 @@
   },
   "fullControl": false,
   "prompt": {
-    "message": "Turn 7 (KI 2)",
-    "okLabel": "Pause",
-    "cancelLabel": "Fast",
+    "message": "Priority: KI 4 Turn: 51 (KI 4) Phase: Main phase, precombat",
+    "okLabel": "Resume",
+    "cancelLabel": "Step",
     "okEnabled": true,
     "cancelEnabled": true,
-    "seq": 3
+    "seq": 9
   }
 }

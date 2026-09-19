@@ -1,7 +1,10 @@
+import { useLayoutEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import type { CardSnap, PlayerSnap, Snapshot } from "../protocol";
 import CardBox from "./CardBox";
 import CardImage from "./CardImage";
+import { groupCards } from "../groups";
+import type { Group } from "../groups";
 import { useStore } from "../store";
 import { send } from "../ws";
 
@@ -33,13 +36,71 @@ function Pile({ label, cards }: { label: string; cards: CardSnap[] }) {
   );
 }
 
+/** Stapel aus groups.ts rendern: eine Karte je Gruppe, Zaehler nur bei mehr als einer Karte.
+ *  Key = erste Karte der Gruppe, damit ein Wechsel der gezeigten Karte (z. B. nach dem Tappen) nichts neu montiert. */
+function Stacks({ groups }: { groups: Group[] }) {
+  return <>{groups.map((g) => (
+    <CardBox key={g.cards[0].id} card={g.card} stack={g.cards.length > 1 ? { count: g.cards.length, tapped: g.tapped } : undefined} />
+  ))}</>;
+}
+
+/** Effekt- und Emblem-Chips (Forges Hilfskarten CardSnap.effect bzw. CardSnap.emblem): Name, Hover zeigt den Text
+ *  im Detail-Panel, Klick wie eine Karte. Embleme als Chip statt Karte, weil eine zweite Karte in der Kommandozone
+ *  in keiner Panelhoehe (720-1060) neben dem Commander Platz hat – sie tragen eine "Emblem"-Marke. */
+function Effects({ effects, inline }: { effects: CardSnap[]; inline?: boolean }) {
+  const seq = useStore((s) => s.state?.prompt.seq);
+  const setHover = useStore((s) => s.setHover);
+  if (effects.length === 0) return null;
+  return (
+    <div className={"effects" + (inline ? " inline" : "")}>
+      <span className="zone-label">Effekte</span>
+      {effects.map((c) => (
+        <button key={c.id} type="button" className={"effect-chip" + (c.emblem ? " emblem" : "")} title={c.text ?? ""}
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); send({ type: "selectCard", id: c.id, alt: e.button === 2, seq }); }}
+          onMouseEnter={() => setHover(c.id)} onMouseLeave={() => setHover(undefined)}>
+          {c.emblem && <span className="mark">Emblem</span>}
+          {c.emblem ? c.name?.replace(/^Emblem\s*[—–-]\s*/, "") : c.name}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Zuschauer-Panel: passt die Kartengroesse nach dem Rendern an die tatsaechliche Hoehe an. Die CSS-Formel
+ * (--w-spec) kennt nur die Zahl der Stapel, nicht, wie oft die Reihen umbrechen; laeuft das Spielfeld-Raster
+ * ueber seinen Platz (scrollHeight > clientHeight der .battlefield), wird --fit in Zehntelschritten bis 0,5
+ * verkleinert. Zuruecksetzen, wenn sich die Kartenzahl oder das Fenster aendert.
+ */
+function useFit(enabled: boolean, signature: string) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [fit, setFit] = useState(1);
+  useLayoutEffect(() => { setFit(1); }, [signature]);
+  useLayoutEffect(() => {
+    if (!enabled) return;
+    const onResize = () => setFit(1);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [enabled]);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!enabled || !el) return;
+    if (el.scrollHeight > el.clientHeight + 1 && fit > 0.5) setFit((f) => Math.max(0.5, Math.round((f - 0.1) * 10) / 10));
+  }, [enabled, fit, signature]);
+  return { ref, fit };
+}
+
 export default function PlayerZone({ p, state, compact, spectator }: { p: PlayerSnap; state: Snapshot; compact: boolean; spectator?: boolean }) {
   const seq = useStore((s) => s.state?.prompt.seq);
   const cards = (ids: number[]) => ids.map((id) => state.cards[String(id)]).filter(Boolean);
-  const bf = cards(p.battlefield);
-  const others = bf.filter((c) => !isLand(c));
-  const lands = bf.filter(isLand);
-  const command = cards(p.command);
+  // Effekt-Hilfskarten und Embleme (Forge legt sie in die Kommandozone) werden nicht als Karte gezeigt,
+  // sondern als Chips unter dem Spielfeld.
+  const isChip = (c: CardSnap) => !!c.effect || !!c.emblem;
+  const effects = [...cards(p.command), ...cards(p.battlefield)].filter(isChip);
+  const bf = cards(p.battlefield).filter((c) => !isChip(c));
+  const others = groupCards(bf.filter((c) => !isLand(c)));
+  const lands = groupCards(bf.filter(isLand));
+  const command = cards(p.command).filter((c) => !isChip(c));
   const graveyard = cards(p.graveyard);
   const exile = cards(p.exile);
   const hand = cards(p.hand);
@@ -58,10 +119,15 @@ export default function PlayerZone({ p, state, compact, spectator }: { p: Player
   // (die Zahlen stehen ohnehin im Kopf). In der eigenen Zone bleiben beide Stapel als Ziel sichtbar.
   const showGrave = !compact || graveyard.length > 0;
   const showExile = !compact || exile.length > 0;
-  // Kompakte Panels: Laender-Ueberlappung haengt (per CSS) an der Landzahl; im Zuschauer-Panel ausserdem die
-  // Kartengroesse an der Zahl der Nicht-Land-Permanents und die Hand-Ueberlappung an der Handgroesse.
+  // Kompakte Panels: Laender-Ueberlappung haengt (per CSS) an der Zahl der Land-Stapel; im Zuschauer-Panel ausserdem
+  // die Kartengroesse an der Zahl der Nicht-Land-Stapel und die Hand-Ueberlappung an der Handgroesse.
+  // Gegnerzeile der Tischansicht: Chips im Kopf hinter den Badges statt einer Zeile unter dem Spielfeld
+  // (die Zeile kostet immer Hoehe, die bei 1280x720 der eigenen Zone fehlt; im Kopf nur, wenn er umbricht).
+  // Eigene Zone und Zuschauer-Panels: Zeile "Effekte" unter dem Spielfeld.
+  const inlineEffects = compact && !spectator;
+  const { ref: bfRef, fit } = useFit(!!spectator, `${others.length}|${lands.length}|${hand.length}|${command.length}|${effects.length}`);
   const sizing = compact
-    ? ({ "--n-lands": lands.length, "--n-bf": Math.max(1, others.length), "--n": hand.length } as CSSProperties)
+    ? ({ "--n-lands": lands.length, "--n-bf": Math.max(1, others.length), "--n": hand.length, "--fit": fit } as CSSProperties)
     : undefined;
   return (
     <div className={"player" + (active ? " active" : "") + (compact ? " compact" : " own") + (spectator ? " spectator" : "")} style={sizing}>
@@ -78,8 +144,9 @@ export default function PlayerZone({ p, state, compact, spectator }: { p: Player
           {mana && <span className="badge mana" title="Mana im Pool">Mana <b>{mana}</b></span>}
           {cmdDmg && <span className="badge cmd" title={"Commander-Schaden: " + cmdTitle}>CMD <b>{cmdDmg}</b></span>}
         </span>
+        {inlineEffects && <Effects effects={effects} inline />}
       </div>
-      <div className="zone battlefield">
+      <div className="zone battlefield" ref={bfRef}>
         <div className="command" title="Kommandozone">
           <div className="zone-label">Kommando&shy;zone</div>
           <div className="row">
@@ -88,12 +155,8 @@ export default function PlayerZone({ p, state, compact, spectator }: { p: Player
           </div>
         </div>
         <div className="rows">
-          <div className="row bf-main">
-            {others.map((c) => <CardBox key={c.id} card={c} />)}
-          </div>
-          <div className="row bf-lands">
-            {lands.map((c) => <CardBox key={c.id} card={c} />)}
-          </div>
+          <div className="row bf-main"><Stacks groups={others} /></div>
+          <div className="row bf-lands"><Stacks groups={lands} /></div>
         </div>
         {(showGrave || showExile) && (
           <div className="piles">
@@ -108,6 +171,7 @@ export default function PlayerZone({ p, state, compact, spectator }: { p: Player
           </div>
         )}
       </div>
+      {!inlineEffects && <Effects effects={effects} />}
     </div>
   );
 }

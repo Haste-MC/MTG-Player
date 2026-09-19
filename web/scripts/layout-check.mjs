@@ -111,10 +111,23 @@ try {
         }
       }
     }
+    // 5. Effekt-Chips (unter dem Spielfeld) duerfen keine Karte ueberdecken - passiert, wenn das Spielfeld
+    //    eines Zuschauer-Panels hoeher wird als sein Platz (Reihen umbrechen) und in die Chip-Zeile laeuft.
+    for (const e of document.querySelectorAll(".effects")) {
+      const eb = r(e);
+      for (const c of document.querySelectorAll(".card")) {
+        if (!visible(c)) continue;
+        const b = r(c);
+        if (b.left < eb.right && b.right > eb.left && b.top < eb.bottom && b.bottom > eb.top) {
+          out.push(`Effekt-Zeile ueberdeckt Karte "${name(c)}": Karte ${fmt(b)}, Effekte ${fmt(eb)}`);
+          break;
+        }
+      }
+    }
     return out;
   });
 
-  // 5. Hover ueber eine Log-Zeile mit Karte (Detail-Panel fuellt sich) darf das Log-Panel nicht verschieben
+  // 6. Hover ueber eine Log-Zeile mit Karte (Detail-Panel fuellt sich) darf das Log-Panel nicht verschieben
   //    oder verkleinern - sonst rutscht die Zeile unter dem Zeiger weg, das Detail leert sich wieder und
   //    es flackert (feste Detailhoehe, siehe styles.css .side). Ein ResizeObserver protokolliert jede
   //    Groessenaenderung des Log-Panels waehrend des Hovers; am Ende muss das Detail noch gefuellt sein
