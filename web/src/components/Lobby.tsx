@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { loadAiSettings, saveAiSettings } from "../aiSettings";
+import { loadAiSettings, restoreSlots, saveAiSettings } from "../aiSettings";
 import { type Pick, toRef } from "../deckref";
 import { buildStartGame, DEFAULT_AI } from "../lobbyPayload";
 import type { AiPick } from "../protocol";
@@ -21,6 +21,13 @@ export default function Lobby() {
   const [shownError, setShownError] = useState<string>();
   // Erste echte "lobby"-Nachricht (precons gefuellt): einmalig die gespeicherte KI-Auswahl laden.
   const settingsLoaded = useRef(false);
+  // Alle beim Laden gefundenen Picks, auch die, fuer die restoreSlots wegen min/max noch keinen Slot
+  // angelegt hat - addAi/toggleSpectate greifen beim manuellen Hinzufuegen eines Slots hierauf zurueck,
+  // statt immer DEFAULT_AI zu nehmen.
+  const loadedPicks = useRef<AiPick[]>([]);
+
+  const maxAis = spectate ? 6 : 5;
+  const minAis = spectate ? 2 : 1;
 
   // Neue Fehler (letzte Log-Zeile) automatisch zeigen - unabhaengig davon, ob eine fruehere
   // Fehlermeldung gerade per editPicker/start weggewischt wurde.
@@ -32,21 +39,24 @@ export default function Lobby() {
   useEffect(() => {
     if (settingsLoaded.current || precons.length === 0) return;
     settingsLoaded.current = true;
-    const loaded = loadAiSettings(localStorage, aiProfiles);
+    const loaded = loadAiSettings(() => localStorage, aiProfiles);
+    loadedPicks.current = loaded.picks;
     setAiTimeout(loaded.timeout);
-    setAiPicks((prev) => prev.map((_, i) => loaded.picks[i] ?? DEFAULT_AI));
+    // AiSettings.picks.length ist die gespeicherte Slot-Zahl - so viele Slots (geklemmt auf min/max)
+    // anlegen, nicht nur die Picks in die aktuell vorhandene (anfangs einzige) Zeile mappen.
+    const picks = restoreSlots(loaded.picks, { min: minAis, max: maxAis });
+    setAiPicks(picks);
+    setAis((prev) => Array.from({ length: picks.length }, (_, i) => prev[i] ?? EMPTY));
   }, [precons, aiProfiles]);
 
   // Auswahl merken, sobald sie geladen ist (kein Ueberschreiben des Storage vor dem obigen Laden).
   useEffect(() => {
     if (!settingsLoaded.current) return;
-    saveAiSettings(localStorage, { picks: aiPicks, timeout: aiTimeout });
+    saveAiSettings(() => localStorage, { picks: aiPicks, timeout: aiTimeout });
   }, [aiPicks, aiTimeout]);
 
   const humanRef = toRef(human);
   const aiRefs = ais.map(toRef);
-  const maxAis = spectate ? 6 : 5;
-  const minAis = spectate ? 2 : 1;
   const msg = buildStartGame(spectate, humanRef, aiRefs, aiPicks, aiTimeout);
   const ready = msg !== undefined;
 
@@ -56,7 +66,7 @@ export default function Lobby() {
     // Zuschauer-Modus braucht mindestens 2 KIs (Forges Spectator-Pfad, siehe HumanMatch.startSpectator).
     if (on && ais.length < 2) {
       setAis([...ais, EMPTY]);
-      setAiPicks([...aiPicks, DEFAULT_AI]);
+      setAiPicks([...aiPicks, loadedPicks.current[ais.length] ?? DEFAULT_AI]);
     }
   };
   const editHuman = (n: Pick) => {
@@ -73,7 +83,7 @@ export default function Lobby() {
   const addAi = () => {
     setShownError(undefined);
     setAis([...ais, EMPTY]);
-    setAiPicks([...aiPicks, DEFAULT_AI]);
+    setAiPicks([...aiPicks, loadedPicks.current[ais.length] ?? DEFAULT_AI]);
   };
   const removeAi = (i: number) => {
     setShownError(undefined);

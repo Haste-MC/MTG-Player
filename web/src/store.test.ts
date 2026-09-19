@@ -46,6 +46,7 @@ describe("reduce", () => {
       aiProfiles: ["Default", "Cautious", "Experimental", "Reckless"],
       aiTimeout: 5,
     });
+    expect(s.aiModes).toEqual(["standard", "hybrid", "sim"]);
     expect(s.aiProfiles).toEqual(["Default", "Cautious", "Experimental", "Reckless"]);
     expect(s.aiTimeout).toBe(5);
   });
