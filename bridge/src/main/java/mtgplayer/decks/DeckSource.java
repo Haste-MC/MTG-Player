@@ -5,11 +5,13 @@ import forge.deck.Deck;
 import mtgplayer.forge.Precons;
 
 /**
- * Übersetzt die Deck-Angabe aus startGame ({precon} | {saved} | {text, deckName?}) in ein Deck.
+ * Übersetzt die Deck-Angabe aus startGame ({precon} | {saved} | {text, deckName?} |
+ * {archidekt, deckName?}) in ein Deck.
  *
  * <p>{@code name} ist bei den Gegner-Eintraegen aus startGame der Spielername (z.B. "KI 1") –
- * das ist NICHT der Speichername fuer ein {@code text}-Deck, dafuer gibt es das eigene Feld
- * {@code deckName}. Ohne {@code deckName} wird der vorgeschlagene Commander-Name genutzt.</p>
+ * das ist NICHT der Speichername fuer ein {@code text}- oder {@code archidekt}-Deck, dafuer gibt
+ * es das eigene Feld {@code deckName}. Ohne {@code deckName} wird der vorgeschlagene
+ * Commander-Name (bei {@code archidekt}: der Deckname von Archidekt) genutzt.</p>
  */
 public final class DeckSource {
 
@@ -17,9 +19,15 @@ public final class DeckSource {
     public record Resolved(Deck deck, Runnable save) { }
 
     private final DeckStore store;
+    private final Archidekt archidekt;
 
     public DeckSource(DeckStore store) {
+        this(store, Archidekt.standard());
+    }
+
+    public DeckSource(DeckStore store, Archidekt archidekt) {
         this.store = store;
+        this.archidekt = archidekt;
     }
 
     public Resolved resolve(JsonNode node) {
@@ -32,16 +40,28 @@ public final class DeckSource {
         if (node.hasNonNull("saved")) {
             return new Resolved(store.load(node.get("saved").asText()), () -> { });
         }
+        if (node.hasNonNull("archidekt")) {
+            Archidekt.Result r = archidekt.fetch(node.get("archidekt").asText());
+            String name = node.hasNonNull("deckName") && !node.get("deckName").asText().isBlank()
+                    ? node.get("deckName").asText().trim() : r.name();
+            return resolveText(r.text(), name);
+        }
         if (node.hasNonNull("text")) {
             String text = node.get("text").asText();
-            DeckImport.Result r = DeckImport.parse(text);
-            if (!r.problems().isEmpty()) {
-                throw new IllegalArgumentException("Deck-Import:\n" + String.join("\n", r.problems()));
-            }
             String name = node.hasNonNull("deckName") && !node.get("deckName").asText().isBlank()
-                    ? node.get("deckName").asText().trim() : DeckImport.suggestName(text, r.deck());
-            return new Resolved(r.deck(), () -> store.save(name, r.deck()));
+                    ? node.get("deckName").asText().trim() : null;
+            return resolveText(text, name);
         }
-        throw new IllegalArgumentException("Deck braucht 'precon', 'saved' oder 'text'");
+        throw new IllegalArgumentException("Deck braucht 'precon', 'saved', 'text' oder 'archidekt'");
+    }
+
+    /** Gemeinsame Textlisten-Verarbeitung fuer {@code text} und {@code archidekt}: parse → Probleme → Resolved mit Save. */
+    private Resolved resolveText(String text, String deckNameOrNull) {
+        DeckImport.Result r = DeckImport.parse(text);
+        if (!r.problems().isEmpty()) {
+            throw new IllegalArgumentException("Deck-Import:\n" + String.join("\n", r.problems()));
+        }
+        String name = deckNameOrNull != null ? deckNameOrNull : DeckImport.suggestName(text, r.deck());
+        return new Resolved(r.deck(), () -> store.save(name, r.deck()));
     }
 }

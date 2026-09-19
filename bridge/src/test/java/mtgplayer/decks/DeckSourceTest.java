@@ -98,4 +98,23 @@ class DeckSourceTest {
     void ohneBekannteFormWirft(@TempDir Path dir) {
         assertThrows(IllegalArgumentException.class, () -> new DeckSource(new DeckStore(dir)).resolve(Json.parse("{}")));
     }
+
+    @Test
+    void archidektFormHoltParstUndSpeichert(@TempDir Path dir) throws Exception {
+        String body = java.nio.file.Files.readString(Path.of("src/test/resources/archidekt-1.json"));
+        DeckStore store = new DeckStore(dir);
+        DeckSource src = new DeckSource(store, new Archidekt(url -> body));
+        DeckSource.Resolved r = src.resolve(Json.parse("{\"archidekt\":\"https://archidekt.com/decks/1/x\"}"));
+        r.save().run();
+        assertEquals(List.of("Fun With Fungus"), store.names());
+        assertEquals("Thelon of Havenwood", r.deck().getCommanders().get(0).getName());
+    }
+
+    @Test
+    void archidektFehlerWirdGemeldet(@TempDir Path dir) {
+        DeckSource src = new DeckSource(new DeckStore(dir), new Archidekt(url -> { throw new java.io.IOException("HTTP 500"); }));
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                () -> src.resolve(Json.parse("{\"archidekt\":\"42\"}")));
+        assertTrue(e.getMessage().contains("Archidekt"));
+    }
 }

@@ -149,6 +149,7 @@ public final class Bridge {
      * KI-only-Modus (Zuschauer, kein humanDeck): {"type":"startGame","spectate":true,
      * "opponents":[{deckAngabe,"name":"KI 1"}, ... 2–6 Eintraege]}
      * deckAngabe: {"precon":"..."} | {"saved":"..."} | {"text":"...", "deckName":"..."?}
+     * | {"archidekt":"https://archidekt.com/decks/...", "deckName":"..."?}
      * "name" bei einem Gegner-Eintrag ist der Spielername, nicht der Speichername des Decks.
      */
     private void startGame(JsonNode msg) {
