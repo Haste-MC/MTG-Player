@@ -67,12 +67,41 @@ cd bridge
 mvn -q test                                # alle Tests inkl. KI-Spiel und End-to-End über WebSocket (Minuten)
 mvn -q compile exec:java                   # Bridge-Server (WebSocket 8081, HTTP 8080)
 mvn -q compile exec:java -Dexec.args="--ai-demo 42"   # headless KI-Spiel wie in M1
+mvn -q compile exec:java -Dexec.args="--bench"         # N Spiele KI gegen KI, siehe Abschnitt "Bench"
 ```
 
 Ports: `-Dmtgplayer.wsPort=…`, `-Dmtgplayer.httpPort=…`; Bind-Adresse `-Dmtgplayer.bind=…` (Standard `0.0.0.0`, damit Windows unter WSL2 per localhost rankommt); Frontend-Verzeichnis: `-Dmtgplayer.web=…` (Standard `../web/dist`).
 `ForgeBoot.init()` schreibt bei jedem Start `bridge/assets/forge.profile.properties` (generiert, git-ignoriert) und lenkt
 Forges Nutzerdaten damit nach `~/.mtg-player/`; `bridge/assets/res` ist ein Symlink auf `forge/forge-gui/res`.
 Der Assets-Pfad ist mit `-Dmtgplayer.assets=<dir>` überschreibbar; Maven setzt ihn für `test` und `exec:java` automatisch.
+
+## Bench (KI gegen KI)
+
+Misst reproduzierbar, ob eine KI-Einstellung gegen eine andere gewinnt: N Spiele 1-gegen-1, headless, mit Seed.
+
+```bash
+cd bridge && mvn -q compile exec:java -Dexec.args="--bench --games 40 --a sim:Default --b std:Default --deck-a 'precon:Abzan Armor [TDC] [2025]' --deck-b 'precon:Adaptive Enchantment [C18] [2018]' --seed 1"
+```
+
+Precon-Namen mit Leerzeichen müssen in `-Dexec.args` in Anführungszeichen stehen (Maven trennt sonst am Leerzeichen).
+
+| Option | Bedeutung | Standard |
+|---|---|---|
+| `--games N` | Zahl der Spiele | 40 |
+| `--a spec` / `--b spec` | KI-Sitze, `AiConfig.parse`, z. B. `sim:Reckless`, `std`, `hybrid:Cautious` | `sim:Default` / `std:Default` |
+| `--deck-a ref` / `--deck-b ref` | Deck: `precon:<Name>` oder `saved:<Name>` | erste zwei Precons alphabetisch |
+| `--turns N` | Zugdeckel (Spielerzüge) → Unentschieden | 200 |
+| `--timeout s` | KI-Bedenkzeit in Sekunden | 5 |
+| `--seed n` | Basis-Seed; Spiel i nutzt `seed + i` | aktuelle Zeit |
+| `--out dir` | Ausgabeverzeichnis | `~/.mtg-player/bench/` |
+
+Ausgabe: `<out>/<yyyy-MM-dd-HHmm>-<a>-vs-<b>.md` (Tabelle, Siegquote mit 95-%-Wilson-Intervall, Parameter, Seed,
+eine Zeile je Spiel) und die gleichnamige `.json` mit allen Einzelspielen. Nach jedem Spiel eine Fortschrittszeile
+auf stdout. Läuft Minuten bis Stunden; Ctrl-C schreibt den Zwischenstand.
+
+`sim` (`USE_FULL_SIMULATION`) simuliert Angriffe/Blocks/Ziele voraus und ist entsprechend rechenintensiv; auf
+manchen Matchups treibt das den Speicherverbrauch spürbar hoch (bei Bedarf `MAVEN_OPTS=-Xmx8g` oder mehr setzen).
+`hybrid` (`USE_HYBRID_SIMULATION`, nur Zauberauswahl) ist deutlich günstiger.
 
 ## Offen
 

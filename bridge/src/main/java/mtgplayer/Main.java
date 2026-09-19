@@ -1,6 +1,8 @@
 package mtgplayer;
 
 import forge.deck.Deck;
+import mtgplayer.bench.Bench;
+import mtgplayer.bench.BenchArgs;
 import mtgplayer.forge.ForgeBoot;
 import mtgplayer.forge.Precons;
 import mtgplayer.images.ImageCache;
@@ -12,6 +14,7 @@ import mtgplayer.server.HttpStatic;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Random;
@@ -19,6 +22,7 @@ import java.util.Random;
 /**
  * Standard: Bridge-Server für den Browser (WebSocket 8081, HTTP 8080).
  * {@code --ai-demo [seed]}: vier zufällige Precons spielen headless (M1-Verhalten).
+ * {@code --bench [Optionen]}: N Spiele KI gegen KI headless, siehe README Abschnitt "Bench".
  */
 public final class Main {
 
@@ -31,6 +35,11 @@ public final class Main {
 
         if (args.length > 0 && args[0].equals("--ai-demo")) {
             aiDemo(args.length > 1 ? Long.parseLong(args[1]) : System.currentTimeMillis());
+            return;
+        }
+
+        if (args.length > 0 && args[0].equals("--bench")) {
+            Bench.run(BenchArgs.parse(Arrays.copyOfRange(args, 1, args.length)), System.out);
             return;
         }
 
