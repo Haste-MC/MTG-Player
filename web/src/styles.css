@@ -318,20 +318,29 @@ input[type="checkbox"] { accent-color: var(--accent); width: 14px; height: 14px;
    die Effekte-Zeile (Regel 5) - kein Rand-, sondern ein reproduzierbarer Fall bei einer normalen,
    im Brief vorgesehenen Handgroesse (2-5 Karten). Fix: --w-spec-hand (und damit --h, fuer ALLE
    Handkarten der Zeile gleich) wird zusaetzlich auf einen Wert gedeckelt, der selbst im Worst-Case
-   von bis zu 6 Stufen a 12px (72px) noch in die tatsaechliche Containerhoehe passt - dadurch schrumpft
-   die GESAMTE Karte (nicht nur ihr Slot-Kasten), bevor die letzte Karte ueberhaupt Gefahr laeuft,
-   ueber den Rand zu ragen. */
+   aller Stufen (8px je verdeckter Karte, siehe --n unten) noch in die tatsaechliche Containerhoehe
+   passt - dadurch schrumpft die GESAMTE Karte (nicht nur ihr Slot-Kasten), bevor die letzte Karte
+   ueberhaupt Gefahr laeuft, ueber den Rand zu ragen. Das Budget rechnete zunaechst mit einem festen
+   72px (6 Stufen a 12px) statt der echten Handgroesse - bei >= 8 Handkarten (Commander kommt vor)
+   reichte das nicht mehr und die Hand lief wieder nach oben in Stapel/Kommandozone (Fix-Runde 4):
+   PlayerZone setzt --n auf die tatsaechliche Kartenzahl, die Formel rechnet damit. Die Streifenhoehe
+   wurde dabei von 12px auf 8px gesenkt (Formel-Term UND .card-slot min-height, siehe unten): bei
+   9 Handkarten in einer knappen Zuschauer-Zeile (spectator-rows.json KI 2, 1280x720, ~118px
+   Zeilenhoehe) reicht der 22px-Boden bei 12px/Stufe fuer die letzte Karte nicht mehr aus und sie
+   ragt gemessen ~20px unter das Panel hinaus (nachgerechnet, kein CSS-Trick behebt das ohne die
+   Streifenhoehe zu senken); bei 8px/Stufe bleibt die Formel bis zu dieser Handgroesse selbsttragend
+   (kein Bodenkontakt mehr noetig). */
 .spectator-hand { container-type: size; grid-area: hand; align-self: stretch; min-height: 0; display: flex; flex-direction: column; justify-content: flex-end; width: calc(var(--cmd-w) + 14px); }
 .spectator-hand .row {
   height: 100%;
-  --w: min(var(--w-spec-hand), max(22px, calc((100cqh - 72px) / 1.4)));
+  --w: min(var(--w-spec-hand), max(22px, calc((100cqh - 8px * max(0, var(--n, 1) - 1) - 20px) / 1.4)));
   --h: calc(var(--w) * 1.4);
   display: flex; flex-direction: column; flex-wrap: nowrap; align-items: center; gap: 0; padding: 2px; min-height: 0; overflow: visible;
 }
-/* Slot = schrumpfbare Stufe: flex-basis 30 % der Kartenhoehe, schrumpft bis min-height 12px, wenn die
+/* Slot = schrumpfbare Stufe: flex-basis 30 % der Kartenhoehe, schrumpft bis min-height 8px, wenn die
    Zeile nicht genug Platz fuer alle Karten hat. Die letzte Karte behaelt ihre volle Hoehe (flex: none) -
    die ist dank des cqh-Deckels oben bereits klein genug, um in die Zeile zu passen. */
-.spectator-hand .card-slot { flex: 0 1 calc(var(--h) * 0.3); min-height: 12px; height: auto; overflow: visible; align-items: flex-start; }
+.spectator-hand .card-slot { flex: 0 1 calc(var(--h) * 0.3); min-height: 8px; height: auto; overflow: visible; align-items: flex-start; }
 .spectator-hand .card-slot:last-child { flex: none; height: var(--h); }
 .spectator-hand .card-slot:hover { z-index: 6; }
 .spectator-hand .card-slot:hover .card-frame { transform: translateY(-2px) scale(1.04); }
