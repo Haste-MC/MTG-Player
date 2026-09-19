@@ -17,6 +17,13 @@ describe("toRef", () => {
     expect(toRef({ kind: "text", value: text, name: "Mein Deck" })).toEqual({ text, deckName: "Mein Deck" });
     expect(toRef({ kind: "text", value: text, name: "" })).toEqual({ text, deckName: undefined });
   });
+
+  it("archidekt mit und ohne deckName", () => {
+    const url = "https://archidekt.com/decks/1/x";
+    expect(toRef({ kind: "archidekt", value: url, name: "" })).toEqual({ archidekt: url });
+    expect(toRef({ kind: "archidekt", value: url, name: "Mein Deck" })).toEqual({ archidekt: url, deckName: "Mein Deck" });
+    expect(toRef({ kind: "archidekt", value: "", name: "" })).toBeUndefined();
+  });
 });
 
 describe("Gegner-Eintrag (name = Spielername)", () => {

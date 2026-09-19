@@ -55,6 +55,7 @@ export default function Lobby() {
         <option value="precon">Precon</option>
         <option value="saved">Eigenes Deck</option>
         <option value="text">Textliste</option>
+        <option value="archidekt">Archidekt-URL</option>
       </select>
       {p.kind === "precon" && (
         <select value={p.value} onChange={(e) => onChange({ ...p, value: e.target.value })}>
@@ -73,6 +74,12 @@ export default function Lobby() {
           <input placeholder="Name (optional)" value={p.name} onChange={(e) => onChange({ ...p, name: e.target.value })} />
           <textarea rows={8} placeholder={"Archidekt/Arena-Export einfügen, z. B.\n1 Sol Ring (c21) 263\nCommander\n1 Felothar the Steadfast"}
             value={p.value} onChange={(e) => onChange({ ...p, value: e.target.value })} />
+        </div>
+      )}
+      {p.kind === "archidekt" && (
+        <div className="textdeck">
+          <input placeholder="https://archidekt.com/decks/12345/…" value={p.value} onChange={(e) => onChange({ ...p, value: e.target.value })} />
+          <input placeholder="Name (optional, sonst Archidekt-Deckname)" value={p.name} onChange={(e) => onChange({ ...p, name: e.target.value })} />
         </div>
       )}
     </div>
