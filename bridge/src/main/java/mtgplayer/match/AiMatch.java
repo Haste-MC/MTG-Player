@@ -26,7 +26,7 @@ import java.util.function.Consumer;
  */
 public final class AiMatch {
 
-    public record Result(String winner, String reason, int turns) { }
+    public record Result(String winner, String reason, int turns, boolean turnCapped) { }
 
     private AiMatch() { }
 
@@ -80,11 +80,16 @@ public final class AiMatch {
         };
         game.getGameLog().addObserver(observer);
 
+        // Forge selbst kann ein Spiel ebenfalls mit GameEndReason.Draw beenden (gleichzeitiger Verlust,
+        // Stack > 999, GameDrawEffect) - dieses Flag markiert nur ein Unentschieden DURCH UNS (Zugdeckel),
+        // damit BenchStats.summarize() es nicht mit einem Forge-eigenen Unentschieden verwechselt.
+        boolean[] turnCapped = {false};
         game.subscribeToEvents(new Object() {
             @Subscribe
             public void onTurnEnded(GameEventTurnEnded e) {
                 if (!game.isGameOver() && game.getPhaseHandler().getTurn() >= maxTurns) {
                     log.accept("[bridge] turn-cap " + maxTurns + " erreicht, breche ab");
+                    turnCapped[0] = true;
                     // Spieler vorher auf Draw setzen, sonst markiert Player.onGameOver() alle als Gewinner.
                     for (Player p : game.getPlayers()) {
                         p.intentionalDraw();
@@ -105,6 +110,6 @@ public final class AiMatch {
                 ? null : outcome.getWinningPlayer().getPlayer().getName();
         String reason = outcome == null ? "unbekannt" : String.valueOf(outcome.getWinCondition());
         int turns = outcome == null ? game.getPhaseHandler().getTurn() : outcome.getLastTurnNumber();
-        return new Result(winner, reason, turns);
+        return new Result(winner, reason, turns, turnCapped[0]);
     }
 }

@@ -36,7 +36,7 @@ public final class Bench {
      *  = "Turn {0} ({1})"); daraus lesen wir, wer tatsaechlich zuerst dran war (Forge lost das zusaetzlich
      *  zur Sitzreihenfolge aus, s. u.). */
     private static final Pattern FIRST_TURN = Pattern.compile("Turn 1 \\((.+)\\)");
-    private static final DateTimeFormatter FILE_STAMP = DateTimeFormatter.ofPattern("yyyy-MM-dd-HHmm");
+    private static final DateTimeFormatter FILE_STAMP = DateTimeFormatter.ofPattern("yyyy-MM-dd-HHmmss");
     private static final DateTimeFormatter DISPLAY_STAMP = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
     private Bench() { }
@@ -59,6 +59,7 @@ public final class Bench {
         Runtime.getRuntime().addShutdownHook(hook);
 
         int winsA = 0, winsB = 0, draws = 0;
+        Summary summary = null;
         try {
             for (int i = 0; i < args.games(); i++) {
                 MyRandom.setRandom(new Random(args.seed() + i));
@@ -83,7 +84,7 @@ public final class Bench {
                 long millis = System.currentTimeMillis() - t0;
 
                 GameRecord record = new GameRecord(i, args.seed() + i, firstSeat[0] == null ? "?" : firstSeat[0],
-                        r.winner(), r.reason(), r.turns(), millis);
+                        r.winner(), r.reason(), r.turns(), millis, r.turnCapped());
                 synchronized (records) {
                     records.add(record);
                 }
@@ -97,6 +98,14 @@ public final class Bench {
                 String outcome = r.winner() == null ? "Unentschieden" : r.winner() + " gewinnt";
                 progress.printf("#%d %s (Zug %d, %d s)  A %d – B %d – U %d%n",
                         i + 1, outcome, r.turns(), millis / 1000, winsA, winsB, draws);
+            }
+            // Bericht schreiben, WAEHREND der Shutdown-Hook noch registriert ist (s. u.): sonst gaebe es
+            // ein Fenster zwischen removeShutdownHook und diesem Aufruf, in dem ein Ctrl-C weder den Hook
+            // (schon entfernt) noch diesen Pfad (noch nicht erreicht) treffen wuerde und der letzte Lauf
+            // verloren ginge.
+            summary = BenchStats.summarize(records);
+            if (written.compareAndSet(false, true)) {
+                writeReports(args, records, summary);
             }
         } catch (RuntimeException | Error e) {
             // Eine Forge-Ausnahme mitten im Lauf darf Stunden an Ergebnissen nicht verwerfen:
@@ -118,10 +127,6 @@ public final class Bench {
             }
         }
 
-        Summary summary = BenchStats.summarize(records);
-        if (written.compareAndSet(false, true)) {
-            writeReports(args, records, summary);
-        }
         return summary;
     }
 

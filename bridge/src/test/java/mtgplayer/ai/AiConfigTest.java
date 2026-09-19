@@ -2,17 +2,36 @@ package mtgplayer.ai;
 
 import static org.junit.jupiter.api.Assertions.*;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.google.common.collect.Multimap;
+import forge.ai.AiCache;
 import forge.ai.LobbyPlayerAi;
 import forge.ai.PlayerControllerAi;
+import forge.ai.simulation.GameCopier;
+import forge.deck.Deck;
 import forge.game.Game;
+import forge.game.Match;
 import forge.game.player.Player;
+import forge.game.player.RegisteredPlayer;
+import forge.player.LobbyPlayerHuman;
+import java.lang.reflect.Field;
+import java.util.List;
 import mtgplayer.forge.ForgeBoot;
+import mtgplayer.forge.Precons;
+import mtgplayer.match.CommanderRules;
 import mtgplayer.protocol.Json;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 class AiConfigTest {
     @BeforeAll static void boot() { ForgeBoot.init(); }
+
+    /** {@code AiCache.dataMap} ist privat und hat keinen Getter (nur {@code getCached}/{@code clear}) -
+     *  fuer den Test unten lesen wir es per Reflection statt Forge dafuer zu aendern. */
+    private static Multimap<?, ?> aiCacheDataMap() throws ReflectiveOperationException {
+        Field f = AiCache.class.getDeclaredField("dataMap");
+        f.setAccessible(true);
+        return (Multimap<?, ?>) f.get(null);
+    }
 
     @Test void profileSindGeladenDefaultZuerst() {
         assertEquals("Default", AiConfig.profiles().get(0));
@@ -37,6 +56,20 @@ class AiConfigTest {
         assertThrows(IllegalArgumentException.class, () -> AiConfig.fromJson(Json.parse("{\"profile\":\"Nope\"}")));
     }
 
+    @Test void fromJsonLehntNichtObjektAb() {
+        JsonNode msg = Json.parse("{\"ai\":\"sim\"}");
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> AiConfig.fromJson(msg.path("ai")));
+        assertEquals("ai muss ein Objekt sein", e.getMessage());
+    }
+
+    @Test void timeoutLehntNichtGanzzahlAb() {
+        JsonNode msg = Json.parse("{\"aiTimeout\":\"schnell\"}");
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> AiConfig.timeout(msg));
+        assertEquals("KI-Bedenkzeit muss eine ganze Zahl sein", e.getMessage());
+        // 5.0 ist im JSON keine ganze Zahl (FloatNode), auch wenn der Wert ganzzahlig ist.
+        assertThrows(IllegalArgumentException.class, () -> AiConfig.timeout(Json.parse("{\"aiTimeout\":5.0}")));
+    }
+
     @Test void lobbyPlayerTraegtOptionUndProfil() {
         LobbyPlayerAi lp = new AiConfig(AiConfig.Mode.SIM, "Reckless").newLobbyPlayer("KI 1");
         assertEquals("Reckless", lp.getAiProfile());
@@ -47,5 +80,31 @@ class AiConfigTest {
         Player q = AiConfig.DEFAULT.newLobbyPlayer("KI 2").createIngamePlayer(game, 1);
         assertFalse(((PlayerControllerAi) q.getController()).getAi().usesFullSimulation());
         assertFalse(((PlayerControllerAi) q.getController()).getAi().usesHybridSimulation());
+    }
+
+    /** Regression fuer den Bug aus dem Review: in einem menschlichen Spiel sitzt der Mensch auf Platz 0
+     *  (wie HostedMatch es aufbaut) und unsere KI auf Platz 1. GameCopier.clonePlayer ersetzt
+     *  LobbyPlayerHuman in der Kopie durch eine FREMDE LobbyPlayerAi (Platz 0 in der Kopie), unsere
+     *  Unterklasse bleibt fuer Platz 1 erhalten - dort darf createIngamePlayer nicht mehr an "id == 0"
+     *  haengen, sonst feuert AiCache.clear() in Simulationskopien menschlicher Spiele nie. */
+    @Test void aiCacheWirdAuchInSimKopieEinesMenschlichenSpielsGeleert() throws ReflectiveOperationException {
+        Deck a = Precons.load("Abzan Armor [TDC] [2025]");
+        Deck b = Precons.load("Adaptive Enchantment [C18] [2018]");
+        RegisteredPlayer human = RegisteredPlayer.forCommander(a);
+        human.setPlayer(new LobbyPlayerHuman("Du"));
+        RegisteredPlayer ai = RegisteredPlayer.forCommander(b);
+        ai.setPlayer(new AiConfig(AiConfig.Mode.SIM, "Default").newLobbyPlayer("KI"));
+        Game game = new Match(CommanderRules.create(), List.of(human, ai), "t").createGame();
+
+        // Cache-Eintrag anlegen, wie es Forges ComputerUtil*-Klassen im echten Spiel tun.
+        aiCacheDataMap().clear();
+        AiCache.getCached("aiConfigTest-key", () -> "wert", null, game);
+        assertFalse(aiCacheDataMap().isEmpty(), "Testvorbereitung: Cache sollte einen Eintrag haben");
+
+        new GameCopier(game).makeCopy();
+
+        assertTrue(aiCacheDataMap().isEmpty(),
+                "AiCache.clear() sollte in jeder Simulationskopie feuern, auch wenn der Mensch (nicht unsere "
+                        + "LobbyPlayerAi) auf Platz 0 sitzt und unsere KI dadurch id >= 1 hat");
     }
 }

@@ -95,17 +95,19 @@ Precon-Namen mit Leerzeichen müssen in `-Dexec.args` in Anführungszeichen steh
 | `--seed n` | Basis-Seed; Spiel i nutzt `seed + i` | aktuelle Zeit |
 | `--out dir` | Ausgabeverzeichnis | `~/.mtg-player/bench/` |
 
-Ausgabe: `<out>/<yyyy-MM-dd-HHmm>-<a>-vs-<b>.md` (Tabelle, Siegquote mit 95-%-Wilson-Intervall, Parameter, Seed,
+Ausgabe: `<out>/<yyyy-MM-dd-HHmmss>-<a>-vs-<b>.md` (Tabelle, Siegquote mit 95-%-Wilson-Intervall, Parameter, Seed,
 eine Zeile je Spiel) und die gleichnamige `.json` mit allen Einzelspielen. Nach jedem Spiel eine Fortschrittszeile
 auf stdout. Läuft Minuten bis Stunden; Ctrl-C schreibt den Zwischenstand.
 
 `sim` (`USE_FULL_SIMULATION`) simuliert Angriffe/Blocks/Ziele voraus und ist entsprechend rechenintensiv;
 der Speicherverbrauch ist inzwischen unkritisch (`AiConfig.newLobbyPlayer` leert Forges `AiCache` nach jeder
 Simulationskopie, siehe `.superpowers/sdd/sim-oom-investigation.md` – ohne den Fix wuchs der Heap pro
-Entscheidung unbegrenzt). `--timeout` wirkt bei `sim` aber **nicht**: Forges Voll-Simulation fragt
-`AI_TIMEOUT` nirgends ab, eine einzelne Entscheidung dauert, so lange sie dauert – ein einzelnes `sim`-Spiel
+Entscheidung unbegrenzt; gilt auch für menschliche Spiele mit Sim-KI, nicht nur für den Bench). `--timeout`
+wirkt bei `sim` aber **nicht**: die Zauberwahl-Simulation kennt kein Zeitlimit (nur die Angriffs-Bewertung
+nutzt den Timeout), eine einzelne Entscheidung dauert, so lange sie dauert – ein einzelnes `sim`-Spiel
 kann dadurch 2–10 Minuten brauchen. `hybrid` (`USE_HYBRID_SIMULATION`, nur Zauberauswahl simuliert) ist
-deutlich schneller.
+deutlich schneller. KI-Sitze spielen inzwischen das Profil `Default` (Datei `res/ai/Default.ai`) statt
+Forges eingebauter Standard-Heuristiken – `AiConfig.newLobbyPlayer` ruft immer `setAiProfile`.
 
 ## Offen
 

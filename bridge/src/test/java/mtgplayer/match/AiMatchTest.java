@@ -52,6 +52,7 @@ class AiMatchTest {
         assertNotNull(r);
         assertNull(r.winner(), "bei turn-cap sollte es keinen Gewinner geben, war " + r.winner());
         assertEquals("Draw", r.reason());
+        assertTrue(r.turnCapped(), "turnCapped sollte bei einem Zugdeckel-Ende gesetzt sein");
         assertTrue(r.turns() <= 3, "turn-cap nicht eingehalten: " + r.turns());
         assertTrue(log.stream().anyMatch(l -> l.startsWith("[bridge] turn-cap")),
                 "Log sollte eine turn-cap Zeile enthalten");

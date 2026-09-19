@@ -32,7 +32,8 @@ import java.util.function.Predicate;
  * Mulligan-Prompt → Keep → Prio-Prompt in Zug 1 → Concede-Dialog → gameOver.
  *
  * <p>Beide Tests teilen sich eine statische WebSocket-Verbindung/Inbox (siehe start()); die
- * Bridge schickt "lobby" nur einmal beim Connect. {@code @TestMethodOrder} stellt sicher, dass
+ * Bridge schickt "lobby" beim Connect und erneut nach jedem Spielstart (Bridge#handle, ggf. neu
+ * gespeichertes Deck). {@code @TestMethodOrder} stellt sicher, dass
  * {@link #lobbyStartKeepPrioConcede()} (das dieses Connect-"lobby" konsumiert und auf
  * {@code aiProfiles} prüft) vor {@link #aiConfigUndTimeoutWerdenAngenommenUnbekanntesProfilAbgelehnt()}
  * läuft - sonst würde dessen erstes {@code await("error", ...)} das Connect-"lobby" stillschweigend

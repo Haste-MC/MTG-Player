@@ -69,10 +69,15 @@ public record AiConfig(Mode mode, String profile) {
     }
     public static AiConfig fromJson(JsonNode ai) {
         if (ai == null || ai.isMissingNode() || ai.isNull()) return DEFAULT;
+        if (!ai.isObject()) throw new IllegalArgumentException("ai muss ein Objekt sein");
         return validated(new AiConfig(Mode.parse(ai.path("mode").asText("standard")), ai.path("profile").asText("Default")));
     }
     public static int timeout(JsonNode msg) {
-        int t = msg.path("aiTimeout").asInt(DEFAULT_TIMEOUT);
+        JsonNode aiTimeout = msg.path("aiTimeout");
+        if (!aiTimeout.isMissingNode() && !aiTimeout.isNull() && !aiTimeout.isInt()) {
+            throw new IllegalArgumentException("KI-Bedenkzeit muss eine ganze Zahl sein");
+        }
+        int t = aiTimeout.asInt(DEFAULT_TIMEOUT);
         if (t < MIN_TIMEOUT || t > MAX_TIMEOUT) throw new IllegalArgumentException("KI-Bedenkzeit muss 1–60 s sein");
         return t;
     }
@@ -88,17 +93,21 @@ public record AiConfig(Mode mode, String profile) {
         // EINER Entscheidung tausende Spielkopien (GameSimulator/GameCopier), die der Cache dann alle
         // festhaelt - Live-Set-Spitze > 12 GB, OutOfMemoryError. Der Game-Konstruktor ruft
         // createIngamePlayer(game, id) fuer jede Kopie ueber dasselbe LobbyPlayer-Objekt auf
-        // (GameCopier.clonePlayer reicht es durch); wir leeren den Cache dort je neu erzeugtem Game
-        // (id == 0 = der/die Spieler:in dieses Spiels, nicht die Statisten). Das Leeren aendert keine
-        // Entscheidung (reines Memo) und kostet nichts Messbares - siehe
+        // (GameCopier.clonePlayer reicht es durch); wir leeren den Cache dort bei JEDER Kopie, unabhaengig
+        // von der id. Eine feste id (z. B. 0) waere kein verlaesslicher Marker fuer "das ist unser Sitz":
+        // HostedMatch sortiert den Menschen auf Platz 0, und GameCopier.clonePlayer ersetzt
+        // LobbyPlayerHuman in der Kopie durch eine FREMDE (Forges eigene) LobbyPlayerAi - unsere
+        // Unterklasse bleibt zwar erhalten, sitzt in der Kopie aber weiterhin auf ihrer id aus dem
+        // Originalspiel, also >= 1, sobald ein Mensch am Tisch sitzt (id == 0 haette dort nie gefeuert).
+        // Der Cache ist global (static), das Leeren wirkt also fuer alle Sitze gleich; da der Konstruktor
+        // vor jeder Bewertung dieser Kopie laeuft, ist das unproblematisch. n Aufrufe je Kopie auf einer
+        // synchronisierten Map sind vernachlaessigbar und aendern keine Entscheidung (reines Memo) - siehe
         // .superpowers/sdd/sim-oom-investigation.md (Lauf 4-7: Live-Set-Spitze faellt von >12 GB auf
-        // ~1,6 GB, Laufzeit unveraendert).
+        // ~1,6 GB, Laufzeit unveraendert; gilt auch fuer menschliche Spiele mit Sim-KI).
         LobbyPlayerAi lp = new LobbyPlayerAi(name, opts) {
             @Override
             public Player createIngamePlayer(Game game, int id) {
-                if (id == 0) {
-                    AiCache.clear();
-                }
+                AiCache.clear();
                 return super.createIngamePlayer(game, id);
             }
         };

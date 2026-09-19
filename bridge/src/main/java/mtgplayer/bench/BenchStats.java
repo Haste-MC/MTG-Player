@@ -38,9 +38,10 @@ public final class BenchStats {
                 winsB++;
             } else {
                 draws++;
-                // AiMatch beendet ein Spiel nur beim Zugdeckel mit dem Grund "Draw" (siehe AiMatch.play) -
-                // jedes Unentschieden mit diesem Grund ist also eines durch den Zugdeckel.
-                if ("Draw".equals(g.reason())) {
+                // Forge kann ein Spiel selbst mit GameEndReason.Draw beenden (gleichzeitiger Verlust,
+                // Stack > 999, GameDrawEffect) - nur GameRecord.turnCapped() unterscheidet zuverlaessig
+                // ein Unentschieden durch unseren Zugdeckel von einem Forge-eigenen.
+                if (g.turnCapped()) {
                     drawsByTurnCap++;
                 }
             }

@@ -142,7 +142,9 @@ class SimMemoryProbe {
                 ? null : outcome.getWinningPlayer().getPlayer().getName();
         String reason = outcome == null ? "unbekannt" : String.valueOf(outcome.getWinCondition());
         int t = outcome == null ? game.getPhaseHandler().getTurn() : outcome.getLastTurnNumber();
-        return new AiMatch.Result(winner, reason, t);
+        // Wegwerf-Sonde: turnCapped wird hier nicht nachverfolgt (die Sonde wertet nur Speicher/Laufzeit
+        // aus, siehe .superpowers/sdd/sim-oom-investigation.md), false ist unschaedlich.
+        return new AiMatch.Result(winner, reason, t, false);
     }
 
     static final java.util.concurrent.atomic.AtomicLong COPIES = new java.util.concurrent.atomic.AtomicLong();
