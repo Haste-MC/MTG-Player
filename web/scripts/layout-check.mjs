@@ -124,8 +124,31 @@ try {
         }
       }
     }
+    // 7. Gemessene Reihen (.bf-rows): mit <= 5 Kreaturen-Stapeln muss die Kartenbreite bei >= 1600px Breite
+    //    mindestens 110px, bei 1920x1080 mindestens 120px sein - der Befund "Karten winzig, Panel leer".
+    const minW = vw >= 1920 && vh >= 1080 ? 120 : vw >= 1600 ? 110 : 0;
+    for (const rows of document.querySelectorAll(".player.spectator .bf-rows")) {
+      const creatures = rows.querySelectorAll(".bf-creatures .card-slot").length;
+      const first = rows.querySelector(".bf-creatures .card:not(.tapped)");
+      if (!first || creatures > 5 || minW === 0) continue;
+      const w = r(first).width;
+      if (w < minW) out.push(`Zuschauer-Panel "${rows.closest(".player")?.querySelector(".pname")?.textContent}": Kartenbreite ${Math.round(w)}px < ${minW}px bei ${creatures} Kreaturen`);
+    }
+    // 8. Laender liegen unten: die Laenderreihe endet nicht mehr als 8px ueber der Unterkante des Reihen-Containers.
+    for (const rows of document.querySelectorAll(".bf-rows")) {
+      const lands = rows.querySelector(".bf-lands");
+      if (!lands) continue;
+      const rb = r(rows), lb = r(lands);
+      if (rb.bottom - lb.bottom > 8) out.push(`Laenderreihe haengt ${Math.round(rb.bottom - lb.bottom)}px ueber der Unterkante (${rows.closest(".player")?.querySelector(".pname")?.textContent})`);
+    }
     return out;
   });
+
+  // 9. Messung stabil: --bw jedes Panels nach 400ms unveraendert (sonst waechst der Container mit den Karten).
+  const bw1 = await page.evaluate(() => [...document.querySelectorAll(".player")].map((p) => p.style.getPropertyValue("--bw")));
+  await page.waitForTimeout(400);
+  const bw2 = await page.evaluate(() => [...document.querySelectorAll(".player")].map((p) => p.style.getPropertyValue("--bw")));
+  if (JSON.stringify(bw1) !== JSON.stringify(bw2)) problems.push(`Kartenbreite pendelt: ${bw1.join(" ")} -> ${bw2.join(" ")}`);
 
   // 6. Hover ueber eine Log-Zeile mit Karte (Detail-Panel fuellt sich) darf das Log-Panel nicht verschieben
   //    oder verkleinern - sonst rutscht die Zeile unter dem Zeiger weg, das Detail leert sich wieder und

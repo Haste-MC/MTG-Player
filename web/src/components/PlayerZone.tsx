@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useRef } from "react";
 import type { CSSProperties } from "react";
 import type { CardSnap, PlayerSnap, Snapshot } from "../protocol";
 import CardBox from "./CardBox";
@@ -7,8 +7,18 @@ import { groupCards } from "../groups";
 import type { Group } from "../groups";
 import { useStore } from "../store";
 import { send } from "../ws";
+import { slotUnits, useBoardSize } from "../boardSize";
+import type { RowSpec } from "../boardSize";
 
 const isLand = (c: CardSnap) => !!c.typeLine?.includes("Land");
+const isCreature = (c: CardSnap) => !!c.typeLine?.includes("Creature");
+// Drei Reihen: Kreaturen (auch Kreatur-Laender/Artefakt-Kreaturen), uebrige bleibende Karten, Laender unten.
+function splitRows(bf: CardSnap[]) {
+  const creatures = groupCards(bf.filter(isCreature));
+  const other = groupCards(bf.filter((c) => !isCreature(c) && !isLand(c)));
+  const lands = groupCards(bf.filter((c) => !isCreature(c) && isLand(c)));
+  return { creatures, other, lands };
+}
 
 /** Wo der Commander steckt, wenn er nicht in der Kommandozone liegt (Forge liefert ZoneType-Namen, Fixtures Kleinschreibung). */
 const ZONE_TEXT: Record<string, string> = {
@@ -66,30 +76,6 @@ function Effects({ effects, inline }: { effects: CardSnap[]; inline?: boolean })
   );
 }
 
-/**
- * Zuschauer-Panel: passt die Kartengroesse nach dem Rendern an die tatsaechliche Hoehe an. Die CSS-Formel
- * (--w-spec) kennt nur die Zahl der Stapel, nicht, wie oft die Reihen umbrechen; laeuft das Spielfeld-Raster
- * ueber seinen Platz (scrollHeight > clientHeight der .battlefield), wird --fit in Zehntelschritten bis 0,5
- * verkleinert. Zuruecksetzen, wenn sich die Kartenzahl oder das Fenster aendert.
- */
-function useFit(enabled: boolean, signature: string) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [fit, setFit] = useState(1);
-  useLayoutEffect(() => { setFit(1); }, [signature]);
-  useLayoutEffect(() => {
-    if (!enabled) return;
-    const onResize = () => setFit(1);
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, [enabled]);
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!enabled || !el) return;
-    if (el.scrollHeight > el.clientHeight + 1 && fit > 0.5) setFit((f) => Math.max(0.5, Math.round((f - 0.1) * 10) / 10));
-  }, [enabled, fit, signature]);
-  return { ref, fit };
-}
-
 export default function PlayerZone({ p, state, compact, spectator }: { p: PlayerSnap; state: Snapshot; compact: boolean; spectator?: boolean }) {
   const seq = useStore((s) => s.state?.prompt.seq);
   const cards = (ids: number[]) => ids.map((id) => state.cards[String(id)]).filter(Boolean);
@@ -98,8 +84,7 @@ export default function PlayerZone({ p, state, compact, spectator }: { p: Player
   const isChip = (c: CardSnap) => !!c.effect || !!c.emblem;
   const effects = [...cards(p.command), ...cards(p.battlefield)].filter(isChip);
   const bf = cards(p.battlefield).filter((c) => !isChip(c));
-  const others = groupCards(bf.filter((c) => !isLand(c)));
-  const lands = groupCards(bf.filter(isLand));
+  const { creatures, other, lands } = splitRows(bf);
   const command = cards(p.command).filter((c) => !isChip(c));
   const graveyard = cards(p.graveyard);
   const exile = cards(p.exile);
@@ -125,10 +110,19 @@ export default function PlayerZone({ p, state, compact, spectator }: { p: Player
   // (die Zeile kostet immer Hoehe, die bei 1280x720 der eigenen Zone fehlt; im Kopf nur, wenn er umbricht).
   // Eigene Zone und Zuschauer-Panels: Zeile "Effekte" unter dem Spielfeld.
   const inlineEffects = compact && !spectator;
-  const { ref: bfRef, fit } = useFit(!!spectator, `${others.length}|${lands.length}|${hand.length}|${command.length}|${effects.length}`);
-  const sizing = compact
-    ? ({ "--n-lands": lands.length, "--n-bf": Math.max(1, others.length), "--n": hand.length, "--fit": fit } as CSSProperties)
-    : undefined;
+  // Messung nur fuer die eigene Zone und Zuschauer-Panels; die kompakte Gegnerzeile behaelt ihre CSS-Formel.
+  const measured = !compact || !!spectator;
+  const rowsRef = useRef<HTMLDivElement>(null);
+  const rowSpecs: RowSpec[] = [
+    { units: creatures.map(slotUnits), scale: 1 },
+    { units: other.map(slotUnits), scale: 1 },
+    { units: lands.map(slotUnits), scale: 0.8 },
+  ];
+  const bw = useBoardSize(rowsRef, rowSpecs, measured);
+  const sizing = {
+    ...(bw !== undefined ? { "--bw": `${bw}px` } : {}),
+    ...(compact && !spectator ? { "--n-lands": lands.length } : {}),
+  } as CSSProperties;
   return (
     <div className={"player" + (active ? " active" : "") + (compact ? " compact" : " own") + (spectator ? " spectator" : "")} style={sizing}>
       <div className={"header" + (p.highlighted ? " highlighted" : "") + (p.targetable ? " targetable" : "")} onClick={() => send({ type: "selectPlayer", id: p.id, seq })}>
@@ -146,7 +140,7 @@ export default function PlayerZone({ p, state, compact, spectator }: { p: Player
         </span>
         {inlineEffects && <Effects effects={effects} inline />}
       </div>
-      <div className="zone battlefield" ref={bfRef}>
+      <div className="zone battlefield">
         <div className="command" title="Kommandozone">
           <div className="zone-label">Kommando&shy;zone</div>
           <div className="row">
@@ -154,10 +148,19 @@ export default function PlayerZone({ p, state, compact, spectator }: { p: Player
             {command.length === 0 && <div className="cmd-placeholder"><span>{placeholder}</span></div>}
           </div>
         </div>
-        <div className="rows">
-          <div className="row bf-main"><Stacks groups={others} /></div>
-          <div className="row bf-lands"><Stacks groups={lands} /></div>
-        </div>
+        {measured ? (
+          <div className="rows bf-rows" ref={rowsRef}>
+            {creatures.length > 0 && <div className="row bf-creatures"><Stacks groups={creatures} /></div>}
+            {other.length > 0 && <div className="row bf-other"><Stacks groups={other} /></div>}
+            {lands.length > 0 && <div className="row bf-lands"><Stacks groups={lands} /></div>}
+            {creatures.length + other.length + lands.length === 0 && <div className="bf-empty">keine bleibenden Karten</div>}
+          </div>
+        ) : (
+          <div className="rows">
+            <div className="row bf-main"><Stacks groups={[...creatures, ...other]} /></div>
+            <div className="row bf-lands"><Stacks groups={lands} /></div>
+          </div>
+        )}
         {(showGrave || showExile) && (
           <div className="piles">
             {showGrave && <Pile label="Grab" cards={graveyard} />}
