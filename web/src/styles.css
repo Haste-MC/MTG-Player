@@ -362,18 +362,27 @@ input[type="checkbox"] { accent-color: var(--accent); width: 14px; height: 14px;
 .tag.tapped-tag::before { content: "\27F3"; font-size: 18px; line-height: 1; font-weight: 400; }
 .player.compact .tag.tapped-tag { width: 20px; height: 20px; }
 .player.compact .tag.tapped-tag::before { font-size: 14px; }
-/* Stapel gleichnamiger Karten (groups.ts): Zaehler oben links, "n getappt" unten links, zwei Kartenkanten dahinter. */
+/* Tabletop-Stapel (groups.ts): bis zu 4 Ebenen hinter der obersten Karte, je 5px nach oben/rechts versetzt;
+   getappte Karten liegen als gedrehte, abgedunkelte Ebenen zuunterst und ragen links/rechts heraus. */
 .card-frame.stacked { isolation: isolate; }
-.card-frame.stacked::before { content: ""; position: absolute; inset: 0; border-radius: 7px; z-index: -1; box-shadow: 3px -3px 0 -1px rgba(255, 255, 255, 0.14), 6px -6px 0 -2px rgba(255, 255, 255, 0.08); }
+.stack-layers { position: absolute; inset: 0; z-index: -1; pointer-events: none; }
+.stack-layer { position: absolute; inset: 0; border-radius: 7px; background: #0c1013; box-shadow: var(--shadow-card); overflow: hidden;
+  transform: translate(calc(var(--i) * 5px), calc(var(--i) * -5px)); }
+.stack-layer .art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.stack-layer:not(:has(.art)) { border: 1px solid var(--line-2); background: linear-gradient(180deg, #232d35, #182027); }
+/* Slot waechst um den Versatz nach rechts, damit die Ebenen nicht in den Nachbarn ragen. */
+.card-slot:has(.stack-layers) { width: calc(var(--w) + var(--layers, 0) * 5px); justify-content: flex-start; }
+/* Gemessene Reihen: getappte Ebenen gedreht (Slot 1,4 w breit, Karte mittig), Badge "n getappt" entfaellt. */
+.bf-rows .card-slot.stack-tapped-slot { width: var(--h); justify-content: center; }
+.bf-rows .stack-layer.tapped { transform: translate(calc(var(--i) * 5px), calc(var(--i) * -5px)) rotate(90deg); }
+.bf-rows .stack-layer.tapped .art { filter: brightness(0.55) saturate(0.8); }
+.bf-rows .tag.stack-tapped { display: none; }
+/* Gegnerzeile (ohne Drehung): Ebenen aufrecht, getappte nur abgedunkelt, Badge bleibt. */
+.player.compact:not(.spectator) .stack-layer.tapped .art { filter: brightness(0.55) saturate(0.8); }
 .tag.stack-count { left: 3px; top: 3px; font-size: 11px; color: var(--gold); border-color: rgba(242, 193, 78, 0.5); background: rgba(24, 19, 6, 0.92); }
 .tag.stack-tapped { left: 3px; bottom: 3px; color: var(--muted); font-weight: 600; }
-/* Kleine Laender (Gegnerzeile ueberlappend, Zuschauer bis 44px, eigene bei niedrigen Fenstern): "3 getappt" passt nicht, wird zu "3⟳". */
 .player.compact .bf-lands .tag.stack-tapped .word { display: none; }
 .player.compact .bf-lands .tag.stack-tapped::after { content: "\27F3"; font-weight: 400; margin-left: 1px; }
-@media (max-height: 800px) {
-  .player.own .bf-lands .tag.stack-tapped .word { display: none; }
-  .player.own .bf-lands .tag.stack-tapped::after { content: "\27F3"; font-weight: 400; margin-left: 1px; }
-}
 /* Token-Rahmen hat das grosse P/T in der Mitte: ⟳ dort unten mittig statt zentriert. */
 .card-frame:has(.token-frame) .tag.tapped-tag { top: auto; bottom: 3px; transform: translateX(-50%); }
 /* Emblem-Textkarte (nur falls ein Emblem doch einmal als Karte gezeigt wird, z. B. in einer Liste): Platz fuer die Marke. */

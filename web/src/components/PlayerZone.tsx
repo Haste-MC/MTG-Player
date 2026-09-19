@@ -118,7 +118,14 @@ export default function PlayerZone({ p, state, compact, spectator }: { p: Player
     { units: other.map(slotUnits), scale: 1 },
     { units: lands.map(slotUnits), scale: 0.8 },
   ];
-  const bw = useBoardSize(rowsRef, rowSpecs, measured);
+  // min 40 statt der fitCardWidth-Vorgabe 50: Tabletop-Stapel (Task 3) lassen gemischt getappte
+  // Stapel jetzt exakt 1,4x breit rendern (vorher war die CSS-Breite schmaler als slotUnits() sie
+  // schon seit Task 1 fuer die Messung ansetzt) - bei einem dicht besetzten 6-Spieler-Panel (viele
+  // Stapel je Reihe, spectator-rows.json KI 4 bei 1600x900) reicht 50px als unterste Kartenbreite
+  // nicht mehr aus, obwohl eine kleinere Breite (~45px) die Reihen tatsaechlich unterbringen wuerde;
+  // der alte Boden liess fitCardWidth dann direkt aufgeben und 50px zurueckgeben, was die Reihe ueber
+  // den Panelrand hinaus wachsen liess (Layout-Check Regel 3).
+  const bw = useBoardSize(rowsRef, rowSpecs, measured, { min: 40 });
   const sizing = {
     ...(bw !== undefined ? { "--bw": `${bw}px` } : {}),
     ...(compact && !spectator ? { "--n-lands": lands.length } : {}),

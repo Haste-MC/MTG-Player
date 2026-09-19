@@ -58,7 +58,7 @@ export function fitCardWidth(width: number, height: number, rows: RowSpec[], opt
  * sonst waechst er mit den Karten und die Messung wuerde pendeln. undefined, solange nichts gemessen ist
  * oder enabled false ist (dann greifen die CSS-Fallbacks).
  */
-export function useBoardSize(ref: RefObject<HTMLElement>, rows: RowSpec[], enabled: boolean): number | undefined {
+export function useBoardSize(ref: RefObject<HTMLElement>, rows: RowSpec[], enabled: boolean, opts: FitOpts = {}): number | undefined {
   const [size, setSize] = useState<{ w: number; h: number }>();
   useEffect(() => {
     const el = ref.current;
@@ -74,6 +74,7 @@ export function useBoardSize(ref: RefObject<HTMLElement>, rows: RowSpec[], enabl
   }, [ref, enabled]);
   // Signatur statt rows-Referenz: PlayerZone baut die Reihen bei jedem Render neu.
   const sig = rows.map((r) => r.scale + ":" + r.units.join(",")).join("|");
+  const optsSig = opts.min + ":" + opts.max + ":" + opts.gap + ":" + opts.rowGap;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  return useMemo(() => (enabled && size ? fitCardWidth(size.w, size.h, rows, {}) : undefined), [enabled, size, sig]);
+  return useMemo(() => (enabled && size ? fitCardWidth(size.w, size.h, rows, opts) : undefined), [enabled, size, sig, optsSig]);
 }

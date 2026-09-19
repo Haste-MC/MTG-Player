@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { MouseEvent } from "react";
+import type { CSSProperties, MouseEvent } from "react";
 import type { CardSnap } from "../protocol";
 import { useStore } from "../store";
 import { send } from "../ws";
@@ -26,7 +26,16 @@ export default function CardBox({ card, stack }: { card: CardSnap; stack?: Stack
   const noImg = !card.imageKey || failedKey === card.imageKey;
   if (card.faceDown) return <div className="card-slot"><div className="card-frame"><div className="card back" /></div></div>;
   const tokenFrame = noImg && !!card.token;
-  const cls = ["card", card.tapped ? "tapped" : "", card.selectable ? "selectable" : "",
+  const stacked = !!stack && stack.count > 1;
+  // Tabletop-Stapel (groups.ts): bis zu 4 Ebenen hinter der obersten Karte, getappte Kopien liegen
+  // als gedrehte Ebenen zuunterst. Die gezeigte Karte dreht sich nur, wenn ALLE Kopien getappt sind;
+  // in der kompakten Gegnerzeile (ohne Drehung) bleibt der Stapel aufrecht und traegt "N getappt".
+  const layers = stacked ? Math.min(stack.count - 1, 4) : 0;
+  const tappedLayers = stacked ? Math.min(stack.tapped, layers) : 0;
+  const allTapped = stacked && stack.tapped === stack.count;
+  const rotated = card.tapped || allTapped;
+  const stackTappedSlot = stacked && stack.tapped > 0 && !allTapped;
+  const cls = ["card", rotated ? "tapped" : "", card.selectable ? "selectable" : "",
     card.actionable ? "actionable" : "", card.attacking ? "attacking" : "", card.blocking ? "blocking" : "",
     card.token ? "token" : "", tokenFrame ? "token-frame" : "", !noImg ? "has-img" : ""]
     .filter(Boolean).join(" ");
@@ -34,10 +43,20 @@ export default function CardBox({ card, stack }: { card: CardSnap; stack?: Stack
     e.preventDefault();
     send({ type: "selectCard", id: card.id, alt: e.button === 2, seq });
   };
-  const stacked = !!stack && stack.count > 1;
   return (
-    <div className={"card-slot" + (card.tapped ? " tapped-slot" : "") + (noImg ? " text-slot" : "")}>
-      <div className={"card-frame" + (card.tapped ? " tapped" : "") + (stacked ? " stacked" : "")}>
+    <div className={"card-slot" + (rotated ? " tapped-slot" : "") + (stackTappedSlot ? " stack-tapped-slot" : "") + (noImg ? " text-slot" : "")}
+      style={{ "--layers": layers } as CSSProperties}>
+      <div className={"card-frame" + (rotated ? " tapped" : "") + (stacked ? " stacked" : "")}>
+        {layers > 0 && (
+          <div className="stack-layers" aria-hidden>
+            {Array.from({ length: layers }, (_, i) => (
+              <div key={i} className={"stack-layer" + (i < tappedLayers ? " tapped" : "")}
+                style={{ "--i": layers - i } as CSSProperties}>
+                {!noImg && <CardImage imageKey={card.imageKey} className="art" />}
+              </div>
+            ))}
+          </div>
+        )}
         <div className={cls} title={card.text ?? ""} onClick={click} onContextMenu={click}
           onMouseEnter={() => setHover(card.id)} onMouseLeave={() => setHover(undefined)}>
           <CardImage key={card.imageKey} imageKey={card.imageKey} className="art" onFail={() => setFailedKey(card.imageKey)} />
