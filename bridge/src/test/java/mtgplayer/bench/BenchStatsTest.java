@@ -1,6 +1,7 @@
 package mtgplayer.bench;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -36,5 +37,20 @@ class BenchStatsTest {
         var s = BenchStats.summarize(List.of(vomZugdeckel, forgeEigenesDraw));
         assertEquals(2, s.draws());
         assertEquals(1, s.drawsByTurnCap());
+    }
+
+    @Test
+    void abstuerzeZaehlenGetrenntUndNichtInDurchschnitten() {
+        GameRecord crash = GameRecord.crash(2, 3, "?", new RuntimeException("Couldn't map <Nothing>/1"), 5000);
+        assertTrue(crash.crashed());
+        assertTrue(crash.reason().startsWith("Crash: RuntimeException: Couldn't map"));
+        var s = BenchStats.summarize(List.of(g(0, "A", 20), g(1, null, 40), crash));
+        assertEquals(3, s.games());
+        assertEquals(1, s.crashes());
+        assertEquals(1, s.winsA());
+        assertEquals(1, s.draws());
+        assertEquals(1.0, s.winRateA(), 1e-9);
+        assertEquals(30.0, s.avgTurns(), 1e-9);
+        assertEquals(30.0, s.medianTurns(), 1e-9);
     }
 }

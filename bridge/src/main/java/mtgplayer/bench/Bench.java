@@ -58,7 +58,7 @@ public final class Bench {
         });
         Runtime.getRuntime().addShutdownHook(hook);
 
-        int winsA = 0, winsB = 0, draws = 0;
+        int winsA = 0, winsB = 0, draws = 0, crashes = 0;
         Summary summary = null;
         try {
             for (int i = 0; i < args.games(); i++) {
@@ -73,14 +73,29 @@ public final class Bench {
 
                 String[] firstSeat = {null};
                 long t0 = System.currentTimeMillis();
-                AiMatch.Result r = AiMatch.play(decks, names, configs, args.timeout(), args.turns(), line -> {
-                    if (firstSeat[0] == null) {
-                        Matcher m = FIRST_TURN.matcher(line);
-                        if (m.matches()) {
-                            firstSeat[0] = m.group(1);
+                AiMatch.Result r;
+                try {
+                    r = AiMatch.play(decks, names, configs, args.timeout(), args.turns(), line -> {
+                        if (firstSeat[0] == null) {
+                            Matcher m = FIRST_TURN.matcher(line);
+                            if (m.matches()) {
+                                firstSeat[0] = m.group(1);
+                            }
                         }
+                    });
+                } catch (RuntimeException e) {
+                    // Forge-eigener Absturz (z. B. GameCopier "Couldn't map" in der Simulation): das Spiel
+                    // als Crash festhalten und weitermachen - ein Absturz in Spiel 3 darf nicht 37 Spiele kosten.
+                    long millis = System.currentTimeMillis() - t0;
+                    GameRecord record = GameRecord.crash(i, args.seed() + i, firstSeat[0] == null ? "?" : firstSeat[0], e, millis);
+                    synchronized (records) {
+                        records.add(record);
                     }
-                });
+                    crashes++;
+                    progress.printf("#%d Absturz (%d s): %s  A %d – B %d – U %d – X %d%n",
+                            i + 1, millis / 1000, record.reason(), winsA, winsB, draws, crashes);
+                    continue;
+                }
                 long millis = System.currentTimeMillis() - t0;
 
                 GameRecord record = new GameRecord(i, args.seed() + i, firstSeat[0] == null ? "?" : firstSeat[0],
@@ -96,8 +111,8 @@ public final class Bench {
                     draws++;
                 }
                 String outcome = r.winner() == null ? "Unentschieden" : r.winner() + " gewinnt";
-                progress.printf("#%d %s (Zug %d, %d s)  A %d – B %d – U %d%n",
-                        i + 1, outcome, r.turns(), millis / 1000, winsA, winsB, draws);
+                progress.printf("#%d %s (Zug %d, %d s)  A %d – B %d – U %d – X %d%n",
+                        i + 1, outcome, r.turns(), millis / 1000, winsA, winsB, draws, crashes);
             }
             // Bericht schreiben, WAEHREND der Shutdown-Hook noch registriert ist (s. u.): sonst gaebe es
             // ein Fenster zwischen removeShutdownHook und diesem Aufruf, in dem ein Ctrl-C weder den Hook
@@ -176,9 +191,10 @@ public final class Bench {
                 .append(" · Seed: ").append(args.seed())
                 .append(" · ").append(DISPLAY_STAMP.format(LocalDateTime.now()))
                 .append('\n');
-        sb.append("| | A | B | Unentschieden |\n|---|---|---|---|\n");
+        sb.append("| | A | B | Unentschieden | Abstürze |\n|---|---|---|---|---|\n");
         sb.append("| Siege | ").append(summary.winsA()).append(" | ").append(summary.winsB()).append(" | ")
-                .append(summary.draws()).append(" (Zugdeckel ").append(summary.drawsByTurnCap()).append(") |\n");
+                .append(summary.draws()).append(" (Zugdeckel ").append(summary.drawsByTurnCap()).append(") | ")
+                .append(summary.crashes()).append(" |\n");
         sb.append("Siegquote A (entschiedene Spiele): ").append(pct(summary.winRateA()))
                 .append(" % · 95-%-Intervall ").append(pct(summary.ciLow())).append('–').append(pct(summary.ciHigh()))
                 .append(" % · Ø Züge ").append(num1(summary.avgTurns())).append(" (Median ").append(num(summary.medianTurns()))

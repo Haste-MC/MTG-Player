@@ -25,10 +25,14 @@ public final class BenchStats {
     }
 
     public static Summary summarize(List<GameRecord> games) {
-        int winsA = 0, winsB = 0, draws = 0, drawsByTurnCap = 0;
+        int winsA = 0, winsB = 0, draws = 0, drawsByTurnCap = 0, crashes = 0;
         long turnSum = 0, millisSum = 0;
         List<Integer> turns = new ArrayList<>();
         for (GameRecord g : games) {
+            if (g.crashed()) {
+                crashes++;
+                continue;
+            }
             turnSum += g.turns();
             millisSum += g.millis();
             turns.add(g.turns());
@@ -51,9 +55,10 @@ public final class BenchStats {
         double[] ci = wilson(winsA, decided, 1.96);
         Collections.sort(turns);
         int n = games.size();
-        double avgTurns = n == 0 ? 0 : (double) turnSum / n;
-        double avgMillis = n == 0 ? 0 : (double) millisSum / n;
-        return new Summary(n, winsA, winsB, draws, drawsByTurnCap, winRateA, ci[0], ci[1], avgTurns, median(turns), avgMillis);
+        int played = n - crashes;
+        double avgTurns = played == 0 ? 0 : (double) turnSum / played;
+        double avgMillis = played == 0 ? 0 : (double) millisSum / played;
+        return new Summary(n, winsA, winsB, draws, drawsByTurnCap, crashes, winRateA, ci[0], ci[1], avgTurns, median(turns), avgMillis);
     }
 
     private static double median(List<Integer> sortedTurns) {
