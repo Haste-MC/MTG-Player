@@ -150,7 +150,9 @@ public final class StateSerializer {
                 ctx.selectable().test(cv) ? Boolean.TRUE : null,
                 ctx.weaklySelectable().test(cv) ? Boolean.TRUE : null,
                 ctx.highlighted().test(cv) ? Boolean.TRUE : null,
-                cv.isCommander() ? Boolean.TRUE : null);
+                cv.isCommander() ? Boolean.TRUE : null,
+                cv.isImmutable() ? Boolean.TRUE : null,
+                cv.isEmblem() ? Boolean.TRUE : null);
     }
 
     private static Map<String, Integer> counters(Multiset<CounterType> counters) {

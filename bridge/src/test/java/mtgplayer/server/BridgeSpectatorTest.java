@@ -16,6 +16,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.net.URI;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -33,6 +36,10 @@ class BridgeSpectatorTest {
     private static Bridge bridge;
     private static WebSocketClient client;
     private static final BlockingQueue<JsonNode> inbox = new LinkedBlockingQueue<>();
+    // wie BridgeEndToEndTest.seenLogLines: await() verwirft alles, was nicht auf den gesuchten Typ
+    // passt - log-Zeilen, die waehrend des Wartens auf "Pause" durchlaufen, muessen deshalb hier
+    // mitgeschnitten werden, sonst sind sie laengst verworfen, bis der Test danach fragt.
+    private static final List<JsonNode> seenLogLines = Collections.synchronizedList(new ArrayList<>());
 
     @BeforeAll
     static void start() throws Exception {
@@ -61,6 +68,9 @@ class BridgeSpectatorTest {
             if (n == null) break;
             if ("error".equals(n.path("type").asText())) {
                 System.err.println("[bridge error] " + n.path("text").asText());
+            }
+            if ("log".equals(n.path("type").asText())) {
+                seenLogLines.add(n);
             }
             if (type.equals(n.path("type").asText()) && cond.test(n)) return n;
         }
@@ -96,6 +106,25 @@ class BridgeSpectatorTest {
         for (JsonNode p : running.get("players")) {
             assertTrue(p.get("isAi").asBoolean(), "beide Sitze sind KIs");
         }
+
+        // Wie beim menschlichen Sitz (BridgeEndToEndTest) muss Forges Spiel-Log auch beim Zuschauer
+        // ankommen. Der Beobachter (WebGuiGame.watchLogOf) haengt bereits an diesem Punkt korrekt am
+        // echten GameLog - siehe unten -, aber der "Pause"-Zustand kommt so frueh (Forges
+        // InputPlaybackControl haengt sich noch VOR jeder Spielaktion ein, direkt bei ihrer Erzeugung,
+        // siehe Kommentar oben bei running) an, dass zu diesem Zeitpunkt oft noch KEINE einzige
+        // Log-Zeile erzeugt wurde: ein synchroner Check von seenLogLines direkt nach running waere
+        // eine reine Wettlaufbedingung. Richtig ist, wie beim Reconnect-Check in BridgeEndToEndTest,
+        // aktiv auf die naechste "log"-Nachricht mit kind zu warten - sie kommt kurz darauf (Zugwechsel
+        // Zug 1, Priority-Weitergabe der KIs), seenLogLines faengt dabei alles mit, was schon vorher da war.
+        JsonNode logLine = seenLogLines.stream().filter(n -> !n.path("kind").asText().isEmpty()).findFirst()
+                .orElseGet(() -> {
+                    try {
+                        return await("log", n -> !n.path("kind").asText().isEmpty(), 20);
+                    } catch (InterruptedException e) {
+                        throw new RuntimeException(e);
+                    }
+                });
+        assertNotNull(logLine, "keine Log-Zeile mit kind beim Zuschauer angekommen");
 
         int seq = running.path("prompt").path("seq").asInt();
         send("{\"type\":\"ok\",\"seq\":" + seq + "}");

@@ -35,6 +35,10 @@ export interface CardSnap {
   highlighted?: boolean;
   /** true nur für Commander (CardView.isCommander), sonst fehlt das Feld. */
   commander?: boolean;
+  /** true nur für Forges Effekt-Hilfskarten (CardView.isImmutable, GamePieceType.EFFECT), sonst fehlt das Feld. */
+  effect?: boolean;
+  /** true nur für Embleme (CardView.isEmblem), sonst fehlt das Feld. */
+  emblem?: boolean;
 }
 
 export interface PlayerSnap {

@@ -70,11 +70,15 @@ public record Snapshot(
             Boolean actionable,
             Boolean highlighted,
             /** {@code true} nur fuer Commander (CardView.isCommander), sonst {@code null}. */
-            Boolean commander) {
+            Boolean commander,
+            /** {@code true} nur fuer Forges Effekt-Hilfskarten (CardView.isImmutable, GamePieceType.EFFECT), sonst {@code null}. */
+            Boolean effect,
+            /** {@code true} nur fuer Embleme (CardView.isEmblem), sonst {@code null}. */
+            Boolean emblem) {
 
         public static CardSnap hidden(int id) {
             return new CardSnap(id, true, null, null, null, null, null, null, null, null, null, null, null,
-                    null, null, null, null, null, null, null, null, null, null, null, null);
+                    null, null, null, null, null, null, null, null, null, null, null, null, null, null);
         }
     }
 

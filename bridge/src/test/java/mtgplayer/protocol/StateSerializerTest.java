@@ -13,6 +13,7 @@ import forge.deck.DeckSection;
 import forge.game.Game;
 import forge.game.GameRules;
 import forge.game.GameType;
+import forge.card.GamePieceType;
 import forge.game.Match;
 import forge.game.card.Card;
 import forge.game.player.Player;
@@ -35,6 +36,7 @@ class StateSerializerTest {
     private static Card foeHandCard;
     private static Card myPermanent;
     private static Card myCommander;
+    private static Card myEffect;
 
     @BeforeAll
     static void boardAufbauen() {
@@ -62,6 +64,18 @@ class StateSerializerTest {
         myCommander = Card.fromPaperCard(a.get(DeckSection.Commander).toFlatList().get(0), me);
         me.addCommander(myCommander);
         me.getZone(ZoneType.Battlefield).add(myCommander);
+
+        // Forges Effekt-Hilfskarten entstehen normalerweise ueber SpellAbilityEffect.createEffect(...)
+        // (protected/statisch, braucht eine SpellAbility) - fuer den Test reicht der direkte Weg, den
+        // createEffect selbst intern geht: new Card(id, game) + setGamePieceType(EFFECT) + setName(...),
+        // dann in die Kommandozone legen (wo Forge Effekt-Karten tatsaechlich ablegt). setOwner ist
+        // Pflicht: Zone.add loest darueber Player.getCardsActivatableInExternalZones/mayPlayerLook aus,
+        // das ohne Owner mit einer NullPointerException abbricht (owner-lose Karte gibt es in Forge nicht).
+        myEffect = new Card(game.nextCardId(), game);
+        myEffect.setGamePieceType(GamePieceType.EFFECT);
+        myEffect.setName("Giant Growth");
+        myEffect.setOwner(me);
+        me.getZone(ZoneType.Command).add(myEffect);
     }
 
     @Test
@@ -75,6 +89,23 @@ class StateSerializerTest {
         JsonNode json = Json.parse(Json.toJson(s));
         assertTrue(json.get("cards").get(String.valueOf(myCommander.getId())).get("commander").asBoolean());
         assertFalse(json.get("cards").get(String.valueOf(myPermanent.getId())).has("commander"));
+    }
+
+    @Test
+    void effektKarteTraegtEffectFlagNormaleKarteNicht() {
+        Snapshot s = StateSerializer.snapshot(game.getView(), ViewContext.plain(me.getView()));
+        Snapshot.CardSnap eff = s.cards().get(myEffect.getId());
+        assertNotNull(eff);
+        assertEquals(Boolean.TRUE, eff.effect());
+        assertNull(eff.emblem(), "Effekt-Hilfskarte ist kein Emblem");
+        assertEquals("Command", eff.zone());
+        assertTrue(s.players().get(0).command().contains(myEffect.getId()));
+        assertNull(s.cards().get(myPermanent.getId()).effect(), "normale Karte traegt kein effect-Feld");
+
+        JsonNode json = Json.parse(Json.toJson(s));
+        assertTrue(json.get("cards").get(String.valueOf(myEffect.getId())).get("effect").asBoolean());
+        assertFalse(json.get("cards").get(String.valueOf(myPermanent.getId())).has("effect"));
+        assertFalse(json.get("cards").get(String.valueOf(myEffect.getId())).has("emblem"));
     }
 
     @Test
