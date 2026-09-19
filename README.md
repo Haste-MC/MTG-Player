@@ -99,9 +99,13 @@ Ausgabe: `<out>/<yyyy-MM-dd-HHmm>-<a>-vs-<b>.md` (Tabelle, Siegquote mit 95-%-Wi
 eine Zeile je Spiel) und die gleichnamige `.json` mit allen Einzelspielen. Nach jedem Spiel eine Fortschrittszeile
 auf stdout. Läuft Minuten bis Stunden; Ctrl-C schreibt den Zwischenstand.
 
-`sim` (`USE_FULL_SIMULATION`) simuliert Angriffe/Blocks/Ziele voraus und ist entsprechend rechenintensiv; auf
-manchen Matchups treibt das den Speicherverbrauch spürbar hoch (bei Bedarf `MAVEN_OPTS=-Xmx8g` oder mehr setzen).
-`hybrid` (`USE_HYBRID_SIMULATION`, nur Zauberauswahl) ist deutlich günstiger.
+`sim` (`USE_FULL_SIMULATION`) simuliert Angriffe/Blocks/Ziele voraus und ist entsprechend rechenintensiv;
+der Speicherverbrauch ist inzwischen unkritisch (`AiConfig.newLobbyPlayer` leert Forges `AiCache` nach jeder
+Simulationskopie, siehe `.superpowers/sdd/sim-oom-investigation.md` – ohne den Fix wuchs der Heap pro
+Entscheidung unbegrenzt). `--timeout` wirkt bei `sim` aber **nicht**: Forges Voll-Simulation fragt
+`AI_TIMEOUT` nirgends ab, eine einzelne Entscheidung dauert, so lange sie dauert – ein einzelnes `sim`-Spiel
+kann dadurch 2–10 Minuten brauchen. `hybrid` (`USE_HYBRID_SIMULATION`, nur Zauberauswahl simuliert) ist
+deutlich schneller.
 
 ## Offen
 

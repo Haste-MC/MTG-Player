@@ -1,9 +1,12 @@
 package mtgplayer.ai;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import forge.ai.AiCache;
 import forge.ai.AIOption;
 import forge.ai.AiProfileUtil;
 import forge.ai.LobbyPlayerAi;
+import forge.game.Game;
+import forge.game.player.Player;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -79,7 +82,26 @@ public record AiConfig(Mode mode, String profile) {
             case HYBRID -> Set.of(AIOption.USE_HYBRID_SIMULATION);
             case SIM -> Set.of(AIOption.USE_FULL_SIMULATION);
         };
-        LobbyPlayerAi lp = new LobbyPlayerAi(name, opts);
+        // Forges statischer Memo-Cache AiCache haelt seine Eintraege (u. a. Game/Player-Argumente) per
+        // starker Referenz und wird sonst nur einmal pro Entscheidung des ORIGINALSPIELS geleert
+        // (AiController.chooseSpellAbilityToPlay). In der Voll-Simulation (sim) entstehen innerhalb
+        // EINER Entscheidung tausende Spielkopien (GameSimulator/GameCopier), die der Cache dann alle
+        // festhaelt - Live-Set-Spitze > 12 GB, OutOfMemoryError. Der Game-Konstruktor ruft
+        // createIngamePlayer(game, id) fuer jede Kopie ueber dasselbe LobbyPlayer-Objekt auf
+        // (GameCopier.clonePlayer reicht es durch); wir leeren den Cache dort je neu erzeugtem Game
+        // (id == 0 = der/die Spieler:in dieses Spiels, nicht die Statisten). Das Leeren aendert keine
+        // Entscheidung (reines Memo) und kostet nichts Messbares - siehe
+        // .superpowers/sdd/sim-oom-investigation.md (Lauf 4-7: Live-Set-Spitze faellt von >12 GB auf
+        // ~1,6 GB, Laufzeit unveraendert).
+        LobbyPlayerAi lp = new LobbyPlayerAi(name, opts) {
+            @Override
+            public Player createIngamePlayer(Game game, int id) {
+                if (id == 0) {
+                    AiCache.clear();
+                }
+                return super.createIngamePlayer(game, id);
+            }
+        };
         lp.setAiProfile(profile);
         return lp;
     }

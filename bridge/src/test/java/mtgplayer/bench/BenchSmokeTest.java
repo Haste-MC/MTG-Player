@@ -26,11 +26,16 @@ class BenchSmokeTest {
     @Test
     @Timeout(value = 6, unit = TimeUnit.MINUTES)
     void zweiSpieleSchreibenMarkdownUndJson(@TempDir Path tmp) throws Exception {
-        // hybrid statt sim: USE_FULL_SIMULATION (sim) treibt bei diesem Precon-Matchup den Heap zuverlaessig
-        // in ein OutOfMemoryError (reproduziert mit --turns 10/30, --timeout 1/2, mehreren Seeds, auch mit
-        // direkten AiMatch.play-Aufrufen ohne Bench-Code) - siehe task-2-report.md "Abweichungen". hybrid
-        // (USE_HYBRID_SIMULATION) simuliert nur die Zauberauswahl, nicht Angriff/Block, und bleibt genauso
-        // eine echte nicht-Standard-AiConfig fuer den Smoke-Test.
+        // hybrid statt sim: das urspruengliche OutOfMemoryError bei sim (USE_FULL_SIMULATION) ist seit
+        // AiConfig.newLobbyPlayer (AiCache.clear() je Spielkopie) behoben (siehe
+        // .superpowers/sdd/sim-oom-investigation.md, "Fix-Runde 1" in task-2-report.md) - der Speicher
+        // ist also kein Grund mehr, hier bei hybrid zu bleiben. Der Grund jetzt: ein sim-Spiel dauert,
+        // so lange die groesste Einzelentscheidung dauert (--timeout wirkt im sim-Pfad nicht, siehe
+        // README), das waren in der Untersuchung 84 s bis 572 s *pro Spiel* - zu lang fuer einen
+        // Smoke-Test, der in @Timeout(6, MINUTES) zuverlaessig durchlaufen soll. hybrid
+        // (USE_HYBRID_SIMULATION) simuliert nur die Zauberauswahl, ist in Sekunden statt Minuten fertig
+        // und bleibt eine echte nicht-Standard-AiConfig fuer den Smoke-Test. Der sim-Pfad selbst wird
+        // durch SimMemoryProbe abgedeckt (manuell, -Dprobe.run=true, siehe dort).
         BenchArgs args = new BenchArgs(2, AiConfig.parse("hybrid:Default"), AiConfig.parse("std:Default"),
                 "precon:Abzan Armor [TDC] [2025]", "precon:Adaptive Enchantment [C18] [2018]",
                 30, 2, 1, tmp);
