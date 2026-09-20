@@ -168,6 +168,9 @@ public final class Bench {
             // zurueckgeben statt zu werfen - der Aufrufer (Bench.run oder Main --bench-one) macht weiter.
             // turns = letzter im Log gesehener Zug, damit der Bericht zeigt, wann es passierte.
             long millis = System.currentTimeMillis() - t0;
+            // Stacktrace nach stderr (im Kindprozess: <out>/game-<i>.log) - der Record traegt nur die Meldung.
+            System.err.println("[bench] Spiel " + i + " (Seed " + seed + ") abgestuerzt in Zug " + lastTurn[0] + ":");
+            e.printStackTrace();
             return GameRecord.crash(i, seed, firstSeat[0] == null ? "?" : firstSeat[0], e, millis, lastTurn[0]);
         }
         long millis = System.currentTimeMillis() - t0;
