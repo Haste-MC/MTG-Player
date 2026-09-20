@@ -41,7 +41,7 @@ public final class CrashLog {
     }
 
     /** @param title kurze Ueberschrift (Thread-Name oder Forge-Titel), @param text Forge-Text oder null */
-    public static void report(String title, String text, Throwable e) {
+    public static synchronized void report(String title, String text, Throwable e) {
         StringBuilder sb = new StringBuilder();
         sb.append(STAMP.format(LocalDateTime.now())).append(' ').append(title);
         if (text != null && !text.isBlank()) {

@@ -79,8 +79,11 @@ public final class Scene {
         return game;
     }
 
+    /** Spieler nach Sitz-Index - ueber die registrierten Spieler, damit der Index nach einem Ausscheiden nicht verrutscht. */
     public Player player(int i) {
-        return game.getPlayers().get(i);
+        forge.game.player.RegisteredPlayer rp = game.getRegisteredPlayers().get(i);
+        return java.util.stream.Stream.concat(game.getPlayers().stream(), game.getLostPlayers().stream())
+                .filter(p -> p.getRegisteredPlayer() == rp).findFirst().orElseThrow();
     }
 
     /** Karte per {@code Card.fromPaperCard} anlegen (neuer Timestamp, sonst kollidieren statische

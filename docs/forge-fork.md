@@ -25,6 +25,7 @@ Basis: Tag `forge-2.0.14` (Commit a37a865a). Maven-Version `2.0.14-mtgplayer`.
 | 620b238b + Revert 9f06a677 | `forge-ai`: `GameStateEvaluator` – Handkarte 4 + 8·behaltbar statt 1 + 4 (`HAND_CARD_VALUE`, `HAND_CARD_KEEPABLE_VALUE`, `evalHand`), Gegnerkarten gleich statt pauschal 4. **Zurückgenommen** | Stufe-4-Schritt 2: 29 : 11 (72,5 %) gegen Schritt 1 30 : 10 (75 %); weder Quote noch Untergrenze gehalten. Commit + Revert bleiben im Verlauf |
 | 191a45df + Revert ebc387ca | `forge-ai`: `GameStateEvaluator.evalCard` – Nicht-Kreaturen-Permanent 40 + 35·CMC statt 50 + 30·CMC (`PERMANENT_BASE_VALUE`, `PERMANENT_VALUE_PER_MANA`). **Zurückgenommen** | Stufe-4-Schritt 3: 29 : 11 (72,5 %) gegen Schritt 1 30 : 10; 37 von 40 Spielen identisch mit Schritt 1, Seed 20 verloren |
 | b7605d49 + Revert 3b808037 | `forge-ai`: `SpellAbilityPicker.canHoldUntilMain2` – die `availableValue`-Regel (bester Zug hebt den verfügbaren Wert nicht → nicht spielen, auf Main 2 warten) greift nur noch in der eigenen Main 1 und nur, wenn eine per `GameCopier.makeCopy(MAIN2, player)` durch den Kampf vorgespielte Kopie den Zauber noch bezahlen kann (`ComputerUtilMana.canPayManaCost`, Zauber per Beschreibung wie `GameSimulator.findSaInSimGame` gesucht); Debug-Zeile `Holding … until MAIN2`. **Zurückgenommen** | Stufe-4-Schritt 4 (Fall Breeches, `2026-09-20-stufe-2-nichtstun.md`): 28 : 12 gegen Schritt 1 30 : 10; die Regel greift 1× in 179 Entscheidungen, es gibt nichts zu gewinnen. Wieder aufnehmen, wenn die Kampfsimulation Trigger-Kosten abbildet |
+| af525e92 | `forge-ai`: `ChooseCardAi.goadIsAcceptable` prüft nur eigene Kreaturen (fremde zu goaden ist kein Nachteil); Kommentar zum Landgewicht präzisiert (Deck-Höchstwert, Deckel 6) | Review-Befunde Stufe 4 |
 
 Bekannt (offen): `GameSimulator.CHECK_GAME_COPY_SCORE` (nur mit Java-Assertions aktiv) meldet im Abzan-Spiegel und
 bei Abzan gegen Adaptive Enchantment `Game copy error` – eine Kopie in Rekursionstiefe 2–3 wird anders bewertet als
@@ -68,6 +69,8 @@ installiert. **Nicht ausgeführt** in dem Sinn, dass keiner der Sim-Tests selbst
 Fixture (`AITest`/`GuiDesktop`), nicht der Stufe-2-Fork-Änderungen. Die Bridge-eigenen Sim-Tests
 (`SimBudgetTest`, `SimCopierTest`, volle Suite) laufen unabhängig davon grün, siehe
 `.superpowers/sdd/final-fix-report-ki2.md`.
+
+`Legacy.ai` (Kopie von Default mit `MULLIGAN_CHECK_COLORS=false`) dient nur dem Bench-Vergleich und ist nicht für einen Upstream-PR gedacht; Forges Zufalls-Profilwahl kann es ziehen.
 
 Upstream-Update: `cd forge && git fetch upstream --tags && git merge forge-<version>` (Konflikte nur in den
 POM-Versionen und unseren Patches), dann `mvn versions:set -DnewVersion=<version>-mtgplayer` und Bridge-POM anpassen.

@@ -98,6 +98,10 @@ Stufe 4: Mulligan prüft Farben und Kurve (Fork-Property `MULLIGAN_CHECK_COLORS`
 Abzan-Spiegel 28:12, Ahoy 24:16 gegen das alte Verhalten, davon nach Kontrolle mit gleichen Seeds ~5–8 Punkte
 Effekt: [docs/bench/2026-09-20-stufe-4-mulligan.md](docs/bench/2026-09-20-stufe-4-mulligan.md).
 
+Stufe 4: Landgewicht in der Bewertung → 75 % [60–86] im Spiegel (vorher 70 %), Mulligan mit Farb-/Kurvenprüfung (+5–8 Punkte),
+Meld/Goad/Phage-Szenen: [docs/bench/2026-09-20-stufe-4-bewertung.md](docs/bench/2026-09-20-stufe-4-bewertung.md),
+[docs/bench/2026-09-20-stufe-4-mulligan.md](docs/bench/2026-09-20-stufe-4-mulligan.md). KI-Profil `Legacy` = Default mit altem Mulligan (nur Vergleich).
+
 Stufe 3: Kandidaten unter Budget sortiert → 70 % [55–82] im Spiegel; 30 s Budget bringt nichts (59 %):
 [docs/bench/2026-09-20-stufe-3-kandidaten.md](docs/bench/2026-09-20-stufe-3-kandidaten.md).
 
