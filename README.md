@@ -75,6 +75,12 @@ Ports: `-Dmtgplayer.wsPort=…`, `-Dmtgplayer.httpPort=…`; Bind-Adresse `-Dmtg
 Forges Nutzerdaten damit nach `~/.mtg-player/`; `bridge/assets/res` ist ein Symlink auf `forge/forge-gui/res`.
 Der Assets-Pfad ist mit `-Dmtgplayer.assets=<dir>` überschreibbar; Maven setzt ihn für `test` und `exec:java` automatisch.
 
+## Wenn der Tisch einfriert
+
+Friert ein Spiel ein (kein Prompt mehr, Log steht), ist meist der Spiel-Thread mit einer Ausnahme abgebrochen.
+Die Bridge schreibt jeden solchen Abbruch mit Stacktrace nach `~/.mtg-player/logs/bridge.log` und als rote
+Zeile ins Browser-Log („Spiel abgebrochen …"). Für einen Bugreport reicht der letzte Block aus der Datei.
+
 ## Forge-Fork
 
 Seit dem KI-Paket Stufe 2 läuft die Bridge gegen einen Fork von Forge (`Haste-MC/forge`, Branch `mtg-player`,

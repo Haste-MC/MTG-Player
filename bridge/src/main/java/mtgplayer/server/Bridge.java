@@ -6,6 +6,7 @@ import forge.gui.GuiBase;
 import mtgplayer.ai.AiConfig;
 import mtgplayer.decks.DeckSource;
 import mtgplayer.decks.DeckStore;
+import mtgplayer.forge.CrashLog;
 import mtgplayer.forge.Precons;
 import mtgplayer.forge.WebGuiBase;
 import mtgplayer.gui.Stops;
@@ -43,6 +44,8 @@ public final class Bridge {
     }
 
     public void start() {
+        // Abbrueche des Spiel-Threads (Forge-BugReporter, uncaught) als Fehlerzeile in den Browser.
+        CrashLog.setListener(text -> ws.send(new Messages.ErrorMsg(text)));
         ws.start();
     }
 

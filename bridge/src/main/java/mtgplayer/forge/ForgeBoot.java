@@ -65,11 +65,8 @@ public final class ForgeBoot {
             return null;
         });
         if (Thread.getDefaultUncaughtExceptionHandler() == null) {
-            // M2-Minimum: sichtbar im Log statt stillschweigend verschluckt. Weiterleitung an den Browser kommt in M3.
-            Thread.setDefaultUncaughtExceptionHandler((t, e) -> {
-                System.err.println("[uncaught] " + t.getName());
-                e.printStackTrace();
-            });
+            // Sichtbar im Terminal, in ~/.mtg-player/logs/bridge.log und (ueber CrashLog.setListener) im Browser.
+            Thread.setDefaultUncaughtExceptionHandler((t, e) -> CrashLog.report("uncaught in " + t.getName(), null, e));
         }
         initialized = true;
     }

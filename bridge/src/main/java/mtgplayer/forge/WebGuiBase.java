@@ -96,7 +96,8 @@ public final class WebGuiBase implements IGuiBase {
     @Override public void showCardList(String title, String message, List<PaperCard> list) { }
     @Override public boolean showBoxedProduct(String title, String message, List<PaperCard> list) { return false; }
     @Override public void showBugReportDialog(String title, String text, boolean showExitAppBtn) {
-        System.err.println("[forge] " + title + ": " + text);
+        // Forge meldet hier Ausnahmen des Spiel-Threads (BugReporter); der Thread ist danach tot.
+        CrashLog.report("forge: " + title, text, null);
     }
     @Override public void showImageDialog(ISkinImage image, String message, String title) { }
     @Override public int showOptionDialog(String message, String title, FSkinProp icon, List<String> options, int defaultOption) {
