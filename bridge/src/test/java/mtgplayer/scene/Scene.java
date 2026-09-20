@@ -35,7 +35,7 @@ import java.util.stream.Collectors;
 public final class Scene {
     /** Deckel fuer {@link #loopUntil}: mehr Schritte als ein Zug je braucht, aber endlich. */
     public static final int MAX_STEPS = 500;
-    private static final String[] NAMES = {"A", "B", "C"};
+    private static final String[] NAMES = {"A", "B", "C", "D"};
 
     private final Game game;
 
@@ -55,7 +55,12 @@ public final class Scene {
         return of(List.of(a, b, c), 3);
     }
 
-    private static Scene of(List<AiConfig> configs, int aiTimeout) {
+    public static Scene fourPlayers(AiConfig a, AiConfig b, AiConfig c, AiConfig d) {
+        return of(List.of(a, b, c, d), 3);
+    }
+
+    /** Beliebig viele Sitze (max. {@code NAMES.length}) mit gemeinsamer KI-Bedenkzeit. */
+    public static Scene of(List<AiConfig> configs, int aiTimeout) {
         List<RegisteredPlayer> players = new ArrayList<>();
         for (int i = 0; i < configs.size(); i++) {
             players.add(new RegisteredPlayer(new Deck()).setPlayer(configs.get(i).newLobbyPlayer(NAMES[i])));
