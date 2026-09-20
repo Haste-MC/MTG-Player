@@ -88,6 +88,11 @@ final class SubprocessRunner implements GameRunner {
         // Explizit statt auf das geerbte Arbeitsverzeichnis zu vertrauen - ForgeBoot.assetsDir() loest
         // sonst relativ zum cwd des Kindprozesses auf.
         cmd.add("-Dmtgplayer.assets=" + ForgeBoot.assetsDir());
+        // Debug-Ausgabe des Sim-Pickers (Fork-Flag, siehe docs/forge-fork.md) an den Kindprozess
+        // durchreichen - sie landet dann in game-<i>.out.log.
+        if (Boolean.getBoolean("forge.ai.sim.debug")) {
+            cmd.add("-Dforge.ai.sim.debug=true");
+        }
         cmd.add("-cp");
         cmd.add(CLASSPATH);
         cmd.add("mtgplayer.Main");
