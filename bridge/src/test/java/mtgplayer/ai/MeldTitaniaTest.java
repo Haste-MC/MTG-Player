@@ -12,7 +12,6 @@ import forge.util.MyRandom;
 import mtgplayer.forge.ForgeBoot;
 import mtgplayer.scene.Scene;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -27,11 +26,16 @@ import java.util.concurrent.TimeUnit;
  *  Baer + Mill 3 auf die Meld-Bedingung hin?), Szene C die Mechanik mit Sim-KI.
  *
  *  <p>Befund (Task 1, Report {@code .superpowers/sdd/task-1-report.md}): A gruen - der Meld funktioniert.
- *  B in Hauptphase 1 rot, weil {@code TokenAi.checkPhaseRestrictions} Spielsteine ohne Eile im eigenen
- *  Zug grundsaetzlich erst in Hauptphase 2 erzeugt; in Hauptphase 2 aktiviert die Standard-KI Argoth
- *  (Profilwuerfel {@code TOKEN_GENERATION_ABILITY_CHANCE=80}), die Sim-KI schon in Hauptphase 1. C rot:
- *  {@code GameCopier} kopiert {@code Card.getMeldedWith()} nicht, die erste Spielkopie der Sim-KI mit der
- *  gemeldeten Karte stirbt in {@code Card.getCMC} mit NPE. */
+ *  B in Hauptphase 1 war rot, weil {@code TokenAi.checkPhaseRestrictions} Spielsteine ohne Eile im eigenen
+ *  Zug grundsaetzlich erst in Hauptphase 2 erzeugt und dort nur mit dem Profilwuerfel
+ *  {@code TOKEN_GENERATION_ABILITY_CHANCE=80}; C war rot, weil {@code GameCopier} {@code Card.getMeldedWith()}
+ *  nicht kopierte und die erste Spielkopie der Sim-KI in {@code Card.getCMC} mit NPE starb.
+ *
+ *  <p>Fork-Fix (Task 2): {@code ComputerUtil.worksTowardMeld} erkennt generisch ueber die Skripte, dass eine
+ *  eigene Faehigkeit (Selbst-Mill oder Land-Opfer als Kosten) auf einen noch unerfuellten Meld-Trigger mit
+ *  {@code CheckSVar} auf Laender im Friedhof hinarbeitet, waehrend das Gegenstueck kontrolliert wird; solche
+ *  Faehigkeiten gelten fuer {@code castSpellInMain1} als Hauptphase-1-Spiel und ueberspringen den Wuerfel.
+ *  {@code GameCopier} kopiert die Melded-Liste des Schlachtfelds und verknuepft {@code meldedWith}. */
 class MeldTitaniaTest {
     private static final String TITANIA = "Titania, Voice of Gaea";
     private static final String ARGOTH = "Argoth, Sanctum of Nature";
@@ -100,8 +104,6 @@ class MeldTitaniaTest {
      *  im Spiel (Argoth aktiviert) oder der Friedhof hat >= 4 Laender. */
     @Test
     @Timeout(value = 3, unit = TimeUnit.MINUTES)
-    @Disabled("rot: TokenAi.checkPhaseRestrictions erzeugt Spielsteine ohne Eile im eigenen Zug erst in Hauptphase 2"
-            + " (forge-ai TokenAi Z. 113-125), die Standard-KI passt in Hauptphase 1 mit 8 offenem Mana - siehe Task 2")
     void szeneB_standardKiAktiviertArgothVorDemKampf() {
         Scene s = strategyScene(AiConfig.DEFAULT);
         Player a = s.player(0);
@@ -110,10 +112,10 @@ class MeldTitaniaTest {
                 + ", Laender im Friedhof: " + landsInGraveyard(a) + ")" + why(s));
     }
 
-    /** Szene B, beobachtetes Verhalten: bis zum Endschritt (also inkl. Hauptphase 2) aktiviert die Standard-KI
-     *  Argoth - mit dem Profilwuerfel {@code TOKEN_GENERATION_ABILITY_CHANCE=80} ({@code TokenAi.checkApiLogic}),
-     *  deshalb ueber fuenf feste Seeds und mindestens drei Treffer (bei 80 % waeren <= 2 von 5 nur in 5,8 % der
-     *  Faelle zu erwarten; die Seeds sind deterministisch, solange die KI die Zufallsquelle gleich verbraucht). */
+    /** Szene B, Basislinie aus Task 1: bis zum Endschritt (also inkl. Hauptphase 2) aktiviert die Standard-KI
+     *  Argoth. Vor dem Fork-Fix hing das am Profilwuerfel {@code TOKEN_GENERATION_ABILITY_CHANCE=80}
+     *  ({@code TokenAi.checkApiLogic}), deshalb fuenf feste Seeds und mindestens drei Treffer; seit dem Fix
+     *  ueberspringen Meld-foerdernde Faehigkeiten den Wuerfel, erwartet sind 5/5 (Schwelle bewusst belassen). */
     @Test
     @Timeout(value = 3, unit = TimeUnit.MINUTES)
     void szeneB_standardKiAktiviertArgothInHauptphase2() {
@@ -145,11 +147,33 @@ class MeldTitaniaTest {
                 + ", Laender im Friedhof: " + landsInGraveyard(a) + ")" + why(s));
     }
 
+    /** Szene D (Strategie bis zum Meld): Hauptphase 1 mit 2 Laendern im Friedhof, Schleife bis zur Hauptphase 1
+     *  des uebernaechsten Zugs - die KI muellt sich per Argoth auf >= 4 Laender, der Upkeep-Trigger meldet.
+     *  Mit Sim-KI laeuft dabei auch der Kopierer ueber die gemeldete Karte (Szene C im Spielfluss). */
+    @Test
+    @Timeout(value = 5, unit = TimeUnit.MINUTES)
+    void szeneD_standardKiArbeitetBisZumMeld() {
+        assertStrategyLeadsToMeld(AiConfig.DEFAULT);
+    }
+
+    @Test
+    @Timeout(value = 5, unit = TimeUnit.MINUTES)
+    void szeneD_simKiArbeitetBisZumMeld() {
+        assertStrategyLeadsToMeld(AiConfig.parse("sim"));
+    }
+
+    private static void assertStrategyLeadsToMeld(AiConfig a) {
+        Scene s = strategyScene(a);
+        Player pa = s.player(0);
+        s.loopUntil(PhaseType.MAIN1, s.player(1));
+        assertTrue(landsInGraveyard(pa) >= 4, "Argoth nicht aktiviert, Laender im Friedhof: " + landsInGraveyard(pa) + why(s));
+        s.loopUntil(PhaseType.MAIN1, pa);
+        assertMelded(s, pa);
+    }
+
     /** Szene C (Mechanik, Sim-KI): wie A mit Voll-Simulation auf A. */
     @Test
     @Timeout(value = 5, unit = TimeUnit.MINUTES)
-    @Disabled("rot: der Meld selbst gelingt, aber die erste Spielkopie der Sim-KI danach stirbt mit NPE in Card.getCMC"
-            + " (GameCopier kopiert Card.getMeldedWith nicht) - siehe Task 2 und GameCopierTest.gemeldeteKarteUeberlebtDieKopie")
     void szeneC_mechanikMeldetMitSimKi() {
         Scene s = meldScene(AiConfig.parse("sim"), AiConfig.DEFAULT, 4);
         Player a = s.player(0), b = s.player(1);

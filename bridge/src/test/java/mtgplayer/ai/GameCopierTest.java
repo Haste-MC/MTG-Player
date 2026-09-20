@@ -16,11 +16,11 @@ import forge.game.card.CardPredicates;
 import forge.game.combat.Combat;
 import forge.game.phase.PhaseType;
 import forge.game.player.Player;
+import forge.game.zone.PlayerZoneBattlefield;
 import forge.game.zone.ZoneType;
 import mtgplayer.forge.ForgeBoot;
 import mtgplayer.scene.Scene;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -141,8 +141,6 @@ class GameCopierTest {
      *  genau das passiert in der ersten Spielkopie der Sim-KI nach dem Meld (MeldTitaniaTest Szene C). */
     @Test
     @Timeout(value = 3, unit = TimeUnit.MINUTES)
-    @Disabled("rot: GameCopier.copyGameState setzt den Zustand Meld, kopiert aber Card.getMeldedWith nicht"
-            + " -> NPE in Card.getCMC - siehe Task 2")
     void gemeldeteKarteUeberlebtDieKopie() {
         Scene s = MeldTitaniaTest.meldScene(AiConfig.DEFAULT, AiConfig.DEFAULT, 4);
         Player a = s.player(0), b = s.player(1);
@@ -159,5 +157,11 @@ class GameCopierTest {
         assertNotNull(copied.getMeldedWith(), "meldedWith fehlt in der Kopie");
         int cmc = assertDoesNotThrow(() -> copied.getCMC());
         assertEquals(3, cmc);
+        // das Gegenstueck liegt wie im Original in der Melded-Liste des Schlachtfelds, nicht als eigene bleibende Karte
+        Player copyA = copy.getPlayer(a.getId());
+        assertTrue(((PlayerZoneBattlefield) copyA.getZone(ZoneType.Battlefield)).getMeldedCards().contains(copied.getMeldedWith()),
+                "Argoth fehlt in der Melded-Liste der Kopie");
+        assertTrue(CardLists.filter(copyA.getCardsIn(ZoneType.Battlefield), CardPredicates.nameEquals("Argoth, Sanctum of Nature")).isEmpty(),
+                "Argoth liegt in der Kopie als eigene bleibende Karte im Spiel");
     }
 }
