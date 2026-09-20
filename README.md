@@ -138,6 +138,13 @@ eine einzelne Entscheidung im Bench über 30 Minuten. `hybrid` (`USE_HYBRID_SIMU
 simuliert) ist deutlich schneller. KI-Sitze spielen inzwischen das Profil `Default` (Datei `res/ai/Default.ai`) statt
 Forges eingebauter Standard-Heuristiken – `AiConfig.newLobbyPlayer` ruft immer `setAiProfile`.
 
+**Sim-Entscheidungen nachlesen:** `-Dforge.ai.sim.debug=true` (Fork-Flag) lässt den Picker jede Top-Level-
+Entscheidung auf stdout schreiben – Phase, Hand, jeden bewerteten Kandidaten mit Wert, gewählten Zug und Plan.
+Beim `--bench` gibt der Elternprozess das Flag an die Kindprozesse weiter (Ausgabe in `<out>/game-<i>.out.log`);
+ein einzelnes Spiel spielt man direkt nach: `java -Dforge.ai.sim.debug=true -cp … mtgplayer.Main --bench-one <i>
+<Bench-Optionen>` (Seed = `--seed` + i, Sitzreihenfolge wie im Lauf). Befund zur vermeintlichen Nichtstun-Schwäche:
+[docs/bench/2026-09-20-stufe-2-nichtstun.md](docs/bench/2026-09-20-stufe-2-nichtstun.md).
+
 ## Offen
 
 Gleiche Länder im Deckbau stapeln, 5–6-Spieler-Raster im Zuschauer-Modus nur per CSS vorbereitet (kein Fixture),
