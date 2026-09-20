@@ -35,8 +35,9 @@ class SimBudgetTest {
         long t0 = System.nanoTime();
         AiMatch.Result r = AiMatch.play(decks, List.of("A", "B"), cfg, 3, 26, s -> { });
         double seconds = (System.nanoTime() - t0) / 1e9;
-        // 26 Spielerzuege, davon 13 fuer die Sim-KI mit je ~2 Entscheidungen (Main 1/2) a max. 3 s Budget,
-        // plus Kampf und Standard-KI: grosszuegige Schranke, die ohne Budget (>30 min) sicher reisst.
+        // Wanduhr-Smoke-Test, keine Messung je Entscheidung: 26 Spielerzuege, davon 13 fuer die Sim-KI mit
+        // je ~2 Entscheidungen (Main 1/2) a max. 3 s Budget, plus Kampf und Standard-KI - grosszuegige
+        // Gesamtschranke, die ohne Budget (>30 min) sicher reisst.
         assertTrue(seconds < 240, "Sim-Spiel brauchte " + seconds + " s fuer " + r.turns() + " Zuege");
     }
 }
