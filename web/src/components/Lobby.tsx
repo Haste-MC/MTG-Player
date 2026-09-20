@@ -160,7 +160,7 @@ export default function Lobby() {
               value={aiTimeout}
               onChange={(e) => setAiTimeout(Math.min(60, Math.max(1, Number(e.target.value) || 1)))}
             /> s
-            <span className="hint">gilt für alle KI-Modi; Simulation nutzt das Budget je Entscheidung</span>
+            <span className="hint">Richtwert je Entscheidung, kann bis ~2× überschreiten; gilt für alle KI-Modi, Simulation nutzt das Budget je Entscheidung</span>
           </div>
         </section>
         {ais.map((a, i) => (

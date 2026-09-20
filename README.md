@@ -82,14 +82,25 @@ Maven-Version `2.0.14-mtgplayer`, damit der Fork-Build das Original in `~/.m2` n
 ist `origin` der Fork und `upstream` Card-Forge; neue Forge-Versionen kommen per `git fetch upstream && git merge
 forge-<version>` auf den Branch. Nach jeder Änderung an Forge: obiges `mvn install` erneut, dann Bridge neu bauen.
 Was der Fork ändert, steht in `docs/forge-fork.md` – aktuell: Zeitbudget für die Voll-Simulation (die
-KI-Bedenkzeit gilt damit für alle KI-Modi).
+KI-Bedenkzeit gilt damit für alle KI-Modi), `GameCopier` robust gegen Monarch-Effektkarte, den
+`<Nothing>`-Kampfplatzhalter und außerhalb des Spielfelds erinnerte Token/Effektkarten, sowie das Debug-Flag
+`-Dforge.ai.sim.debug` für die Top-Level-Entscheidungen des Pickers.
 
 ## Bench (KI gegen KI)
 
 Erster Messlauf und Einordnung: [docs/bench/2026-09-20-sim-vs-standard.md](docs/bench/2026-09-20-sim-vs-standard.md)
-(Simulations-KI gewinnt das Spiegel-Match zu ~76 %, aber 28 % der Spiele enden in Timeout/Absturz).
+(Simulations-KI gewinnt das Spiegel-Match zu ~76 %, aber 28 % der Spiele enden in Timeout/Absturz). Stufe-2-Nachweise
+zu den beiden Fixes: [docs/bench/2026-09-20-stufe-2-zeitbudget.md](docs/bench/2026-09-20-stufe-2-zeitbudget.md)
+(0 Timeouts statt 9) und [docs/bench/2026-09-20-stufe-2-copier.md](docs/bench/2026-09-20-stufe-2-copier.md)
+(0 Abstürze an Monarch/`<Nothing>`; Siegquote gegenüber dem Ausgangslauf statistisch unverändert, andere
+Grundgesamtheit).
 
-Misst reproduzierbar, ob eine KI-Einstellung gegen eine andere gewinnt: N Spiele 1-gegen-1, headless, mit Seed.
+Misst, ob eine KI-Einstellung gegen eine andere gewinnt: N Spiele 1-gegen-1, headless, mit Seed. Ohne Zeitbudget
+(`--timeout 0`) ist ein Sim-Sitz je Spiel-Index reproduzierbar wie ein Standard-Sitz; mit Zeitbudget hängt die
+Deadline jeder Simulations-Entscheidung an der Wanduhr, nicht am Seed – ein Wiederholungslauf auf einer anderen
+Maschine oder unter Last kann andere Kandidaten abbrechen und damit einen anderen Zug wählen. Bench-Läufe mit
+Zeitbudget sind ab einer gewissen Boardkomplexität als Verteilung (mehrere Seeds, Konfidenzintervall) zu lesen,
+nicht als wiederholbares Einzelspiel-Ergebnis.
 
 ```bash
 cd bridge && mvn -q compile exec:java -Dexec.args="--bench --games 40 --a sim:Default --b std:Default --deck-a 'precon:Abzan Armor [TDC] [2025]' --deck-b 'precon:Adaptive Enchantment [C18] [2018]' --seed 1"
@@ -103,7 +114,7 @@ Precon-Namen mit Leerzeichen müssen in `-Dexec.args` in Anführungszeichen steh
 | `--a spec` / `--b spec` | KI-Sitze, `AiConfig.parse`, z. B. `sim:Reckless`, `std`, `hybrid:Cautious` | `sim:Default` / `std:Default` |
 | `--deck-a ref` / `--deck-b ref` | Deck: `precon:<Name>` oder `saved:<Name>` | erste zwei Precons alphabetisch |
 | `--turns N` | Zugdeckel (Spielerzüge) → Unentschieden | 200 |
-| `--timeout s` | KI-Bedenkzeit in Sekunden (gilt auch für die Simulation, je Entscheidung) | 5 |
+| `--timeout s` | KI-Bedenkzeit in Sekunden; Richtwert je Entscheidung, kann bis etwa das Doppelte überschreiten (gilt auch für die Simulation) | 5 |
 | `--seed n` | Basis-Seed; Spiel i nutzt `seed + i` | aktuelle Zeit |
 | `--out dir` | Ausgabeverzeichnis | `~/.mtg-player/bench/` |
 | `--game-timeout min` | Zeitlimit je Spiel im Kindprozess (danach `destroyForcibly`, Spiel zählt als Absturz) | 30 |
