@@ -94,6 +94,10 @@ KI-Bedenkzeit gilt damit für alle KI-Modi), `GameCopier` robust gegen Monarch-E
 
 ## Bench (KI gegen KI)
 
+Stufe 4: Mulligan prüft Farben und Kurve (Fork-Property `MULLIGAN_CHECK_COLORS`, Vergleichsprofil `Legacy`) →
+Abzan-Spiegel 28:12, Ahoy 24:16 gegen das alte Verhalten, davon nach Kontrolle mit gleichen Seeds ~5–8 Punkte
+Effekt: [docs/bench/2026-09-20-stufe-4-mulligan.md](docs/bench/2026-09-20-stufe-4-mulligan.md).
+
 Stufe 3: Kandidaten unter Budget sortiert → 70 % [55–82] im Spiegel; 30 s Budget bringt nichts (59 %):
 [docs/bench/2026-09-20-stufe-3-kandidaten.md](docs/bench/2026-09-20-stufe-3-kandidaten.md).
 
@@ -130,7 +134,9 @@ Precon-Namen mit Leerzeichen müssen in `-Dexec.args` in Anführungszeichen steh
 | `--in-process` | jedes Spiel im aufrufenden Thread statt in einem eigenen JVM-Kindprozess (Flag, kein Wert) | aus |
 
 Ausgabe: `<out>/<yyyy-MM-dd-HHmmss>-<a>-vs-<b>.md` (Tabelle, Siegquote mit 95-%-Wilson-Intervall, Parameter, Seed,
-eine Zeile je Spiel) und die gleichnamige `.json` mit allen Einzelspielen. Nach jedem Spiel eine Fortschrittszeile
+eine Zeile je Spiel, Spalte „Nichtstun" = Sitze mit ≥ 5 gespielten Ländern und ≤ 2 gewirkten Zaubern, aus den
+Forge-Logzeilen `<Sitz> played …`/`<Sitz> cast …` gezählt; Summenzeile `Nichtstun A x / B y`) und die gleichnamige
+`.json` mit allen Einzelspielen (`fewSpells` je Spiel, `fewSpellsA/B` in der Summary). Nach jedem Spiel eine Fortschrittszeile
 auf stdout. Läuft Minuten bis Stunden; Ctrl-C schreibt den Zwischenstand.
 
 **Ein JVM-Kindprozess je Spiel.** Ein Forge-eigener Absturz während der Simulation (z. B. `GameCopier`

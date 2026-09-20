@@ -64,4 +64,49 @@ class BenchStatsTest {
         assertEquals(1, s.winsA());
         assertEquals(20.0, s.avgTurns(), 1e-9);
     }
+
+    /** "Nichtstun"-Spiel (docs/bench/2026-09-20-stufe-2-nichtstun.md): ein Sitz spielt mindestens 5 Laender,
+     *  wirkt aber hoechstens 2 Zauber. Gezaehlt aus Forges Logzeilen "<Sitz> played <Land>" und
+     *  "<Sitz> cast <Zauber>" (GameEventLandPlayed/GameEventSpellAbilityCast); "activated"/"triggered"
+     *  zaehlen nicht, und ein Kartentext mit " cast " mitten in der Zeile auch nicht. */
+    @Test
+    void activityCounterErkenntNichtstunJeSitz() {
+        ActivityCounter c = new ActivityCounter();
+        for (int i = 0; i < 5; i++) {
+            c.see("A played Forest (" + i + ")");
+            c.see("B played Island (" + i + ")");
+        }
+        c.see("A cast Grizzly Bears");
+        c.see("A cast Llanowar Elves");
+        c.see("A activated Llanowar Elves - Mana ability");
+        c.see("Path of Ancestry (144) - {T}: Add one mana. When that mana is spent to cast a creature spell, scry 1.");
+        for (int i = 0; i < 3; i++) {
+            c.see("B cast Counterspell");
+        }
+        assertEquals("A", c.fewSpells());
+
+        ActivityCounter fewLands = new ActivityCounter();
+        for (int i = 0; i < 4; i++) {
+            fewLands.see("A played Forest (" + i + ")");
+        }
+        assertEquals("", fewLands.fewSpells(), "unter 5 Laendern ist es Landmangel, kein Nichtstun");
+
+        ActivityCounter both = new ActivityCounter();
+        for (int i = 0; i < 6; i++) {
+            both.see("A played Forest (" + i + ")");
+            both.see("B played Forest (" + i + ")");
+        }
+        assertEquals("AB", both.fewSpells());
+    }
+
+    @Test
+    void summaryZaehltNichtstunSpieleJeSitz() {
+        var s = BenchStats.summarize(List.of(g(0, "A", 20).withFewSpells("B"), g(1, "B", 30).withFewSpells("AB"),
+                g(2, "A", 40), GameRecord.crash(3, 4, "?", new RuntimeException("x"), 5000).withFewSpells("A")));
+        assertEquals(1, s.fewSpellsA(), "Abstuerze zaehlen nicht");
+        assertEquals(2, s.fewSpellsB());
+        assertTrue(g(0, "A", 20).withFewSpells("AB").fewSpells("A"));
+        assertTrue(g(0, "A", 20).withFewSpells("AB").fewSpells("B"));
+        assertTrue(!g(0, "A", 20).fewSpells("A"));
+    }
 }

@@ -147,11 +147,13 @@ public final class Bench {
 
         String[] firstSeat = {null};
         int[] lastTurn = {0};
+        ActivityCounter activity = new ActivityCounter();
         long t0 = System.currentTimeMillis();
         AiMatch.Result r;
         try {
             r = AiMatch.play(decks, names, configs, args.timeout(), args.turns(), line -> {
                 log.accept(line);
+                activity.see(line);
                 Matcher t = ANY_TURN.matcher(line);
                 if (t.matches()) {
                     lastTurn[0] = Integer.parseInt(t.group(1));
@@ -175,7 +177,7 @@ public final class Bench {
         }
         long millis = System.currentTimeMillis() - t0;
         return new GameRecord(i, seed, firstSeat[0] == null ? "?" : firstSeat[0],
-                r.winner(), r.reason(), r.turns(), millis, r.turnCapped());
+                r.winner(), r.reason(), r.turns(), millis, r.turnCapped()).withFewSpells(activity.fewSpells());
     }
 
     private static Deck loadDeck(String ref) {
@@ -231,13 +233,16 @@ public final class Bench {
         sb.append("Siegquote A (entschiedene Spiele): ").append(pct(summary.winRateA()))
                 .append(" % · 95-%-Intervall ").append(pct(summary.ciLow())).append('–').append(pct(summary.ciHigh()))
                 .append(" % · Ø Züge ").append(num1(summary.avgTurns())).append(" (Median ").append(num(summary.medianTurns()))
-                .append(") · Ø Dauer ").append(Math.round(summary.avgMillis() / 1000.0)).append(" s\n");
-        sb.append("## Spiele\n| # | Seed | Erster | Sieger | Grund | Züge | Dauer s | Sim-Fehler |\n|---|---|---|---|---|---|---|---|\n");
+                .append(") · Ø Dauer ").append(Math.round(summary.avgMillis() / 1000.0)).append(" s")
+                .append(" · Nichtstun (≥ 5 Länder, ≤ 2 Zauber) A ").append(summary.fewSpellsA())
+                .append(" / B ").append(summary.fewSpellsB()).append('\n');
+        sb.append("## Spiele\n| # | Seed | Erster | Sieger | Grund | Züge | Dauer s | Sim-Fehler | Nichtstun |\n|---|---|---|---|---|---|---|---|---|\n");
         for (GameRecord g : records) {
             sb.append("| ").append(g.index() + 1).append(" | ").append(g.seed()).append(" | ").append(g.firstSeat())
                     .append(" | ").append(g.winner() == null ? "–" : g.winner()).append(" | ").append(g.reason())
                     .append(" | ").append(g.turns()).append(" | ").append(g.millis() / 1000)
-                    .append(" | ").append(g.simErrors()).append(" |\n");
+                    .append(" | ").append(g.simErrors())
+                    .append(" | ").append(g.fewSpells() == null || g.fewSpells().isEmpty() ? "–" : g.fewSpells()).append(" |\n");
         }
         return sb.toString();
     }

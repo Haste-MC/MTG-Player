@@ -5,6 +5,8 @@ package mtgplayer.bench;
  *  Simulation) - zaehlen weder als Sieg noch als Unentschieden und nicht in Ø Zuege/Dauer. */
 /** {@code simBroken}: Spiele, die durchliefen, in denen Forges Simulation aber Fehler geworfen hat (die Sim-KI
  *  spielt dann still nichts mehr) - wie Abstuerze aus allen Kennzahlen ausgenommen. */
+/** {@code fewSpellsA}/{@code fewSpellsB}: gewertete Spiele, in denen der Sitz "nichts getan" hat (mindestens 5 Laender,
+ *  hoechstens 2 Zauber - {@link GameRecord#fewSpells}); Land-/Farbmangel-Kennzahl der Mulligan-Heuristik. */
 public record Summary(int games, int winsA, int winsB, int draws, int drawsByTurnCap, int crashes, int simBroken, double winRateA,
-                       double ciLow, double ciHigh, double avgTurns, double medianTurns, double avgMillis) {
+                       double ciLow, double ciHigh, double avgTurns, double medianTurns, double avgMillis, int fewSpellsA, int fewSpellsB) {
 }

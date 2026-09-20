@@ -25,7 +25,7 @@ public final class BenchStats {
     }
 
     public static Summary summarize(List<GameRecord> games) {
-        int winsA = 0, winsB = 0, draws = 0, drawsByTurnCap = 0, crashes = 0, simBroken = 0;
+        int winsA = 0, winsB = 0, draws = 0, drawsByTurnCap = 0, crashes = 0, simBroken = 0, fewSpellsA = 0, fewSpellsB = 0;
         long turnSum = 0, millisSum = 0;
         List<Integer> turns = new ArrayList<>();
         for (GameRecord g : games) {
@@ -40,6 +40,12 @@ public final class BenchStats {
             turnSum += g.turns();
             millisSum += g.millis();
             turns.add(g.turns());
+            if (g.fewSpells("A")) {
+                fewSpellsA++;
+            }
+            if (g.fewSpells("B")) {
+                fewSpellsB++;
+            }
             if ("A".equals(g.winner())) {
                 winsA++;
             } else if ("B".equals(g.winner())) {
@@ -62,7 +68,7 @@ public final class BenchStats {
         int played = n - crashes - simBroken;
         double avgTurns = played == 0 ? 0 : (double) turnSum / played;
         double avgMillis = played == 0 ? 0 : (double) millisSum / played;
-        return new Summary(n, winsA, winsB, draws, drawsByTurnCap, crashes, simBroken, winRateA, ci[0], ci[1], avgTurns, median(turns), avgMillis);
+        return new Summary(n, winsA, winsB, draws, drawsByTurnCap, crashes, simBroken, winRateA, ci[0], ci[1], avgTurns, median(turns), avgMillis, fewSpellsA, fewSpellsB);
     }
 
     private static double median(List<Integer> sortedTurns) {
