@@ -12,7 +12,7 @@
     <properties>
         <maven.compiler.release>17</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <forge.version>2.0.14</forge.version>
+        <forge.version>2.0.14-mtgplayer</forge.version>
         <junit.version>5.10.2</junit.version>
     </properties>
 

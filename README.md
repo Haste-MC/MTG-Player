@@ -11,8 +11,8 @@ Design: `docs/superpowers/specs/2026-09-16-mtg-player-design.md`.
 ## Einmalig: Forge bauen
 
 ```bash
-git submodule update --init --depth 1
-cd forge && mvn -q -pl forge-gui -am install -DskipTests -Dcheckstyle.skip -Dmaven.javadoc.skip=true
+git submodule update --init --depth 1   # Fork Haste-MC/forge, Branch mtg-player (Basis: Tag forge-2.0.14)
+cd forge && mvn -q -pl forge-gui -am install -DskipTests -Dcheckstyle.skip -Dmaven.javadoc.skip=true   # installiert 2.0.14-mtgplayer nach ~/.m2
 ```
 
 ## Spielen
@@ -74,6 +74,14 @@ Ports: `-Dmtgplayer.wsPort=…`, `-Dmtgplayer.httpPort=…`; Bind-Adresse `-Dmtg
 `ForgeBoot.init()` schreibt bei jedem Start `bridge/assets/forge.profile.properties` (generiert, git-ignoriert) und lenkt
 Forges Nutzerdaten damit nach `~/.mtg-player/`; `bridge/assets/res` ist ein Symlink auf `forge/forge-gui/res`.
 Der Assets-Pfad ist mit `-Dmtgplayer.assets=<dir>` überschreibbar; Maven setzt ihn für `test` und `exec:java` automatisch.
+
+## Forge-Fork
+
+Seit dem KI-Paket Stufe 2 läuft die Bridge gegen einen Fork von Forge (`Haste-MC/forge`, Branch `mtg-player`,
+Maven-Version `2.0.14-mtgplayer`, damit der Fork-Build das Original in `~/.m2` nicht überschreibt). Im Submodule
+ist `origin` der Fork und `upstream` Card-Forge; neue Forge-Versionen kommen per `git fetch upstream && git merge
+forge-<version>` auf den Branch. Nach jeder Änderung an Forge: obiges `mvn install` erneut, dann Bridge neu bauen.
+Was der Fork ändert, steht in `docs/forge-fork.md`.
 
 ## Bench (KI gegen KI)
 

@@ -1,4 +1,5 @@
 [submodule "forge"]
 	path = forge
-	url = https://github.com/Card-Forge/forge.git
+	url = git@github.com:Haste-MC/forge.git
 	shallow = true
+	branch = mtg-player
