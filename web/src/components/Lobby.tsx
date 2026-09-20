@@ -160,7 +160,7 @@ export default function Lobby() {
               value={aiTimeout}
               onChange={(e) => setAiTimeout(Math.min(60, Math.max(1, Number(e.target.value) || 1)))}
             /> s
-            <span className="hint">gilt für Standard und Hybrid – Simulation rechnet ohne Zeitlimit (Züge dauern Minuten)</span>
+            <span className="hint">gilt für alle KI-Modi; Simulation nutzt das Budget je Entscheidung</span>
           </div>
         </section>
         {ais.map((a, i) => (
@@ -171,7 +171,7 @@ export default function Lobby() {
             {picker(a, (n) => editAi(i, n))}
             <div className="ai-pick">
               <select
-                title="Standard: Forges Regel-KI. Hybrid: simuliert nur die Zauberwahl. Simulation: rechnet Züge vor – stärker, aber ohne Zeitlimit sehr langsam"
+                title="Standard: Forges Regel-KI. Hybrid: simuliert nur die Zauberwahl. Simulation: rechnet Züge vor – stärker, braucht je Entscheidung bis zur vollen Bedenkzeit"
                 value={aiPicks[i]?.mode ?? DEFAULT_AI.mode}
                 onChange={(e) => editAiPick(i, { ...(aiPicks[i] ?? DEFAULT_AI), mode: e.target.value as AiPick["mode"] })}
               >

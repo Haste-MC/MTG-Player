@@ -63,6 +63,11 @@
                 <version>3.2.5</version>
                 <configuration>
                     <argLine>-Xmx4g</argLine>
+                    <!-- Wie Bench-Kindprozess und Bridge (kein -ea): mit Java-Assertions aktiviert Forges
+                         GameSimulator den Debug-Check CHECK_GAME_COPY_SCORE, der Sim-Spiele doppelt bewertet
+                         und bei Kopier-Ungenauigkeiten mit "Game copy error" abbricht (Abzan-Spiegel, siehe
+                         .superpowers/sdd/task-1-report.md). -->
+                    <enableAssertions>false</enableAssertions>
                     <trimStackTrace>false</trimStackTrace>
                     <systemPropertyVariables>
                         <mtgplayer.assets>${project.basedir}/assets</mtgplayer.assets>

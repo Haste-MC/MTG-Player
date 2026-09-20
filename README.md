@@ -81,7 +81,8 @@ Seit dem KI-Paket Stufe 2 läuft die Bridge gegen einen Fork von Forge (`Haste-M
 Maven-Version `2.0.14-mtgplayer`, damit der Fork-Build das Original in `~/.m2` nicht überschreibt). Im Submodule
 ist `origin` der Fork und `upstream` Card-Forge; neue Forge-Versionen kommen per `git fetch upstream && git merge
 forge-<version>` auf den Branch. Nach jeder Änderung an Forge: obiges `mvn install` erneut, dann Bridge neu bauen.
-Was der Fork ändert, steht in `docs/forge-fork.md`.
+Was der Fork ändert, steht in `docs/forge-fork.md` – aktuell: Zeitbudget für die Voll-Simulation (die
+KI-Bedenkzeit gilt damit für alle KI-Modi).
 
 ## Bench (KI gegen KI)
 
@@ -102,7 +103,7 @@ Precon-Namen mit Leerzeichen müssen in `-Dexec.args` in Anführungszeichen steh
 | `--a spec` / `--b spec` | KI-Sitze, `AiConfig.parse`, z. B. `sim:Reckless`, `std`, `hybrid:Cautious` | `sim:Default` / `std:Default` |
 | `--deck-a ref` / `--deck-b ref` | Deck: `precon:<Name>` oder `saved:<Name>` | erste zwei Precons alphabetisch |
 | `--turns N` | Zugdeckel (Spielerzüge) → Unentschieden | 200 |
-| `--timeout s` | KI-Bedenkzeit in Sekunden | 5 |
+| `--timeout s` | KI-Bedenkzeit in Sekunden (gilt auch für die Simulation, je Entscheidung) | 5 |
 | `--seed n` | Basis-Seed; Spiel i nutzt `seed + i` | aktuelle Zeit |
 | `--out dir` | Ausgabeverzeichnis | `~/.mtg-player/bench/` |
 | `--game-timeout min` | Zeitlimit je Spiel im Kindprozess (danach `destroyForcibly`, Spiel zählt als Absturz) | 30 |
@@ -129,10 +130,12 @@ bekanntermaßen stabil laufen).
 der Speicherverbrauch ist inzwischen unkritisch (`AiConfig.newLobbyPlayer` leert Forges `AiCache` nach jeder
 Simulationskopie, siehe `.superpowers/sdd/sim-oom-investigation.md` – ohne den Fix wuchs der Heap pro
 Entscheidung unbegrenzt; gilt auch für menschliche Spiele mit Sim-KI, nicht nur für den Bench). `--timeout`
-wirkt bei `sim` aber **nicht**: die Zauberwahl-Simulation kennt kein Zeitlimit (nur die Angriffs-Bewertung
-nutzt den Timeout), eine einzelne Entscheidung dauert, so lange sie dauert – ein einzelnes `sim`-Spiel
-kann dadurch 2–10 Minuten brauchen. `hybrid` (`USE_HYBRID_SIMULATION`, nur Zauberauswahl simuliert) ist
-deutlich schneller. KI-Sitze spielen inzwischen das Profil `Default` (Datei `res/ai/Default.ai`) statt
+gilt auch für die Simulation: der Fork gibt jeder Zauberwahl-Entscheidung ein Zeitbudget von `--timeout`
+Sekunden (`SimulationController`-Deadline, siehe `docs/forge-fork.md`) – nach Ablauf werden keine weiteren
+Kandidaten, Ziele, Modi oder tieferen Ebenen mehr bewertet, mindestens ein Kandidat wird aber immer
+durchgerechnet und das Ergebnis ist der beste bis dahin gefundene Zug. Ohne Budget (Upstream-Forge) hing
+eine einzelne Entscheidung im Bench über 30 Minuten. `hybrid` (`USE_HYBRID_SIMULATION`, nur Zauberauswahl
+simuliert) ist deutlich schneller. KI-Sitze spielen inzwischen das Profil `Default` (Datei `res/ai/Default.ai`) statt
 Forges eingebauter Standard-Heuristiken – `AiConfig.newLobbyPlayer` ruft immer `setAiProfile`.
 
 ## Offen
