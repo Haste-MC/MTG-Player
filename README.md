@@ -87,10 +87,12 @@ Seit dem KI-Paket Stufe 2 läuft die Bridge gegen einen Fork von Forge (`Haste-M
 Maven-Version `2.0.14-mtgplayer`, damit der Fork-Build das Original in `~/.m2` nicht überschreibt). Im Submodule
 ist `origin` der Fork und `upstream` Card-Forge; neue Forge-Versionen kommen per `git fetch upstream && git merge
 forge-<version>` auf den Branch. Nach jeder Änderung an Forge: obiges `mvn install` erneut, dann Bridge neu bauen.
-Was der Fork ändert, steht in `docs/forge-fork.md` – aktuell: Zeitbudget für die Voll-Simulation (die
-KI-Bedenkzeit gilt damit für alle KI-Modi), `GameCopier` robust gegen Monarch-Effektkarte, den
-`<Nothing>`-Kampfplatzhalter und außerhalb des Spielfelds erinnerte Token/Effektkarten, sowie das Debug-Flag
-`-Dforge.ai.sim.debug` für die Top-Level-Entscheidungen des Pickers.
+Was der Fork ändert, steht kommitweise in `docs/forge-fork.md`: Zeitbudget für die Voll-Simulation (die
+KI-Bedenkzeit gilt für alle KI-Modi), `GameCopier` robust gegen Monarch-Effektkarte, `<Nothing>`-Kampfplatzhalter,
+erinnerte Token, ausgeschiedene Spieler, gemeldete Karten und Goad; Kandidaten nach Nützlichkeit sortiert; die KI
+arbeitet auf eigene Meld-Bedingungen hin und lehnt Goad-Marken ab, die in einen verlorenen Pflichtangriff führen;
+Mulligan mit Farb-/Kurvenprüfung (`MULLIGAN_CHECK_COLORS`, Vergleichsprofil `Legacy` = altes Verhalten); Landgewicht
+in der Sim-Bewertung; Debug-Flag `-Dforge.ai.sim.debug`.
 
 ## Bench (KI gegen KI)
 
@@ -98,9 +100,8 @@ Stufe 4: Mulligan prüft Farben und Kurve (Fork-Property `MULLIGAN_CHECK_COLORS`
 Abzan-Spiegel 28:12, Ahoy 24:16 gegen das alte Verhalten, davon nach Kontrolle mit gleichen Seeds ~5–8 Punkte
 Effekt: [docs/bench/2026-09-20-stufe-4-mulligan.md](docs/bench/2026-09-20-stufe-4-mulligan.md).
 
-Stufe 4: Landgewicht in der Bewertung → 75 % [60–86] im Spiegel (vorher 70 %), Mulligan mit Farb-/Kurvenprüfung (+5–8 Punkte),
-Meld/Goad/Phage-Szenen: [docs/bench/2026-09-20-stufe-4-bewertung.md](docs/bench/2026-09-20-stufe-4-bewertung.md),
-[docs/bench/2026-09-20-stufe-4-mulligan.md](docs/bench/2026-09-20-stufe-4-mulligan.md). KI-Profil `Legacy` = Default mit altem Mulligan (nur Vergleich).
+Stufe 4: Landgewicht in der Bewertung → Ahoy-Spiegel 30:10 = 75 % [60–86] (vorher 28:12); die anderen drei
+Bewertungs-Schritte waren neutral und sind zurückgenommen: [docs/bench/2026-09-20-stufe-4-bewertung.md](docs/bench/2026-09-20-stufe-4-bewertung.md).
 
 Stufe 3: Kandidaten unter Budget sortiert → 70 % [55–82] im Spiegel; 30 s Budget bringt nichts (59 %):
 [docs/bench/2026-09-20-stufe-3-kandidaten.md](docs/bench/2026-09-20-stufe-3-kandidaten.md).
