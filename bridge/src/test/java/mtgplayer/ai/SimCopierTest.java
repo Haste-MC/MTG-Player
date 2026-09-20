@@ -48,4 +48,17 @@ class SimCopierTest {
         MyRandom.setRandom(new Random(4));
         assertDoesNotThrow(() -> AiMatch.play(decks, List.of("B", "A"), cfg, 3, 30, s -> { }));
     }
+
+    /** Ahoy-Spiegel, Sim auf A, Seed 30, Sitzreihenfolge [B, A] (Bench-Spielindex 29): B ruestet mit
+     *  Gemcutter Buccaneer Treasure-Token als Equipment an, opfert sie spaeter fuer Mana - Bench-Absturz
+     *  {@code Couldn't map Treasure Token} zu Beginn von As Zug 16. */
+    @Test
+    @Timeout(value = 15, unit = TimeUnit.MINUTES)
+    void geopferteAusruestungUeberlebtDieKopie() {
+        Deck ahoy = Precons.load("Ahoy Mateys [LCC] [2023]");
+        List<AiConfig> cfg = List.of(AiConfig.DEFAULT, AiConfig.parse("sim"));
+        MyRandom.setRandom(new Random(30));
+        // aiTimeout 10 wie im Bench: mit 3 s Budget verlaeuft die Partie anders und erreicht die Stellung nicht.
+        assertDoesNotThrow(() -> AiMatch.play(List.of(ahoy, ahoy), List.of("B", "A"), cfg, 10, 30, s -> { }));
+    }
 }
