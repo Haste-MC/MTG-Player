@@ -51,6 +51,19 @@ vollständig (57,9–78,5 % gemeinsame Fläche); 40 Seeds trennen das nicht. Die
 Simulations-KI benutzbar (keine hängenden Entscheidungen, keine Commander-Abstürze mehr), verändert aber die
 gemessene Spielstärke gegenüber dem Ausgangslauf nicht nachweisbar.
 
+## Nachtrag: Abschlusslauf nach dem Iterator-Fix
+
+Der Lauf auf den gemergten Jars fand bei Seed 13 noch `RuntimeException("-1")` aus `SpellAbilityChoicesIterator`
+(Simulator bricht vor `chooseTargets` ab → `advance()` poppt eine nie gepushte Ebene; Fork-Commit 94931591).
+Abschlusslauf Ahoy-Spiegel, 40 Seeds, `--timeout 10 --game-timeout 10`, Jars mit allen Stufe-2-Fixes
+(`2026-09-20-stufe-2-final-roh-ahoy-spiegel.md`):
+
+| A gewinnt | B gewinnt | Siegquote A | 95-%-Intervall | Timeouts | Abstürze | Sim defekt | Ø Dauer |
+|---|---|---|---|---|---|---|---|
+| **26** | **14** | **65,0 %** | **49,5–77,9 %** | 0 | **0** | 0 | 58 s |
+
+**Alle 40 Spiele ausgetragen.** Siegquote wie in den Vorläufen (64–65 %), Untergrenze knapp unter 50 %.
+
 ## Einschränkungen
 
 - Sim-Sitze sind mit Zeitbudget nicht mehr seed-reproduzierbar: die Deadline hängt an der Wanduhr. Bench-Läufe
