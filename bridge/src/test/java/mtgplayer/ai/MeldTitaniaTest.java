@@ -121,16 +121,21 @@ class MeldTitaniaTest {
     void szeneB_standardKiAktiviertArgothInHauptphase2() {
         List<String> misses = new ArrayList<>();
         int hits = 0;
-        for (int seed = 1; seed <= 5; seed++) {
-            MyRandom.setRandom(new Random(seed));
-            Scene s = strategyScene(AiConfig.DEFAULT);
-            Player a = s.player(0);
-            s.loopUntil(PhaseType.END_OF_TURN, a);
-            if (workedTowardsMeld(s, a)) {
-                hits++;
-            } else {
-                misses.add("Seed " + seed + why(s));
+        Random before = MyRandom.getRandom();
+        try {
+            for (int seed = 1; seed <= 5; seed++) {
+                MyRandom.setRandom(new Random(seed));
+                Scene s = strategyScene(AiConfig.DEFAULT);
+                Player a = s.player(0);
+                s.loopUntil(PhaseType.END_OF_TURN, a);
+                if (workedTowardsMeld(s, a)) {
+                    hits++;
+                } else {
+                    misses.add("Seed " + seed + why(s));
+                }
             }
+        } finally {
+            MyRandom.setRandom(before);
         }
         assertTrue(hits >= 3, "nur " + hits + "/5 Seeds aktivieren Argoth bis zum Endschritt:\n" + String.join("\n", misses));
     }

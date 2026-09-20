@@ -4,16 +4,29 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 class CrashLogTest {
+
+    @TempDir
+    Path tmp;
+
+    /** Nie in die echte {@code ~/.mtg-player/logs/bridge.log} des Nutzers schreiben. */
+    @BeforeEach
+    void redirect() {
+        CrashLog.setFile(tmp.resolve("logs").resolve("bridge.log"));
+    }
 
     @AfterEach
     void reset() {
         CrashLog.setListener(null);
+        CrashLog.setFile(null);
     }
 
     @Test

@@ -3,6 +3,7 @@ package mtgplayer.ai;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import forge.game.card.Card;
 import forge.game.phase.PhaseType;
 import forge.game.player.Player;
 import forge.game.zone.ZoneType;
@@ -105,24 +106,54 @@ class PhagePlayerLossTest {
         runAndAssertBLost(phageScene(List.of(AiConfig.DEFAULT, AiConfig.parse("sim"), AiConfig.parse("sim"), AiConfig.DEFAULT)));
     }
 
-    /** Verwandter Fall ohne Phage: der aktive Spieler scheidet im eigenen Zug aus (leere Bibliothek, SBA im
-     *  Ziehsegment) und eine Sim-KI entscheidet danach noch in diesem Zug (C hat vier Shock + acht Mountain, A einen
-     *  Baeren als Ziel, damit die Simulation wirklich eine Spielkopie anlegt) - die Kopie muss den
-     *  ausgeschiedenen Spieler als aktiven Spieler kennen. */
+    /** Verwandter Fall ohne Phage: der aktive Spieler B scheidet im eigenen Zug aus (0 Leben, SBA bei der
+     *  ersten Prioritaet im Ziehsegment) und die Sim-KI C entscheidet danach noch in diesem Zug - die Kopie
+     *  muss den ausgeschiedenen Spieler als aktiven Spieler kennen. Damit C wirklich handelt (und der Test
+     *  nicht leer besteht), hat C vier Shock + acht Mountain und A zwei Baeren als lohnende Ziele; die Szene
+     *  beginnt erst in Bs Zug, jede Aktion von C liegt also nach Bs Verlust. */
     @Test
     @Timeout(value = 5, unit = TimeUnit.MINUTES)
     void aktiverSpielerScheidetImEigenenZugAusSimKiEntscheidetDanach() {
         Scene s = Scene.threePlayers(AiConfig.DEFAULT, AiConfig.DEFAULT, AiConfig.parse("sim"));
         Player a = s.player(0), b = s.player(1), c = s.player(2);
-        s.card("Grizzly Bears", a, ZoneType.Battlefield);
+        s.cards("Grizzly Bears", 2, a, ZoneType.Battlefield);
         s.cards("Shock", 4, c, ZoneType.Hand);
         s.cards("Mountain", 8, c, ZoneType.Battlefield);
         s.cards("Swamp", 10, a, ZoneType.Library);
         s.cards("Swamp", 10, c, ZoneType.Library);
-        s.setPhase(PhaseType.END_OF_TURN, a);
-        s.loopUntil(PhaseType.MAIN1, c);
-        assertTrue(b.hasLost(), "B haette beim Ziehen verlieren muessen" + why(s));
+        b.setLife(0, null);
+        s.setPhase(PhaseType.DRAW, b);
+        s.loopUntil(PhaseType.END_OF_TURN, b);
+        assertTrue(b.hasLost(), "B haette mit 0 Leben verlieren muessen" + why(s));
         assertFalse(s.game().isGameOver(), "Spiel vorbei" + why(s));
+        assertTrue(s.count(c, ZoneType.Hand, "Shock") < 4, "Sim-KI C hat nach Bs Verlust nicht gehandelt" + why(s));
+    }
+
+    /** Commander-Fall (Review-Befund, Fix-Runde 1): B hat einen Commander in der Kommandozone. Beim Verlust
+     *  laesst {@code Game.onPlayerLost} alle Karten von B aufhoeren zu existieren, {@code Player.commanders}
+     *  bleibt aber gesetzt - die Sim-Kopie darf daran nicht scheitern. */
+    @Test
+    @Timeout(value = 5, unit = TimeUnit.MINUTES)
+    void opferMitCommanderInDerKommandozone() {
+        Scene s = phageScene(List.of(AiConfig.DEFAULT, AiConfig.DEFAULT, AiConfig.parse("sim")));
+        Player b = s.player(1);
+        b.addCommander(s.card("Grizzly Bears", b, ZoneType.Command));
+        runAndAssertBLost(s);
+    }
+
+    /** Commander-Fall 2: Bs Commander (getappt im Spiel) hat A vorher Kampfschaden zugefuegt
+     *  ({@code A.commanderDamage} hat Bs Commander als Schluessel, hier direkt gesetzt); nach Bs Verlust muss
+     *  die Sim-Kopie des ueberlebenden A diesen Eintrag ueberspringen. */
+    @Test
+    @Timeout(value = 5, unit = TimeUnit.MINUTES)
+    void opferCommanderHatteAngreiferSchadenZugefuegt() {
+        Scene s = phageScene(List.of(AiConfig.DEFAULT, AiConfig.DEFAULT, AiConfig.parse("sim")));
+        Player a = s.player(0), b = s.player(1);
+        Card commander = s.card("Grizzly Bears", b, ZoneType.Battlefield, true);
+        commander.setTapped(true); // hat angegriffen, kann Phage also nicht blocken
+        b.addCommander(commander);
+        a.addCommanderDamage(commander, 2);
+        runAndAssertBLost(s);
     }
 
     @Test

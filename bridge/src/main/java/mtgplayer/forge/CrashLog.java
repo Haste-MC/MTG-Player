@@ -22,6 +22,7 @@ public final class CrashLog {
 
     private static final DateTimeFormatter STAMP = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     private static volatile Consumer<String> listener;
+    private static volatile Path fileOverride;
 
     private CrashLog() { }
 
@@ -29,8 +30,14 @@ public final class CrashLog {
         listener = l;
     }
 
+    /** Zieldatei umlenken (Tests); {@code null} = wieder {@code ~/.mtg-player/logs/bridge.log}. */
+    public static void setFile(Path f) {
+        fileOverride = f;
+    }
+
     public static Path file() {
-        return ForgeBoot.dataDir().resolve("logs").resolve("bridge.log");
+        Path f = fileOverride;
+        return f != null ? f : ForgeBoot.dataDir().resolve("logs").resolve("bridge.log");
     }
 
     /** @param title kurze Ueberschrift (Thread-Name oder Forge-Titel), @param text Forge-Text oder null */
