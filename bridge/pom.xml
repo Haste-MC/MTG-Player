@@ -66,7 +66,8 @@
                     <!-- Wie Bench-Kindprozess und Bridge (kein -ea): mit Java-Assertions aktiviert Forges
                          GameSimulator den Debug-Check CHECK_GAME_COPY_SCORE, der Sim-Spiele doppelt bewertet
                          und bei Kopier-Ungenauigkeiten mit "Game copy error" abbricht (Abzan-Spiegel, siehe
-                         .superpowers/sdd/task-1-report.md). -->
+                         docs/forge-fork.md "Bekannt"). Die GameCopier-Tests aus Stufe 2 Task 2 sollten fuer
+                         ihre Klasse gezielt mit -ea laufen (surefire argLine bzw. Test-spezifisch). -->
                     <enableAssertions>false</enableAssertions>
                     <trimStackTrace>false</trimStackTrace>
                     <systemPropertyVariables>
