@@ -88,6 +88,9 @@ KI-Bedenkzeit gilt damit für alle KI-Modi), `GameCopier` robust gegen Monarch-E
 
 ## Bench (KI gegen KI)
 
+Stufe 3: Kandidaten unter Budget sortiert → 70 % [55–82] im Spiegel; 30 s Budget bringt nichts (59 %):
+[docs/bench/2026-09-20-stufe-3-kandidaten.md](docs/bench/2026-09-20-stufe-3-kandidaten.md).
+
 Erster Messlauf und Einordnung: [docs/bench/2026-09-20-sim-vs-standard.md](docs/bench/2026-09-20-sim-vs-standard.md)
 (Simulations-KI gewinnt das Spiegel-Match zu ~76 %, aber 28 % der Spiele enden in Timeout/Absturz). Stufe-2-Nachweise
 zu den beiden Fixes: [docs/bench/2026-09-20-stufe-2-zeitbudget.md](docs/bench/2026-09-20-stufe-2-zeitbudget.md)
