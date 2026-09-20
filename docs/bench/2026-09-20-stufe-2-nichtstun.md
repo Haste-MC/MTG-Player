@@ -16,6 +16,12 @@ schätzt Handkarten zu hoch.
 schlicht keinen bezahlbaren Zauber auf der Hand (Land- oder Farbmangel), und die Standard-KI verliert dieselben
 Seeds mit denselben Händen genauso.**
 
+## Einschränkungen
+
+Untersucht sind alle sieben Niederlagen aus einem Deckpaar (Ahoy-Mateys-Spiegel bzw. Abzan gegen Ahoy) mit dem
+Profil `Default`. Für kontrolllastige Decks, andere Profile oder größere Boards ist die Aussage nicht geprüft; die
+einmal beobachtete `availableValue`-Schwäche (Kampf-Trigger mit Zusatzkosten) könnte dort häufiger sein.
+
 ## Vorgehen
 
 Alle sieben Niederlagen der Sim-KI aus dem ersten Messlauf mit `--bench-one` in-process nachgespielt (gleicher
