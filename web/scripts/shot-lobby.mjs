@@ -1,7 +1,9 @@
 // Screenshot der Lobby mit Klicks (Deck-Panel, Reiter, Kachel-Auswahl, Checkbox, Texteingabe) statt nur
 // Fixture-Zustand - window.mtgApply liefert nur "lobby"/"state" etc., aber keine UI-Interaktion.
 // Aufruf (aus web/): node scripts/shot-lobby.mjs <url> <out.png> [--open-panel] [--tab=saved] [--pick="Tinker Time (TDC)"]
-//   [--url-value="https://…"] [--spectate]
+//   [--url-value="https://…"] [--spectate] [--apply=fixtures/archidekt-decks.json …]
+// --apply (mehrfach moeglich) wendet nach dem Oeffnen des Panels und dem Reiterwechsel weitere Inbound-Fixtures per
+// window.mtgApply an, z. B. die Archidekt-Deckliste und einen laufenden Import fuer den Reiter "Archidekt".
 // --pick oeffnet das Panel der ersten Deck-Kachel ("Dein Deck", im Zuschauer-Modus "KI 1"), klickt die Deck-Karte mit
 // diesem Namen und schliesst es damit (die Kachel zeigt das Deck). --open-panel laesst das Panel am Ende offen (nach
 // einem --pick wird es dafuer erneut geoeffnet); --tab wechselt darin den Reiter.
@@ -11,7 +13,7 @@ import { readFile } from "node:fs/promises";
 const [, , url, out, ...rest] = process.argv;
 
 if (!url || !out) {
-  console.error("Usage: node scripts/shot-lobby.mjs <url> <out.png> [--open-panel] [--tab=<precons|saved|import>] [--pick=<Deckname>] [--url-value=<Text fürs erste Import-Eingabefeld>] [--spectate]");
+  console.error("Usage: node scripts/shot-lobby.mjs <url> <out.png> [--open-panel] [--tab=<precons|saved|import|archidekt>] [--pick=<Deckname>] [--url-value=<Text fürs erste Import-Eingabefeld>] [--spectate] [--apply=<fixture.json>]...");
   process.exit(1);
 }
 
@@ -25,9 +27,10 @@ const tab = flag("tab");
 const pickName = flag("pick");
 const urlValue = flag("url-value");
 const spectate = rest.includes("--spectate");
-const TAB_LABEL = { precons: "Precons", saved: "Eigene Decks", import: "Import" };
+const applyFiles = rest.filter((a) => a.startsWith("--apply=")).map((a) => a.slice("--apply=".length));
+const TAB_LABEL = { precons: "Precons", saved: "Eigene Decks", import: "Import", archidekt: "Archidekt" };
 if (tab && !TAB_LABEL[tab]) {
-  console.error(`unbekannter Reiter: ${tab} (precons|saved|import)`);
+  console.error(`unbekannter Reiter: ${tab} (precons|saved|import|archidekt)`);
   process.exit(1);
 }
 
@@ -76,6 +79,15 @@ try {
   if (openPanel) {
     await openFirstPanel();
     await clickTab();
+  }
+  for (const file of applyFiles) {
+    const m = JSON.parse(await readFile(file, "utf8"));
+    await page.evaluate((msg) => window.mtgApply(msg), m);
+    await page.waitForTimeout(300);
+  }
+  if (tab === "archidekt") {
+    // Externe Bilder von Archidekt: kurz warten, damit sie (wenn erreichbar) im Screenshot sind.
+    await page.waitForTimeout(1500);
   }
   if (urlValue) {
     // Erstes Eingabefeld des Import-Reiters (Textliste: Name, Archidekt: URL) - setzt --tab=import voraus.

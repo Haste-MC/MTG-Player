@@ -41,6 +41,17 @@ Archidekt-Id steht als Tag (`archidekt:<id>`) in der gespeicherten `.dck`-Datei;
 „Eigene Decks" bekommt dadurch einen „↻ Resync"-Knopf, der das Deck neu von Archidekt lädt (z. B. nach
 Änderungen an der Liste dort), ohne dass du erneut importieren musst.
 
+Archidekt-Konto: der Reiter „Archidekt" im Deck-Panel holt mit dem Benutzernamen (Enter oder „Decks laden",
+der Name bleibt im Browser gemerkt) die Liste der öffentlichen Commander-Decks des Kontos – nur öffentliche
+und ungelistete Decks, private sieht Archidekt ohne Login nicht. Jede Kachel trägt eine Marke: **neu** (noch
+nicht importiert), **aktuell** (der gespeicherte Stand entspricht Archidekt) oder **geändert** (auf Archidekt
+seither bearbeitet); die geänderten sind vorab angehakt. „Ausgewählte holen (n)" importiert bzw. aktualisiert
+die angehakten Decks nacheinander (neue mit ihrem Archidekt-Namen, bekannte unter dem gespeicherten Namen),
+„Alle aktualisieren" nimmt alle schon importierten Decks des Kontos. Während des Laufs zeigt die Fußzeile
+„3/7 · Deckname …", danach „7/7 fertig" und rot die Decks, die nicht geladen werden konnten – der Lauf geht
+bei Fehlern weiter. Dafür stehen in der `.dck`-Datei zwei Tags: `archidekt:<id>` und
+`archidekt-updated:<Stand>` (Archidekts `updatedAt` beim Import).
+
 Spielende: Der Dialog bietet neben „Zur Lobby" auch „Nochmal spielen" – startet dieselbe Deck-/KI-
 Konstellation direkt neu, ohne den Umweg über die Lobby. Läuft eine Serie (Lobby-Einstellung „Serie"), zeigt
 der Dialog den Stand (z. B. „Du 2 · KI 1 1") und der Knopf wird zu „Neue Serie", sobald jemand die nötigen
@@ -94,6 +105,11 @@ Protokoll (WebSocket, JSON, Feld `type`, Details in `docs/superpowers/specs/2026
 die `lobby`-Nachricht listet Precons und eigene Decks als `DeckInfo` (Name, Commander mit Bild, bei
 Archidekt-Importen die `archidekt`-Id); die Client-Nachricht `resyncDeck` (Deckname) lädt ein solches Deck
 neu von Archidekt und die Bridge antwortet mit einer frischen `lobby`- oder mit einer `error`-Nachricht.
+`archidektList` (Benutzername) liefert `archidektDecks` (Id, Name, `updatedAt`, Vorschaubild je öffentlichem
+Commander-Deck des Kontos) oder `error`; `archidektImport` (Ids) importiert/aktualisiert die Decks nacheinander
+und meldet je Deck `archidektProgress` (`done`, `total`, `current` = Name des laufenden Decks, `errors`), nach
+jedem Deck eine frische `lobby`-Nachricht und zum Schluss `archidektProgress` mit `current: null`; ein zweiter
+`archidektImport` während eines Laufs wird mit `error` abgewiesen.
 
 ## Wenn der Tisch einfriert
 
