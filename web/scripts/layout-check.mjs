@@ -41,7 +41,7 @@ try {
     const vw = window.innerWidth, vh = window.innerHeight;
     const r = (el) => el.getBoundingClientRect();
     const fmt = (b) => `${Math.round(b.left)},${Math.round(b.top)} ${Math.round(b.width)}x${Math.round(b.height)}`;
-    const name = (el) => el.querySelector(".name")?.textContent || el.querySelector(".art")?.getAttribute("src") || el.className;
+    const name = (el) => el.querySelector(".name, .attach-name")?.textContent || el.querySelector(".art")?.getAttribute("src") || el.className;
     // Karten in zugeklappten <details> (Friedhof/Exil-Liste) haben in Chromium trotzdem Layout-Boxen – überspringen.
     const visible = (el) => typeof el.checkVisibility !== "function" || el.checkVisibility();
 
@@ -96,7 +96,7 @@ try {
     // 3. Kein Karten-Clipping im eigenen Spielfeld, bei den Gegnern und (Zuschauer-Modus ohne
     //    eigenen Sitz, siehe Table.tsx) im 2-spaltigen Zuschauer-Raster: Rechteck gegen jeden
     //    Vorfahren mit overflow != visible, außerdem muss jede Karte innerhalb ihres .player-Panels liegen.
-    for (const c of document.querySelectorAll(".mine .battlefield .card, .opponents .card, .spectator-grid .card")) {
+    for (const c of document.querySelectorAll(".mine .battlefield .card, .opponents .card, .spectator-grid .card, .mine .battlefield .attach-layer, .opponents .attach-layer, .spectator-grid .attach-layer")) {
       if (!visible(c)) continue;
       const b = r(c);
       const panel = c.closest(".player");
@@ -279,6 +279,41 @@ try {
     }, 400);
   }));
   problems.push(...pendulum);
+
+  // 12. Grab-/Exil-Popup (Pile) nicht abgeschnitten: nur fuer *attach*-Fixtures (Task 4) - erster und
+  //     letzter .player, damit sowohl die neue Oeffnung nach rechts (linke Spalte, spectator-attach)
+  //     als auch die bisherige nach links (rechte Spalte/eigene Zone, table-attach) geprueft werden.
+  //     .pile-list-Inhalte bleiben in Chromium auch bei zugeklapptem <details> im Layout (siehe visible()
+  //     oben) - checkVisibility() filtert die tatsaechlich offene Liste heraus.
+  if (fixturePaths.some((p) => p.includes("attach"))) {
+    const playerCount = await page.locator(".player").count();
+    const checkPile = async (index, label) => {
+      const player = page.locator(".player").nth(index);
+      const summary = player.locator(".pile:has(.pile-thumb:not(.empty)) > summary").first();
+      if ((await summary.count()) === 0) return;
+      await summary.click();
+      await page.waitForTimeout(300);
+      const rect = await player.evaluate((el) => {
+        const visible = (n) => typeof n.checkVisibility !== "function" || n.checkVisibility();
+        const list = [...el.querySelectorAll(".pile-list")].find(visible);
+        if (!list) return null;
+        const b = list.getBoundingClientRect();
+        return { left: b.left, top: b.top, right: b.right, bottom: b.bottom };
+      });
+      if (rect) {
+        const fmt = `${Math.round(rect.left)},${Math.round(rect.top)} ${Math.round(rect.right - rect.left)}x${Math.round(rect.bottom - rect.top)}`;
+        if (rect.left < 0 || rect.top < 0 || rect.right > width || rect.bottom > height) {
+          problems.push(`Regel 12: Grab-/Exil-Liste ragt aus dem Viewport (${label}): ${fmt} (Viewport ${width}x${height})`);
+        }
+      }
+      await summary.click();
+      await page.waitForTimeout(50);
+    };
+    if (playerCount > 0) {
+      await checkPile(0, "erster Spieler");
+      await checkPile(playerCount - 1, "letzter Spieler");
+    }
+  }
 
   // 6. Hover ueber eine Log-Zeile mit Karte (Detail-Panel fuellt sich) darf das Log-Panel nicht verschieben
   //    oder verkleinern - sonst rutscht die Zeile unter dem Zeiger weg, das Detail leert sich wieder und

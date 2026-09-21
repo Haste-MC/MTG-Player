@@ -1,5 +1,5 @@
-import { useMemo, useRef } from "react";
-import type { CSSProperties } from "react";
+import { useMemo, useRef, useState } from "react";
+import type { CSSProperties, SyntheticEvent } from "react";
 import type { CardSnap, PlayerSnap, Snapshot } from "../protocol";
 import CardBox from "./CardBox";
 import CardImage from "./CardImage";
@@ -29,15 +29,23 @@ const ZONE_TEXT: Record<string, string> = {
 /** Friedhof/Exil als kleiner Stapel: Bild der obersten Karte + Zähler; Klick klappt die Liste auf. */
 function Pile({ label, cards }: { label: string; cards: CardSnap[] }) {
   const top = cards[cards.length - 1];
+  const [openRight, setOpenRight] = useState(false);
+  // Oeffnungsseite beim Aufklappen: liegt die Vorschau in der linken Viewport-Haelfte (Zuschauer-Panels
+  // der linken Spalte), oeffnet die Liste nach rechts - sonst wie bisher nach links.
+  const onToggle = (e: SyntheticEvent<HTMLDetailsElement>) => {
+    if (!e.currentTarget.open) return;
+    const b = e.currentTarget.getBoundingClientRect();
+    setOpenRight(b.left + b.width / 2 < window.innerWidth / 2);
+  };
   return (
-    <details className="pile">
+    <details className="pile" onToggle={onToggle}>
       <summary className={"pile-thumb" + (top ? "" : " empty")} title={`${label} (${cards.length})`}>
         {top && <CardImage key={top.imageKey} imageKey={top.imageKey} className="art" />}
         {top && !top.imageKey && <span className="pile-name">{top.name}</span>}
         <span className="pile-count">{cards.length}</span>
         <span className="pile-label">{label}</span>
       </summary>
-      <div className="pile-list">
+      <div className={"pile-list" + (openRight ? " open-right" : "")}>
         <div className="pile-list-title">{label} · {cards.length}</div>
         {cards.length === 0 && <div className="muted">leer</div>}
         <div className="zone">{cards.map((c) => <CardBox key={c.id} card={c} />)}</div>

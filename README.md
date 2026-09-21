@@ -58,6 +58,9 @@ Effekt-Hilfskarten und Embleme erscheinen als Chips in der Zeile "Effekte"
 (Gegner: im Panelkopf), Hover zeigt den Text im Detail-Panel rechts.
 Zuschauer-Panels und eigene Zone: Kreaturen oben, übrige bleibende Karten in der Mitte, Länder unten; die
 Kartengröße passt sich der Panelgröße an.
+Angelegte Auren/Equipment liegen hinter ihrem Wirt und schauen oben heraus (in der Gegnerzeile seitlich); jede
+Kante ist hover-/klickbar. Flüche auf Spielern stehen als „Aura"-Chip im Panelkopf des verzauberten Spielers.
+Die Grab-/Exil-Liste öffnet zur Bildmitte hin.
 Alternative Bridge-Ports lassen sich per URL setzen: `?wsPort=8082` (gleicher Host) oder `?ws=ws://host:port` (eigene WebSocket-URL).
 
 ## Bridge

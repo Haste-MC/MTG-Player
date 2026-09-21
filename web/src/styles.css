@@ -276,6 +276,7 @@ input[type="checkbox"] { accent-color: var(--accent); width: 14px; height: 14px;
 .pile-thumb .pile-label { position: absolute; left: 0; right: 0; bottom: 0; padding: 12px 2px 3px; font-size: 8px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; text-align: center; color: var(--text); background: linear-gradient(transparent, rgba(0, 0, 0, 0.9)); overflow: hidden; white-space: nowrap; }
 .pile-thumb.empty .pile-label { color: var(--muted); background: none; }
 .pile-list { position: absolute; top: 0; right: calc(100% + 14px); z-index: 30; width: max-content; min-width: 200px; max-width: min(640px, 60vw); padding: 10px; border-radius: var(--radius-md); background: #1a2229; border: 1px solid var(--line-2); box-shadow: var(--shadow); }
+.pile-list.open-right { right: auto; left: calc(100% + 14px); }
 .pile-list .zone { display: flex; flex-wrap: wrap; gap: 6px; max-height: 50vh; overflow: auto; }
 .pile-list-title { font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 6px; }
 
