@@ -210,7 +210,8 @@ public final class Bridge {
                     decks.importArchidekt(id).save().run();
                 } catch (RuntimeException e) {
                     if (!(e instanceof IllegalArgumentException)) e.printStackTrace();
-                    errors.add(current + ": " + (e instanceof IllegalArgumentException ? e.getMessage() : e.toString()));
+                    String reason = e instanceof IllegalArgumentException ? e.getMessage() : e.toString();
+                    errors.add(current + ": " + stripDeckPrefix(current, reason));
                 }
                 done++;
                 ws.send(new Messages.Lobby(Precons.infos(), store.infos()));
@@ -219,7 +220,7 @@ public final class Bridge {
                         Thread.sleep(1000);
                     } catch (InterruptedException ie) {
                         Thread.currentThread().interrupt();
-                        errors.add("Import abgebrochen");
+                        errors.add(current + ": Import abgebrochen");
                         break;
                     }
                 }
@@ -232,6 +233,22 @@ public final class Bridge {
             importRunning.set(false);
         }
         ws.send(new Messages.ArchidektProgress(done, total, null, List.copyOf(errors)));
+    }
+
+    /**
+     * Fehlertext je Deck im Import-Lauf soll "&lt;Name&gt;: &lt;Grund&gt;" sein. DeckSource.resync stellt dem
+     * Grund bereits "Resync &lt;Name&gt;: " voran (und andere Pfade ggf. "&lt;Name&gt;: ") - dieser Praefix
+     * wird hier entfernt, damit der Name nicht doppelt erscheint.
+     */
+    static String stripDeckPrefix(String name, String message) {
+        if (message == null) return "unbekannter Fehler";
+        if (name == null) return message;
+        for (String prefix : new String[] { "Resync " + name + ": ", name + ": " }) {
+            if (message.startsWith(prefix)) {
+                return message.substring(prefix.length());
+            }
+        }
+        return message;
     }
 
     private static Integer seqOf(JsonNode msg) {
