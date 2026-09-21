@@ -231,6 +231,15 @@ describe("store: serie", () => {
     expect(useStore.getState().series).toBeUndefined();
   });
 
+  it("expectNewMatch: noteStart setzt das flag, der erste turn-0-state loescht es (doppelklick-schutz)", () => {
+    expect(useStore.getState().expectNewMatch).toBe(false);
+    useStore.getState().noteStart(msg);
+    expect(useStore.getState().expectNewMatch).toBe(true);   // Table/Lobby sperren jetzt "Nochmal spielen"/"Spiel starten"
+    useStore.getState().apply(snap({ turn: 0 }));
+    expect(useStore.getState().expectNewMatch).toBe(false);
+    expect(useStore.getState().screen).toBe("table");
+  });
+
   it("setBestOf setzt bestOf, default 0", () => {
     expect(useStore.getState().bestOf).toBe(0);
     useStore.getState().setBestOf(5);

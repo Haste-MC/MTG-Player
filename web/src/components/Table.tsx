@@ -18,11 +18,13 @@ export default function Table() {
   const bestOf = useStore((s) => s.bestOf);
   const noteStart = useStore((s) => s.noteStart);
   const resetSeries = useStore((s) => s.resetSeries);
+  const expectNewMatch = useStore((s) => s.expectNewMatch);
   if (!state) return <div className="lobby"><div className="lobby-card"><p className="muted">Warte auf Spielzustand …</p></div></div>;
   const names = state.players.map((p) => p.name);
   const seriesWon = series ? seriesWinner(series, bestOf) : undefined;
+  // Doppelklick-Schutz: nach noteStart() ist expectNewMatch bis zum naechsten Snapshot (oder error) gesetzt.
   const again = () => {
-    if (!lastStart) return;
+    if (!lastStart || expectNewMatch) return;
     if (seriesWon) resetSeries();
     noteStart(lastStart);
     send(lastStart);
@@ -87,7 +89,7 @@ export default function Table() {
                 {seriesWon && <b> – {seriesWon} gewinnt die Serie</b>}</p>
             )}
             <div className="buttons">
-              {lastStart && <button className="primary" onClick={again}>{seriesWon ? "Neue Serie" : "Nochmal spielen"}</button>}
+              {lastStart && <button className="primary" disabled={expectNewMatch} onClick={again}>{seriesWon ? "Neue Serie" : "Nochmal spielen"}</button>}
               <button className={lastStart ? "quiet" : "primary"} onClick={backToLobby}>Zur Lobby</button>
             </div>
           </div>

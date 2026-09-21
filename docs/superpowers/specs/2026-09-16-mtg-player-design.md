@@ -97,7 +97,7 @@ JSON über eine WebSocket-Verbindung, Nachrichtentyp im Feld `type`.
 
 | type | Inhalt | Wann |
 |---|---|---|
-| `lobby` | verfügbare Precons, AI-Profile, zuletzt verwendete eigene Decks | nach Connect |
+| `lobby` | `precons[]` und `decks[]` als `DeckInfo` (`name`, `commanders:[{name, imageKey}]`, bei Archidekt-Importen `archidekt`-Id), AI-Modi/-Profile, Standard-Bedenkzeit | nach Connect, nach jedem Spielstart, nach `resyncDeck` |
 | `state` | vollständiger Snapshot (unten) | nach jedem Forge-Update, gedrosselt auf max. ~30/s |
 | `input` | `prompt`, `selectableCards[]`, `selectablePlayers[]`, `buttons:{ok?:label, cancel?:label}` | Forge wartet auf Klick |
 | `choice` | `id`, `kind` (`one`/`many`/`order`/`confirm`/`number`/`ability`/`damage`), `title`, `options[]`, `min`, `max` | synchroner Dialog |
@@ -116,6 +116,7 @@ JSON über eine WebSocket-Verbindung, Nachrichtentyp im Feld `type`.
 | `setStops` | `{phase: bool}` getrennt für eigene und gegnerische Züge |
 | `fullControl` | `bool` |
 | `concede` | – |
+| `resyncDeck` | `name` eines eigenen Archidekt-Decks: neu von Archidekt laden und speichern; Antwort ist eine frische `lobby`-Nachricht oder `error` |
 
 ### Snapshot (`state`)
 

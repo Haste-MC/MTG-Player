@@ -23,6 +23,7 @@ export default function DeckPicker({ pick, onChange, label }: { pick: Pick; onCh
   const [query, setQuery] = useState("");
   const [draft, setDraft] = useState<Pick>(draftOf(pick)); // Import-Formulare
   const [syncing, setSyncing] = useState<string>();          // Deckname, dessen Resync laeuft
+  const [status, setStatus] = useState<{ text: string; warn: boolean }>(); // Ergebnis des letzten Resync (Reiter "Eigene Decks")
   const searchRef = useRef<HTMLInputElement>(null);
   const chosen: DeckInfo | undefined = pick.kind === "precon" ? precons.find((d) => d.name === pick.value)
     : pick.kind === "saved" ? decks.find((d) => d.name === pick.value) : undefined;
@@ -32,12 +33,24 @@ export default function DeckPicker({ pick, onChange, label }: { pick: Pick; onCh
     setQuery("");
     setDraft(draftOf(pick));
     setSyncing(undefined);
+    setStatus(undefined);
     searchRef.current?.focus();
   }, [open]);
+  useEffect(() => { setStatus(undefined); }, [tab]);
   // "synchronisiert …" endet mit der naechsten lobby-Nachricht (decks) oder einem Fehler der Bridge (letzte
-  // Log-Zeile mit warn - ein fehlgeschlagener Resync schickt nur "error", decks bleibt gleich).
-  useEffect(() => { setSyncing(undefined); }, [decks]);
-  useEffect(() => { if (log[log.length - 1]?.warn) setSyncing(undefined); }, [log]);
+  // Log-Zeile mit warn - ein fehlgeschlagener Resync schickt nur "error", decks bleibt gleich). Das Ergebnis
+  // steht danach als Statuszeile unter dem Raster, damit man es nicht im Log suchen muss.
+  useEffect(() => {
+    if (syncing === undefined) return;
+    setSyncing(undefined);
+    setStatus({ text: "Deck aktualisiert.", warn: false });
+  }, [decks]);
+  useEffect(() => {
+    const last = log[log.length - 1];
+    if (!last?.warn || syncing === undefined) return;
+    setSyncing(undefined);
+    setStatus({ text: last.text, warn: true });
+  }, [log]);
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
@@ -94,6 +107,9 @@ export default function DeckPicker({ pick, onChange, label }: { pick: Pick; onCh
                   </div>
                 ))}
               </div>
+            )}
+            {tab === "saved" && status && (
+              <div className={"deck-status" + (status.warn ? " warn" : "")}>{status.text}</div>
             )}
             {tab === "import" && (
               <div className="deck-import">
