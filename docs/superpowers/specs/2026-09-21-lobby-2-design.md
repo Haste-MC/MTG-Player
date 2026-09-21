@@ -87,7 +87,7 @@ Datei), werden beim Laden auf leer gesetzt. Damit sind nach „Zur Lobby" diesel
   reine Funktion `seriesWinner(series, bestOf)`), `deckSearch.test.ts` (Filterfunktion des Panels), bestehende Tests
   angepasst (`lobby`-Fixture mit `DeckInfo`).
 - Fixtures: `fixtures/lobby.json` auf `DeckInfo` (mit echten `imageKey`s aus Precons, z. B. `c:Felothar the
-  Steadfast|TDC|1`), neue `fixtures/lobby-picked.json`? – nein: `shot-lobby.mjs` bekommt `--open-panel` (klickt die
+  Steadfast|TDC|1`), `shot-lobby.mjs` bekommt `--open-panel` (klickt die
   erste Kachel) und `--tab=<precons|saved|import>`; Screenshots 1600×900: Lobby mit gewählten Kacheln, offenes Panel
   „Precons" mit Bildern, „Eigene Decks" mit Resync-Knopf, „Import"; dazu das Spielende-Overlay mit Serie (Fixture
   `table.json` + `gameOver`-Nachricht `{ "type": "gameOver", "winner": "Du" }`).
