@@ -14,6 +14,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 
 class ArchidektTest {
@@ -77,6 +78,38 @@ class ArchidektTest {
         Archidekt broken = new Archidekt(url -> { throw new IOException("HTTP 404"); });
         IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> broken.fetch("1"));
         assertTrue(e.getMessage().contains("404"));
+    }
+
+    @Test
+    void listeFiltertCommanderUndFolgtNext() throws IOException {
+        String p1 = Files.readString(Path.of("src/test/resources/archidekt-list-1.json"));
+        String p2 = Files.readString(Path.of("src/test/resources/archidekt-list-2.json"));
+        List<String> urls = new ArrayList<>();
+        Archidekt a = new Archidekt(url -> { urls.add(url); return url.contains("page=2") ? p2 : p1; });
+        List<Archidekt.Entry> decks = a.listDecks("plssssss");
+        assertEquals(List.of(26595870L, 26566111L, 9592911L), decks.stream().map(Archidekt.Entry::id).toList());
+        assertEquals("https://card-images.archidekt.com/art/front/5/f/5feba5d6-99a6-4e9b-8a7d-90d955868fc3.webp?1783911263", decks.get(0).art());
+        assertEquals("https://card-images.archidekt.com/art/front/r/i/rin.webp", decks.get(2).art(), "customFeatured leer -> featured");
+        assertEquals("HOBBITS CREATE MONSTERS", decks.get(0).name());
+        assertEquals("2026-09-21T18:41:17.869883Z", decks.get(0).updatedAt());
+        assertTrue(urls.get(0).contains("ownerUsername=plssssss"), urls.get(0));
+        assertEquals(2, urls.size());
+    }
+
+    @Test
+    void listeFehlerWirdGemeldet() {
+        Archidekt a = new Archidekt(url -> { throw new IOException("HTTP 404"); });
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> a.listDecks("x"));
+        assertTrue(e.getMessage().startsWith("Archidekt:"));
+        assertThrows(IllegalArgumentException.class, () -> new Archidekt(url -> "{}").listDecks("  "), "leerer Name");
+        IllegalArgumentException bad = assertThrows(IllegalArgumentException.class, () -> new Archidekt(url -> "kein json").listDecks("x"));
+        assertTrue(bad.getMessage().startsWith("Archidekt:"));
+    }
+
+    @Test
+    void fetchLiefertUpdatedAt() throws IOException {
+        String body = Files.readString(Path.of("src/test/resources/archidekt-1.json"));
+        assertEquals("2018-03-12T05:12:58Z", new Archidekt(url -> body).fetch("1").updatedAt());
     }
 
     @Test

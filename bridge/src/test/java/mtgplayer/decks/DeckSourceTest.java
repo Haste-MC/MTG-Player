@@ -109,6 +109,28 @@ class DeckSourceTest {
         assertEquals(List.of("Fun With Fungus"), store.names());
         assertEquals("Thelon of Havenwood", r.deck().getCommanders().get(0).getName());
         assertEquals("1", store.archidektId("Fun With Fungus"));
+        assertEquals("2018-03-12T05:12:58Z", store.infos().get(0).archidektUpdated());
+    }
+
+    @Test
+    void importArchidektNeuUndDannResyncUnterGespeichertemNamen(@TempDir Path dir) throws Exception {
+        String body = java.nio.file.Files.readString(Path.of("src/test/resources/archidekt-1.json"));
+        DeckStore store = new DeckStore(dir);
+        DeckSource src = new DeckSource(store, new Archidekt(url -> body));
+        src.importArchidekt(1).save().run();
+        assertEquals(List.of("Fun With Fungus"), store.names());
+        // umbenannt gespeichert (Name aus einem frueheren Import mit deckName) - Resync behaelt den Namen
+        Deck d = store.load("Fun With Fungus");
+        store.save("Pilze", d);
+        java.nio.file.Files.delete(dir.resolve(DeckStore.fileName("Fun With Fungus")));
+        src.importArchidekt(1).save().run();
+        assertEquals(List.of("Pilze"), store.names());
+        assertEquals("1", store.archidektId("Pilze"));
+        assertEquals("2018-03-12T05:12:58Z", store.infos().get(0).archidektUpdated());
+        // Resync erzeugt keine doppelten Tags
+        Deck again = store.load("Pilze");
+        assertEquals(1, again.getTags().stream().filter(t -> t.startsWith(DeckStore.ARCHIDEKT_TAG)).count(), again.getTags().toString());
+        assertEquals(1, again.getTags().stream().filter(t -> t.startsWith(DeckStore.ARCHIDEKT_UPDATED_TAG)).count(), again.getTags().toString());
     }
 
     @Test

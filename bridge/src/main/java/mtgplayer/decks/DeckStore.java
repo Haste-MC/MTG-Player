@@ -27,6 +27,8 @@ public final class DeckStore {
 
     /** Deck-Tag (Forge {@code Tags=} im .dck), das die Archidekt-Deck-Id eines Imports festhaelt. */
     public static final String ARCHIDEKT_TAG = "archidekt:";
+    /** Deck-Tag mit Archidekts {@code updatedAt} (ISO-String) zum Zeitpunkt des Imports/Resyncs. */
+    public static final String ARCHIDEKT_UPDATED_TAG = "archidekt-updated:";
 
     private static final String NAME_PREFIX = "Name=";
 
@@ -65,7 +67,7 @@ public final class DeckStore {
         for (String name : names()) {
             try {
                 Deck d = load(name);
-                out.add(Precons.info(name, d, archidektId(d)));
+                out.add(Precons.info(name, d, archidektId(d), archidektUpdated(d)));
             } catch (RuntimeException e) {
                 System.err.println("DeckStore: ueberspringe " + fileName(name) + ": " + e);
             }
@@ -82,10 +84,32 @@ public final class DeckStore {
         }
     }
 
+    /**
+     * @return gespeicherter Name des Decks mit Tag {@code archidekt:<id>}, oder null. Laeuft ueber
+     *         {@link #infos()} (unlesbare Decks werden dort uebersprungen).
+     */
+    public String byArchidektId(String id) {
+        if (id == null) return null;
+        for (Messages.DeckInfo info : infos()) {
+            if (id.equals(info.archidekt())) {
+                return info.name();
+            }
+        }
+        return null;
+    }
+
     private static String archidektId(Deck deck) {
+        return tagValue(deck, ARCHIDEKT_TAG);
+    }
+
+    private static String archidektUpdated(Deck deck) {
+        return tagValue(deck, ARCHIDEKT_UPDATED_TAG);
+    }
+
+    private static String tagValue(Deck deck, String prefix) {
         for (String tag : deck.getTags()) {
-            if (tag.startsWith(ARCHIDEKT_TAG)) {
-                return tag.substring(ARCHIDEKT_TAG.length());
+            if (tag.startsWith(prefix)) {
+                return tag.substring(prefix.length());
             }
         }
         return null;

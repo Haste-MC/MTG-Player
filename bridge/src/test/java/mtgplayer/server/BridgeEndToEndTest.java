@@ -253,4 +253,28 @@ class BridgeEndToEndTest {
         JsonNode err = await("error", n -> n.path("text").asText().startsWith("Resync gibt es nicht:"), 10);
         assertTrue(err.path("text").asText().startsWith("Resync gibt es nicht:"), err.toString());
     }
+
+    /** archidektImport mit leerer Id-Liste: sofort ein abschliessendes archidektProgress 0/0 ohne Fehler. */
+    @Test
+    @Order(4)
+    @Timeout(value = 1, unit = TimeUnit.MINUTES)
+    void archidektImportLeerLiefertProgressNullVonNull() throws Exception {
+        send("{\"type\":\"archidektImport\",\"ids\":[]}");
+        JsonNode p = await("archidektProgress", n -> true, 10);
+        assertEquals(0, p.get("done").asInt());
+        assertEquals(0, p.get("total").asInt());
+        // Json.mapper() laesst null-Felder weg (NON_NULL): current fehlt dann im Draht-JSON
+        assertTrue(p.path("current").isMissingNode() || p.path("current").isNull(), p.toString());
+        assertEquals(0, p.get("errors").size());
+    }
+
+    /** archidektList ohne Benutzername: "error" statt Netzzugriff. */
+    @Test
+    @Order(5)
+    @Timeout(value = 1, unit = TimeUnit.MINUTES)
+    void archidektListOhneNamenLiefertError() throws Exception {
+        send("{\"type\":\"archidektList\",\"username\":\"\"}");
+        JsonNode err = await("error", n -> n.path("text").asText().startsWith("Archidekt:"), 10);
+        assertTrue(err.path("text").asText().contains("Benutzername"), err.toString());
+    }
 }

@@ -12,8 +12,31 @@ public final class Messages {
     /** imageKey: Forges Bildschluessel ({@code c:Name|SET|art}), siehe {@code PaperCard.getImageKey(false)}. */
     public record Commander(String name, String imageKey) { }
 
-    /** archidekt: Archidekt-Deck-Id, null wenn das Deck kein Archidekt-Import ist. */
-    public record DeckInfo(String name, List<Commander> commanders, String archidekt) { }
+    /**
+     * archidekt: Archidekt-Deck-Id, null wenn das Deck kein Archidekt-Import ist. archidektUpdated:
+     * Archidekts {@code updatedAt} zum Zeitpunkt des Imports (null ohne Tag) – der Client vergleicht es
+     * mit dem Stand aus {@link ArchidektDecks}.
+     */
+    public record DeckInfo(String name, List<Commander> commanders, String archidekt, String archidektUpdated) { }
+
+    /** Eintrag der Konto-Deckliste von Archidekt (nur Commander-Decks); art: Bild-URL oder null. */
+    public record ArchidektEntry(long id, String name, String updatedAt, String art) { }
+
+    /** Antwort auf {@code archidektList}. */
+    public record ArchidektDecks(String type, String username, List<ArchidektEntry> decks) {
+        public ArchidektDecks(String username, List<ArchidektEntry> decks) { this("archidektDecks", username, decks); }
+    }
+
+    /**
+     * Fortschritt eines {@code archidektImport}-Laufs: vor jedem Deck mit {@code current} = Name, zum
+     * Schluss mit {@code done == total} und {@code current == null}; errors: "&lt;Name&gt;: &lt;Grund&gt;" je
+     * fehlgeschlagenem Deck.
+     */
+    public record ArchidektProgress(String type, int done, int total, String current, List<String> errors) {
+        public ArchidektProgress(int done, int total, String current, List<String> errors) {
+            this("archidektProgress", done, total, current, errors);
+        }
+    }
 
     public record Lobby(String type, List<DeckInfo> precons, List<DeckInfo> decks,
                         List<String> aiModes, List<String> aiProfiles, int aiTimeout) {

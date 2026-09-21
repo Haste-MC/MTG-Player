@@ -64,7 +64,7 @@ class DeckStoreTest {
         store.save("Mein Abzan", Precons.load("Abzan Armor [TDC] [2025]"));
         Files.writeString(dir.resolve("kaputt.dck"), "[metadata]\nName=Kaputt\n[Main]\n99999999999999 Sol Ring\n");
         assertEquals(List.of("Kaputt", "Mein Abzan"), store.names(), "names() liest nur die Name-Zeile");
-        assertThrows(RuntimeException.class, () -> Precons.info("Kaputt", store.load("Kaputt"), null),
+        assertThrows(RuntimeException.class, () -> Precons.info("Kaputt", store.load("Kaputt"), null, null),
             "Vorbedingung: die Datei laesst sich nicht zu einer DeckInfo laden");
         List<Messages.DeckInfo> infos = store.infos();
         assertEquals(List.of("Mein Abzan"), infos.stream().map(Messages.DeckInfo::name).toList());
@@ -84,5 +84,23 @@ class DeckStoreTest {
         assertEquals("12345", infos.get(0).archidekt());
         assertEquals("12345", store.archidektId("Mein Abzan"));
         assertNull(store.archidektId("gibt es nicht"));
+    }
+
+    @Test
+    void zweitesTagLiefertUpdatedUndNameJeArchidektId(@TempDir Path dir) {
+        DeckStore store = new DeckStore(dir);
+        Deck d = Precons.load("Abzan Armor [TDC] [2025]");
+        d.getTags().add(DeckStore.ARCHIDEKT_TAG + "12345");
+        d.getTags().add(DeckStore.ARCHIDEKT_UPDATED_TAG + "2026-09-21T18:41:17.869883Z");
+        store.save("Mein Abzan", d);
+        List<Messages.DeckInfo> infos = store.infos();
+        assertEquals("12345", infos.get(0).archidekt());
+        assertEquals("2026-09-21T18:41:17.869883Z", infos.get(0).archidektUpdated());
+        assertEquals("Mein Abzan", store.byArchidektId("12345"));
+        assertNull(store.byArchidektId("0"));
+        // ohne Tags: null statt Fehler (anderes Precon - Precons.load liefert die geteilte Forge-Instanz,
+        // das oben getaggte Abzan-Deck traegt die Tags also weiterhin)
+        store.save("Ohne", Precons.load("Adaptive Enchantment [C18] [2018]"));
+        assertNull(store.infos().stream().filter(i -> i.name().equals("Ohne")).findFirst().orElseThrow().archidektUpdated());
     }
 }

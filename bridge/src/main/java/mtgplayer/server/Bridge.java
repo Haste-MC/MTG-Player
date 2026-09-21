@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import forge.deck.Deck;
 import forge.gui.GuiBase;
 import mtgplayer.ai.AiConfig;
+import mtgplayer.decks.Archidekt;
 import mtgplayer.decks.DeckSource;
 import mtgplayer.decks.DeckStore;
 import mtgplayer.forge.CrashLog;
@@ -17,6 +18,7 @@ import mtgplayer.protocol.Messages;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Verdrahtet WebSocket ↔ WebGuiGame/HumanMatch. Eingaben, die Forges Input-System berühren,
@@ -30,7 +32,10 @@ public final class Bridge {
     private final WebGuiGame gui;
     private final HumanMatch match = new HumanMatch();
     private final DeckStore store = DeckStore.standard();
-    private final DeckSource decks = new DeckSource(store);
+    private final Archidekt archidekt = Archidekt.standard();
+    private final DeckSource decks = new DeckSource(store, archidekt);
+    /** Genau ein archidektImport-Lauf zur Zeit (siehe handle, "archidektImport"). */
+    private final AtomicBoolean importRunning = new AtomicBoolean();
 
     public Bridge(int wsPort) {
         this.ws = new WsServer(wsPort, this::handle, this::onClientConnected);
@@ -141,9 +146,92 @@ public final class Bridge {
                     }
                 });
             }
+            case "archidektList" -> archidektList(msg.path("username").asText(""));
+            case "archidektImport" -> archidektImport(msg.path("ids"));
             case "requestState" -> onClientConnected();
             default -> ws.send(new Messages.ErrorMsg("unbekannter Nachrichtentyp: " + type));
         }
+    }
+
+    /** {"type":"archidektList","username":"..."} → archidektDecks (Konto-Liste, nur Commander) oder error. */
+    private void archidektList(String username) {
+        GuiBase.getInterface().runBackgroundTask("archidekt-list", () -> {
+            try {
+                List<Messages.ArchidektEntry> out = new ArrayList<>();
+                for (Archidekt.Entry e : archidekt.listDecks(username)) {
+                    out.add(new Messages.ArchidektEntry(e.id(), e.name(), e.updatedAt(), e.art()));
+                }
+                ws.send(new Messages.ArchidektDecks(username.trim(), out));
+            } catch (IllegalArgumentException e) {
+                ws.send(new Messages.ErrorMsg(e.getMessage()));
+            } catch (RuntimeException e) {
+                e.printStackTrace();
+                ws.send(new Messages.ErrorMsg("Archidekt: " + e));
+            }
+        });
+    }
+
+    /**
+     * {"type":"archidektImport","ids":[long, ...]}: je Id nacheinander {@link DeckSource#importArchidekt}
+     * (vorhandenes Deck → Resync unter dem gespeicherten Namen, sonst Neuimport). Vor jedem Deck ein
+     * archidektProgress mit current = gespeicherter Name oder "Deck &lt;id&gt;" (die Archidekt-Liste liegt nur
+     * beim Client), nach jedem Deck eine lobby-Nachricht; Fehler je Deck landen in errors, der Lauf geht
+     * weiter. Zwischen zwei Abrufen ≥ 1 s Pause (Archidekt-Ruecksicht). Nur ein Lauf zur Zeit.
+     */
+    private void archidektImport(JsonNode idsNode) {
+        List<Long> ids = new ArrayList<>();
+        for (JsonNode n : idsNode) {
+            if (n.canConvertToLong()) ids.add(n.asLong());
+        }
+        if (!importRunning.compareAndSet(false, true)) {
+            ws.send(new Messages.ErrorMsg("Archidekt: Import läuft noch"));
+            return;
+        }
+        try {
+            GuiBase.getInterface().runBackgroundTask("archidekt-import", () -> importRun(ids));
+        } catch (RuntimeException e) {
+            importRunning.set(false);   // Task kam nie zum Laufen - Flag nicht haengen lassen
+            throw e;
+        }
+    }
+
+    /** Der eigentliche Lauf (Hintergrund-Thread), siehe {@link #archidektImport}. */
+    private void importRun(List<Long> ids) {
+        int total = ids.size();
+        int done = 0;
+        List<String> errors = new ArrayList<>();
+        try {
+            ws.send(new Messages.ArchidektProgress(0, total, null, List.copyOf(errors)));
+            for (long id : ids) {
+                String current = store.byArchidektId(String.valueOf(id));
+                if (current == null) current = "Deck " + id;
+                ws.send(new Messages.ArchidektProgress(done, total, current, List.copyOf(errors)));
+                try {
+                    decks.importArchidekt(id).save().run();
+                } catch (RuntimeException e) {
+                    if (!(e instanceof IllegalArgumentException)) e.printStackTrace();
+                    errors.add(current + ": " + (e instanceof IllegalArgumentException ? e.getMessage() : e.toString()));
+                }
+                done++;
+                ws.send(new Messages.Lobby(Precons.infos(), store.infos()));
+                if (done < total) {
+                    try {
+                        Thread.sleep(1000);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        errors.add("Import abgebrochen");
+                        break;
+                    }
+                }
+            }
+        } catch (RuntimeException e) {
+            // wie bei "concede": sonst stirbt der Fehler still auf dem Hintergrund-Thread
+            e.printStackTrace();
+            ws.send(new Messages.ErrorMsg("Archidekt-Import: " + e));
+        } finally {
+            importRunning.set(false);
+        }
+        ws.send(new Messages.ArchidektProgress(done, total, null, List.copyOf(errors)));
     }
 
     private static Integer seqOf(JsonNode msg) {
