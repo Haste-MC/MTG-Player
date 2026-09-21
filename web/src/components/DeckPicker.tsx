@@ -2,9 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { ArchidektEntry, DeckInfo } from "../protocol";
 import type { Pick } from "../deckref";
 import { filterDecks } from "../deckSearch";
-import { classify, defaultSelection, updateAllIds } from "../archidektPlan";
+import { classify, defaultSelection, updateAllIds, type EntryState } from "../archidektPlan";
 import { loadArchidektUser, saveArchidektUser } from "../archidektSettings";
-import { useStore } from "../store";
+import { useStore, type LogEntry } from "../store";
 import { send } from "../ws";
 import CardImage from "./CardImage";
 
@@ -13,6 +13,17 @@ const tabOf = (kind: Pick["kind"]): Tab => (kind === "saved" ? "saved" : kind ==
 /** Import-Formular zeigt nur einen text-/archidekt-Pick; bei precon/saved startet es leer (der Deckname gehoert nicht ins Feld). */
 const draftOf = (pick: Pick): Pick => (pick.kind === "text" || pick.kind === "archidekt" ? pick : { kind: "text", value: "", name: "" });
 const SRC_LABEL: Record<Pick["kind"], string> = { precon: "Precon", saved: "Eigenes Deck", text: "Textliste", archidekt: "Archidekt" };
+/** CSS-Klasse je Zustandsmarke (ASCII, damit kein Umlaut im Selektor steht). */
+const STATE_CLASS: Record<EntryState, string> = { neu: "neu", aktuell: "aktuell", "geändert": "geaendert" };
+/** Markierung "Stand des Logs beim Klick": die damals letzte Zeile (null bei leerem Log). */
+type LogMark = { last: LogEntry | null };
+const markOf = (log: LogEntry[]): LogMark => ({ last: log[log.length - 1] ?? null });
+/** Text der juengsten Warn-Zeile, die nach der Markierung ins Log kam, sonst undefined. Ist die markierte Zeile schon
+ * aus dem (gekuerzten) Log gefallen, zaehlt das ganze Log - passiert nur, wenn waehrend des Vorgangs LOG_MAX Zeilen kamen. */
+const lastWarnSince = (log: LogEntry[], mark: LogMark): string | undefined => {
+  const from = mark.last ? log.lastIndexOf(mark.last) + 1 : 0;
+  return log.slice(from).filter((l) => l.warn).pop()?.text;
+};
 const TAB_LABEL: Record<Tab, string> = { precons: "Precons", saved: "Eigene Decks", import: "Import", archidekt: "Archidekt" };
 
 /** Deckauswahl je Sitz: Kachel mit Commander-Art, Klick oeffnet das Panel (Reiter Precons / Eigene Decks / Import /
@@ -30,12 +41,21 @@ export default function DeckPicker({ pick, onChange, label }: { pick: Pick; onCh
   const [draft, setDraft] = useState<Pick>(draftOf(pick)); // Import-Formulare
   const [syncing, setSyncing] = useState<string>();          // Deckname, dessen Resync laeuft
   const [status, setStatus] = useState<{ text: string; warn: boolean }>(); // Ergebnis des letzten Resync (Reiter "Eigene Decks")
+  const [adStatus, setAdStatus] = useState<{ text: string; warn: boolean }>(); // Fehler des letzten Ladens/Imports (Reiter "Archidekt")
   const searchRef = useRef<HTMLInputElement>(null);
   // Reiter "Archidekt": Benutzername (zuletzt geladener aus dem Store, sonst der gemerkte aus localStorage) und die
   // angehakten Ids. Die Liste selbst liegt im Store (ad.decks); bei einer neuen Liste werden alle "geändert" vorbelegt.
   const [username, setUsername] = useState(() => ad.username ?? loadArchidektUser(() => localStorage));
   const [selected, setSelected] = useState<Set<number>>(() => new Set(ad.decks ? defaultSelection(ad.decks, decks) : []));
   const loadingRef = useRef(ad.loading);
+  // Letzte Log-Zeile beim Klick auf "Decks laden" bzw. "Ausgewählte holen"/"Alle aktualisieren": nur Warnungen, die danach
+  // ins Log kamen, gehoeren zu diesem Vorgang (ein alter Tippfehler-Fehler darf nicht unter einer korrekt geladenen Liste
+  // stehen). Die Zeile selbst statt log.length, weil der Store das Log bei LOG_MAX vorn kuerzt und Indizes dann wandern.
+  const loadMarkRef = useRef<LogMark>();
+  const importMarkRef = useRef<LogMark>();
+  // true zwischen dem Klick auf einen Import-Knopf und der ersten Fortschrittsmeldung mit einem laufenden Deck - die Bridge
+  // schickt zuerst "0/n" ohne current, das darf weder als "fertig" gelten noch die Knoepfe kurz freigeben.
+  const [starting, setStarting] = useState(false);
   const chosen: DeckInfo | undefined = pick.kind === "precon" ? precons.find((d) => d.name === pick.value)
     : pick.kind === "saved" ? decks.find((d) => d.name === pick.value) : undefined;
   useEffect(() => {
@@ -45,9 +65,10 @@ export default function DeckPicker({ pick, onChange, label }: { pick: Pick; onCh
     setDraft(draftOf(pick));
     setSyncing(undefined);
     setStatus(undefined);
+    setAdStatus(undefined);
     searchRef.current?.focus();
   }, [open]);
-  useEffect(() => { setStatus(undefined); }, [tab]);
+  useEffect(() => { setStatus(undefined); setAdStatus(undefined); }, [tab]);
   // "synchronisiert …" endet mit der naechsten lobby-Nachricht (decks) oder einem Fehler der Bridge (letzte
   // Log-Zeile mit warn - ein fehlgeschlagener Resync schickt nur "error", decks bleibt gleich). Das Ergebnis
   // steht danach als Statuszeile unter dem Raster, damit man es nicht im Log suchen muss.
@@ -62,22 +83,40 @@ export default function DeckPicker({ pick, onChange, label }: { pick: Pick; onCh
     setSyncing(undefined);
     setStatus({ text: last.text, warn: true });
   }, [log]);
-  // Neue Archidekt-Liste: Auswahl vorbelegen, Eingabefeld auf das geladene Konto, alte Statuszeile weg.
+  const progress = ad.progress;
+  const importing = starting || (progress != null && progress.current != null);   // laufender archidektImport
+  // Ein "error" der Bridge beendet ad.loading, ohne eine Liste zu liefern (Reducer setzt loading=false und haengt die
+  // Log-Zeile im selben Update an): eine Warnung, die seit dem Klick auf "Decks laden" ins Log kam, ist die Antwort darauf.
+  // Laeuft vor dem Listen-Effekt unten, damit bei Erfolg dessen Leeren der Statuszeile gewinnt.
+  useEffect(() => {
+    const ended = loadingRef.current && !ad.loading;
+    loadingRef.current = ad.loading;
+    if (!ended || loadMarkRef.current === undefined) return;
+    const warn = lastWarnSince(log, loadMarkRef.current);
+    loadMarkRef.current = undefined;
+    if (warn) setAdStatus({ text: warn, warn: true });
+  }, [ad.loading, log]);
+  // Waehrend eines Imports (ab Klick bis zur letzten Fortschrittsmeldung): Fehler der Bridge ("Import läuft noch",
+  // Listenfehler) landen als rote Statuszeile im Reiter statt nur im Log; ein solcher Fehler beendet auch "startet …".
+  useEffect(() => {
+    if (!importing || importMarkRef.current === undefined) return;
+    const warn = lastWarnSince(log, importMarkRef.current);
+    if (!warn) return;
+    setAdStatus({ text: warn, warn: true });
+    setStarting(false);
+  }, [log, importing]);
+  // Erste Fortschrittsmeldung mit laufendem Deck (oder ein sofort fertiger Lauf) beendet den Startzustand.
+  useEffect(() => {
+    if (progress && (progress.current != null || progress.done === progress.total)) setStarting(false);
+  }, [progress]);
+  // Neue Archidekt-Liste: Auswahl vorbelegen, Eingabefeld auf das geladene Konto, alte Statuszeile weg (letzter Effekt,
+  // damit er die Warnpruefung oben ueberstimmt).
   useEffect(() => {
     if (!ad.decks) return;
     setSelected(new Set(defaultSelection(ad.decks, decks)));
     if (ad.username) setUsername(ad.username);
-    setStatus(undefined);
+    setAdStatus(undefined);
   }, [ad.decks]);
-  // Ein "error" der Bridge beendet ad.loading, ohne eine Liste zu liefern (Reducer setzt loading=false und haengt die
-  // Log-Zeile im selben Update an): steht dann eine Warnung als letzte Log-Zeile, ist das die Antwort auf "Decks laden".
-  useEffect(() => {
-    const ended = loadingRef.current && !ad.loading;
-    loadingRef.current = ad.loading;
-    if (!ended) return;
-    const last = log[log.length - 1];
-    if (last?.warn && tab === "archidekt") setStatus({ text: last.text, warn: true });
-  }, [ad.loading, log]);
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
@@ -85,17 +124,22 @@ export default function DeckPicker({ pick, onChange, label }: { pick: Pick; onCh
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
   const list = useMemo(() => filterDecks(tab === "precons" ? precons : decks, query), [tab, precons, decks, query]);
-  const progress = ad.progress;
-  const importing = progress != null && progress.current != null;   // laufender archidektImport
   const chosenIds = useMemo(() => (ad.decks ?? []).filter((e) => selected.has(e.id)).map((e) => e.id), [ad.decks, selected]);
   const updateIds = useMemo(() => updateAllIds(ad.decks ?? [], decks), [ad.decks, decks]);
   const canLoad = username.trim() !== "" && !ad.loading;
   const loadList = () => {
     if (!canLoad) return;
     const name = username.trim();
-    setStatus(undefined);
+    setAdStatus(undefined);
+    loadMarkRef.current = markOf(log);
     saveArchidektUser(() => localStorage, name);
     requestArchidektList(name);
+  };
+  const startImport = (ids: number[]) => {
+    setAdStatus(undefined);
+    importMarkRef.current = markOf(log);
+    setStarting(true);
+    send({ type: "archidektImport", ids });
   };
   const toggle = (id: number) => setSelected((prev) => {
     const next = new Set(prev);
@@ -179,26 +223,28 @@ export default function DeckPicker({ pick, onChange, label }: { pick: Pick; onCh
                           <span className="deck-card-name">{e.name}</span>
                         </button>
                         <input type="checkbox" className="deck-check" checked={on} onChange={() => toggle(e.id)} aria-label={"Auswählen: " + e.name} />
-                        <span className={"state-badge " + state}>{state}</span>
+                        <span className={"state-badge " + STATE_CLASS[state]}>{state}</span>
                       </div>
                     );
                   })}
                 </div>
                 <div className="deck-actions">
                   <button type="button" className="primary" disabled={chosenIds.length === 0 || importing}
-                    onClick={() => { setStatus(undefined); send({ type: "archidektImport", ids: chosenIds }); }}>
+                    onClick={() => startImport(chosenIds)}>
                     Ausgewählte holen ({chosenIds.length})
                   </button>
                   <button type="button" disabled={updateIds.length === 0 || importing} title="Alle schon importierten Decks dieses Kontos neu von Archidekt laden"
-                    onClick={() => { setStatus(undefined); send({ type: "archidektImport", ids: updateIds }); }}>
+                    onClick={() => startImport(updateIds)}>
                     Alle aktualisieren
                   </button>
-                  {progress && (
+                  {(starting || progress) && (
                     <span className="deck-status">
-                      {importing ? `${progress.done}/${progress.total} · ${progress.current} …` : `${progress.done}/${progress.total} fertig`}
+                      {starting ? "startet …"
+                        : progress!.current != null ? `${progress!.done}/${progress!.total} · ${progress!.current} …`
+                        : `${progress!.done}/${progress!.total} fertig`}
                     </span>
                   )}
-                  {status && <span className={"deck-status" + (status.warn ? " warn" : "")}>{status.text}</span>}
+                  {adStatus && <span className={"deck-status" + (adStatus.warn ? " warn" : "")}>{adStatus.text}</span>}
                 </div>
                 {progress && progress.errors.length > 0 && <div className="deck-status warn">{progress.errors.join("\n")}</div>}
                 <p className="hint">Nur öffentliche/ungelistete Decks; private sieht Archidekt ohne Login nicht. Importierte Decks erscheinen unter „Eigene Decks“.</p>

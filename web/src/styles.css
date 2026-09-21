@@ -714,13 +714,14 @@ button.deck-card-main:hover:not(:disabled) { background: rgba(79, 140, 255, 0.06
    Zustandsmarke (rechts oben), Fusszeile mit den Aktionen und der Fortschrittszeile. */
 .archidekt-head { display: flex; gap: 8px; flex: 1; min-width: 0; }
 .archidekt-head input { flex: 1; min-width: 0; }
-.deck-art.remote .art { transform: none; object-position: 50% 30%; }   /* Archidekt liefert schon den Art-Ausschnitt */
+/* Archidekt liefert schon den Art-Ausschnitt - kein Zoom; Spezifitaet mindestens wie .deck-art.big:not(.pair) .art oben */
+.deck-art.big.remote:not(.pair) .art { transform: none; object-position: 50% 30%; }
 .deck-card.checked { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
 .deck-card .deck-check { position: absolute; top: 8px; left: 8px; width: 16px; height: 16px; cursor: pointer; accent-color: var(--accent); box-shadow: 0 0 0 2px rgba(8, 11, 14, 0.7); border-radius: 3px; }
 .state-badge { position: absolute; top: 6px; right: 6px; font-size: 10px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; padding: 2px 7px; border-radius: 999px; border: 1px solid transparent; background: rgba(8, 11, 14, 0.85); pointer-events: none; }
 .state-badge.neu { color: var(--accent-2); border-color: rgba(79, 140, 255, 0.45); }
 .state-badge.aktuell { color: var(--green); border-color: rgba(62, 207, 142, 0.45); }
-.state-badge.geändert { color: var(--gold); border-color: rgba(242, 193, 78, 0.5); }
+.state-badge.geaendert { color: var(--gold); border-color: rgba(242, 193, 78, 0.5); }
 .deck-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .deck-panel .hint { margin: 0; color: var(--muted); font-size: 12px; }
 .deck-import { display: flex; flex-direction: column; gap: 10px; }
