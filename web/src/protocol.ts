@@ -119,12 +119,26 @@ export interface Choice {
 }
 
 /** Ein Deck im Lobby-Angebot (Bridge: Messages.DeckInfo). imageKey ist Forges Bildschluessel
- * ("c:Name|SET|art"); archidekt ist die Archidekt-Deck-Id eines importierten Decks, null/fehlend sonst. */
+ * ("c:Name|SET|art"); archidekt ist die Archidekt-Deck-Id eines importierten Decks, null/fehlend sonst;
+ * archidektUpdated ist der beim Import/Resync gespeicherte Archidekt-Stand (ISO-String), null/fehlend
+ * ohne archidekt-Tag. */
 export interface DeckInfo {
   name: string;
   commanders: { name: string; imageKey?: string }[];
   archidekt?: string | null;
+  archidektUpdated?: string | null;
 }
+
+/** Ein Deck-Eintrag aus Archidekt.listDecks (Bridge). art ist die Vorschau-URL (customFeatured/featured),
+ * null/fehlend ohne Bild. */
+export interface ArchidektEntry { id: number; name: string; updatedAt: string; art?: string | null }
+/** Antwort auf Outbound.archidektList. */
+export interface ArchidektDecks { type: "archidektDecks"; username: string; decks: ArchidektEntry[] }
+/** Laufender archidektImport: current ist der Name des gerade importierten Decks, fehlt/null zwischen
+ * den Decks (u. a. am Ende, wenn done === total). Jackson laesst null-Felder weg - current kann im JSON
+ * also fehlen, nicht nur null sein. */
+export interface ArchidektProgress { type: "archidektProgress"; done: number; total: number; current?: string | null; errors: string[] }
+
 export interface Lobby {
   type: "lobby";
   precons: DeckInfo[];
@@ -147,7 +161,7 @@ export interface LogLine { type: "log"; text: string; kind?: string; card?: numb
 export interface GameOver { type: "gameOver"; winner?: string; }
 export interface ErrorMsg { type: "error"; text: string; }
 
-export type Inbound = Snapshot | Choice | Lobby | LogLine | GameOver | ErrorMsg;
+export type Inbound = Snapshot | Choice | Lobby | LogLine | GameOver | ErrorMsg | ArchidektDecks | ArchidektProgress;
 
 export type Outbound =
   // humanDeck fehlt bei spectate:true (KI-only-Modus, kein eigener Sitz - siehe lobbyPayload.ts)
@@ -162,7 +176,11 @@ export type Outbound =
   | { type: "concede" }
   | { type: "requestState" }
   // Gespeichertes Archidekt-Deck neu von Archidekt laden (Bridge antwortet mit einer frischen lobby-Nachricht oder error).
-  | { type: "resyncDeck"; name: string };
+  | { type: "resyncDeck"; name: string }
+  // Oeffentliche Commander-Decks eines Archidekt-Kontos auflisten (Bridge antwortet mit archidektDecks oder error).
+  | { type: "archidektList"; username: string }
+  // Ausgewaehlte Decks importieren/resyncen; die Bridge meldet den Fortschritt ueber archidektProgress.
+  | { type: "archidektImport"; ids: number[] };
 
 export type StartGame = Extract<Outbound, { type: "startGame" }>;
 

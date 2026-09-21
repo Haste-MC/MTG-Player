@@ -1,6 +1,9 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { INCORRECT_ACTION_TEXT, reduce, initialState, useStore } from "./store";
-import type { Choice, DeckInfo, Snapshot, StartGame } from "./protocol";
+import type { ArchidektDecks, ArchidektProgress, Choice, DeckInfo, Snapshot, StartGame } from "./protocol";
+import { send } from "./ws";
+
+vi.mock("./ws", () => ({ send: vi.fn() }));
 
 const deck = (name: string): DeckInfo => ({ name, commanders: [] });
 
@@ -244,5 +247,46 @@ describe("store: serie", () => {
     expect(useStore.getState().bestOf).toBe(0);
     useStore.getState().setBestOf(5);
     expect(useStore.getState().bestOf).toBe(5);
+  });
+});
+
+describe("store: archidekt", () => {
+  const entries: ArchidektDecks["decks"] = [
+    { id: 1, name: "Deck 1", updatedAt: "2026-09-01T00:00:00.000000Z", art: "https://example.com/a.webp" },
+  ];
+
+  beforeEach(() => {
+    useStore.setState({ ...initialState, archidekt: { loading: false } });
+    vi.mocked(send).mockClear();
+  });
+
+  it("archidektDecks setzt die liste und beendet loading", () => {
+    const loading = reduce({ ...initialState, archidekt: { loading: true } }, { type: "archidektDecks", username: "kevin", decks: entries });
+    expect(loading.archidekt).toEqual({ username: "kevin", decks: entries, loading: false });
+  });
+
+  it("archidektProgress landet in archidekt.progress", () => {
+    const progress: ArchidektProgress = { type: "archidektProgress", done: 2, total: 5, current: "Koma, World-Eater", errors: [] };
+    const s = reduce({ ...initialState, archidekt: { loading: true } }, progress);
+    expect(s.archidekt.progress).toEqual(progress);
+  });
+
+  it("archidektProgress am ende (done === total, current fehlt) bleibt als fertig im store stehen", () => {
+    const done: ArchidektProgress = { type: "archidektProgress", done: 5, total: 5, errors: [] };
+    const s = reduce({ ...initialState, archidekt: { loading: true } }, done);
+    expect(s.archidekt.progress).toEqual({ type: "archidektProgress", done: 5, total: 5, errors: [] });
+    expect(s.archidekt.progress?.current).toBeUndefined();
+  });
+
+  it("error beendet loading", () => {
+    const s = reduce({ ...initialState, archidekt: { loading: true, username: "kevin" } }, { type: "error", text: "Archidekt: HTTP 500" });
+    expect(s.archidekt.loading).toBe(false);
+    expect(s.archidekt.username).toBe("kevin");
+  });
+
+  it("requestArchidektList setzt loading und sendet archidektList", () => {
+    useStore.getState().requestArchidektList("kevin");
+    expect(useStore.getState().archidekt.loading).toBe(true);
+    expect(send).toHaveBeenCalledWith({ type: "archidektList", username: "kevin" });
   });
 });

@@ -1,0 +1,7 @@
+{
+  "type": "archidektProgress",
+  "done": 2,
+  "total": 5,
+  "current": "Koma, World-Eater",
+  "errors": ["HOBBITS CREATE MONSTERS: Archidekt: HTTP 500"]
+}

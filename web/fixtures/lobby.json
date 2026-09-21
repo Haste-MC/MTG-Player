@@ -7,7 +7,7 @@
     { "name": "Elven Empire (C21)", "commanders": [{ "name": "Lathril, Blade of the Elves", "imageKey": "c:Lathril, Blade of the Elves|KHC|1" }], "archidekt": null }
   ],
   "decks": [
-    { "name": "Felothar Landfall", "commanders": [{ "name": "Felothar the Steadfast", "imageKey": "c:Felothar the Steadfast|TDC|1" }], "archidekt": "12345" },
+    { "name": "Felothar Landfall", "commanders": [{ "name": "Felothar the Steadfast", "imageKey": "c:Felothar the Steadfast|TDC|1" }], "archidekt": "12345", "archidektUpdated": "2026-09-18T12:00:00.000000Z" },
     { "name": "Kalamax Storm", "commanders": [{ "name": "Kalamax, the Stormsire", "imageKey": "c:Kalamax, the Stormsire|C20|1" }], "archidekt": null }
   ],
   "aiModes": ["standard", "hybrid", "sim"],

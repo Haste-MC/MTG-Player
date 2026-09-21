@@ -1,0 +1,11 @@
+{
+  "type": "archidektDecks",
+  "username": "kevin",
+  "decks": [
+    { "id": 12345, "name": "Felothar Landfall", "updatedAt": "2026-09-21T09:00:00.000000Z", "art": "https://card-images.archidekt.com/art/front/d/8/d876315f-b269-4254-a517-905c6e927462.webp" },
+    { "id": 12345, "name": "Felothar Landfall", "updatedAt": "2026-09-18T12:00:00.000000Z", "art": "https://card-images.archidekt.com/art/front/9/0/901bd4dc-ebd3-40af-9fb0-57a8719329a4.webp" },
+    { "id": 26595870, "name": "HOBBITS CREATE MONSTERS", "updatedAt": "2026-09-21T18:41:17.869883Z", "art": "https://card-images.archidekt.com/art/front/5/f/5feba5d6-99a6-4e9b-8a7d-90d955868fc3.webp?1783911263" },
+    { "id": 26566111, "name": "BARD KING OF DALE", "updatedAt": "2026-09-20T20:09:16.875082Z", "art": "https://card-images.archidekt.com/art/front/custom.webp" },
+    { "id": 9592911, "name": "EDH Rin and Seri", "updatedAt": "2026-09-01T10:00:00.000000Z", "art": "https://card-images.archidekt.com/art/front/r/i/rin.webp" }
+  ]
+}

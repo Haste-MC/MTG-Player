@@ -1,6 +1,7 @@
 import { create } from "zustand";
-import type { Choice, DeckInfo, Inbound, Snapshot, StartGame } from "./protocol";
+import type { ArchidektEntry, ArchidektProgress, Choice, DeckInfo, Inbound, Snapshot, StartGame } from "./protocol";
 import { recordResult, type Series, startSeries } from "./series";
+import { send } from "./ws";
 
 export interface LogEntry { text: string; kind?: string; card?: number; warn?: boolean; id?: number }
 
@@ -35,11 +36,16 @@ export interface AppState {
    *  Spielstart, kein Reconnect-Replay der alten Partie (die z. B. bei einem sofortigen Concede selbst
    *  bei turn 0 geendet haben kann). Wird bei jedem Snapshot und bei jedem error zurueckgesetzt. */
   expectNewMatch: boolean;
+  /** Archidekt-Reiter der Lobby: zuletzt geladene Deckliste eines Kontos und der Fortschritt eines
+   *  laufenden archidektImport. decks/progress fehlen, bevor je eine Antwort kam; loading ist waehrend
+   *  einer laufenden archidektList-Anfrage true, ein "error" beendet es (unabhaengig vom Grund). */
+  archidekt: { username?: string; decks?: ArchidektEntry[]; loading: boolean; progress?: ArchidektProgress };
 }
 
 export const initialState: AppState = {
   screen: "lobby", precons: [], decks: [], choices: [], log: [], hiddenKinds: ["MANA", "PHASE"], lastLogId: 0,
   aiModes: ["standard", "hybrid", "sim"], aiProfiles: ["Default"], aiTimeout: 5, bestOf: 0, expectNewMatch: false,
+  archidekt: { loading: false },
 };
 
 const LOG_MAX = 500;
@@ -88,11 +94,18 @@ export function reduce(s: AppState, m: Inbound): AppState {
     }
     case "gameOver":
       return { ...s, winner: m.winner ?? null, choices: [], series: s.series ? recordResult(s.series, m.winner ?? null) : s.series };
-    case "error":
+    case "error": {
       // Ein fehlgeschlagenes startGame (z. B. Deckfehler) darf expectNewMatch nicht scharf lassen - sonst
       // wuerde der naechste turn-0-Snapshot (Reconnect der alten Partie) faelschlich als Spielstart gelten.
-      if (m.text === INCORRECT_ACTION_TEXT) return { ...s, toast: { text: m.text, n: (s.toast?.n ?? 0) + 1 }, expectNewMatch: false };
-      return { ...s, log: [...s.log, { text: "⚠ " + m.text, warn: true }].slice(-LOG_MAX), expectNewMatch: false };
+      // Ein error beendet auch ein laufendes archidektList (unabhaengig davon, ob er davon stammt).
+      const archidekt = { ...s.archidekt, loading: false };
+      if (m.text === INCORRECT_ACTION_TEXT) return { ...s, toast: { text: m.text, n: (s.toast?.n ?? 0) + 1 }, expectNewMatch: false, archidekt };
+      return { ...s, log: [...s.log, { text: "⚠ " + m.text, warn: true }].slice(-LOG_MAX), expectNewMatch: false, archidekt };
+    }
+    case "archidektDecks":
+      return { ...s, archidekt: { username: m.username, decks: m.decks, loading: false } };
+    case "archidektProgress":
+      return { ...s, archidekt: { ...s.archidekt, progress: m } };
     default:
       return s;
   }
@@ -109,6 +122,8 @@ interface Store extends AppState {
   noteStart: (msg: StartGame) => void;
   resetSeries: () => void;
   setBestOf: (n: number) => void;
+  /** Setzt archidekt.loading und schickt archidektList - die Bridge antwortet mit archidektDecks/error. */
+  requestArchidektList: (username: string) => void;
 }
 
 export const useStore = create<Store>((set) => ({
@@ -124,4 +139,8 @@ export const useStore = create<Store>((set) => ({
   toggleKind: (kind) => set((s) => ({
     hiddenKinds: s.hiddenKinds.includes(kind) ? s.hiddenKinds.filter((k) => k !== kind) : [...s.hiddenKinds, kind],
   })),
+  requestArchidektList: (username) => {
+    set((s) => ({ archidekt: { ...s.archidekt, loading: true } }));
+    send({ type: "archidektList", username });
+  },
 }));
