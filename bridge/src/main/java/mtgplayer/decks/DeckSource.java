@@ -61,6 +61,11 @@ public final class DeckSource {
      * {@code archidekt:<id>}, wird es unter seinem gespeicherten Namen neu geholt ({@link #resync}), sonst
      * neu importiert unter dem Archidekt-Namen. Beide Tags werden gesetzt.
      *
+     * <p>Traegt ein anderes gespeichertes Deck bereits den Archidekt-Namen (oder einen Namen, der auf
+     * dieselbe .dck-Datei abbildet, siehe {@link DeckStore#fileName}), wird unter
+     * {@code "<Name> (<id>)"} gespeichert - ein lokales Deck wird nie stillschweigend ueberschrieben.
+     * Das Deck mit derselben Id kommt hier nicht an ({@link DeckStore#byArchidektId} leitet es zum Resync).</p>
+     *
      * @throws IllegalArgumentException Fetch- oder Import-Fehler ("Archidekt: …" bzw. "Resync &lt;name&gt;: …")
      */
     public Resolved importArchidekt(long id) {
@@ -69,7 +74,18 @@ public final class DeckSource {
             return resync(existing);
         }
         Archidekt.Result r = archidekt.fetch(String.valueOf(id));
-        return resolveText(r.text(), r.name(), String.valueOf(id), r.updatedAt());
+        return resolveText(r.text(), uniqueName(r.name(), id), String.valueOf(id), r.updatedAt());
+    }
+
+    /** @return {@code name}, oder {@code "<name> (<id>)"}, wenn ein gespeichertes Deck denselben Namen bzw. dieselbe Datei belegt. */
+    private String uniqueName(String name, long id) {
+        String file = DeckStore.fileName(name);
+        for (String n : store.names()) {
+            if (n.equals(name) || DeckStore.fileName(n).equals(file)) {
+                return name + " (" + id + ")";
+            }
+        }
+        return name;
     }
 
     /**

@@ -31,13 +31,21 @@ public final class Bridge {
     private final WsServer ws;
     private final WebGuiGame gui;
     private final HumanMatch match = new HumanMatch();
-    private final DeckStore store = DeckStore.standard();
-    private final Archidekt archidekt = Archidekt.standard();
-    private final DeckSource decks = new DeckSource(store, archidekt);
+    private final DeckStore store;
+    private final Archidekt archidekt;
+    private final DeckSource decks;
     /** Genau ein archidektImport-Lauf zur Zeit (siehe handle, "archidektImport"). */
     private final AtomicBoolean importRunning = new AtomicBoolean();
 
     public Bridge(int wsPort) {
+        this(wsPort, DeckStore.standard(), Archidekt.standard());
+    }
+
+    /** Fuer Tests (siehe BridgeArchidektImportTest): eigenes Deck-Verzeichnis und Archidekt ohne Netz. */
+    Bridge(int wsPort, DeckStore store, Archidekt archidekt) {
+        this.store = store;
+        this.archidekt = archidekt;
+        this.decks = new DeckSource(store, archidekt);
         this.ws = new WsServer(wsPort, this::handle, this::onClientConnected);
         this.gui = new WebGuiGame(ws);
         // KI-only-Modus: HostedMatch.startGame holt sich bei einer leeren guis-Map (Zuschauer, kein
