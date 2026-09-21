@@ -35,7 +35,10 @@ public final class Precons {
         return d;
     }
 
-    /** Alle Precons als {@link Messages.DeckInfo}, nach Name sortiert; einmal berechnet und gecacht. */
+    /**
+     * Alle Precons als {@link Messages.DeckInfo}, nach Name sortiert; einmal berechnet und gecacht.
+     * Kein Lock: eine doppelte Berechnung bei gleichzeitigem Erstaufruf ist harmlos (idempotent, Ergebnis unveraenderlich).
+     */
     public static List<Messages.DeckInfo> infos() {
         List<Messages.DeckInfo> out = cached;
         if (out == null) {

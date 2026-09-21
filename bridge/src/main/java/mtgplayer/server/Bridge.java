@@ -134,6 +134,10 @@ public final class Bridge {
                         ws.send(new Messages.Lobby(Precons.infos(), store.infos()));
                     } catch (IllegalArgumentException e) {
                         ws.send(new Messages.ErrorMsg(e.getMessage()));
+                    } catch (RuntimeException e) {
+                        // wie bei "concede": sonst stirbt der Fehler still auf dem Hintergrund-Thread
+                        e.printStackTrace();
+                        ws.send(new Messages.ErrorMsg("Resync " + name + ": " + e));
                     }
                 });
             }
