@@ -1,12 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { loadAiSettings, restoreSlots, saveAiSettings } from "../aiSettings";
-import { type Pick, toRef } from "../deckref";
+import { type AiSettings, loadAiSettings, restoreSlots, saveAiSettings } from "../aiSettings";
+import { EMPTY_PICK as EMPTY, type Pick, toRef } from "../deckref";
 import { buildStartGame, DEFAULT_AI } from "../lobbyPayload";
 import type { AiPick } from "../protocol";
 import { useStore } from "../store";
 import { send } from "../ws";
-
-const EMPTY: Pick = { kind: "precon", value: "", name: "" };
 
 export default function Lobby() {
   const precons = useStore((s) => s.precons);
@@ -25,6 +23,8 @@ export default function Lobby() {
   // angelegt hat - addAi/toggleSpectate greifen beim manuellen Hinzufuegen eines Slots hierauf zurueck,
   // statt immer DEFAULT_AI zu nehmen.
   const loadedPicks = useRef<AiPick[]>([]);
+  // bestOf wird hier noch nicht bedient (Lobby-Umbau folgt) - gespeicherten Wert beim Sichern nur durchreichen.
+  const loadedBestOf = useRef<AiSettings["bestOf"]>(0);
 
   const maxAis = spectate ? 6 : 5;
   const minAis = spectate ? 2 : 1;
@@ -41,6 +41,7 @@ export default function Lobby() {
     settingsLoaded.current = true;
     const loaded = loadAiSettings(() => localStorage, aiProfiles);
     loadedPicks.current = loaded.picks;
+    loadedBestOf.current = loaded.bestOf;
     setAiTimeout(loaded.timeout);
     // AiSettings.picks.length ist die gespeicherte Slot-Zahl - so viele Slots (geklemmt auf min/max)
     // anlegen, nicht nur die Picks in die aktuell vorhandene (anfangs einzige) Zeile mappen.
@@ -52,7 +53,7 @@ export default function Lobby() {
   // Auswahl merken, sobald sie geladen ist (kein Ueberschreiben des Storage vor dem obigen Laden).
   useEffect(() => {
     if (!settingsLoaded.current) return;
-    saveAiSettings(() => localStorage, { picks: aiPicks, timeout: aiTimeout });
+    saveAiSettings(() => localStorage, { picks: aiPicks, timeout: aiTimeout, bestOf: loadedBestOf.current });
   }, [aiPicks, aiTimeout]);
 
   const humanRef = toRef(human);
@@ -107,13 +108,13 @@ export default function Lobby() {
       {p.kind === "precon" && (
         <select value={p.value} onChange={(e) => onChange({ ...p, value: e.target.value })}>
           <option value="">– Precon wählen –</option>
-          {precons.map((x) => <option key={x} value={x}>{x}</option>)}
+          {precons.map((x) => <option key={x.name} value={x.name}>{x.name}</option>)}
         </select>
       )}
       {p.kind === "saved" && (
         <select value={p.value} onChange={(e) => onChange({ ...p, value: e.target.value })}>
           <option value="">– gespeichertes Deck –</option>
-          {decks.map((x) => <option key={x} value={x}>{x}</option>)}
+          {decks.map((x) => <option key={x.name} value={x.name}>{x.name}</option>)}
         </select>
       )}
       {p.kind === "text" && (

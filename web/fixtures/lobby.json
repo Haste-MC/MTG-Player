@@ -1,7 +1,15 @@
 {
   "type": "lobby",
-  "precons": ["Tinker Time (TDC)", "Eldrazi Incursion (TDC)", "Aetherdrift Living Energy (DRC)", "Elven Empire (C21)"],
-  "decks": ["Felothar Landfall", "Kalamax Storm"],
+  "precons": [
+    { "name": "Tinker Time (TDC)", "commanders": [{ "name": "Gimbal, Gremlin Prodigy", "imageKey": "c:Gimbal, Gremlin Prodigy|MOC|1" }], "archidekt": null },
+    { "name": "Eldrazi Incursion (TDC)", "commanders": [{ "name": "Ulalek, Fused Atrocity", "imageKey": "c:Ulalek, Fused Atrocity|M3C|1" }], "archidekt": null },
+    { "name": "Aetherdrift Living Energy (DRC)", "commanders": [{ "name": "Saheeli, Radiant Creator", "imageKey": "c:Saheeli, Radiant Creator|DRC|1" }], "archidekt": null },
+    { "name": "Elven Empire (C21)", "commanders": [{ "name": "Lathril, Blade of the Elves", "imageKey": "c:Lathril, Blade of the Elves|KHC|1" }], "archidekt": null }
+  ],
+  "decks": [
+    { "name": "Felothar Landfall", "commanders": [{ "name": "Felothar the Steadfast", "imageKey": "c:Felothar the Steadfast|TDC|1" }], "archidekt": "12345" },
+    { "name": "Kalamax Storm", "commanders": [{ "name": "Kalamax, the Stormsire", "imageKey": "c:Kalamax, the Stormsire|C20|1" }], "archidekt": null }
+  ],
   "aiModes": ["standard", "hybrid", "sim"],
   "aiProfiles": ["Default", "Cautious", "Experimental", "Reckless"],
   "aiTimeout": 5

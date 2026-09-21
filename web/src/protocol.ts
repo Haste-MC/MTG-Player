@@ -118,10 +118,17 @@ export interface Choice {
   flags?: string[];
 }
 
+/** Ein Deck im Lobby-Angebot (Bridge: Messages.DeckInfo). imageKey ist Forges Bildschluessel
+ * ("c:Name|SET|art"); archidekt ist die Archidekt-Deck-Id eines importierten Decks, null/fehlend sonst. */
+export interface DeckInfo {
+  name: string;
+  commanders: { name: string; imageKey?: string }[];
+  archidekt?: string | null;
+}
 export interface Lobby {
   type: "lobby";
-  precons: string[];
-  decks?: string[];
+  precons: DeckInfo[];
+  decks?: DeckInfo[];
   aiModes?: string[];
   aiProfiles?: string[];
   aiTimeout?: number;
@@ -153,7 +160,11 @@ export type Outbound =
   | { type: "fullControl"; value: boolean }
   | { type: "answer"; id: number; value: unknown }
   | { type: "concede" }
-  | { type: "requestState" };
+  | { type: "requestState" }
+  // Gespeichertes Archidekt-Deck neu von Archidekt laden (Bridge antwortet mit einer frischen lobby-Nachricht oder error).
+  | { type: "resyncDeck"; name: string };
+
+export type StartGame = Extract<Outbound, { type: "startGame" }>;
 
 export const PHASES: { id: string; short: string }[] = [
   { id: "UNTAP", short: "UT" }, { id: "UPKEEP", short: "UP" }, { id: "DRAW", short: "DR" },

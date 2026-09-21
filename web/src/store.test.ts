@@ -1,6 +1,8 @@
-import { describe, expect, it } from "vitest";
-import { reduce, initialState } from "./store";
-import type { Choice, Snapshot } from "./protocol";
+import { beforeEach, describe, expect, it } from "vitest";
+import { reduce, initialState, useStore } from "./store";
+import type { Choice, DeckInfo, Snapshot, StartGame } from "./protocol";
+
+const deck = (name: string): DeckInfo => ({ name, commanders: [] });
 
 const snap = (over: Partial<Snapshot> = {}): Snapshot => ({
   type: "state",
@@ -19,20 +21,21 @@ const snap = (over: Partial<Snapshot> = {}): Snapshot => ({
 
 describe("reduce", () => {
   it("lobby setzt precons und screen", () => {
-    const s = reduce(initialState, { type: "lobby", precons: ["A", "B"] });
-    expect(s.precons).toEqual(["A", "B"]);
+    const s = reduce(initialState, { type: "lobby", precons: [deck("A"), deck("B")] });
+    expect(s.precons).toEqual([deck("A"), deck("B")]);
     expect(s.screen).toBe("lobby");
   });
 
   it("lobby setzt gespeicherte decks", () => {
-    const s = reduce(initialState, { type: "lobby", precons: ["A"], decks: ["Mein Deck"] });
-    expect(s.decks).toEqual(["Mein Deck"]);
-    const s2 = reduce(s, { type: "lobby", precons: ["A"] });
+    const mine: DeckInfo = { name: "Mein Deck", commanders: [{ name: "Felothar the Steadfast", imageKey: "c:Felothar the Steadfast|TDC|1" }], archidekt: "12345" };
+    const s = reduce(initialState, { type: "lobby", precons: [deck("A")], decks: [mine] });
+    expect(s.decks).toEqual([mine]);
+    const s2 = reduce(s, { type: "lobby", precons: [deck("A")] });
     expect(s2.decks).toEqual([]);
   });
 
   it("lobby ohne KI-Felder -> Standardwerte (Modi, Default-Profil, 5s)", () => {
-    const s = reduce(initialState, { type: "lobby", precons: ["A"] });
+    const s = reduce(initialState, { type: "lobby", precons: [deck("A")] });
     expect(s.aiModes).toEqual(["standard", "hybrid", "sim"]);
     expect(s.aiProfiles).toEqual(["Default"]);
     expect(s.aiTimeout).toBe(5);
@@ -41,7 +44,7 @@ describe("reduce", () => {
   it("lobby uebernimmt aiModes/aiProfiles/aiTimeout von der Bridge", () => {
     const s = reduce(initialState, {
       type: "lobby",
-      precons: ["A"],
+      precons: [deck("A")],
       aiModes: ["standard", "hybrid", "sim"],
       aiProfiles: ["Default", "Cautious", "Experimental", "Reckless"],
       aiTimeout: 5,
@@ -142,5 +145,55 @@ describe("reduce", () => {
     const s = reduce(initialState, c);
     expect(s.choices[0]?.id).toBe(9);
     expect(s.choices[0]?.kind).toBe("reveal");
+  });
+});
+
+describe("store: serie", () => {
+  const msg: StartGame = { type: "startGame", humanDeck: { precon: "A" }, opponents: [{ precon: "B", name: "KI 1" }] };
+
+  beforeEach(() => {
+    useStore.setState({ ...initialState, lastStart: undefined, series: undefined, winner: undefined, state: undefined });
+  });
+
+  it("noteStart merkt lastStart und startet die serie", () => {
+    useStore.getState().noteStart(msg);
+    expect(useStore.getState().lastStart).toEqual(msg);
+    expect(useStore.getState().series).toEqual({ key: expect.any(String), wins: {}, games: 0 });
+  });
+
+  it("gameOver mit winner zaehlt in der serie", () => {
+    useStore.getState().noteStart(msg);
+    useStore.getState().apply({ type: "gameOver", winner: "Du" });
+    expect(useStore.getState().series?.wins.Du).toBe(1);
+    expect(useStore.getState().series?.games).toBe(1);
+  });
+
+  it("gameOver ohne serie laesst series undefined", () => {
+    const s = reduce(initialState, { type: "gameOver", winner: "Du" });
+    expect(s.series).toBeUndefined();
+  });
+
+  it("backToLobby behaelt lastStart und series", () => {
+    useStore.getState().noteStart(msg);
+    useStore.getState().apply({ type: "gameOver", winner: "Du" });
+    useStore.getState().backToLobby();
+    expect(useStore.getState().screen).toBe("lobby");
+    expect(useStore.getState().series?.wins.Du).toBe(1);
+    expect(useStore.getState().lastStart).toEqual(msg);
+  });
+
+  it("noteStart mit gleichem key behaelt den stand, resetSeries setzt zurueck", () => {
+    useStore.getState().noteStart(msg);
+    useStore.getState().apply({ type: "gameOver", winner: "Du" });
+    useStore.getState().noteStart(msg);
+    expect(useStore.getState().series?.wins.Du).toBe(1);
+    useStore.getState().resetSeries();
+    expect(useStore.getState().series).toBeUndefined();
+  });
+
+  it("setBestOf setzt bestOf, default 0", () => {
+    expect(useStore.getState().bestOf).toBe(0);
+    useStore.getState().setBestOf(5);
+    expect(useStore.getState().bestOf).toBe(5);
   });
 });

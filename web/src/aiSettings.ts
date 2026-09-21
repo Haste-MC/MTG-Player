@@ -4,16 +4,18 @@ import { DEFAULT_AI } from "./lobbyPayload";
 /** localStorage-Schlüssel für die zuletzt gewählten KI-Einstellungen der Lobby. */
 const KEY = "mtg.lobby.ai";
 
-const DEFAULTS: AiSettings = { picks: [], timeout: 5 };
+const DEFAULTS: AiSettings = { picks: [], timeout: 5, bestOf: 0 };
 
 const VALID_MODES = new Set<AiPick["mode"]>(["standard", "hybrid", "sim"]);
+const VALID_BEST_OF: readonly AiSettings["bestOf"][] = [0, 3, 5, 7];
 
-export interface AiSettings { picks: AiPick[]; timeout: number }
+/** bestOf: Laenge der Serie ("Best of n"), 0 = keine Serie (Default). */
+export interface AiSettings { picks: AiPick[]; timeout: number; bestOf: 0 | 3 | 5 | 7 }
 
 /**
  * Lädt die zuletzt gespeicherte KI-Auswahl aus dem Storage - rein testbar mit injiziertem Storage.
  * Fehlendes/kaputtes/unlesbares Storage sowie ein ungültiger Wert je Feld fallen einzeln auf die
- * Defaults zurück (leere picks, Timeout 5); ein Profilname, den es laut "profiles" nicht (mehr) gibt,
+ * Defaults zurück (leere picks, Timeout 5, bestOf 0); ein Profilname, den es laut "profiles" nicht (mehr) gibt,
  * wird zu "Default".
  *
  * Nimmt einen Getter statt des Storage-Objekts direkt entgegen: schon der bloße Zugriff auf den
@@ -43,7 +45,9 @@ export function loadAiSettings(getStorage: () => Pick<Storage, "getItem">, profi
       ? parsed.timeout
       : DEFAULTS.timeout;
 
-    return { picks, timeout };
+    const bestOf = VALID_BEST_OF.find((n) => n === parsed.bestOf) ?? DEFAULTS.bestOf;
+
+    return { picks, timeout, bestOf };
   } catch {
     return DEFAULTS;
   }
