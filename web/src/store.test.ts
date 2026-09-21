@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { reduce, initialState, useStore } from "./store";
+import { INCORRECT_ACTION_TEXT, reduce, initialState, useStore } from "./store";
 import type { Choice, DeckInfo, Snapshot, StartGame } from "./protocol";
 
 const deck = (name: string): DeckInfo => ({ name, commanders: [] });
@@ -124,17 +124,44 @@ describe("reduce", () => {
     expect(s.choices).toEqual([]);
   });
 
-  it("neuer state (turn 0) nach gameOver ist eine neue partie - winner und log werden geleert", () => {
+  it("neuer state (turn 0) nach gameOver und noteStart ist eine neue partie - winner und log werden geleert", () => {
     let s = reduce(initialState, snap());
     s = reduce(s, { type: "log", text: "altes spiel", id: 5 });
     s = reduce(s, { type: "gameOver", winner: "KI 1" });
     expect(s.winner).toBe("KI 1");
-    // "Nochmal spielen" im Overlay schickt startGame erneut; s.state ist noch die alte Partie, aber
-    // winner ist gesetzt - der neue Snapshot (turn 0) muss trotzdem als Spielstart erkannt werden.
+    // "Nochmal spielen" im Overlay ruft noteStart() vor dem send() auf (siehe store.ts) - das setzt
+    // expectNewMatch. s.state ist zu diesem Zeitpunkt noch die alte Partie; erst der naechste
+    // turn-0-Snapshot mit gesetztem Flag zaehlt als Spielstart.
+    s = { ...s, expectNewMatch: true };
     s = reduce(s, snap({ turn: 0 }));
     expect(s.winner).toBeUndefined();
     expect(s.log).toEqual([]);
     expect(s.lastLogId).toBe(0);
+    expect(s.expectNewMatch).toBe(false);
+  });
+
+  it("turn-0-state nach gameOver OHNE expectNewMatch ist ein reconnect-replay - log und winner bleiben", () => {
+    // Sofortiges Concede kann selbst bei turn 0 enden; kommt danach per Reconnect derselbe Snapshot
+    // erneut an, ohne dass "Nochmal spielen" geklickt wurde (expectNewMatch also nicht gesetzt ist),
+    // darf das nicht als neuer Spielstart durchgehen - sonst wuerden Log und Overlay mitten im
+    // offenen Spielende-Dialog verschwinden.
+    let s = reduce(initialState, snap({ turn: 0 }));
+    s = reduce(s, { type: "log", text: "partie zu ende bei zug 0", id: 5 });
+    s = reduce(s, { type: "gameOver", winner: "KI 1" });
+    expect(s.expectNewMatch).toBe(false);
+    s = reduce(s, snap({ turn: 0 }));
+    expect(s.winner).toBe("KI 1");
+    expect(s.log.map((l) => l.text)).toEqual(["partie zu ende bei zug 0"]);
+    expect(s.lastLogId).toBe(5);
+  });
+
+  it("error setzt expectNewMatch zurueck (fehlgeschlagenes startGame darf das flag nicht scharf lassen)", () => {
+    const s0 = { ...initialState, expectNewMatch: true };
+    const s = reduce(s0, { type: "error", text: "Unbekannte Karte: Foo" });
+    expect(s.expectNewMatch).toBe(false);
+    // gilt auch fuer den flashIncorrectAction-Sonderfall (Toast statt Log-Zeile)
+    const s2 = reduce(s0, { type: "error", text: INCORRECT_ACTION_TEXT });
+    expect(s2.expectNewMatch).toBe(false);
   });
 
   it("log verwirft wiederholte zeilen mit derselben id (reconnect-replay)", () => {

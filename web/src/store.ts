@@ -31,11 +31,15 @@ export interface AppState {
   series?: Series;
   /** Serienlaenge aus der Lobby (0 = keine Serie). */
   bestOf: number;
+  /** true zwischen noteStart() und dem naechsten Snapshot: der naechste turn-0-state ist sicher ein
+   *  Spielstart, kein Reconnect-Replay der alten Partie (die z. B. bei einem sofortigen Concede selbst
+   *  bei turn 0 geendet haben kann). Wird bei jedem Snapshot und bei jedem error zurueckgesetzt. */
+  expectNewMatch: boolean;
 }
 
 export const initialState: AppState = {
   screen: "lobby", precons: [], decks: [], choices: [], log: [], hiddenKinds: ["MANA", "PHASE"], lastLogId: 0,
-  aiModes: ["standard", "hybrid", "sim"], aiProfiles: ["Default"], aiTimeout: 5, bestOf: 0,
+  aiModes: ["standard", "hybrid", "sim"], aiProfiles: ["Default"], aiTimeout: 5, bestOf: 0, expectNewMatch: false,
 };
 
 const LOG_MAX = 500;
@@ -62,12 +66,17 @@ export function reduce(s: AppState, m: Inbound): AppState {
       };
     case "state": {
       // Spielstart nach der Lobby (erster Snapshot, s.state war noch undefined) oder Replay aus dem
-      // Spielende-Overlay ("Nochmal spielen"/"Neue Serie" - s.state ist da noch die alte Partie, aber
-      // winner ist gesetzt): Log der Vorpartie leeren und winner zuruecksetzen.
-      const isNewMatch = m.turn === 0 && (s.state === undefined || s.winner !== undefined);
+      // Spielende-Overlay ("Nochmal spielen"/"Neue Serie" - noteStart hat expectNewMatch gesetzt): Log der
+      // Vorpartie leeren und winner zuruecksetzen. winner selbst ist als Indiz ungeeignet: ein turn-0-state
+      // kann nach einem sofortigen Concede per Reconnect erneut ankommen, waehrend das Overlay noch offen
+      // ist - dann ist es kein Spielstart, sondern ein Replay derselben (beendeten) Partie.
+      const isNewMatch = m.turn === 0 && (s.state === undefined || s.expectNewMatch);
       const freshLog = isNewMatch ? [] : s.log;
       const lastLogId = isNewMatch ? 0 : s.lastLogId;
-      return { ...s, state: m, screen: "table", log: freshLog, lastLogId, winner: isNewMatch ? undefined : s.winner };
+      return {
+        ...s, state: m, screen: "table", log: freshLog, lastLogId, expectNewMatch: false,
+        winner: isNewMatch ? undefined : s.winner,
+      };
     }
     case "choice":
       return { ...s, choices: addChoice(s.choices, m) };
@@ -80,8 +89,10 @@ export function reduce(s: AppState, m: Inbound): AppState {
     case "gameOver":
       return { ...s, winner: m.winner ?? null, choices: [], series: s.series ? recordResult(s.series, m.winner ?? null) : s.series };
     case "error":
-      if (m.text === INCORRECT_ACTION_TEXT) return { ...s, toast: { text: m.text, n: (s.toast?.n ?? 0) + 1 } };
-      return { ...s, log: [...s.log, { text: "⚠ " + m.text, warn: true }].slice(-LOG_MAX) };
+      // Ein fehlgeschlagenes startGame (z. B. Deckfehler) darf expectNewMatch nicht scharf lassen - sonst
+      // wuerde der naechste turn-0-Snapshot (Reconnect der alten Partie) faelschlich als Spielstart gelten.
+      if (m.text === INCORRECT_ACTION_TEXT) return { ...s, toast: { text: m.text, n: (s.toast?.n ?? 0) + 1 }, expectNewMatch: false };
+      return { ...s, log: [...s.log, { text: "⚠ " + m.text, warn: true }].slice(-LOG_MAX), expectNewMatch: false };
     default:
       return s;
   }
@@ -107,7 +118,7 @@ export const useStore = create<Store>((set) => ({
   backToLobby: () => set({ screen: "lobby", state: undefined, winner: undefined, choices: [] }),
   setHover: (id) => set({ hover: id }),
   clearToast: () => set({ toast: undefined }),
-  noteStart: (msg) => set((s) => ({ lastStart: msg, series: startSeries(s.series, msg) })),
+  noteStart: (msg) => set((s) => ({ lastStart: msg, series: startSeries(s.series, msg), expectNewMatch: true })),
   resetSeries: () => set({ series: undefined }),
   setBestOf: (n) => set({ bestOf: n }),
   toggleKind: (kind) => set((s) => ({
