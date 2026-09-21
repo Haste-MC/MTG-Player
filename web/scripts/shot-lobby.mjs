@@ -2,8 +2,9 @@
 // Fixture-Zustand - window.mtgApply liefert nur "lobby"/"state" etc., aber keine UI-Interaktion.
 // Aufruf (aus web/): node scripts/shot-lobby.mjs <url> <out.png> [--open-panel] [--tab=saved] [--pick="Tinker Time (TDC)"]
 //   [--url-value="https://…"] [--spectate]
-// --open-panel oeffnet das Panel der ersten Deck-Kachel ("Dein Deck", im Zuschauer-Modus "KI 1"); --tab wechselt
-// darin den Reiter; --pick klickt die Deck-Karte mit diesem Namen (schliesst das Panel, die Kachel zeigt das Deck).
+// --pick oeffnet das Panel der ersten Deck-Kachel ("Dein Deck", im Zuschauer-Modus "KI 1"), klickt die Deck-Karte mit
+// diesem Namen und schliesst es damit (die Kachel zeigt das Deck). --open-panel laesst das Panel am Ende offen (nach
+// einem --pick wird es dafuer erneut geoeffnet); --tab wechselt darin den Reiter.
 import { chromium } from "playwright";
 import { readFile } from "node:fs/promises";
 
@@ -54,20 +55,27 @@ try {
     await page.click("text=Nur KI – zuschauen");
     await page.waitForTimeout(300);
   }
-  if (openPanel || tab || pickName) {
-    // Erste Kachel ("Dein Deck" ohne Zuschauer-Modus, sonst "KI 1") - genügt für Screenshots mit einer Auswahl.
+  // Erste Kachel ("Dein Deck" ohne Zuschauer-Modus, sonst "KI 1") - genügt für Screenshots mit einer Auswahl.
+  const openFirstPanel = async () => {
     await page.locator(".deck-tile").first().click();
     await page.locator(".deck-panel").waitFor();
     await page.waitForTimeout(200);
-  }
-  if (tab) {
+  };
+  const clickTab = async () => {
+    if (!tab) return;
     await page.locator(".deck-tabs .tab", { hasText: TAB_LABEL[tab] }).click();
     await page.waitForTimeout(200);
-  }
+  };
   if (pickName) {
-    await page.locator(".deck-card", { has: page.locator(".deck-card-name", { hasText: pickName }) }).first().click();
+    await openFirstPanel();
+    if (tab !== "import") await clickTab();   // Karte liegt unter Precons (Standard) oder Eigene Decks
+    await page.locator(".deck-card-main", { has: page.locator(".deck-card-name", { hasText: pickName }) }).first().click();
     await page.locator(".deck-panel").waitFor({ state: "detached" });
     await page.waitForTimeout(200);
+  }
+  if (openPanel) {
+    await openFirstPanel();
+    await clickTab();
   }
   if (urlValue) {
     // Erstes Eingabefeld des Import-Reiters (Textliste: Name, Archidekt: URL) - setzt --tab=import voraus.

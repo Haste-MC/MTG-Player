@@ -7,6 +7,9 @@ import { send } from "../ws";
 import CardImage from "./CardImage";
 
 type Tab = "precons" | "saved" | "import";
+const tabOf = (kind: Pick["kind"]): Tab => (kind === "saved" ? "saved" : kind === "precon" ? "precons" : "import");
+/** Import-Formular zeigt nur einen text-/archidekt-Pick; bei precon/saved startet es leer (der Deckname gehoert nicht ins Feld). */
+const draftOf = (pick: Pick): Pick => (pick.kind === "text" || pick.kind === "archidekt" ? pick : { kind: "text", value: "", name: "" });
 const SRC_LABEL: Record<Pick["kind"], string> = { precon: "Precon", saved: "Eigenes Deck", text: "Textliste", archidekt: "Archidekt" };
 const TAB_LABEL: Record<Tab, string> = { precons: "Precons", saved: "Eigene Decks", import: "Import" };
 
@@ -14,16 +17,27 @@ const TAB_LABEL: Record<Tab, string> = { precons: "Precons", saved: "Eigene Deck
 export default function DeckPicker({ pick, onChange, label }: { pick: Pick; onChange: (p: Pick) => void; label: string }) {
   const precons = useStore((s) => s.precons);
   const decks = useStore((s) => s.decks);
+  const log = useStore((s) => s.log);
   const [open, setOpen] = useState(false);
-  const [tab, setTab] = useState<Tab>(pick.kind === "saved" ? "saved" : pick.kind === "precon" ? "precons" : "import");
+  const [tab, setTab] = useState<Tab>(tabOf(pick.kind));
   const [query, setQuery] = useState("");
-  const [draft, setDraft] = useState<Pick>(pick);           // Import-Formulare
+  const [draft, setDraft] = useState<Pick>(draftOf(pick)); // Import-Formulare
   const [syncing, setSyncing] = useState<string>();          // Deckname, dessen Resync laeuft
   const searchRef = useRef<HTMLInputElement>(null);
   const chosen: DeckInfo | undefined = pick.kind === "precon" ? precons.find((d) => d.name === pick.value)
     : pick.kind === "saved" ? decks.find((d) => d.name === pick.value) : undefined;
-  useEffect(() => { if (open) { setQuery(""); setDraft(pick); searchRef.current?.focus(); } }, [open]);
-  useEffect(() => { setSyncing(undefined); }, [decks]);      // neue lobby-Nachricht beendet "synchronisiert …"
+  useEffect(() => {
+    if (!open) return;
+    setTab(tabOf(pick.kind));
+    setQuery("");
+    setDraft(draftOf(pick));
+    setSyncing(undefined);
+    searchRef.current?.focus();
+  }, [open]);
+  // "synchronisiert …" endet mit der naechsten lobby-Nachricht (decks) oder einem Fehler der Bridge (letzte
+  // Log-Zeile mit warn - ein fehlgeschlagener Resync schickt nur "error", decks bleibt gleich).
+  useEffect(() => { setSyncing(undefined); }, [decks]);
+  useEffect(() => { if (log[log.length - 1]?.warn) setSyncing(undefined); }, [log]);
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
@@ -38,7 +52,7 @@ export default function DeckPicker({ pick, onChange, label }: { pick: Pick; onCh
       : pick.kind === "archidekt" && pick.value.trim() ? (pick.name.trim() || pick.value.trim()) : undefined);
   return (
     <>
-      <button type="button" className={"deck-tile" + (title ? "" : " empty")} onClick={() => setOpen(true)} aria-label={label}>
+      <button type="button" className={"deck-tile" + (title ? "" : " empty")} onClick={() => setOpen(true)} aria-label={`${label}: ${title ?? "Deck wählen"}`}>
         <Art commanders={chosen?.commanders ?? []} />
         <span className="deck-tile-text">
           <span className="deck-tile-name">{title ?? "Deck wählen"}</span>
@@ -64,18 +78,20 @@ export default function DeckPicker({ pick, onChange, label }: { pick: Pick; onCh
               <div className="deck-grid">
                 {list.length === 0 && <div className="muted">{tab === "saved" && decks.length === 0 ? "Noch keine eigenen Decks – über „Import“ anlegen." : "kein Treffer"}</div>}
                 {list.map((d) => (
-                  <button key={d.name} type="button" className={"deck-card" + (pick.kind === listKind && chosen?.name === d.name ? " on" : "")}
-                    onClick={() => choose(d)}>
-                    <Art commanders={d.commanders} big />
-                    <span className="deck-card-name">{d.name}</span>
-                    <span className="deck-card-cmd">{d.commanders.map((c) => c.name).join(" / ")}</span>
+                  // div statt button, damit der Resync-Knopf ein eigener (per Tastatur erreichbarer) Button sein kann
+                  <div key={d.name} className={"deck-card" + (pick.kind === listKind && chosen?.name === d.name ? " on" : "")}>
+                    <button type="button" className="deck-card-main" onClick={() => choose(d)}>
+                      <Art commanders={d.commanders} big />
+                      <span className="deck-card-name">{d.name}</span>
+                      <span className="deck-card-cmd">{d.commanders.map((c) => c.name).join(" / ")}</span>
+                    </button>
                     {tab === "saved" && d.archidekt && (
-                      <span className="resync" role="button" title={"Neu von Archidekt laden (" + d.archidekt + ")"}
-                        onClick={(e) => { e.stopPropagation(); setSyncing(d.name); send({ type: "resyncDeck", name: d.name }); }}>
+                      <button type="button" className="resync" title={"Neu von Archidekt laden (" + d.archidekt + ")"} disabled={syncing === d.name}
+                        onClick={() => { setSyncing(d.name); send({ type: "resyncDeck", name: d.name }); }}>
                         {syncing === d.name ? "synchronisiert …" : "↻ Resync"}
-                      </span>
+                      </button>
                     )}
-                  </button>
+                  </div>
                 ))}
               </div>
             )}
