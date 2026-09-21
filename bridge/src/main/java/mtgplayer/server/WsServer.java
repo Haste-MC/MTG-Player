@@ -71,7 +71,14 @@ public final class WsServer extends WebSocketServer implements Transport {
         if (old != null && old.isOpen() && old != conn) {
             old.close(1000, "neuer Client");
         }
-        onOpen.run();
+        try {
+            onOpen.run();
+        } catch (RuntimeException e) {
+            // wie onMessage: ein Fehler beim Connect-Callback (z. B. Lobby-Aufbau) darf den Socket-Thread
+            // nicht mitreissen - der Client erfaehrt es als "error" statt einer stillen Verbindung.
+            conn.send(Json.toJson(new Messages.ErrorMsg("Bridge: " + e)));
+            e.printStackTrace();
+        }
     }
 
     @Override

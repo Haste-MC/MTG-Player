@@ -55,12 +55,20 @@ public final class DeckStore {
         return out;
     }
 
-    /** Alle gespeicherten Decks als {@link Messages.DeckInfo}, nach Name sortiert. */
+    /**
+     * Alle gespeicherten Decks als {@link Messages.DeckInfo}, nach Name sortiert. Eine Datei, die sich
+     * nicht laden laesst (kaputte .dck, unbekannte Karte, ...), wird mit Hinweis auf stderr uebersprungen -
+     * ein einzelnes defektes Deck darf nicht die ganze "lobby"-Nachricht (und damit die Lobby) verhindern.
+     */
     public List<Messages.DeckInfo> infos() {
         List<Messages.DeckInfo> out = new ArrayList<>();
         for (String name : names()) {
-            Deck d = load(name);
-            out.add(Precons.info(name, d, archidektId(d)));
+            try {
+                Deck d = load(name);
+                out.add(Precons.info(name, d, archidektId(d)));
+            } catch (RuntimeException e) {
+                System.err.println("DeckStore: ueberspringe " + fileName(name) + ": " + e);
+            }
         }
         return out;
     }

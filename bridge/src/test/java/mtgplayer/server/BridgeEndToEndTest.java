@@ -31,7 +31,7 @@ import java.util.function.Predicate;
  * Spielt die ersten Sekunden eines echten Spiels über das Protokoll: Lobby → Spielstart →
  * Mulligan-Prompt → Keep → Prio-Prompt in Zug 1 → Concede-Dialog → gameOver.
  *
- * <p>Beide Tests teilen sich eine statische WebSocket-Verbindung/Inbox (siehe start()); die
+ * <p>Alle Tests teilen sich eine statische WebSocket-Verbindung/Inbox (siehe start()); die
  * Bridge schickt "lobby" beim Connect und erneut nach jedem Spielstart (Bridge#handle, ggf. neu
  * gespeichertes Deck). {@code @TestMethodOrder} stellt sicher, dass
  * {@link #lobbyStartKeepPrioConcede()} (das dieses Connect-"lobby" konsumiert und auf
@@ -242,5 +242,15 @@ class BridgeEndToEndTest {
         JsonNode confirm = await("choice", n -> "confirm".equals(n.path("kind").asText()), 30);
         send("{\"type\":\"answer\",\"id\":" + confirm.get("id").asInt() + ",\"value\":true}");
         assertNotNull(await("gameOver", n -> true, 60));
+    }
+
+    /** resyncDeck mit unbekanntem Namen: die Bridge antwortet mit "error" (Text aus DeckSource.resync) statt still zu bleiben. */
+    @Test
+    @Order(3)
+    @Timeout(value = 1, unit = TimeUnit.MINUTES)
+    void resyncDeckUnbekanntesDeckLiefertError() throws Exception {
+        send("{\"type\":\"resyncDeck\",\"name\":\"gibt es nicht\"}");
+        JsonNode err = await("error", n -> n.path("text").asText().startsWith("Resync gibt es nicht:"), 10);
+        assertTrue(err.path("text").asText().startsWith("Resync gibt es nicht:"), err.toString());
     }
 }

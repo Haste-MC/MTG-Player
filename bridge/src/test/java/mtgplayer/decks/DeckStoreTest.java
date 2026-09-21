@@ -13,6 +13,8 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
@@ -47,6 +49,25 @@ class DeckStoreTest {
         assertEquals(List.of("A/B: C?"), store.names(), "Anzeigename bleibt, nur der Dateiname wird bereinigt");
         assertTrue(dir.resolve("A_B_ C_.dck").toFile().exists());
         assertEquals("A/B: C?", store.load("A/B: C?").getName(), "geladenes Deck traegt den gespeicherten Anzeigenamen");
+    }
+
+    /**
+     * Eine defekte .dck darf infos() nicht zu Fall bringen. Ein fehlender [Main]-Abschnitt reicht als
+     * Defekt nicht: DeckSerializer.fromFile liest nur die Metadaten und parst die Kartenlisten erst beim
+     * Zugriff (Deck.setDeferredSections) - und ein leeres Deck ist dabei gueltig. Eine Kartenzeile mit
+     * einer Anzahl jenseits von int laesst dagegen CardPool.processCardList (Integer.parseInt) beim ersten
+     * Zugriff auf die Sections (getCommanders in Precons.info) mit NumberFormatException scheitern.
+     */
+    @Test
+    void infosUeberspringenUnlesbaresDeck(@TempDir Path dir) throws IOException {
+        DeckStore store = new DeckStore(dir);
+        store.save("Mein Abzan", Precons.load("Abzan Armor [TDC] [2025]"));
+        Files.writeString(dir.resolve("kaputt.dck"), "[metadata]\nName=Kaputt\n[Main]\n99999999999999 Sol Ring\n");
+        assertEquals(List.of("Kaputt", "Mein Abzan"), store.names(), "names() liest nur die Name-Zeile");
+        assertThrows(RuntimeException.class, () -> Precons.info("Kaputt", store.load("Kaputt"), null),
+            "Vorbedingung: die Datei laesst sich nicht zu einer DeckInfo laden");
+        List<Messages.DeckInfo> infos = store.infos();
+        assertEquals(List.of("Mein Abzan"), infos.stream().map(Messages.DeckInfo::name).toList());
     }
 
     @Test
