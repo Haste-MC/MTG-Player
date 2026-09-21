@@ -235,6 +235,7 @@ input[type="checkbox"] { accent-color: var(--accent); width: 14px; height: 14px;
 /* Land mit seitlichem Anhang-Streifen: eigener Stapelkontext ueber der ueberlappenden margin-left-Reihe,
    sonst malt das naechste Land (spaeter im DOM, ohne z-index) den Streifen zu. */
 .player.compact:not(.spectator) .bf-lands .card-slot.has-attach { position: relative; z-index: 1; }
+.player.compact:not(.spectator) .bf-lands .card-slot.has-attach:hover { z-index: 6; }
 .player.compact:not(.spectator) .bf-lands:empty { display: none; }
 .player.compact:not(.spectator) .bf-main:empty::before { content: "keine bleibenden Karten"; color: var(--faint); font-size: 11px; align-self: center; padding: 0 4px; }
 
