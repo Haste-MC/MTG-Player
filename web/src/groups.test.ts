@@ -77,4 +77,14 @@ describe("attachedBy", () => {
     };
     expect(attachedBy(cards).size).toBe(0);
   });
+  it("aura auf equipment bleibt in der eigenen reihe", () => {
+    const cards = {
+      "1": bf(1, { attachments: [2] }),
+      "2": bf(2, { attachedTo: 1, attachments: [3] }),
+      "3": bf(3, { attachedTo: 2 }),
+    };
+    const m = attachedBy(cards);
+    expect(m.get(1)?.map((c) => c.id)).toEqual([2]);
+    expect(m.has(2)).toBe(false);
+  });
 });

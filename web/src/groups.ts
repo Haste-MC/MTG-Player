@@ -66,6 +66,9 @@ export function groupCards(cards: CardSnap[]): Group[] {
  * attachments-Liste des Wirts; Anhaenge ohne Listeneintrag hinten, nach id. Zugeordnet wird nur, wenn
  * der Wirt bekannt, offen und im Spiel ist - sonst bleibt der Anhang in seiner eigenen Reihe.
  * Der Kontrolleur spielt keine Rolle: eine gegnerische Aura auf der eigenen Kreatur liegt beim Wirt.
+ * Ein Wirt, der selbst Anhang ist (Aura auf Equipment auf Kreatur), bekommt keine Ebenen - CardBox
+ * rendert Anhang-Ebenen nur eine Stufe tief, eine zweite Stufe waere nirgends sichtbar; seine Anhaenge
+ * bleiben deshalb in der eigenen Reihe.
  */
 export function attachedBy(cards: Record<string, CardSnap>): Map<number, CardSnap[]> {
   const out = new Map<number, CardSnap[]>();
@@ -76,6 +79,10 @@ export function attachedBy(cards: Record<string, CardSnap>): Map<number, CardSna
     let list = out.get(host.id);
     if (!list) { list = []; out.set(host.id, list); }
     list.push(c);
+  }
+  for (const hostId of [...out.keys()]) {
+    const hostCard = cards[String(hostId)];
+    if (hostCard.attachedTo !== undefined && out.has(hostCard.attachedTo)) out.delete(hostId);
   }
   for (const [hostId, list] of out) {
     const order = cards[String(hostId)].attachments ?? [];

@@ -77,7 +77,8 @@
         303,
         304,
         271,
-        321
+        321,
+        322
       ],
       "manaPool": {},
       "hasPriority": false
@@ -329,7 +330,10 @@
       "owner": 2,
       "zone": "battlefield",
       "tapped": false,
-      "typeLine": "Basic Land — Forest"
+      "typeLine": "Basic Land — Forest",
+      "attachments": [
+        322
+      ]
     },
     "302": {
       "id": 302,
@@ -697,6 +701,20 @@
       "text": "Equipped creature has hexproof and haste. Equip {1}",
       "manaCost": "{2}",
       "attachedTo": 304
+    },
+    "322": {
+      "id": 322,
+      "faceDown": false,
+      "name": "Wild Growth",
+      "imageKey": "c:Wild Growth|CMR|1",
+      "controller": 2,
+      "owner": 2,
+      "zone": "battlefield",
+      "tapped": false,
+      "typeLine": "Enchantment — Aura",
+      "text": "Enchant land. Whenever enchanted land is tapped for mana, its controller adds an additional {G}.",
+      "manaCost": "{G}",
+      "attachedTo": 301
     },
     "470": {
       "id": 470,
