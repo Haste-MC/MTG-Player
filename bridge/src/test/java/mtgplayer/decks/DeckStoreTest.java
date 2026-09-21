@@ -43,6 +43,16 @@ class DeckStoreTest {
     }
 
     @Test
+    void deleteEntferntDateiUndMeldetUnbekannt(@TempDir Path dir) {
+        DeckStore store = new DeckStore(dir);
+        store.save("Weg damit", Precons.load("Abzan Armor [TDC] [2025]"));
+        store.delete("Weg damit");
+        assertEquals(List.of(), store.names());
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> store.delete("Weg damit"));
+        assertTrue(e.getMessage().contains("Weg damit"));
+    }
+
+    @Test
     void dateinameWirdBereinigt(@TempDir Path dir) {
         DeckStore store = new DeckStore(dir);
         store.save("A/B: C?", Precons.load("Abzan Armor [TDC] [2025]"));

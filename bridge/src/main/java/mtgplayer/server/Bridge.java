@@ -154,6 +154,20 @@ public final class Bridge {
                     }
                 });
             }
+            case "deleteDeck" -> {
+                String name = msg.path("name").asText();
+                GuiBase.getInterface().runBackgroundTask("delete", () -> {
+                    try {
+                        store.delete(name);
+                        ws.send(new Messages.Lobby(Precons.infos(), store.infos()));
+                    } catch (RuntimeException e) {
+                        // wie bei "concede": sonst stirbt der Fehler still auf dem Hintergrund-Thread
+                        e.printStackTrace();
+                        ws.send(new Messages.ErrorMsg("Löschen " + name + ": "
+                                + (e instanceof IllegalArgumentException ? e.getMessage() : e.toString())));
+                    }
+                });
+            }
             case "archidektList" -> archidektList(msg.path("username").asText(""));
             case "archidektImport" -> archidektImport(msg.path("ids"));
             case "requestState" -> onClientConnected();

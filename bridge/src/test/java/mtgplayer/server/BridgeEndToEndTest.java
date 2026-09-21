@@ -277,4 +277,14 @@ class BridgeEndToEndTest {
         JsonNode err = await("error", n -> n.path("text").asText().startsWith("Archidekt:"), 10);
         assertTrue(err.path("text").asText().contains("Benutzername"), err.toString());
     }
+
+    /** deleteDeck mit unbekanntem Namen: die Bridge antwortet mit "error" (Text aus DeckStore.delete) statt still zu bleiben. */
+    @Test
+    @Order(6)
+    @Timeout(value = 1, unit = TimeUnit.MINUTES)
+    void deleteDeckUnbekanntesDeckLiefertError() throws Exception {
+        send("{\"type\":\"deleteDeck\",\"name\":\"gibt es nicht\"}");
+        JsonNode err = await("error", n -> n.path("text").asText().startsWith("Löschen gibt es nicht:"), 10);
+        assertTrue(err.path("text").asText().startsWith("Löschen gibt es nicht:"), err.toString());
+    }
 }

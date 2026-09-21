@@ -137,6 +137,28 @@ public final class DeckStore {
         throw new IllegalArgumentException("unbekanntes Deck: " + name);
     }
 
+    /**
+     * Loescht die Datei des gespeicherten Decks (Suche wie {@link #load}, ueber die
+     * {@code Name=}-Zeile).
+     *
+     * @throws IllegalArgumentException unbekanntes Deck ("unbekanntes Deck: &lt;name&gt;")
+     * @throws IllegalStateException Verzeichnis nicht lesbar oder Datei nicht loeschbar
+     */
+    public void delete(String name) {
+        if (!Files.isDirectory(dir)) throw new IllegalArgumentException("unbekanntes Deck: " + name);
+        try (Stream<Path> files = Files.list(dir)) {
+            for (Path p : files.filter(x -> x.toString().endsWith(".dck")).toList()) {
+                if (name.equals(readDisplayName(p))) {
+                    Files.delete(p);
+                    return;
+                }
+            }
+        } catch (IOException e) {
+            throw new IllegalStateException("kann Deck nicht loeschen: " + name, e);
+        }
+        throw new IllegalArgumentException("unbekanntes Deck: " + name);
+    }
+
     private static String readDisplayName(Path p) {
         try {
             for (String line : Files.readAllLines(p)) {

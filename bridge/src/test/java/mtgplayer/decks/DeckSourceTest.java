@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.fasterxml.jackson.databind.JsonNode;
 import forge.deck.Deck;
 import mtgplayer.forge.ForgeBoot;
+import mtgplayer.forge.Precons;
 import mtgplayer.protocol.Json;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -134,16 +135,34 @@ class DeckSourceTest {
     }
 
     @Test
+    void importArchidektUebernimmtGleichnamigesDeckOhneTag(@TempDir Path dir) throws Exception {
+        String body = java.nio.file.Files.readString(Path.of("src/test/resources/archidekt-1.json"));
+        DeckStore store = new DeckStore(dir);
+        // lokales Deck ohne Tag unter dem Archidekt-Namen (alter Textimport) - Adaptive Enchantment statt
+        // Abzan Armor: Precons.load() liefert die geteilte Forge-Instanz, und DeckStoreTest taggt "Abzan
+        // Armor" in anderen Tests dauerhaft mit ARCHIDEKT_TAG (siehe dortiger Kommentar) - dieses Precon
+        // bleibt ueber die ganze Suite hinweg garantiert ungetaggt.
+        store.save("Fun With Fungus", Precons.load("Adaptive Enchantment [C18] [2018]"));
+        DeckSource src = new DeckSource(store, new Archidekt(url -> body));
+        src.importArchidekt(1).save().run();
+        assertEquals(List.of("Fun With Fungus"), store.names());
+        assertEquals("1", store.archidektId("Fun With Fungus"));
+        assertEquals("Thelon of Havenwood", store.load("Fun With Fungus").getCommanders().get(0).getName());
+    }
+
+    @Test
     void importArchidektNeuMitNamenskollisionSpeichertUnterNameMitId(@TempDir Path dir) throws Exception {
-        // Ein lokales Deck (ohne Archidekt-Tag) heisst schon so wie das Archidekt-Deck: der Import darf es
+        // Ein lokales Deck heisst schon so wie das Archidekt-Deck, traegt aber ein ANDERES
+        // Archidekt-Tag (kein alter Textimport, sondern ein anderer Import): der Import darf es
         // nicht ueberschreiben, sondern speichert unter "<Name> (<id>)".
         String body = java.nio.file.Files.readString(Path.of("src/test/resources/archidekt-1.json"));
         DeckStore store = new DeckStore(dir);
         DeckImport.Result local = DeckImport.parse("1 Sol Ring\n1 Felothar the Steadfast\n");
+        local.deck().getTags().add(DeckStore.ARCHIDEKT_TAG + "99");
         store.save("Fun With Fungus", local.deck());
         new DeckSource(store, new Archidekt(url -> body)).importArchidekt(1).save().run();
         assertEquals(List.of("Fun With Fungus", "Fun With Fungus (1)"), store.names());
-        assertEquals(null, store.archidektId("Fun With Fungus"));
+        assertEquals("99", store.archidektId("Fun With Fungus"));
         assertEquals("Felothar the Steadfast", store.load("Fun With Fungus").getCommanders().get(0).getName());
         assertEquals("1", store.archidektId("Fun With Fungus (1)"));
         assertEquals("Thelon of Havenwood", store.load("Fun With Fungus (1)").getCommanders().get(0).getName());
@@ -154,12 +173,13 @@ class DeckSourceTest {
 
     @Test
     void importArchidektNeuMitDateikollisionSpeichertUnterNameMitId(@TempDir Path dir) throws Exception {
-        // Verschiedene Namen, dieselbe .dck-Datei (DeckStore.fileName ersetzt ":" durch "_"): auch dann
-        // eindeutiger Name statt Ueberschreiben.
+        // Verschiedene Namen, dieselbe .dck-Datei (DeckStore.fileName ersetzt ":" durch "_"), das lokale
+        // Deck traegt ein ANDERES Archidekt-Tag: auch dann eindeutiger Name statt Ueberschreiben.
         String body = java.nio.file.Files.readString(Path.of("src/test/resources/archidekt-1.json"))
                 .replaceFirst("\"name\":\"Fun With Fungus\"", "\"name\":\"Fun:With Fungus\"");
         DeckStore store = new DeckStore(dir);
         DeckImport.Result local = DeckImport.parse("1 Sol Ring\n1 Felothar the Steadfast\n");
+        local.deck().getTags().add(DeckStore.ARCHIDEKT_TAG + "99");
         store.save("Fun_With Fungus", local.deck());
         assertEquals(DeckStore.fileName("Fun_With Fungus"), DeckStore.fileName("Fun:With Fungus"));
         new DeckSource(store, new Archidekt(url -> body)).importArchidekt(1).save().run();
