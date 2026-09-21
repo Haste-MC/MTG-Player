@@ -177,6 +177,8 @@ export type Outbound =
   | { type: "requestState" }
   // Gespeichertes Archidekt-Deck neu von Archidekt laden (Bridge antwortet mit einer frischen lobby-Nachricht oder error).
   | { type: "resyncDeck"; name: string }
+  // Gespeichertes Deck loeschen (nur eigene Decks, keine Precons; Bridge antwortet mit einer frischen lobby-Nachricht oder error).
+  | { type: "deleteDeck"; name: string }
   // Oeffentliche Commander-Decks eines Archidekt-Kontos auflisten (Bridge antwortet mit archidektDecks oder error).
   | { type: "archidektList"; username: string }
   // Ausgewaehlte Decks importieren/resyncen; die Bridge meldet den Fortschritt ueber archidektProgress.

@@ -59,6 +59,17 @@ export default function Lobby() {
     setAis(Array.from({ length: picks.length }, (_, i) => p.ais[i] ?? EMPTY_PICK));
   }, [precons, decks, aiProfiles]);
 
+  // Nach dem Laden: verschwindet ein gewaehltes Precon/eigenes Deck aus dem Angebot der Bridge (z. B. geloescht im
+  // Deck-Panel), wird der Sitz leer; Text-/Archidekt-Picks bleiben. Ein Vergleich, damit gleiche Picks kein setState
+  // (und kein erneutes Speichern) ausloesen.
+  useEffect(() => {
+    if (!settingsLoaded.current) return;
+    const cleaned = dropMissing({ human, ais }, precons, decks);
+    if (JSON.stringify(cleaned) !== JSON.stringify({ human, ais })) {
+      setHuman(cleaned.human);
+      setAis(cleaned.ais);
+    }
+  }, [precons, decks]);
   // Auswahl merken, sobald sie geladen ist (kein Ueberschreiben des Storage vor dem obigen Laden).
   useEffect(() => {
     if (!settingsLoaded.current) return;

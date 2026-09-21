@@ -49,6 +49,26 @@ describe("classify", () => {
     const own = [deck({ archidekt: "99", archidektUpdated: "2026-09-01T00:00:00.000000Z" })];
     expect(classify(e, own)).toBe("aktuell");
   });
+
+  it("kein Id-Treffer, aber eigenes Deck gleichen Namens ohne archidekt -> übernehmen", () => {
+    expect(classify(entry({ id: 1, name: "Koma Ramp" }), [deck({ name: "Koma Ramp" })])).toBe("übernehmen");
+    expect(classify(entry({ id: 1, name: "Koma Ramp" }), [deck({ name: "Koma Ramp", archidekt: null })])).toBe("übernehmen");
+  });
+
+  it("gleicher Name, aber archidekt-Tag mit anderer Id -> neu (Bridge speichert mit Suffix)", () => {
+    expect(classify(entry({ id: 1, name: "Koma Ramp" }), [deck({ name: "Koma Ramp", archidekt: "2" })])).toBe("neu");
+  });
+
+  it("Namensvergleich exakt (Gross-/Kleinschreibung, Leerzeichen)", () => {
+    expect(classify(entry({ id: 1, name: "Koma Ramp" }), [deck({ name: "koma ramp" })])).toBe("neu");
+    expect(classify(entry({ id: 1, name: "Koma Ramp" }), [deck({ name: "Koma Ramp " })])).toBe("neu");
+  });
+
+  it("Id-Treffer geht vor Namenstreffer", () => {
+    const e = entry({ id: 1, name: "Koma Ramp", updatedAt: "same" });
+    const own = [deck({ name: "Koma Ramp" }), deck({ name: "Anders", archidekt: "1", archidektUpdated: "same" })];
+    expect(classify(e, own)).toBe("aktuell");
+  });
 });
 
 describe("defaultSelection", () => {
@@ -70,6 +90,12 @@ describe("defaultSelection", () => {
     const entries = [entry({ id: 1, updatedAt: "same" }), entry({ id: 2, updatedAt: "x" })];
     expect(defaultSelection(entries, own)).toEqual([]);
   });
+
+  it("übernehmen ist nicht vorausgewaehlt", () => {
+    const own = [deck({ name: "Koma Ramp" }), deck({ archidekt: "1", archidektUpdated: "old" })];
+    const entries = [entry({ id: 5, name: "Koma Ramp" }), entry({ id: 1, updatedAt: "new" })];
+    expect(defaultSelection(entries, own)).toEqual([1]);
+  });
 });
 
 describe("updateAllIds", () => {
@@ -89,6 +115,12 @@ describe("updateAllIds", () => {
   it("alles neu -> leer", () => {
     const entries = [entry({ id: 1 }), entry({ id: 2 })];
     expect(updateAllIds(entries, [])).toEqual([]);
+  });
+
+  it("übernehmen gehoert nicht zu \"Alle aktualisieren\"", () => {
+    const own = [deck({ name: "Koma Ramp" }), deck({ archidekt: "1", archidektUpdated: "same" })];
+    const entries = [entry({ id: 5, name: "Koma Ramp" }), entry({ id: 1, updatedAt: "same" })];
+    expect(updateAllIds(entries, own)).toEqual([1]);
   });
 });
 

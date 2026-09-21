@@ -53,8 +53,15 @@ bei Fehlern weiter. Dafür stehen in der `.dck`-Datei zwei Tags: `archidekt:<id>
 `archidekt-updated:<Stand>` (Archidekts `updatedAt` beim Import). Decks, die vor dieser Funktion importiert
 wurden (nur Tag `archidekt:`), erscheinen einmal als **geändert** und sind vorab angehakt; nach dem ersten
 Aktualisieren tragen sie den Stand. Auch ein einfacher „↻ Resync" unter „Eigene Decks" schreibt jetzt
-`archidekt-updated`. Heißt ein lokales Deck schon so wie ein neu zu importierendes Archidekt-Deck (und ist
-nicht dasselbe Archidekt-Deck), speichert der Import unter „<Name> (<Id>)" – überschrieben wird nichts.
+`archidekt-updated`. Heißt ein lokales Deck ohne Archidekt-Tag (z. B. ein früherer Textimport) genauso wie
+ein neu zu importierendes Archidekt-Deck, zeigt die Kachel die Marke **übernehmen**: der Import ersetzt den
+Inhalt dieses Decks und versieht es mit den Tags – nicht vorab angehakt, auch nicht bei „Alle
+aktualisieren". Trägt das gleichnamige Deck dagegen das Tag eines anderen Archidekt-Decks, speichert der
+Import unter „<Name> (<Id>)" – überschrieben wird nichts.
+
+Löschen: jede Kachel unter „Eigene Decks" hat einen „🗑"-Knopf; der erste Klick wird zu „Wirklich löschen?"
+(nach 4 s oder einem Klick daneben wieder weg), der zweite löscht die Datei. Nur eigene Decks, keine Precons.
+War das Deck in einem Sitz gewählt, ist der Sitz danach leer.
 
 Spielende: Der Dialog bietet neben „Zur Lobby" auch „Nochmal spielen" – startet dieselbe Deck-/KI-
 Konstellation direkt neu, ohne den Umweg über die Lobby. Läuft eine Serie (Lobby-Einstellung „Serie"), zeigt
@@ -108,7 +115,8 @@ Der Assets-Pfad ist mit `-Dmtgplayer.assets=<dir>` überschreibbar; Maven setzt 
 Protokoll (WebSocket, JSON, Feld `type`, Details in `docs/superpowers/specs/2026-09-16-mtg-player-design.md`):
 die `lobby`-Nachricht listet Precons und eigene Decks als `DeckInfo` (Name, Commander mit Bild, bei
 Archidekt-Importen die `archidekt`-Id); die Client-Nachricht `resyncDeck` (Deckname) lädt ein solches Deck
-neu von Archidekt und die Bridge antwortet mit einer frischen `lobby`- oder mit einer `error`-Nachricht.
+neu von Archidekt und die Bridge antwortet mit einer frischen `lobby`- oder mit einer `error`-Nachricht;
+`deleteDeck` (Deckname) löscht ein eigenes Deck (nie ein Precon) und antwortet ebenso mit `lobby` oder `error`.
 `archidektList` (Benutzername) liefert `archidektDecks` (Id, Name, `updatedAt`, Vorschaubild je öffentlichem
 Commander-Deck des Kontos) oder `error`; `archidektImport` (Ids) importiert/aktualisiert die Decks nacheinander
 und meldet je Deck `archidektProgress` (`done`, `total`, `current` = gespeicherter Name des laufenden Decks bzw.

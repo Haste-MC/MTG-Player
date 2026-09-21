@@ -14,7 +14,13 @@ const tabOf = (kind: Pick["kind"]): Tab => (kind === "saved" ? "saved" : kind ==
 const draftOf = (pick: Pick): Pick => (pick.kind === "text" || pick.kind === "archidekt" ? pick : { kind: "text", value: "", name: "" });
 const SRC_LABEL: Record<Pick["kind"], string> = { precon: "Precon", saved: "Eigenes Deck", text: "Textliste", archidekt: "Archidekt" };
 /** CSS-Klasse je Zustandsmarke (ASCII, damit kein Umlaut im Selektor steht). */
-const STATE_CLASS: Record<EntryState, string> = { neu: "neu", aktuell: "aktuell", "geändert": "geaendert" };
+const STATE_CLASS: Record<EntryState, string> = { neu: "neu", aktuell: "aktuell", "geändert": "geaendert", "übernehmen": "uebernehmen" };
+const STATE_TITLE: Partial<Record<EntryState, string>> = { "übernehmen": "ersetzt das gleichnamige lokale Deck" };
+/** Laufender Vorgang auf einem eigenen Deck (Reiter "Eigene Decks"): Resync oder Loeschen, mit dem Deckname. */
+type DeckOp = { kind: "resync" | "delete"; name: string };
+const OP_DONE: Record<DeckOp["kind"], string> = { resync: "Deck aktualisiert.", delete: "Deck gelöscht." };
+/** Zwei-Klick-Bestaetigung des Loesch-Knopfs: so lange bleibt "Wirklich löschen?" stehen, wenn nichts anderes passiert. */
+const CONFIRM_MS = 4000;
 /** Markierung "Stand des Logs beim Klick": die damals letzte Zeile (null bei leerem Log). */
 type LogMark = { last: LogEntry | null };
 const markOf = (log: LogEntry[]): LogMark => ({ last: log[log.length - 1] ?? null });
@@ -39,8 +45,9 @@ export default function DeckPicker({ pick, onChange, label }: { pick: Pick; onCh
   const [tab, setTab] = useState<Tab>(tabOf(pick.kind));
   const [query, setQuery] = useState("");
   const [draft, setDraft] = useState<Pick>(draftOf(pick)); // Import-Formulare
-  const [syncing, setSyncing] = useState<string>();          // Deckname, dessen Resync laeuft
-  const [status, setStatus] = useState<{ text: string; warn: boolean }>(); // Ergebnis des letzten Resync (Reiter "Eigene Decks")
+  const [op, setOp] = useState<DeckOp>();                    // laufender Resync/Loeschvorgang (ein Deck)
+  const [confirmDelete, setConfirmDelete] = useState<string>(); // Deckname, dessen Loesch-Knopf "Wirklich löschen?" zeigt
+  const [status, setStatus] = useState<{ text: string; warn: boolean }>(); // Ergebnis des letzten Resync/Loeschens (Reiter "Eigene Decks")
   const [adStatus, setAdStatus] = useState<{ text: string; warn: boolean }>(); // Fehler des letzten Ladens/Imports (Reiter "Archidekt")
   const searchRef = useRef<HTMLInputElement>(null);
   // Reiter "Archidekt": Benutzername (zuletzt geladener aus dem Store, sonst der gemerkte aus localStorage) und die
@@ -63,26 +70,38 @@ export default function DeckPicker({ pick, onChange, label }: { pick: Pick; onCh
     setTab(tabOf(pick.kind));
     setQuery("");
     setDraft(draftOf(pick));
-    setSyncing(undefined);
+    setOp(undefined);
+    setConfirmDelete(undefined);
     setStatus(undefined);
     setAdStatus(undefined);
     searchRef.current?.focus();
   }, [open]);
-  useEffect(() => { setStatus(undefined); setAdStatus(undefined); }, [tab]);
-  // "synchronisiert …" endet mit der naechsten lobby-Nachricht (decks) oder einem Fehler der Bridge (letzte
-  // Log-Zeile mit warn - ein fehlgeschlagener Resync schickt nur "error", decks bleibt gleich). Das Ergebnis
-  // steht danach als Statuszeile unter dem Raster, damit man es nicht im Log suchen muss.
+  useEffect(() => { setConfirmDelete(undefined); setStatus(undefined); setAdStatus(undefined); }, [tab]);
+  // "synchronisiert …"/"löscht …" endet mit der naechsten lobby-Nachricht (decks) oder einem Fehler der Bridge (letzte
+  // Log-Zeile mit warn - ein fehlgeschlagener Resync/Loeschversuch schickt nur "error", decks bleibt gleich). Das
+  // Ergebnis steht danach als Statuszeile unter dem Raster, damit man es nicht im Log suchen muss.
   useEffect(() => {
-    if (syncing === undefined) return;
-    setSyncing(undefined);
-    setStatus({ text: "Deck aktualisiert.", warn: false });
+    if (!op) return;
+    setOp(undefined);
+    setStatus({ text: OP_DONE[op.kind], warn: false });
   }, [decks]);
   useEffect(() => {
     const last = log[log.length - 1];
-    if (!last?.warn || syncing === undefined) return;
-    setSyncing(undefined);
+    if (!last?.warn || !op) return;
+    setOp(undefined);
     setStatus({ text: last.text, warn: true });
   }, [log]);
+  // "Wirklich löschen?" faellt nach CONFIRM_MS oder beim naechsten Mausklick ausserhalb dieses Knopfs zurueck (der
+  // bestaetigende Klick auf den Knopf selbst ist davon ausgenommen - mousedown kommt vor dem click).
+  useEffect(() => {
+    if (confirmDelete === undefined) return;
+    const timer = setTimeout(() => setConfirmDelete(undefined), CONFIRM_MS);
+    const onDown = (e: MouseEvent) => {
+      if (!(e.target instanceof Element) || !e.target.closest("button.delete.confirm")) setConfirmDelete(undefined);
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => { clearTimeout(timer); document.removeEventListener("mousedown", onDown); };
+  }, [confirmDelete]);
   const progress = ad.progress;
   const importing = starting || (progress != null && progress.current != null);   // laufender archidektImport
   // Ein "error" der Bridge beendet ad.loading, ohne eine Liste zu liefern (Reducer setzt loading=false und haengt die
@@ -148,6 +167,17 @@ export default function DeckPicker({ pick, onChange, label }: { pick: Pick; onCh
   });
   const listKind: Pick["kind"] = tab === "precons" ? "precon" : "saved";
   const choose = (d: DeckInfo) => { onChange({ kind: listKind, value: d.name, name: "" }); setOpen(false); };
+  const startOp = (kind: DeckOp["kind"], name: string) => {
+    setConfirmDelete(undefined);
+    setStatus(undefined);
+    setOp({ kind, name });
+    send({ type: kind === "resync" ? "resyncDeck" : "deleteDeck", name });
+  };
+  // Erster Klick fragt nach, der zweite (im Bestaetigungszustand) loescht.
+  const clickDelete = (name: string) => {
+    if (confirmDelete === name) startOp("delete", name);
+    else setConfirmDelete(name);
+  };
   const title = chosen?.name
     ?? (pick.kind === "text" && pick.value.trim() ? (pick.name.trim() || "Textliste")
       : pick.kind === "archidekt" && pick.value.trim() ? (pick.name.trim() || pick.value.trim()) : undefined);
@@ -187,16 +217,22 @@ export default function DeckPicker({ pick, onChange, label }: { pick: Pick; onCh
                 {list.length === 0 && <div className="muted">{tab === "saved" && decks.length === 0 ? "Noch keine eigenen Decks – über „Import“ anlegen." : "kein Treffer"}</div>}
                 {list.map((d) => (
                   // div statt button, damit der Resync-Knopf ein eigener (per Tastatur erreichbarer) Button sein kann
-                  <div key={d.name} className={"deck-card" + (pick.kind === listKind && chosen?.name === d.name ? " on" : "")}>
+                  <div key={d.name} className={"deck-card" + (tab === "saved" ? " own" : "") + (pick.kind === listKind && chosen?.name === d.name ? " on" : "")}>
                     <button type="button" className="deck-card-main" onClick={() => choose(d)}>
                       <Art commanders={d.commanders} big />
                       <span className="deck-card-name">{d.name}</span>
                       <span className="deck-card-cmd">{d.commanders.map((c) => c.name).join(" / ")}</span>
                     </button>
                     {tab === "saved" && d.archidekt && (
-                      <button type="button" className="resync" title={"Neu von Archidekt laden (" + d.archidekt + ")"} disabled={syncing === d.name}
-                        onClick={() => { setSyncing(d.name); send({ type: "resyncDeck", name: d.name }); }}>
-                        {syncing === d.name ? "synchronisiert …" : "↻ Resync"}
+                      <button type="button" className="resync" title={"Neu von Archidekt laden (" + d.archidekt + ")"} disabled={op?.name === d.name}
+                        onClick={() => startOp("resync", d.name)}>
+                        {op?.kind === "resync" && op.name === d.name ? "synchronisiert …" : "↻ Resync"}
+                      </button>
+                    )}
+                    {tab === "saved" && (
+                      <button type="button" className={"delete" + (confirmDelete === d.name ? " confirm" : "")} aria-label={"Deck löschen: " + d.name}
+                        title={confirmDelete === d.name ? undefined : "Deck löschen"} disabled={op?.name === d.name} onClick={() => clickDelete(d.name)}>
+                        {op?.kind === "delete" && op.name === d.name ? "löscht …" : confirmDelete === d.name ? "Wirklich löschen?" : <TrashIcon />}
                       </button>
                     )}
                   </div>
@@ -223,7 +259,7 @@ export default function DeckPicker({ pick, onChange, label }: { pick: Pick; onCh
                           <span className="deck-card-name">{e.name}</span>
                         </button>
                         <input type="checkbox" className="deck-check" checked={on} onChange={() => toggle(e.id)} aria-label={"Auswählen: " + e.name} />
-                        <span className={"state-badge " + STATE_CLASS[state]}>{state}</span>
+                        <span className={"state-badge " + STATE_CLASS[state]} title={STATE_TITLE[state]}>{state}</span>
                       </div>
                     );
                   })}
@@ -275,6 +311,16 @@ export default function DeckPicker({ pick, onChange, label }: { pick: Pick; onCh
         </div>
       )}
     </>
+  );
+}
+
+/** Papierkorb als Inline-SVG statt Emoji: das Emoji haengt an einer installierten Emoji-Schrift und wird sonst zum
+ * Kaestchen (so im headless Chromium der Screenshots). */
+function TrashIcon() {
+  return (
+    <svg className="icon" viewBox="0 0 16 16" width="12" height="12" aria-hidden="true" focusable="false">
+      <path fill="currentColor" d="M6 1.5h4l.5 1H14v1.5H2V2.5h3.5l.5-1ZM3 5h10l-.7 9.1A1.5 1.5 0 0 1 10.8 15.5H5.2a1.5 1.5 0 0 1-1.5-1.4L3 5Zm3 2v6h1.3V7H6Zm2.7 0v6H10V7H8.7Z" />
+    </svg>
   );
 }
 

@@ -708,6 +708,16 @@ button.deck-card-main:hover:not(:disabled) { background: rgba(79, 140, 255, 0.06
 .deck-card button.resync { position: absolute; top: 6px; right: 6px; font-size: 11px; padding: 2px 8px; border-radius: 999px; background: rgba(8, 11, 14, 0.85); border: 1px solid var(--line-2); color: var(--text); }
 .deck-card button.resync:hover:not(:disabled) { border-color: var(--accent); background: rgba(8, 11, 14, 0.85); color: #fff; }
 .deck-card button.resync:disabled { opacity: 1; color: var(--muted); }   /* "synchronisiert …" lesbar lassen */
+/* Loesch-Knopf (Eigene Decks): Pille rechts unten, Resync bleibt rechts oben; im Bestaetigungszustand rot mit Text. */
+.deck-card.own .deck-card-cmd { padding-right: 36px; }   /* Platz fuer die Loesch-Pille rechts unten */
+.deck-card button.delete { position: absolute; bottom: 6px; right: 6px; display: inline-flex; align-items: center; justify-content: center; min-height: 20px; font-size: 11px; line-height: 1.3; padding: 2px 8px; border-radius: 999px; background: rgba(8, 11, 14, 0.85); border: 1px solid var(--line-2); color: var(--muted); }
+.deck-card button.delete .icon { display: block; }
+.deck-card button.delete:hover:not(:disabled) { border-color: var(--red); background: rgba(8, 11, 14, 0.85); color: #fff; }
+/* Bestaetigung und "löscht …": Leiste ueber die ganze Kachelbreite, deckend ueber der Commander-Zeile. */
+.deck-card button.delete.confirm, .deck-card button.delete:disabled { left: 6px; }
+.deck-card button.delete.confirm { background: linear-gradient(rgba(229, 72, 77, 0.25), rgba(229, 72, 77, 0.25)) rgba(8, 11, 14, 0.95); border-color: var(--red); color: #fff; font-weight: 600; }
+.deck-card button.delete.confirm:hover:not(:disabled) { background: linear-gradient(rgba(229, 72, 77, 0.4), rgba(229, 72, 77, 0.4)) rgba(8, 11, 14, 0.95); border-color: var(--red); }
+.deck-card button.delete:disabled { opacity: 1; color: var(--muted); background: rgba(8, 11, 14, 0.95); }   /* "löscht …" lesbar lassen */
 .deck-status { font-size: 12px; color: var(--muted); }   /* Ergebnis des letzten Resync unter dem Raster */
 .deck-status.warn { color: var(--red); white-space: pre-line; }   /* Fehlerliste des Archidekt-Imports: eine Zeile je Deck */
 /* Reiter "Archidekt": Kopf mit Benutzername + "Decks laden" statt Suchfeld; Karten mit Haekchen (links oben) und
@@ -722,6 +732,8 @@ button.deck-card-main:hover:not(:disabled) { background: rgba(79, 140, 255, 0.06
 .state-badge.neu { color: var(--accent-2); border-color: rgba(79, 140, 255, 0.45); }
 .state-badge.aktuell { color: var(--green); border-color: rgba(62, 207, 142, 0.45); }
 .state-badge.geaendert { color: var(--gold); border-color: rgba(242, 193, 78, 0.5); }
+/* uebernehmen: orange-soft ueber dem dunklen Grund; pointer-events fuer den Tooltip (ersetzt das gleichnamige Deck). */
+.state-badge.uebernehmen { color: #ffd2a8; border-color: rgba(255, 170, 100, 0.5); background: linear-gradient(rgba(255, 170, 100, 0.2), rgba(255, 170, 100, 0.2)) rgba(8, 11, 14, 0.85); pointer-events: auto; }
 .deck-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .deck-panel .hint { margin: 0; color: var(--muted); font-size: 12px; }
 .deck-import { display: flex; flex-direction: column; gap: 10px; }
