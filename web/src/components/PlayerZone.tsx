@@ -1,13 +1,13 @@
-import { useRef } from "react";
+import { useMemo, useRef } from "react";
 import type { CSSProperties } from "react";
 import type { CardSnap, PlayerSnap, Snapshot } from "../protocol";
 import CardBox from "./CardBox";
 import CardImage from "./CardImage";
-import { groupCards } from "../groups";
+import { attachedBy, groupCards } from "../groups";
 import type { Group } from "../groups";
 import { useStore } from "../store";
 import { send } from "../ws";
-import { slotUnits, useBoardSize } from "../boardSize";
+import { slotHeadroom, slotUnits, useBoardSize } from "../boardSize";
 import type { RowSpec } from "../boardSize";
 
 const isLand = (c: CardSnap) => !!c.typeLine?.includes("Land");
@@ -46,11 +46,13 @@ function Pile({ label, cards }: { label: string; cards: CardSnap[] }) {
   );
 }
 
-/** Stapel aus groups.ts rendern: eine Karte je Gruppe, Zaehler nur bei mehr als einer Karte.
+/** Stapel aus groups.ts rendern: eine Karte je Gruppe, Zaehler nur bei mehr als einer Karte; Anhaenge
+ *  (hosted, groups.ts attachedBy) liegen als Ebenen hinter dem Wirt.
  *  Key = erste Karte der Gruppe, damit ein Wechsel der gezeigten Karte (z. B. nach dem Tappen) nichts neu montiert. */
-function Stacks({ groups }: { groups: Group[] }) {
+function Stacks({ groups, hosted }: { groups: Group[]; hosted: Map<number, CardSnap[]> }) {
   return <>{groups.map((g) => (
-    <CardBox key={g.cards[0].id} card={g.card} stack={g.cards.length > 1 ? { count: g.cards.length, tapped: g.tapped } : undefined} />
+    <CardBox key={g.cards[0].id} card={g.card} stack={g.cards.length > 1 ? { count: g.cards.length, tapped: g.tapped } : undefined}
+      attached={hosted.get(g.card.id)} />
   ))}</>;
 }
 
@@ -78,12 +80,18 @@ function Effects({ effects, inline }: { effects: CardSnap[]; inline?: boolean })
 
 export default function PlayerZone({ p, state, compact, spectator }: { p: PlayerSnap; state: Snapshot; compact: boolean; spectator?: boolean }) {
   const seq = useStore((s) => s.state?.prompt.seq);
+  const setHover = useStore((s) => s.setHover);
   const cards = (ids: number[]) => ids.map((id) => state.cards[String(id)]).filter(Boolean);
   // Effekt-Hilfskarten und Embleme (Forge legt sie in die Kommandozone) werden nicht als Karte gezeigt,
   // sondern als Chips unter dem Spielfeld.
   const isChip = (c: CardSnap) => !!c.effect || !!c.emblem;
   const effects = [...cards(p.command), ...cards(p.battlefield)].filter(isChip);
-  const bf = cards(p.battlefield).filter((c) => !isChip(c));
+  // Anhaenge (Auren/Equipment) liegen als Ebenen hinter ihrem Wirt (auch wenn der einem anderen Spieler
+  // gehoert) und Flueche auf Spielern als Chip im Panelkopf - beide fallen aus den eigenen Reihen heraus.
+  const hosted = useMemo(() => attachedBy(state.cards), [state.cards]);
+  const isHosted = (c: CardSnap) => c.attachedTo !== undefined && hosted.has(c.attachedTo) || c.attachedToPlayer !== undefined;
+  const bf = cards(p.battlefield).filter((c) => !isChip(c) && !isHosted(c));
+  const auras = Object.values(state.cards).filter((c) => c.attachedToPlayer === p.id);
   const { creatures, other, lands } = splitRows(bf);
   const command = cards(p.command).filter((c) => !isChip(c));
   const graveyard = cards(p.graveyard);
@@ -113,10 +121,12 @@ export default function PlayerZone({ p, state, compact, spectator }: { p: Player
   // Messung nur fuer die eigene Zone und Zuschauer-Panels; die kompakte Gegnerzeile behaelt ihre CSS-Formel.
   const measured = !compact || !!spectator;
   const rowsRef = useRef<HTMLDivElement>(null);
+  // headroom: hoechster Anhang-Ueberstand der Reihe (Ebenen schauen oben heraus, siehe slotHeadroom).
+  const headroom = (groups: Group[]) => Math.max(0, ...groups.map((g) => slotHeadroom(hosted.get(g.card.id)?.length ?? 0, !!g.card.tapped)));
   const rowSpecs: RowSpec[] = [
-    { units: creatures.map(slotUnits), scale: 1 },
-    { units: other.map(slotUnits), scale: 1 },
-    { units: lands.map(slotUnits), scale: 0.8 },
+    { units: creatures.map(slotUnits), scale: 1, headroom: headroom(creatures) },
+    { units: other.map(slotUnits), scale: 1, headroom: headroom(other) },
+    { units: lands.map(slotUnits), scale: 0.8, headroom: headroom(lands) },
   ];
   // min 40 statt der fitCardWidth-Vorgabe 50: Tabletop-Stapel (Task 3) lassen gemischt getappte
   // Stapel jetzt exakt 1,4x breit rendern (vorher war die CSS-Breite schmaler als slotUnits() sie
@@ -145,6 +155,16 @@ export default function PlayerZone({ p, state, compact, spectator }: { p: Player
           {!!p.counters?.POISON && <span className="badge cmd" title="Gift">Gift <b>{p.counters.POISON}</b></span>}
           {mana && <span className="badge mana" title="Mana im Pool">Mana <b>{mana}</b></span>}
           {cmdDmg && <span className="badge cmd" title={"Commander-Schaden: " + cmdTitle}>CMD <b>{cmdDmg}</b></span>}
+          {auras.map((c) => {
+            const by = state.players.find((q) => q.id === c.controller)?.name;
+            return (
+              <button key={c.id} type="button" className="effect-chip aura" title={(c.text ?? "") + (by ? `\nAura von ${by}` : "")}
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); send({ type: "selectCard", id: c.id, alt: e.button === 2, seq }); }}
+                onMouseEnter={() => setHover(c.id)} onMouseLeave={() => setHover(undefined)}>
+                <span className="mark">Aura</span>{c.name}
+              </button>
+            );
+          })}
         </span>
         {inlineEffects && <Effects effects={effects} inline />}
       </div>
@@ -158,15 +178,15 @@ export default function PlayerZone({ p, state, compact, spectator }: { p: Player
         </div>
         {measured ? (
           <div className="rows bf-rows" ref={rowsRef}>
-            {creatures.length > 0 && <div className="row bf-creatures"><Stacks groups={creatures} /></div>}
-            {other.length > 0 && <div className="row bf-other"><Stacks groups={other} /></div>}
-            {lands.length > 0 && <div className="row bf-lands"><Stacks groups={lands} /></div>}
+            {creatures.length > 0 && <div className="row bf-creatures"><Stacks groups={creatures} hosted={hosted} /></div>}
+            {other.length > 0 && <div className="row bf-other"><Stacks groups={other} hosted={hosted} /></div>}
+            {lands.length > 0 && <div className="row bf-lands"><Stacks groups={lands} hosted={hosted} /></div>}
             {creatures.length + other.length + lands.length === 0 && <div className="bf-empty">keine bleibenden Karten</div>}
           </div>
         ) : (
           <div className="rows">
-            <div className="row bf-main"><Stacks groups={[...creatures, ...other]} /></div>
-            <div className="row bf-lands"><Stacks groups={lands} /></div>
+            <div className="row bf-main"><Stacks groups={[...creatures, ...other]} hosted={hosted} /></div>
+            <div className="row bf-lands"><Stacks groups={lands} hosted={hosted} /></div>
           </div>
         )}
         {(showGrave || showExile) && (

@@ -17,7 +17,7 @@ export interface StackInfo { count: number; tapped: number }
  * Getappt: gedreht ueberall in .bf-rows (CSS) - eigene Zone und Zuschauer-Panels; nur die kompakte
  * Gegnerzeile der Tischansicht (kein .bf-rows) bleibt aufrecht, abgedunkelt + ⟳-Marke.
  */
-export default function CardBox({ card, stack }: { card: CardSnap; stack?: StackInfo }) {
+export default function CardBox({ card, stack, attached }: { card: CardSnap; stack?: StackInfo; attached?: CardSnap[] }) {
   const seq = useStore((s) => s.state?.prompt.seq);
   const setHover = useStore((s) => s.setHover);
   // failedKey statt eines simplen bool: eine fehlgeschlagene Karte in diesem Slot darf nicht fuer
@@ -36,6 +36,12 @@ export default function CardBox({ card, stack }: { card: CardSnap; stack?: Stack
   const allTapped = stacked && stack.tapped === stack.count;
   const rotated = card.tapped || allTapped;
   const stackTappedSlot = stacked && stack.tapped > 0 && !allTapped;
+  // Anhaenge (Auren/Equipment, groups.ts attachedBy): bis zu 4 Ebenen hinter dem Wirt, jede um
+  // --attach-dy weiter nach oben versetzt (kompakte Gegnerzeile: seitlich, siehe CSS). Jede Ebene ist
+  // eine eigene Karte: hover-/klickbar, mit eigenem waehlbar/spielbar-Rahmen.
+  const att = attached ?? [];
+  const attLayers = att.slice(0, 4);
+  const attMore = att.length - attLayers.length;
   const cls = ["card", rotated ? "tapped" : "", card.selectable ? "selectable" : "",
     card.actionable ? "actionable" : "", card.attacking ? "attacking" : "", card.blocking ? "blocking" : "",
     card.token ? "token" : "", tokenFrame ? "token-frame" : "", !noImg ? "has-img" : ""]
@@ -45,9 +51,28 @@ export default function CardBox({ card, stack }: { card: CardSnap; stack?: Stack
     send({ type: "selectCard", id: card.id, alt: e.button === 2, seq });
   };
   return (
-    <div className={"card-slot" + (rotated ? " tapped-slot" : "") + (stackTappedSlot ? " stack-tapped-slot" : "") + (noImg ? " text-slot" : "")}
-      style={layers > 0 ? ({ "--layers": layers } as CSSProperties) : undefined}>
-      <div className={"card-frame" + (rotated ? " tapped" : "") + (stacked ? " stacked" : "")}>
+    <div className={"card-slot" + (rotated ? " tapped-slot" : "") + (stackTappedSlot ? " stack-tapped-slot" : "") + (noImg ? " text-slot" : "") + (att.length > 0 ? " has-attach" : "")}
+      style={{ ...(layers > 0 ? { "--layers": layers } : {}), ...(attLayers.length > 0 ? { "--attach-n": attLayers.length } : {}) } as CSSProperties}>
+      <div className={"card-frame" + (rotated ? " tapped" : "") + (stacked ? " stacked" : "") + (att.length > 0 ? " attached" : "")}>
+        {attLayers.length > 0 && (
+          <div className="attach-layers">
+            {attLayers.map((a, i) => (
+              // attLayers[0] liegt direkt hinter dem Wirt und schaut am wenigsten heraus: Versatz --k
+              // steigt mit i, z-index faellt, damit der erste Anhang ueber den weiteren liegt.
+              <div key={a.id}
+                className={"attach-layer" + (a.selectable ? " selectable" : "") + (a.actionable ? " actionable" : "") + (a.highlighted ? " highlighted" : "")}
+                style={{ "--k": i + 1, zIndex: attLayers.length - i } as CSSProperties}
+                title={a.text ?? ""}
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); send({ type: "selectCard", id: a.id, alt: e.button === 2, seq }); }}
+                onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); send({ type: "selectCard", id: a.id, alt: true, seq }); }}
+                onMouseEnter={() => setHover(a.id)} onMouseLeave={() => setHover(undefined)}>
+                {a.imageKey && <CardImage key={a.imageKey} imageKey={a.imageKey} className="art" />}
+                <span className="attach-name">{a.name}</span>
+                {i === attLayers.length - 1 && attMore > 0 && <span className="tag attach-more">+{attMore}</span>}
+              </div>
+            ))}
+          </div>
+        )}
         {layers > 0 && (
           <div className="stack-layers" aria-hidden>
             {Array.from({ length: layers }, (_, i) => (

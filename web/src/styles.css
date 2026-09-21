@@ -243,6 +243,10 @@ input[type="checkbox"] { accent-color: var(--accent); width: 14px; height: 14px;
 .effect-chip.emblem { color: #d9b8ff; border-color: rgba(190, 140, 255, 0.4); background: rgba(190, 140, 255, 0.1); display: inline-flex; align-items: center; gap: 6px; padding-left: 4px; }
 .effect-chip.emblem:hover { background: rgba(190, 140, 255, 0.2); border-color: rgba(190, 140, 255, 0.65); }
 .effect-chip.emblem .mark { font-size: 8.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; padding: 0 5px; border-radius: 999px; background: rgba(190, 140, 255, 0.25); color: #ecdcff; line-height: 1.5; }
+/* Flueche auf Spielern (CardSnap.attachedToPlayer): Chip im Panelkopf, Marke "Aura" + Kartenname. */
+.effect-chip.aura { color: #ffd2a8; border-color: rgba(255, 170, 100, 0.4); background: rgba(255, 170, 100, 0.1); display: inline-flex; align-items: center; gap: 6px; padding-left: 4px; }
+.effect-chip.aura:hover { background: rgba(255, 170, 100, 0.2); border-color: rgba(255, 170, 100, 0.65); }
+.effect-chip.aura .mark { font-size: 8.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; padding: 0 5px; border-radius: 999px; background: rgba(255, 170, 100, 0.25); color: #ffe9d6; line-height: 1.5; }
 .player.compact .effects { margin-top: 4px; padding-top: 4px; }
 /* Gegnerzeile: Chips im Panelkopf (hinter den Badges), gleiche Hoehe wie ein Badge. */
 .effects.inline { margin: 0; padding: 0; border: 0; gap: 4px; }
@@ -411,6 +415,33 @@ input[type="checkbox"] { accent-color: var(--accent); width: 14px; height: 14px;
 .tag.stack-tapped { left: 3px; bottom: 3px; color: var(--muted); font-weight: 600; }
 .player.compact .bf-lands .tag.stack-tapped .word { display: none; }
 .player.compact .bf-lands .tag.stack-tapped::after { content: "\27F3"; font-weight: 400; margin-left: 1px; }
+/* Anhaenge (Auren/Equipment, groups.ts attachedBy): aufrechte Ebenen hinter dem Wirt, Ebene k um
+   k * --attach-dy nach oben versetzt; der Slot bekommt oben Rand in gleicher Hoehe, damit die Ebenen
+   die Reihe darueber nicht ueberlappen und nicht vom .bf-rows-Scrollkasten beschnitten werden. Ebenen
+   sind eigene Karten (Hover/Klick), deshalb pointer-events: auto (anders als .stack-layers). */
+.card-frame.attached { isolation: isolate; }
+.attach-layers { position: absolute; left: 50%; bottom: 0; width: var(--w); height: var(--h); translate: -50% 0; z-index: -1; }
+.attach-layer { position: absolute; inset: 0; border-radius: 7px; background: #0c1013; border: 1px solid var(--line-2); box-shadow: var(--shadow-card); overflow: hidden; cursor: pointer;
+  --attach-dy: calc(var(--h) * 0.22); transform: translateY(calc(var(--k) * -1 * var(--attach-dy))); transition: transform .15s ease; }
+.attach-layer .art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; filter: brightness(0.9); }
+.attach-layer:hover { transform: translateY(calc(var(--k) * -1 * var(--attach-dy) - 3px)); z-index: 3; }
+.attach-layer:hover .art { filter: none; }
+.attach-layer .attach-name { position: absolute; left: 4px; right: 4px; top: 3px; font-size: 9px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.attach-layer:has(.art) .attach-name { display: none; }
+.attach-layer.selectable { box-shadow: 0 0 0 2px var(--gold), 0 0 12px 2px rgba(242, 193, 78, 0.45); }
+.attach-layer.actionable { box-shadow: 0 0 0 2px var(--green), 0 0 12px 2px rgba(62, 207, 142, 0.4); }
+.attach-layer.highlighted { box-shadow: 0 0 0 2px var(--blue); }
+.attach-layer .tag.attach-more { top: 3px; right: 3px; left: auto; }
+.card-slot.has-attach { --attach-dy: calc(var(--h) * 0.22); margin-top: calc(var(--attach-n, 0) * var(--attach-dy)); }
+/* Getappter Wirt: der Rahmen ist --h breit und --w hoch; die Ebenen bleiben aufrecht und an der Unterkante
+   ausgerichtet (bottom: 0), der Wirt dreht sich allein - sie ragen also um (--h - --w) + n * dy darueber
+   hinaus, der Slot-Rand oben waechst entsprechend (passend zu slotHeadroom(n, tapped) in boardSize.ts). */
+.bf-rows .card-frame.tapped .attach-layers { bottom: 0; }
+.bf-rows .card-slot.has-attach.tapped-slot { margin-top: calc(var(--attach-n, 0) * var(--attach-dy) + (var(--h) - var(--w))); }
+/* Kompakte Gegnerzeile: feste Zeilenhoehe, horizontales Scrollen - Ebenen schauen seitlich rechts heraus. */
+.player.compact:not(.spectator) .card-slot.has-attach { --attach-dx: calc(var(--w) * 0.28); margin-top: 0; width: calc(var(--w) + var(--attach-n, 0) * var(--attach-dx)); justify-content: flex-start; }
+.player.compact:not(.spectator) .attach-layer { transform: translateX(calc(var(--k) * var(--attach-dx, calc(var(--w) * 0.28)))); }
+.player.compact:not(.spectator) .attach-layer:hover { transform: translateX(calc(var(--k) * var(--attach-dx, calc(var(--w) * 0.28)))) translateY(-2px); }
 /* Token-Rahmen hat das grosse P/T in der Mitte: ⟳ dort unten mittig statt zentriert. */
 .card-frame:has(.token-frame) .tag.tapped-tag { top: auto; bottom: 3px; transform: translateX(-50%); }
 /* Emblem-Textkarte (nur falls ein Emblem doch einmal als Karte gezeigt wird, z. B. in einer Liste): Platz fuer die Marke. */
