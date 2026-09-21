@@ -53,7 +53,7 @@ public Resolved importArchidekt(long id)        // vorhandenes Deck mit Tag arch
         List<String> urls = new ArrayList<>();
         Archidekt a = new Archidekt(url -> { urls.add(url); return url.contains("page=2") ? p2 : p1; });
         List<Archidekt.Entry> decks = a.listDecks("plssssss");
-        assertEquals(List.of(26595870L, 26637620L, 9592911L), decks.stream().map(Archidekt.Entry::id).toList());
+        assertEquals(List.of(26595870L, 26566111L, 9592911L), decks.stream().map(Archidekt.Entry::id).toList());
         assertEquals("https://card-images.archidekt.com/art/front/5/f/5feba5d6-99a6-4e9b-8a7d-90d955868fc3.webp?1783911263", decks.get(0).art());
         assertTrue(urls.get(0).contains("ownerUsername=plssssss"), urls.get(0));
         assertEquals(2, urls.size());
@@ -73,7 +73,7 @@ public Resolved importArchidekt(long id)        // vorhandenes Deck mit Tag arch
     }
 ```
 
-(Prüfen, ob `archidekt-list-1.json` Eintrag 3 die Id `26637620` hat – sonst die Ids aus der Datei nehmen.) `DeckStoreTest`: Deck mit beiden Tags speichern → `infos().get(0).archidektUpdated()` = Wert, `byArchidektId("12345")` = Name, `byArchidektId("0")` = null. `DeckSourceTest`: `archidektFormHoltParstUndSpeichert` zusätzlich `assertEquals("2018-03-12T05:12:58Z", store.infos().get(0).archidektUpdated())`; neu:
+`DeckStoreTest`: Deck mit beiden Tags speichern → `infos().get(0).archidektUpdated()` = Wert, `byArchidektId("12345")` = Name, `byArchidektId("0")` = null. `DeckSourceTest`: `archidektFormHoltParstUndSpeichert` zusätzlich `assertEquals("2018-03-12T05:12:58Z", store.infos().get(0).archidektUpdated())`; neu:
 
 ```java
     @Test

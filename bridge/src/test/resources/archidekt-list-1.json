@@ -31,36 +31,6 @@
    "customFeatured": "https://card-images.archidekt.com/art/front/custom.webp",
    "private": false,
    "unlisted": false
-  },
-  {
-   "id": 26595812,
-   "name": "BURN IT TO THE GROUND",
-   "updatedAt": "2026-09-20T08:30:37.105951Z",
-   "deckFormat": 3,
-   "featured": "",
-   "customFeatured": "",
-   "private": false,
-   "unlisted": false
-  },
-  {
-   "id": 26465161,
-   "name": "OZAI RAKDOS",
-   "updatedAt": "2026-09-16T16:04:35.873738Z",
-   "deckFormat": 3,
-   "featured": "https://card-images.archidekt.com/art/front/a/9/a98b1550-4609-4a2f-9371-4afe1cdc613e.webp",
-   "customFeatured": "",
-   "private": false,
-   "unlisted": false
-  },
-  {
-   "id": 26330367,
-   "name": "Copy of - Wakanda Forever - Marvel Super Heroes",
-   "updatedAt": "2026-09-12T13:05:25.198184Z",
-   "deckFormat": 3,
-   "featured": "https://storage.googleapis.com/archidekt-card-images/msc/d5a3537f-ac0a-4517-8a89-92abe8c0b8d0_art_crop.jpg",
-   "customFeatured": "",
-   "private": false,
-   "unlisted": false
   }
  ]
 }
