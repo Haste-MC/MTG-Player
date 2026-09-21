@@ -89,9 +89,9 @@ export default function PlayerZone({ p, state, compact, spectator }: { p: Player
   // Anhaenge (Auren/Equipment) liegen als Ebenen hinter ihrem Wirt (auch wenn der einem anderen Spieler
   // gehoert) und Flueche auf Spielern als Chip im Panelkopf - beide fallen aus den eigenen Reihen heraus.
   const hosted = useMemo(() => attachedBy(state.cards), [state.cards]);
-  const isHosted = (c: CardSnap) => c.attachedTo !== undefined && hosted.has(c.attachedTo) || c.attachedToPlayer !== undefined;
+  const isHosted = (c: CardSnap) => (c.attachedTo !== undefined && hosted.has(c.attachedTo)) || c.attachedToPlayer !== undefined;
   const bf = cards(p.battlefield).filter((c) => !isChip(c) && !isHosted(c));
-  const auras = Object.values(state.cards).filter((c) => c.attachedToPlayer === p.id);
+  const auras = Object.values(state.cards).filter((c) => c.attachedToPlayer === p.id && !c.faceDown && c.zone?.toLowerCase() === "battlefield");
   const { creatures, other, lands } = splitRows(bf);
   const command = cards(p.command).filter((c) => !isChip(c));
   const graveyard = cards(p.graveyard);
@@ -157,8 +157,9 @@ export default function PlayerZone({ p, state, compact, spectator }: { p: Player
           {cmdDmg && <span className="badge cmd" title={"Commander-Schaden: " + cmdTitle}>CMD <b>{cmdDmg}</b></span>}
           {auras.map((c) => {
             const by = state.players.find((q) => q.id === c.controller)?.name;
+            const auraTitle = [c.text, by ? `Aura von ${by}` : undefined].filter(Boolean).join("\n");
             return (
-              <button key={c.id} type="button" className="effect-chip aura" title={(c.text ?? "") + (by ? `\nAura von ${by}` : "")}
+              <button key={c.id} type="button" className="effect-chip aura" title={auraTitle}
                 onClick={(e) => { e.preventDefault(); e.stopPropagation(); send({ type: "selectCard", id: c.id, alt: e.button === 2, seq }); }}
                 onMouseEnter={() => setHover(c.id)} onMouseLeave={() => setHover(undefined)}>
                 <span className="mark">Aura</span>{c.name}

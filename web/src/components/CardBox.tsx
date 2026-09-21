@@ -61,7 +61,7 @@ export default function CardBox({ card, stack, attached }: { card: CardSnap; sta
               // steigt mit i, z-index faellt, damit der erste Anhang ueber den weiteren liegt.
               <div key={a.id}
                 className={"attach-layer" + (a.selectable ? " selectable" : "") + (a.actionable ? " actionable" : "") + (a.highlighted ? " highlighted" : "")}
-                style={{ "--k": i + 1, zIndex: attLayers.length - i } as CSSProperties}
+                style={{ "--k": i + 1, "--z": attLayers.length - i } as CSSProperties}
                 title={a.text ?? ""}
                 onClick={(e) => { e.preventDefault(); e.stopPropagation(); send({ type: "selectCard", id: a.id, alt: e.button === 2, seq }); }}
                 onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); send({ type: "selectCard", id: a.id, alt: true, seq }); }}
