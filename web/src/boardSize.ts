@@ -3,12 +3,16 @@ import type { RefObject } from "react";
 import type { Group } from "./groups";
 
 /** Eine Spielfeldreihe fuer die Messung: je Slot die Breite in Karteneinheiten (1 aufrecht, 1.4 gedreht,
- *  1 + 0.04 je Stapel-Ebene), scale 1 fuer Karten, 0.8 fuer Laender. */
-export interface RowSpec { units: number[]; scale: number }
+ *  1 + 0.04 je Stapel-Ebene), scale 1 fuer Karten, 0.8 fuer Laender.
+ *  headroom: Hoehenzuschlag der Reihe in Karteneinheiten, addiert auf scale bevor mit RATIO * w
+ *  multipliziert wird (Zeilenhoehe = RATIO * w * (scale + headroom)) – fuer nach oben herausschauende
+ *  Anhaenge. */
+export interface RowSpec { units: number[]; scale: number; headroom?: number }
 export interface FitOpts { gap?: number; rowGap?: number; min?: number; max?: number }
 
 const MAX_LAYERS = 4;
 const RATIO = 1.4;
+const ATTACH_DY = 0.22;
 
 /** Breite eines Stapels/einer Karte in Einheiten (siehe RowSpec). Gedreht, wenn getappt bzw. im Stapel
  *  getappte Karten liegen (die ragen als gedrehte Ebenen links/rechts heraus). */
@@ -19,14 +23,23 @@ export function slotUnits(g: Group): number {
   return 1 + 0.04 * Math.min(g.cards.length - 1, MAX_LAYERS);
 }
 
+/** Hoehenzuschlag (in Karteneinheiten, bezogen auf w * scale) fuer einen Wirt mit n Anhaengen: jede der
+ *  max. 4 Ebenen schaut um ATTACH_DY der Kartenhoehe (RATIO * w) nach oben heraus. Getappter Wirt: der
+ *  Rahmen ist nur w hoch, die aufrechten Ebenen ragen zusaetzlich um (RATIO - 1) * w darueber hinaus. */
+export function slotHeadroom(attachedCount: number, tapped = false): number {
+  if (attachedCount <= 0) return 0;
+  const base = tapped ? RATIO - 1 : 0;
+  return base + Math.min(attachedCount, MAX_LAYERS) * ATTACH_DY * RATIO;
+}
+
 /** Passt die Reihen bei Kartenbreite w in width x height? Jede Reihe bricht zeilenweise um (eine Zeile
- *  enthaelt immer mindestens einen Slot); Zeilenhoehe = RATIO * w * scale + gap. */
+ *  enthaelt immer mindestens einen Slot); Zeilenhoehe = RATIO * w * (scale + headroom) + gap. */
 function fits(w: number, width: number, height: number, rows: RowSpec[], gap: number, rowGap: number): boolean {
   let total = 0;
   let filled = 0;
   for (const r of rows) {
     if (r.units.length === 0) continue;
-    const lineH = RATIO * w * r.scale;
+    const lineH = RATIO * w * (r.scale + (r.headroom ?? 0));
     let lines = 1;
     let x = 0;
     for (const u of r.units) {
@@ -76,7 +89,7 @@ export function useBoardSize(ref: RefObject<HTMLElement>, rows: RowSpec[], enabl
     return () => ro.disconnect();
   }, [ref, enabled]);
   // Signatur statt rows-Referenz: PlayerZone baut die Reihen bei jedem Render neu.
-  const sig = rows.map((r) => r.scale + ":" + r.units.join(",")).join("|");
+  const sig = rows.map((r) => r.scale + ":" + (r.headroom ?? 0) + ":" + r.units.join(",")).join("|");
   const optsSig = opts.min + ":" + opts.max + ":" + opts.gap + ":" + opts.rowGap;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   return useMemo(() => (enabled && size ? fitCardWidth(size.w, size.h, rows, opts) : undefined), [enabled, size, sig, optsSig]);

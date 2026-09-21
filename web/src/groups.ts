@@ -60,3 +60,27 @@ export function groupCards(cards: CardSnap[]): Group[] {
   }
   return out;
 }
+
+/**
+ * Wirt-Id -> angelegte Karten (Auren, Equipment, Befestigungen), in der Reihenfolge der
+ * attachments-Liste des Wirts; Anhaenge ohne Listeneintrag hinten, nach id. Zugeordnet wird nur, wenn
+ * der Wirt bekannt, offen und im Spiel ist - sonst bleibt der Anhang in seiner eigenen Reihe.
+ * Der Kontrolleur spielt keine Rolle: eine gegnerische Aura auf der eigenen Kreatur liegt beim Wirt.
+ */
+export function attachedBy(cards: Record<string, CardSnap>): Map<number, CardSnap[]> {
+  const out = new Map<number, CardSnap[]>();
+  for (const c of Object.values(cards)) {
+    if (c.attachedTo === undefined) continue;
+    const host = cards[String(c.attachedTo)];
+    if (!host || host.faceDown || host.zone?.toLowerCase() !== "battlefield") continue;
+    let list = out.get(host.id);
+    if (!list) { list = []; out.set(host.id, list); }
+    list.push(c);
+  }
+  for (const [hostId, list] of out) {
+    const order = cards[String(hostId)].attachments ?? [];
+    const rank = (c: CardSnap) => { const i = order.indexOf(c.id); return i < 0 ? order.length : i; };
+    list.sort((a, b) => rank(a) - rank(b) || a.id - b.id);
+  }
+  return out;
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fitCardWidth, slotUnits } from "./boardSize";
+import { fitCardWidth, slotHeadroom, slotUnits } from "./boardSize";
 import type { CardSnap } from "./protocol";
 
 const row = (n: number, scale = 1, units?: number[]): { units: number[]; scale: number } =>
@@ -81,5 +81,22 @@ describe("slotUnits", () => {
     expect(slotUnits({ card: cards[0], cards, tapped: 1 })).toBe(1.4);
     const six = [1, 2, 3, 4, 5, 6].map((i) => snap(i));
     expect(slotUnits({ card: six[0], cards: six, tapped: 0 })).toBeCloseTo(1.16);
+  });
+});
+
+describe("headroom", () => {
+  it("slotHeadroom: 0.22 * 1.4 je anhang, gedeckelt bei 4; getappter wirt zusaetzlich 0.4", () => {
+    expect(slotHeadroom(0)).toBe(0);
+    expect(slotHeadroom(0, true)).toBe(0);
+    expect(slotHeadroom(1)).toBeCloseTo(0.308);
+    expect(slotHeadroom(6)).toBeCloseTo(4 * 0.308);
+    expect(slotHeadroom(1, true)).toBeCloseTo(0.708);
+  });
+  it("eine reihe mit headroom braucht bei gleicher hoehe eine kleinere kartenbreite", () => {
+    const ohne = fitCardWidth(600, 200, [{ units: [1, 1], scale: 1 }]);
+    const mit = fitCardWidth(600, 200, [{ units: [1, 1], scale: 1, headroom: slotHeadroom(2) }]);
+    expect(mit).toBeLessThan(ohne);
+    // 200 = 1.4 * w * (1 + 0.616) -> w = 88
+    expect(mit).toBe(88);
   });
 });

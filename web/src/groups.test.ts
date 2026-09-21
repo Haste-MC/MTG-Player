@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { groupCards } from "./groups";
+import { attachedBy, groupCards } from "./groups";
 import type { CardSnap } from "./protocol";
 
 const forest = (id: number, over: Partial<CardSnap> = {}): CardSnap =>
@@ -47,5 +47,34 @@ describe("groupCards", () => {
     const g2 = groupCards([forest(1, { tapped: true }), forest(2, { tapped: true })]);
     expect(g2[0].card.id).toBe(1);
     expect(g2[0].tapped).toBe(2);
+  });
+});
+
+describe("attachedBy", () => {
+  const bf = (id: number, extra: Partial<CardSnap> = {}): CardSnap => ({ id, faceDown: false, name: "C" + id, zone: "battlefield", ...extra });
+  it("ordnet anhaenge dem wirt in der reihenfolge seiner attachments-liste zu", () => {
+    const cards = {
+      "1": bf(1, { attachments: [3, 2] }),
+      "2": bf(2, { attachedTo: 1 }),
+      "3": bf(3, { attachedTo: 1 }),
+    };
+    const m = attachedBy(cards);
+    expect(m.get(1)?.map((c) => c.id)).toEqual([3, 2]);
+  });
+  it("haengt anhaenge ohne eintrag in der liste hinten an, nach id", () => {
+    const cards = { "1": bf(1, { attachments: [4] }), "5": bf(5, { attachedTo: 1 }), "4": bf(4, { attachedTo: 1 }), "2": bf(2, { attachedTo: 1 }) };
+    expect(attachedBy(cards).get(1)?.map((c) => c.id)).toEqual([4, 2, 5]);
+  });
+  it("fremde aura auf eigener kreatur gehoert zum wirt", () => {
+    const cards = { "1": bf(1, { controller: 1, attachments: [2] }), "2": bf(2, { controller: 2, attachedTo: 1 }) };
+    expect(attachedBy(cards).get(1)?.map((c) => c.id)).toEqual([2]);
+  });
+  it("wirt verdeckt, unbekannt oder nicht im spiel: keine zuordnung", () => {
+    const cards = {
+      "1": bf(1, { faceDown: true }), "2": bf(2, { attachedTo: 1 }),
+      "3": bf(3, { attachedTo: 99 }),
+      "4": bf(4, { zone: "graveyard" }), "5": bf(5, { attachedTo: 4 }),
+    };
+    expect(attachedBy(cards).size).toBe(0);
   });
 });
