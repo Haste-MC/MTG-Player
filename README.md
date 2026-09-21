@@ -24,16 +24,27 @@ cd web && npm install && npm run build && cd ..
 cd bridge && mvn -q compile exec:java
 ```
 
-Browser: <http://127.0.0.1:8080>. Lobby → eigenes Precon und 1–5 KI-Precons wählen → Spiel starten.
+Browser: <http://127.0.0.1:8080>. Lobby → je Sitz eine Deck-Kachel (Commander-Bild) anklicken öffnet ein
+Panel mit den Reitern „Precons" / „Eigene Decks" / „Import" und einer Suche (Deck- oder Commander-Name);
+1–5 KI-Gegner, dazu optional eine Serie (Best of 3/5/7, sonst aus) → Spiel starten. Die letzte Wahl je Sitz
+bleibt im Browser gemerkt (auch nach „Zur Lobby").
 Steuerung: leuchtende Karten sind klickbar, Rechtsklick = andere Fähigkeit, Enter/Leertaste = OK,
 Esc = Abbrechen. Forge passt automatisch, wenn du nichts tun kannst (Arena-Stil).
 
-Eigene Decks: in der Lobby "Textliste" wählen und einen Archidekt- oder Arena-Export einfügen
-(`1 Sol Ring (c21) 263`, Sektion `Commander` oder erste legendäre Kreatur als Commander). Das Deck wird
-unter `~/.mtg-player/decks/` gespeichert und erscheint danach unter "Eigenes Deck". Unbekannte Karten
-werden mit Zeile gemeldet, das Spiel startet dann nicht.
+Eigene Decks: im Panel unter „Import" einen Archidekt- oder Arena-Export einfügen (`1 Sol Ring (c21) 263`,
+Sektion `Commander` oder erste legendäre Kreatur als Commander). Das Deck wird unter `~/.mtg-player/decks/`
+gespeichert und erscheint danach unter „Eigene Decks". Unbekannte Karten werden mit Zeile gemeldet, das
+Spiel startet dann nicht.
 
-Archidekt: Deck-URL (oder nur die ID) einfügen – öffentliche Decks; der Deckname wird übernommen.
+Archidekt: Deck-URL (oder nur die ID) einfügen – öffentliche Decks; der Deckname wird übernommen. Die
+Archidekt-Id steht als Tag (`archidekt:<id>`) in der gespeicherten `.dck`-Datei; die Deck-Kachel unter
+„Eigene Decks" bekommt dadurch einen „↻ Resync"-Knopf, der das Deck neu von Archidekt lädt (z. B. nach
+Änderungen an der Liste dort), ohne dass du erneut importieren musst.
+
+Spielende: Der Dialog bietet neben „Zur Lobby" auch „Nochmal spielen" – startet dieselbe Deck-/KI-
+Konstellation direkt neu, ohne den Umweg über die Lobby. Läuft eine Serie (Lobby-Einstellung „Serie"), zeigt
+der Dialog den Stand (z. B. „Du 2 · KI 1 1") und der Knopf wird zu „Neue Serie", sobald jemand die nötigen
+Siege hat.
 
 Kartenbilder kommen von Scryfall und werden unter `~/.mtg-player/cache/images/` gecacht (erstes Spiel mit
 neuen Karten lädt ein paar Sekunden nach; ohne Internet bleiben es Textboxen). Spielsteine holen ihr Bild aus
@@ -78,6 +89,11 @@ Ports: `-Dmtgplayer.wsPort=…`, `-Dmtgplayer.httpPort=…`; Bind-Adresse `-Dmtg
 `ForgeBoot.init()` schreibt bei jedem Start `bridge/assets/forge.profile.properties` (generiert, git-ignoriert) und lenkt
 Forges Nutzerdaten damit nach `~/.mtg-player/`; `bridge/assets/res` ist ein Symlink auf `forge/forge-gui/res`.
 Der Assets-Pfad ist mit `-Dmtgplayer.assets=<dir>` überschreibbar; Maven setzt ihn für `test` und `exec:java` automatisch.
+
+Protokoll (WebSocket, JSON, Feld `type`, Details in `docs/superpowers/specs/2026-09-16-mtg-player-design.md`):
+die `lobby`-Nachricht listet Precons und eigene Decks als `DeckInfo` (Name, Commander mit Bild, bei
+Archidekt-Importen die `archidekt`-Id); die Client-Nachricht `resyncDeck` (Deckname) lädt ein solches Deck
+neu von Archidekt und die Bridge antwortet mit einer frischen `lobby`- oder mit einer `error`-Nachricht.
 
 ## Wenn der Tisch einfriert
 

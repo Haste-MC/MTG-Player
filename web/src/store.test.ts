@@ -124,6 +124,19 @@ describe("reduce", () => {
     expect(s.choices).toEqual([]);
   });
 
+  it("neuer state (turn 0) nach gameOver ist eine neue partie - winner und log werden geleert", () => {
+    let s = reduce(initialState, snap());
+    s = reduce(s, { type: "log", text: "altes spiel", id: 5 });
+    s = reduce(s, { type: "gameOver", winner: "KI 1" });
+    expect(s.winner).toBe("KI 1");
+    // "Nochmal spielen" im Overlay schickt startGame erneut; s.state ist noch die alte Partie, aber
+    // winner ist gesetzt - der neue Snapshot (turn 0) muss trotzdem als Spielstart erkannt werden.
+    s = reduce(s, snap({ turn: 0 }));
+    expect(s.winner).toBeUndefined();
+    expect(s.log).toEqual([]);
+    expect(s.lastLogId).toBe(0);
+  });
+
   it("log verwirft wiederholte zeilen mit derselben id (reconnect-replay)", () => {
     let s = reduce(initialState, { type: "log", text: "eins", id: 1 });
     s = reduce(s, { type: "log", text: "zwei", id: 2 });

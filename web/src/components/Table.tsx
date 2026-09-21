@@ -1,4 +1,6 @@
 import { useStore } from "../store";
+import { send } from "../ws";
+import { formatSeries, seriesWinner } from "../series";
 import PlayerZone from "./PlayerZone";
 import Hand from "./Hand";
 import Prompt from "./Prompt";
@@ -11,7 +13,20 @@ export default function Table() {
   const state = useStore((s) => s.state);
   const winner = useStore((s) => s.winner);
   const backToLobby = useStore((s) => s.backToLobby);
+  const lastStart = useStore((s) => s.lastStart);
+  const series = useStore((s) => s.series);
+  const bestOf = useStore((s) => s.bestOf);
+  const noteStart = useStore((s) => s.noteStart);
+  const resetSeries = useStore((s) => s.resetSeries);
   if (!state) return <div className="lobby"><div className="lobby-card"><p className="muted">Warte auf Spielzustand …</p></div></div>;
+  const names = state.players.map((p) => p.name);
+  const seriesWon = series ? seriesWinner(series, bestOf) : undefined;
+  const again = () => {
+    if (!lastStart) return;
+    if (seriesWon) resetSeries();
+    noteStart(lastStart);
+    send(lastStart);
+  };
   const spectator = !!state.spectator;
   const me = state.players.find((p) => p.id === state.me);
   const foes = state.players.filter((p) => p.id !== state.me);
@@ -67,7 +82,14 @@ export default function Table() {
         <div className="overlay">
           <div className="dialog">
             <h3>{winner ? `${winner} gewinnt` : state.gameOver ? "Spiel beendet" : "Unentschieden"}</h3>
-            <div className="buttons"><button className="primary" onClick={backToLobby}>Zur Lobby</button></div>
+            {series && (series.games > 1 || bestOf > 0) && (
+              <p className="series">Serie: {formatSeries(series, names)}{bestOf > 0 && ` · Best of ${bestOf}`}
+                {seriesWon && <b> – {seriesWon} gewinnt die Serie</b>}</p>
+            )}
+            <div className="buttons">
+              {lastStart && <button className="primary" onClick={again}>{seriesWon ? "Neue Serie" : "Nochmal spielen"}</button>}
+              <button className={lastStart ? "quiet" : "primary"} onClick={backToLobby}>Zur Lobby</button>
+            </div>
           </div>
         </div>
       )}

@@ -61,11 +61,13 @@ export function reduce(s: AppState, m: Inbound): AppState {
         screen: s.state ? s.screen : "lobby",
       };
     case "state": {
-      // Spielstart nach der Lobby (erster Snapshot, s.state war noch undefined): Log der Vorpartie leeren.
-      const isNewMatch = m.turn === 0 && s.state === undefined;
+      // Spielstart nach der Lobby (erster Snapshot, s.state war noch undefined) oder Replay aus dem
+      // Spielende-Overlay ("Nochmal spielen"/"Neue Serie" - s.state ist da noch die alte Partie, aber
+      // winner ist gesetzt): Log der Vorpartie leeren und winner zuruecksetzen.
+      const isNewMatch = m.turn === 0 && (s.state === undefined || s.winner !== undefined);
       const freshLog = isNewMatch ? [] : s.log;
       const lastLogId = isNewMatch ? 0 : s.lastLogId;
-      return { ...s, state: m, screen: "table", log: freshLog, lastLogId };
+      return { ...s, state: m, screen: "table", log: freshLog, lastLogId, winner: isNewMatch ? undefined : s.winner };
     }
     case "choice":
       return { ...s, choices: addChoice(s.choices, m) };
