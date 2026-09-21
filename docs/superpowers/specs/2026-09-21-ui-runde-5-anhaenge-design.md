@@ -63,7 +63,7 @@ einem Wirt mit 2 Anhängen passt bei gleicher Breite erst bei kleinerer Kartenbr
 
 ## 6. Darstellung an Spielern (`PlayerZone.tsx`)
 
-Im Kopf hinter den Badges: je Anhang ein Chip `.chip.aura` (Muster `Effects`): Name, Tooltip „Aura von
+Im Kopf hinter den Badges: je Anhang ein Chip `.effect-chip.aura` (Muster `Effects`, Marke „Aura" wie die Emblem-Marke): Name, Tooltip „Aura von
 <Kontrolleur>", Hover → Detail-Panel, Klick → `selectCard`. Kein Bild (wie Embleme/Effekte).
 
 ## 7. Nachweise
