@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { ArchidektEntry, DeckInfo } from "../protocol";
 import type { Pick } from "../deckref";
 import { filterDecks } from "../deckSearch";
-import { classify, defaultSelection, updateAllIds, type EntryState } from "../archidektPlan";
+import { classify, defaultSelection, progressLabel, updateAllIds, type EntryState } from "../archidektPlan";
 import { loadArchidektUser, saveArchidektUser } from "../archidektSettings";
 import { useStore, type LogEntry } from "../store";
 import { send } from "../ws";
@@ -175,7 +175,7 @@ export default function DeckPicker({ pick, onChange, label }: { pick: Pick; onCh
               {(tab === "precons" || tab === "saved") && <input ref={searchRef} className="deck-search" placeholder="Suchen (Deck oder Commander)" value={query} onChange={(e) => setQuery(e.target.value)} />}
               {tab === "archidekt" && (
                 <div className="archidekt-head">
-                  <input placeholder="Archidekt-Benutzername" value={username} onChange={(e) => setUsername(e.target.value)}
+                  <input placeholder="Archidekt-Benutzername" aria-label="Archidekt-Benutzername" value={username} onChange={(e) => setUsername(e.target.value)}
                     onKeyDown={(e) => { if (e.key === "Enter") loadList(); }} />
                   <button type="button" className="primary small" disabled={!canLoad} onClick={loadList}>{ad.loading ? "lädt …" : "Decks laden"}</button>
                 </div>
@@ -238,13 +238,13 @@ export default function DeckPicker({ pick, onChange, label }: { pick: Pick; onCh
                     Alle aktualisieren
                   </button>
                   {(starting || progress) && (
-                    <span className="deck-status">
+                    <span className="deck-status" aria-live="polite">
                       {starting ? "startet …"
-                        : progress!.current != null ? `${progress!.done}/${progress!.total} · ${progress!.current} …`
+                        : progress!.current != null ? `${progress!.done}/${progress!.total} · ${progressLabel(progress!.current, ad.decks)} …`
                         : `${progress!.done}/${progress!.total} fertig`}
                     </span>
                   )}
-                  {adStatus && <span className={"deck-status" + (adStatus.warn ? " warn" : "")}>{adStatus.text}</span>}
+                  {adStatus && <span className={"deck-status" + (adStatus.warn ? " warn" : "")} aria-live="polite">{adStatus.text}</span>}
                 </div>
                 {progress && progress.errors.length > 0 && <div className="deck-status warn">{progress.errors.join("\n")}</div>}
                 <p className="hint">Nur öffentliche/ungelistete Decks; private sieht Archidekt ohne Login nicht. Importierte Decks erscheinen unter „Eigene Decks“.</p>

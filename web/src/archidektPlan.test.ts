@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classify, defaultSelection, updateAllIds } from "./archidektPlan";
+import { classify, defaultSelection, progressLabel, updateAllIds } from "./archidektPlan";
 import type { ArchidektEntry, DeckInfo } from "./protocol";
 
 const entry = (over: Partial<ArchidektEntry> = {}): ArchidektEntry => ({
@@ -89,5 +89,20 @@ describe("updateAllIds", () => {
   it("alles neu -> leer", () => {
     const entries = [entry({ id: 1 }), entry({ id: 2 })];
     expect(updateAllIds(entries, [])).toEqual([]);
+  });
+});
+
+describe("progressLabel", () => {
+  it("\"Deck <id>\" wird auf den Namen aus der Konto-Liste abgebildet", () => {
+    expect(progressLabel("Deck 12345", [entry({ id: 12345, name: "Kalamax" })])).toBe("Kalamax");
+  });
+
+  it("unbekannte Id bleibt \"Deck <id>\"", () => {
+    expect(progressLabel("Deck 7", [entry({ id: 12345, name: "Kalamax" })])).toBe("Deck 7");
+    expect(progressLabel("Deck 7", undefined)).toBe("Deck 7");
+  });
+
+  it("gespeicherter Name (Resync) bleibt unveraendert", () => {
+    expect(progressLabel("Pilze", [entry({ id: 1, name: "Fun With Fungus" })])).toBe("Pilze");
   });
 });

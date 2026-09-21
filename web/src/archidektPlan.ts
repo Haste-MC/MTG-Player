@@ -22,3 +22,13 @@ export function defaultSelection(entries: ArchidektEntry[], own: DeckInfo[]): nu
 export function updateAllIds(entries: ArchidektEntry[], own: DeckInfo[]): number[] {
   return entries.filter((e) => classify(e, own) !== "neu").map((e) => e.id);
 }
+
+/** Anzeige von `archidektProgress.current`: die Bridge kennt bei einem neuen Deck nur die Id ("Deck <id>",
+ * die Konto-Liste liegt nur im Client) - hier wird sie auf den Namen aus der Liste abgebildet, sonst
+ * bleibt der Text wie er ist (gespeicherter Name oder unbekannte Id). */
+export function progressLabel(current: string, entries: ArchidektEntry[] | undefined): string {
+  const m = /^Deck (\d+)$/.exec(current);
+  if (!m) return current;
+  const hit = entries?.find((e) => String(e.id) === m[1]);
+  return hit ? hit.name : current;
+}

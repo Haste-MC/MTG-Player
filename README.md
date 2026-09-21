@@ -50,7 +50,11 @@ die angehakten Decks nacheinander (neue mit ihrem Archidekt-Namen, bekannte unte
 „Alle aktualisieren" nimmt alle schon importierten Decks des Kontos. Während des Laufs zeigt die Fußzeile
 „3/7 · Deckname …", danach „7/7 fertig" und rot die Decks, die nicht geladen werden konnten – der Lauf geht
 bei Fehlern weiter. Dafür stehen in der `.dck`-Datei zwei Tags: `archidekt:<id>` und
-`archidekt-updated:<Stand>` (Archidekts `updatedAt` beim Import).
+`archidekt-updated:<Stand>` (Archidekts `updatedAt` beim Import). Decks, die vor dieser Funktion importiert
+wurden (nur Tag `archidekt:`), erscheinen einmal als **geändert** und sind vorab angehakt; nach dem ersten
+Aktualisieren tragen sie den Stand. Auch ein einfacher „↻ Resync" unter „Eigene Decks" schreibt jetzt
+`archidekt-updated`. Heißt ein lokales Deck schon so wie ein neu zu importierendes Archidekt-Deck (und ist
+nicht dasselbe Archidekt-Deck), speichert der Import unter „<Name> (<Id>)" – überschrieben wird nichts.
 
 Spielende: Der Dialog bietet neben „Zur Lobby" auch „Nochmal spielen" – startet dieselbe Deck-/KI-
 Konstellation direkt neu, ohne den Umweg über die Lobby. Läuft eine Serie (Lobby-Einstellung „Serie"), zeigt
@@ -107,7 +111,8 @@ Archidekt-Importen die `archidekt`-Id); die Client-Nachricht `resyncDeck` (Deckn
 neu von Archidekt und die Bridge antwortet mit einer frischen `lobby`- oder mit einer `error`-Nachricht.
 `archidektList` (Benutzername) liefert `archidektDecks` (Id, Name, `updatedAt`, Vorschaubild je öffentlichem
 Commander-Deck des Kontos) oder `error`; `archidektImport` (Ids) importiert/aktualisiert die Decks nacheinander
-und meldet je Deck `archidektProgress` (`done`, `total`, `current` = Name des laufenden Decks, `errors`), nach
+und meldet je Deck `archidektProgress` (`done`, `total`, `current` = gespeicherter Name des laufenden Decks bzw.
+`Deck <id>` bei einem Neuimport – der Client zeigt dafür den Namen aus der Konto-Liste, `errors`), nach
 jedem Deck eine frische `lobby`-Nachricht und zum Schluss `archidektProgress` mit `current: null`; ein zweiter
 `archidektImport` während eines Laufs wird mit `error` abgewiesen.
 
