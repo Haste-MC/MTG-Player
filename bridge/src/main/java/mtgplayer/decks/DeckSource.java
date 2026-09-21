@@ -41,25 +41,50 @@ public final class DeckSource {
             return new Resolved(store.load(node.get("saved").asText()), () -> { });
         }
         if (node.hasNonNull("archidekt")) {
-            Archidekt.Result r = archidekt.fetch(node.get("archidekt").asText());
+            String id = String.valueOf(Archidekt.parseDeckId(node.get("archidekt").asText()));
+            Archidekt.Result r = archidekt.fetch(id);
             String name = node.hasNonNull("deckName") && !node.get("deckName").asText().isBlank()
                     ? node.get("deckName").asText().trim() : r.name();
-            return resolveText(r.text(), name);
+            return resolveText(r.text(), name, id);
         }
         if (node.hasNonNull("text")) {
             String text = node.get("text").asText();
             String name = node.hasNonNull("deckName") && !node.get("deckName").asText().isBlank()
                     ? node.get("deckName").asText().trim() : null;
-            return resolveText(text, name);
+            return resolveText(text, name, null);
         }
         throw new IllegalArgumentException("Deck braucht 'precon', 'saved', 'text' oder 'archidekt'");
     }
 
-    /** Gemeinsame Textlisten-Verarbeitung fuer {@code text} und {@code archidekt}: parse → Probleme → Resolved mit Save. */
-    private Resolved resolveText(String text, String deckNameOrNull) {
+    /**
+     * Holt ein gespeichertes Archidekt-Deck erneut von Archidekt (Id aus dem Tag
+     * {@link DeckStore#ARCHIDEKT_TAG}); {@code save()} ueberschreibt es unter demselben Namen.
+     *
+     * @throws IllegalArgumentException "Resync &lt;name&gt;: …" – kein Archidekt-Deck, Fetch- oder Import-Fehler
+     */
+    public Resolved resync(String name) {
+        String id = store.archidektId(name);
+        if (id == null) {
+            throw new IllegalArgumentException("Resync " + name + ": kein Archidekt-Deck");
+        }
+        try {
+            return resolveText(archidekt.fetch(id).text(), name, id);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Resync " + name + ": " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Gemeinsame Textlisten-Verarbeitung fuer {@code text} und {@code archidekt}: parse → Probleme →
+     * Resolved mit Save. {@code archidektId} (oder null) wird als Tag ins Deck geschrieben.
+     */
+    private Resolved resolveText(String text, String deckNameOrNull, String archidektId) {
         DeckImport.Result r = DeckImport.parse(text);
         if (!r.problems().isEmpty()) {
             throw new IllegalArgumentException("Deck-Import:\n" + String.join("\n", r.problems()));
+        }
+        if (archidektId != null) {
+            r.deck().getTags().add(DeckStore.ARCHIDEKT_TAG + archidektId);
         }
         String name = deckNameOrNull != null ? deckNameOrNull : DeckImport.suggestName(text, r.deck());
         return new Resolved(r.deck(), () -> store.save(name, r.deck()));

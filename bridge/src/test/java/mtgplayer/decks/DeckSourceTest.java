@@ -108,6 +108,7 @@ class DeckSourceTest {
         r.save().run();
         assertEquals(List.of("Fun With Fungus"), store.names());
         assertEquals("Thelon of Havenwood", r.deck().getCommanders().get(0).getName());
+        assertEquals("1", store.archidektId("Fun With Fungus"));
     }
 
     @Test

@@ -152,6 +152,11 @@ class BridgeEndToEndTest {
     void lobbyStartKeepPrioConcede() throws Exception {
         JsonNode lobby = await("lobby", n -> true, 10);
         assertTrue(lobby.get("precons").size() > 100);
+        JsonNode precon = lobby.get("precons").get(0);
+        assertTrue(precon.get("name").isTextual(), "precon hat name: " + precon);
+        assertTrue(precon.get("commanders").size() >= 1, "precon hat commanders: " + precon);
+        assertTrue(precon.get("commanders").get(0).get("imageKey").asText().startsWith("c:"),
+                "commander hat imageKey: " + precon);
         assertTrue(Json.mapper().convertValue(lobby.get("aiProfiles"), List.class).contains("Default"),
                 "aiProfiles enthaelt Default: " + lobby.get("aiProfiles"));
 

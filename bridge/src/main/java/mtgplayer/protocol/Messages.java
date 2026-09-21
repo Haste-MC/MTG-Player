@@ -9,9 +9,15 @@ public final class Messages {
 
     private Messages() { }
 
-    public record Lobby(String type, List<String> precons, List<String> decks,
+    /** imageKey: Forges Bildschluessel ({@code c:Name|SET|art}), siehe {@code PaperCard.getImageKey(false)}. */
+    public record Commander(String name, String imageKey) { }
+
+    /** archidekt: Archidekt-Deck-Id, null wenn das Deck kein Archidekt-Import ist. */
+    public record DeckInfo(String name, List<Commander> commanders, String archidekt) { }
+
+    public record Lobby(String type, List<DeckInfo> precons, List<DeckInfo> decks,
                         List<String> aiModes, List<String> aiProfiles, int aiTimeout) {
-        public Lobby(List<String> precons, List<String> decks) {
+        public Lobby(List<DeckInfo> precons, List<DeckInfo> decks) {
             this("lobby", precons, decks, AiConfig.modes(), AiConfig.profiles(), AiConfig.DEFAULT_TIMEOUT);
         }
     }

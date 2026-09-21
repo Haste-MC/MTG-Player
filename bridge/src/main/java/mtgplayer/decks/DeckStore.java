@@ -3,6 +3,8 @@ package mtgplayer.decks;
 import forge.deck.Deck;
 import forge.deck.io.DeckSerializer;
 import mtgplayer.forge.ForgeBoot;
+import mtgplayer.forge.Precons;
+import mtgplayer.protocol.Messages;
 
 import java.io.File;
 import java.io.IOException;
@@ -22,6 +24,9 @@ import java.util.stream.Stream;
  * wollen wir diese Sanitisierung nicht.
  */
 public final class DeckStore {
+
+    /** Deck-Tag (Forge {@code Tags=} im .dck), das die Archidekt-Deck-Id eines Imports festhaelt. */
+    public static final String ARCHIDEKT_TAG = "archidekt:";
 
     private static final String NAME_PREFIX = "Name=";
 
@@ -48,6 +53,34 @@ public final class DeckStore {
         }
         Collections.sort(out);
         return out;
+    }
+
+    /** Alle gespeicherten Decks als {@link Messages.DeckInfo}, nach Name sortiert. */
+    public List<Messages.DeckInfo> infos() {
+        List<Messages.DeckInfo> out = new ArrayList<>();
+        for (String name : names()) {
+            Deck d = load(name);
+            out.add(Precons.info(name, d, archidektId(d)));
+        }
+        return out;
+    }
+
+    /** @return Archidekt-Deck-Id aus dem Tag {@link #ARCHIDEKT_TAG}, oder null (unbekanntes Deck / kein Import) */
+    public String archidektId(String name) {
+        try {
+            return archidektId(load(name));
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+    }
+
+    private static String archidektId(Deck deck) {
+        for (String tag : deck.getTags()) {
+            if (tag.startsWith(ARCHIDEKT_TAG)) {
+                return tag.substring(ARCHIDEKT_TAG.length());
+            }
+        }
+        return null;
     }
 
     public Deck load(String name) {

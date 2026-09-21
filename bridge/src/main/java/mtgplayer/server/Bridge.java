@@ -61,7 +61,7 @@ public final class Bridge {
     }
 
     private void onClientConnected() {
-        ws.send(new Messages.Lobby(Precons.names(), store.names()));
+        ws.send(new Messages.Lobby(Precons.infos(), store.infos()));
         // state vor choice: beides in EINEM Runnable, sonst kann pending() vor pushState() beim Client ankommen
         GuiBase.getInterface().invokeInEdtLater(() -> {
             gui.pushState();
@@ -126,6 +126,17 @@ public final class Bridge {
                 gui.setStops(s);
             });
             case "fullControl" -> ui(() -> gui.setFullControl(msg.path("value").asBoolean(false)));
+            case "resyncDeck" -> {
+                String name = msg.path("name").asText();
+                GuiBase.getInterface().runBackgroundTask("resync", () -> {
+                    try {
+                        decks.resync(name).save().run();
+                        ws.send(new Messages.Lobby(Precons.infos(), store.infos()));
+                    } catch (IllegalArgumentException e) {
+                        ws.send(new Messages.ErrorMsg(e.getMessage()));
+                    }
+                });
+            }
             case "requestState" -> onClientConnected();
             default -> ws.send(new Messages.ErrorMsg("unbekannter Nachrichtentyp: " + type));
         }
@@ -197,7 +208,7 @@ public final class Bridge {
         // Erst wenn ALLE Decks aufgeloest sind speichern - ein fehlgeschlagener KI-Import
         // darf ein zuvor erfolgreich aufgeloestes Text-Deck nicht trotzdem auf Platte lassen.
         saves.forEach(Runnable::run);
-        ws.send(new Messages.Lobby(Precons.names(), store.names())); // ggf. neu gespeichertes Deck
+        ws.send(new Messages.Lobby(Precons.infos(), store.infos())); // ggf. neu gespeichertes Deck
         Deck humanDeck = human;
         int timeout = aiTimeout;
         ui(() -> {
