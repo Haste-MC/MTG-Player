@@ -106,7 +106,7 @@ Alle anderen `new Snapshot.CardSnap(` -Aufrufe im Bridge-Code suchen (`grep -rn 
   export function attachedBy(cards: Record<string, CardSnap>): Map<number, CardSnap[]>
   // boardSize.ts
   export interface RowSpec { units: number[]; scale: number; headroom?: number }
-  export function slotHeadroom(attachedCount: number): number   // min(n, 4) * 0.22 * 1.4
+  export function slotHeadroom(attachedCount: number, tapped?: boolean): number   // (tapped ? 0.4 : 0) + min(n, 4) * 0.22 * 1.4
   ```
 
 - [ ] **Step 1: Failing Tests** – `groups.test.ts` anhängen:
@@ -150,10 +150,12 @@ describe("attachedBy", () => {
 import { slotHeadroom } from "./boardSize";
 
 describe("headroom", () => {
-  it("slotHeadroom: 0.22 * 1.4 je anhang, gedeckelt bei 4", () => {
+  it("slotHeadroom: 0.22 * 1.4 je anhang, gedeckelt bei 4; getappter wirt zusaetzlich 0.4", () => {
     expect(slotHeadroom(0)).toBe(0);
+    expect(slotHeadroom(0, true)).toBe(0);
     expect(slotHeadroom(1)).toBeCloseTo(0.308);
     expect(slotHeadroom(6)).toBeCloseTo(4 * 0.308);
+    expect(slotHeadroom(1, true)).toBeCloseTo(0.708);
   });
   it("eine reihe mit headroom braucht bei gleicher hoehe eine kleinere kartenbreite", () => {
     const ohne = fitCardWidth(600, 200, [{ units: [1, 1], scale: 1 }]);
@@ -201,9 +203,12 @@ export function attachedBy(cards: Record<string, CardSnap>): Map<number, CardSna
 
 ```ts
 /** Hoehenzuschlag (in Karteneinheiten, bezogen auf w * scale) fuer einen Wirt mit n Anhaengen: jede der
- *  max. 4 Ebenen schaut um ATTACH_DY der Kartenhoehe (RATIO * w) nach oben heraus. */
-export function slotHeadroom(attachedCount: number): number {
-  return Math.min(attachedCount, MAX_LAYERS) * ATTACH_DY * RATIO;
+ *  max. 4 Ebenen schaut um ATTACH_DY der Kartenhoehe (RATIO * w) nach oben heraus. Getappter Wirt: der
+ *  Rahmen ist nur w hoch, die aufrechten Ebenen ragen zusaetzlich um (RATIO - 1) * w darueber hinaus. */
+export function slotHeadroom(attachedCount: number, tapped = false): number {
+  if (attachedCount <= 0) return 0;
+  const base = tapped ? RATIO - 1 : 0;
+  return base + Math.min(attachedCount, MAX_LAYERS) * ATTACH_DY * RATIO;
 }
 ```
 
@@ -269,7 +274,7 @@ Im `.card-frame` (Klasse zusätzlich `attached` wenn `att.length > 0`), **vor** 
         )}
 ```
 
-Reihenfolge: `attLayers[0]` ist der erste Anhang (liegt direkt hinter dem Wirt, `--k` = n, schaut am **wenigsten** heraus? – nein: Spec „der erste Anhang liegt direkt hinter dem Wirt und schaut am wenigsten heraus" → `--k` = i + 1 für Versatz, aber z-index absteigend, damit der erste oben liegt). Also: `style={{ "--k": i + 1, zIndex: attLayers.length - i }}`. Der Name `.attach-name` ist nur im Textfallback sichtbar (`.attach-layer:has(.art) .attach-name { display: none }`).
+Reihenfolge: `attLayers[0]` ist der erste Anhang, liegt direkt hinter dem Wirt und schaut am wenigsten heraus → im Code oben statt `"--k": attLayers.length - i` bitte `style={{ "--k": i + 1, zIndex: attLayers.length - i } as CSSProperties}` (Versatz steigt mit i, z-index fällt, damit der erste Anhang oben liegt). Der Name `.attach-name` ist nur im Textfallback sichtbar (`.attach-layer:has(.art) .attach-name { display: none }`).
 
 - [ ] **Step 3: CSS** (nach dem Stapel-Block, ca. Zeile 410):
 
@@ -313,7 +318,7 @@ Getappter Wirt in der Gegnerzeile (aufrecht, abgedunkelt) braucht keine Sonderre
   - `const hosted = useMemo(() => attachedBy(state.cards), [state.cards]);` (Import aus `../groups`), `const isHosted = (c: CardSnap) => c.attachedTo !== undefined && hosted.has(c.attachedTo) || c.attachedToPlayer !== undefined;`
   - `const bf = cards(p.battlefield).filter((c) => !isChip(c) && !isHosted(c));`
   - `Stacks` bekommt `hosted` durch: `<CardBox key=… card={g.card} stack=… attached={hosted.get(g.card.id)} />` (Signatur `Stacks({ groups, hosted })`).
-  - `rowSpecs`: je Reihe `headroom: Math.max(0, ...groups.map((g) => g.card.tapped ? 0 : slotHeadroom(hosted.get(g.card.id)?.length ?? 0)))` – getappte Wirte: Ebenen bleiben aufrecht und an der Unterkante des `--w` hohen Rahmens; sie ragen dann um `(--h - --w) + n*dy` über den Rahmen → Headroom für getappte Wirte = `(RATIO - 1) + n * 0.22 * RATIO`; dafür in `boardSize.ts` `slotHeadroom(n, tapped = false)` erweitern: `const base = tapped ? RATIO - 1 : 0; return base + Math.min(n, 4) * ATTACH_DY * RATIO;` (Test in Task 2 entsprechend um `slotHeadroom(1, true) ≈ 0.708` ergänzen) und das CSS `.card-slot.has-attach.tapped-slot { margin-top: calc(var(--attach-n) * var(--attach-dy) + (var(--h) - var(--w))); }` – im `.bf-rows`-Bereich.
+  - `rowSpecs`: je Reihe `headroom: Math.max(0, ...groups.map((g) => slotHeadroom(hosted.get(g.card.id)?.length ?? 0, !!g.card.tapped)))` (`groups` = die `Group[]` der Reihe aus `splitRows`; bei leerer Reihe 0). Getappte Wirte: die aufrechten Ebenen sitzen an der Unterkante des nur `--w` hohen Rahmens und ragen um `(--h - --w) + n * dy` darüber hinaus → CSS `.bf-rows .card-slot.has-attach.tapped-slot { margin-top: calc(var(--attach-n, 0) * var(--attach-dy) + (var(--h) - var(--w))); }`.
   - Spieler-Chips: `const auras = Object.values(state.cards).filter((c) => c.attachedToPlayer === p.id);` und im Kopf nach den Badges (`{cmdDmg && …}`):
 
 ```tsx
