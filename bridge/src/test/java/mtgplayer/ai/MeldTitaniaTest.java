@@ -200,9 +200,20 @@ class MeldTitaniaTest {
     @Test
     @Timeout(value = 3, unit = TimeUnit.MINUTES)
     void szeneE_landOpferVerschontDieMeldHaelfte() {
+        assertSacrificesForestNotArgoth(ZoneType.Battlefield);
+    }
+
+    /** Szene E mit Titania noch in der Kommandozone (Commander): auch dann bleibt Argoth verschont. */
+    @Test
+    @Timeout(value = 3, unit = TimeUnit.MINUTES)
+    void szeneE_landOpferVerschontDieMeldHaelfteMitCommanderInKommandozone() {
+        assertSacrificesForestNotArgoth(ZoneType.Command);
+    }
+
+    private static void assertSacrificesForestNotArgoth(ZoneType titaniaZone) {
         Scene s = Scene.twoPlayers(AiConfig.DEFAULT, AiConfig.DEFAULT, 3);
         Player a = s.player(0);
-        s.card(TITANIA, a, ZoneType.Battlefield);
+        s.card(TITANIA, a, titaniaZone);
         Card argoth = s.card(ARGOTH, a, ZoneType.Battlefield);
         argoth.tap(false, null, null);
         s.cards("Forest", 3, a, ZoneType.Battlefield);
