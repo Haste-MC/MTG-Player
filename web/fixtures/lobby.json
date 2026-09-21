@@ -8,7 +8,7 @@
   ],
   "decks": [
     { "name": "Felothar Landfall", "commanders": [{ "name": "Felothar the Steadfast", "imageKey": "c:Felothar the Steadfast|TDC|1" }], "archidekt": "12345", "archidektUpdated": "2026-09-18T12:00:00.000000Z" },
-    { "name": "Kalamax Storm", "commanders": [{ "name": "Kalamax, the Stormsire", "imageKey": "c:Kalamax, the Stormsire|C20|1" }], "archidekt": null }
+    { "name": "Kalamax Storm", "commanders": [{ "name": "Kalamax, the Stormsire", "imageKey": "c:Kalamax, the Stormsire|C20|1" }], "archidekt": "67890", "archidektUpdated": "2026-09-15T08:00:00.000000Z" }
   ],
   "aiModes": ["standard", "hybrid", "sim"],
   "aiProfiles": ["Default", "Cautious", "Experimental", "Reckless"],
