@@ -1,0 +1,66 @@
+{
+ "count": 4,
+ "next": "https://archidekt.com/api/decks/v3/?ownerUsername=plssssss&pageSize=3&page=2",
+ "results": [
+  {
+   "id": 26595870,
+   "name": "HOBBITS CREATE MONSTERS",
+   "updatedAt": "2026-09-21T18:41:17.869883Z",
+   "deckFormat": 3,
+   "featured": "https://card-images.archidekt.com/art/front/d/8/d876315f-b269-4254-a517-905c6e927462.webp",
+   "customFeatured": "https://card-images.archidekt.com/art/front/5/f/5feba5d6-99a6-4e9b-8a7d-90d955868fc3.webp?1783911263",
+   "private": false,
+   "unlisted": false
+  },
+  {
+   "id": 26616782,
+   "name": "Kein Commander",
+   "updatedAt": "2026-09-20T22:54:00.015006Z",
+   "deckFormat": 1,
+   "featured": "https://card-images.archidekt.com/art/front/9/0/901bd4dc-ebd3-40af-9fb0-57a8719329a4.webp",
+   "customFeatured": "",
+   "private": false,
+   "unlisted": false
+  },
+  {
+   "id": 26566111,
+   "name": "BARD KING OF DALE",
+   "updatedAt": "2026-09-20T20:09:16.875082Z",
+   "deckFormat": 3,
+   "featured": "https://card-images.archidekt.com/art/front/c/0/c05c2aa6-29c7-40f8-872e-91099b9225c4.webp",
+   "customFeatured": "https://card-images.archidekt.com/art/front/custom.webp",
+   "private": false,
+   "unlisted": false
+  },
+  {
+   "id": 26595812,
+   "name": "BURN IT TO THE GROUND",
+   "updatedAt": "2026-09-20T08:30:37.105951Z",
+   "deckFormat": 3,
+   "featured": "",
+   "customFeatured": "",
+   "private": false,
+   "unlisted": false
+  },
+  {
+   "id": 26465161,
+   "name": "OZAI RAKDOS",
+   "updatedAt": "2026-09-16T16:04:35.873738Z",
+   "deckFormat": 3,
+   "featured": "https://card-images.archidekt.com/art/front/a/9/a98b1550-4609-4a2f-9371-4afe1cdc613e.webp",
+   "customFeatured": "",
+   "private": false,
+   "unlisted": false
+  },
+  {
+   "id": 26330367,
+   "name": "Copy of - Wakanda Forever - Marvel Super Heroes",
+   "updatedAt": "2026-09-12T13:05:25.198184Z",
+   "deckFormat": 3,
+   "featured": "https://storage.googleapis.com/archidekt-card-images/msc/d5a3537f-ac0a-4517-8a89-92abe8c0b8d0_art_crop.jpg",
+   "customFeatured": "",
+   "private": false,
+   "unlisted": false
+  }
+ ]
+}

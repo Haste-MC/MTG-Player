@@ -1,0 +1,16 @@
+{
+ "count": 4,
+ "next": null,
+ "results": [
+  {
+   "id": 9592911,
+   "name": "EDH Rin and Seri",
+   "updatedAt": "2026-09-01T10:00:00.000000Z",
+   "deckFormat": 3,
+   "featured": "https://card-images.archidekt.com/art/front/r/i/rin.webp",
+   "customFeatured": "",
+   "private": false,
+   "unlisted": true
+  }
+ ]
+}
