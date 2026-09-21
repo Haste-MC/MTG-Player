@@ -36,7 +36,8 @@ werden mit Zeile gemeldet, das Spiel startet dann nicht.
 Archidekt: Deck-URL (oder nur die ID) einfügen – öffentliche Decks; der Deckname wird übernommen.
 
 Kartenbilder kommen von Scryfall und werden unter `~/.mtg-player/cache/images/` gecacht (erstes Spiel mit
-neuen Karten lädt ein paar Sekunden nach; ohne Internet bleiben es Textboxen).
+neuen Karten lädt ein paar Sekunden nach; ohne Internet bleiben es Textboxen). Spielsteine holen ihr Bild aus
+Scryfalls Token-Set der Edition (z. B. `tc21`); Token ohne Editionseintrag bleiben Textboxen.
 
 Phasenleiste über dem Prompt: Klick auf eine Phase setzt/entfernt einen Stop – dort wird angehalten, sofern du
 etwas spielen kannst; ohne Volle Kontrolle passt Forge weiterhin automatisch, wenn nichts spielbar ist

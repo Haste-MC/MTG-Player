@@ -47,4 +47,35 @@ class ImageKeys2ScryfallTest {
         assertTrue(ImageKeys2Scryfall.url(null).isEmpty());
         assertTrue(ImageKeys2Scryfall.url("").isEmpty());
     }
+
+    /** Kevins Befund: Spielsteine hatten kein Bild. Token-Keys ("t:script|SET", optional "|nr") landen auf
+     *  Scryfalls Token-Set (TokensCode der Edition, Standard "T" + Set) mit der Sammlernummer aus dem
+     *  [tokens]-Block der Editionsdatei - wie Forges eigener ImageFetcher. */
+    @Test
+    void tokenKeyWirdZuTokenSetUndSammlernummer() {
+        Optional<String> url = ImageKeys2Scryfall.url("t:g_3_3_beast|C21");
+        assertTrue(url.isPresent());
+        assertEquals("https://api.scryfall.com/cards/tc21/10/en?format=image&version=normal", url.get());
+    }
+
+    @Test
+    void tokenKeyMitSammlernummerNutztDiese() {
+        assertEquals("https://api.scryfall.com/cards/tc21/10/en?format=image&version=normal",
+                ImageKeys2Scryfall.url("t:g_3_3_beast|C21|10").get());
+    }
+
+    @Test
+    void tokenOhneEditionOderUnbekanntBleibtLeer() {
+        assertTrue(ImageKeys2Scryfall.url("t:g_3_3_beast").isEmpty());
+        assertTrue(ImageKeys2Scryfall.url("t:gibt_es_nicht|C21").isEmpty());
+    }
+
+    /** Der Key, den Forge fuer einen echten Spielstein erzeugt (PaperToken.getImageKey, mit Sammlernummer
+     *  und Art-Index), fuehrt zu einer URL. */
+    @Test
+    void echterPaperTokenKeyFuehrtZuUrl() {
+        String key = StaticData.instance().getAllTokens().getToken("g_3_3_beast", "C21").getImageKey(false);
+        assertTrue(key.startsWith("t:g_3_3_beast|C21"), key);
+        assertTrue(ImageKeys2Scryfall.url(key).orElse("").startsWith("https://api.scryfall.com/cards/tc21/"), key);
+    }
 }
