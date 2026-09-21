@@ -3,7 +3,13 @@ package mtgplayer.ai;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+import forge.ai.ComputerUtil;
+import forge.game.card.Card;
+import forge.game.card.CardCollectionView;
 import forge.game.card.CardLists;
+import forge.game.spellability.SpellAbility;
 import forge.game.card.CardPredicates;
 import forge.game.phase.PhaseType;
 import forge.game.player.Player;
@@ -185,5 +191,28 @@ class MeldTitaniaTest {
         s.setPhase(PhaseType.END_OF_TURN, b);
         s.loopUntil(PhaseType.MAIN1, a);
         assertMelded(s, a);
+    }
+
+    /** Szene E (Kevins Befund nach Stufe 4): die KI opferte Argoth selbst als Kosten eines Land-Opfers.
+     *  {@code ComputerUtilCard.getWorstLand} wertet ein getapptes Nichtstandardland (2 Punkte) schlechter als
+     *  ein ungetapptes Standardland (1 Punkt) - nach Argoths Aktivierung ist Argoth getappt, die Forests
+     *  nicht, also faellt die Wahl auf die Meld-Haelfte. Erwartung: ein Forest wird geopfert. */
+    @Test
+    @Timeout(value = 3, unit = TimeUnit.MINUTES)
+    void szeneE_landOpferVerschontDieMeldHaelfte() {
+        Scene s = Scene.twoPlayers(AiConfig.DEFAULT, AiConfig.DEFAULT, 3);
+        Player a = s.player(0);
+        s.card(TITANIA, a, ZoneType.Battlefield);
+        Card argoth = s.card(ARGOTH, a, ZoneType.Battlefield);
+        argoth.tap(false, null, null);
+        s.cards("Forest", 3, a, ZoneType.Battlefield);
+        s.cards("Forest", 10, a, ZoneType.Library);
+        Card rotation = s.card("Crop Rotation", a, ZoneType.Hand);
+        s.setPhase(PhaseType.MAIN1, a);
+        SpellAbility sa = rotation.getFirstSpellAbility();
+        sa.setActivatingPlayer(a);
+        CardCollectionView chosen = ComputerUtil.chooseSacrificeType(a, "Land", sa, null, false, 1, null);
+        assertEquals(1, chosen.size(), "genau ein Land" + why(s));
+        assertEquals("Forest", chosen.get(0).getName(), "Argoth geopfert statt eines Forests" + why(s));
     }
 }
