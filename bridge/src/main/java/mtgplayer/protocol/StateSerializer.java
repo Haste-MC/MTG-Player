@@ -141,6 +141,7 @@ public final class StateSerializer {
                 counters(cv.getCounters()),
                 attachedTo == null ? null : attachedTo.getId(),
                 attachments.isEmpty() ? null : attachments,
+                cv.getEnchantedPlayer() == null ? null : cv.getEnchantedPlayer().getId(),
                 cv.getText(),
                 st.getType() == null ? null : st.getType().toString(),
                 st.getManaCost() == null || st.getManaCost().isNoCost() ? null : st.getManaCost().getShortString(),

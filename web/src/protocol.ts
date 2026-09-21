@@ -24,6 +24,8 @@ export interface CardSnap {
   counters?: Record<string, number>;
   attachedTo?: number;
   attachments?: number[];
+  /** Id des verzauberten Spielers (Fluch u. Ä.), sonst fehlt das Feld. */
+  attachedToPlayer?: number;
   text?: string;
   typeLine?: string;
   manaCost?: string;

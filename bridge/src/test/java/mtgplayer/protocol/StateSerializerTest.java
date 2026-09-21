@@ -37,6 +37,7 @@ class StateSerializerTest {
     private static Card myPermanent;
     private static Card myCommander;
     private static Card myEffect;
+    private static Card myCurse;
 
     @BeforeAll
     static void boardAufbauen() {
@@ -76,6 +77,17 @@ class StateSerializerTest {
         myEffect.setName("Giant Growth");
         myEffect.setOwner(me);
         me.getZone(ZoneType.Command).add(myEffect);
+
+        // Fluch auf dem Gegner: Aura mit "Enchant player", per attachToEntity(..., overwrite=true) direkt
+        // angelegt (kein canBeAttached-Check, der ohne SpellAbility mit NPE scheitern kann).
+        forge.item.IPaperCard cursePaper = forge.model.FModel.getMagicDb().getCommonCards().getCard("Curse of the Bloody Tome");
+        if (cursePaper == null) {
+            forge.StaticData.instance().attemptToLoadCard("Curse of the Bloody Tome");
+            cursePaper = forge.model.FModel.getMagicDb().getCommonCards().getCard("Curse of the Bloody Tome");
+        }
+        myCurse = Card.fromPaperCard(cursePaper, me);
+        me.getZone(ZoneType.Battlefield).add(myCurse);
+        myCurse.attachToEntity(foe, null, true);
     }
 
     @Test
@@ -106,6 +118,15 @@ class StateSerializerTest {
         assertTrue(json.get("cards").get(String.valueOf(myEffect.getId())).get("effect").asBoolean());
         assertFalse(json.get("cards").get(String.valueOf(myPermanent.getId())).has("effect"));
         assertFalse(json.get("cards").get(String.valueOf(myEffect.getId())).has("emblem"));
+    }
+
+    @Test
+    void fluchTraegtAttachedToPlayerNormaleKarteNicht() {
+        Snapshot s = StateSerializer.snapshot(game.getView(), ViewContext.plain(me.getView()));
+        Snapshot.CardSnap curse = s.cards().get(myCurse.getId());
+        assertEquals(foe.getId(), curse.attachedToPlayer());
+        assertNull(curse.attachedTo());
+        assertNull(s.cards().get(myPermanent.getId()).attachedToPlayer());
     }
 
     @Test

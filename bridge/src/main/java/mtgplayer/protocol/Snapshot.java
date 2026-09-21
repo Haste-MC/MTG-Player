@@ -60,6 +60,8 @@ public record Snapshot(
             Map<String, Integer> counters,
             Integer attachedTo,
             List<Integer> attachments,
+            /** Id des verzauberten Spielers (CardView.getEnchantedPlayer), sonst {@code null}. */
+            Integer attachedToPlayer,
             String text,
             String typeLine,
             String manaCost,
@@ -78,7 +80,7 @@ public record Snapshot(
 
         public static CardSnap hidden(int id) {
             return new CardSnap(id, true, null, null, null, null, null, null, null, null, null, null, null,
-                    null, null, null, null, null, null, null, null, null, null, null, null, null, null);
+                    null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
         }
     }
 
