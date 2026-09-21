@@ -4,9 +4,8 @@ import type { Group } from "./groups";
 
 /** Eine Spielfeldreihe fuer die Messung: je Slot die Breite in Karteneinheiten (1 aufrecht, 1.4 gedreht,
  *  1 + 0.04 je Stapel-Ebene), scale 1 fuer Karten, 0.8 fuer Laender.
- *  headroom: Hoehenzuschlag der Reihe in Karteneinheiten, addiert auf scale bevor mit RATIO * w
- *  multipliziert wird (Zeilenhoehe = RATIO * w * (scale + headroom)) – fuer nach oben herausschauende
- *  Anhaenge. */
+ *  headroom: Hoehenzuschlag der Reihe in Karteneinheiten, bezogen auf w * scale (nicht auf die
+ *  Kartenhoehe RATIO * w * scale) – fuer nach oben herausschauende Anhaenge. */
 export interface RowSpec { units: number[]; scale: number; headroom?: number }
 export interface FitOpts { gap?: number; rowGap?: number; min?: number; max?: number }
 
@@ -33,13 +32,13 @@ export function slotHeadroom(attachedCount: number, tapped = false): number {
 }
 
 /** Passt die Reihen bei Kartenbreite w in width x height? Jede Reihe bricht zeilenweise um (eine Zeile
- *  enthaelt immer mindestens einen Slot); Zeilenhoehe = RATIO * w * (scale + headroom) + gap. */
+ *  enthaelt immer mindestens einen Slot); Zeilenhoehe = RATIO * w * scale + headroom * w * scale + gap. */
 function fits(w: number, width: number, height: number, rows: RowSpec[], gap: number, rowGap: number): boolean {
   let total = 0;
   let filled = 0;
   for (const r of rows) {
     if (r.units.length === 0) continue;
-    const lineH = RATIO * w * (r.scale + (r.headroom ?? 0));
+    const lineH = RATIO * w * r.scale + (r.headroom ?? 0) * w * r.scale;
     let lines = 1;
     let x = 0;
     for (const u of r.units) {

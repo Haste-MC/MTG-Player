@@ -96,7 +96,7 @@ describe("headroom", () => {
     const ohne = fitCardWidth(600, 200, [{ units: [1, 1], scale: 1 }]);
     const mit = fitCardWidth(600, 200, [{ units: [1, 1], scale: 1, headroom: slotHeadroom(2) }]);
     expect(mit).toBeLessThan(ohne);
-    // 200 = 1.4 * w * (1 + 0.616) -> w = 88
-    expect(mit).toBe(88);
+    // 200 = (1.4 + 0.616) * w = 2.016 * w -> w = 99
+    expect(mit).toBe(99);
   });
 });
