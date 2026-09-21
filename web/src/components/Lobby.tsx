@@ -1,20 +1,26 @@
 import { useEffect, useRef, useState } from "react";
 import { type AiSettings, loadAiSettings, restoreSlots, saveAiSettings } from "../aiSettings";
-import { EMPTY_PICK as EMPTY, type Pick, toRef } from "../deckref";
+import { EMPTY_PICK, type Pick, toRef } from "../deckref";
 import { buildStartGame, DEFAULT_AI } from "../lobbyPayload";
+import { dropMissing, loadPicks, savePicks } from "../lobbyPicks";
 import type { AiPick } from "../protocol";
+import { formatSeries, seriesWinner } from "../series";
 import { useStore } from "../store";
 import { send } from "../ws";
+import DeckPicker from "./DeckPicker";
 
 export default function Lobby() {
   const precons = useStore((s) => s.precons);
   const decks = useStore((s) => s.decks);
   const log = useStore((s) => s.log);
   const aiProfiles = useStore((s) => s.aiProfiles);
-  const [human, setHuman] = useState<Pick>(EMPTY);
-  const [ais, setAis] = useState<Pick[]>([EMPTY]);
+  const series = useStore((s) => s.series);
+  const resetSeries = useStore((s) => s.resetSeries);
+  const [human, setHuman] = useState<Pick>(EMPTY_PICK);
+  const [ais, setAis] = useState<Pick[]>([EMPTY_PICK]);
   const [aiPicks, setAiPicks] = useState<AiPick[]>([DEFAULT_AI]);
   const [aiTimeout, setAiTimeout] = useState(5);
+  const [bestOf, setBestOf] = useState<AiSettings["bestOf"]>(0);
   const [spectate, setSpectate] = useState(false);
   const [shownError, setShownError] = useState<string>();
   // Erste echte "lobby"-Nachricht (precons gefuellt): einmalig die gespeicherte KI-Auswahl laden.
@@ -23,8 +29,6 @@ export default function Lobby() {
   // angelegt hat - addAi/toggleSpectate greifen beim manuellen Hinzufuegen eines Slots hierauf zurueck,
   // statt immer DEFAULT_AI zu nehmen.
   const loadedPicks = useRef<AiPick[]>([]);
-  // bestOf wird hier noch nicht bedient (Lobby-Umbau folgt) - gespeicherten Wert beim Sichern nur durchreichen.
-  const loadedBestOf = useRef<AiSettings["bestOf"]>(0);
 
   const maxAis = spectate ? 6 : 5;
   const minAis = spectate ? 2 : 1;
@@ -41,32 +45,43 @@ export default function Lobby() {
     settingsLoaded.current = true;
     const loaded = loadAiSettings(() => localStorage, aiProfiles);
     loadedPicks.current = loaded.picks;
-    loadedBestOf.current = loaded.bestOf;
     setAiTimeout(loaded.timeout);
+    setBestOf(loaded.bestOf);
     // AiSettings.picks.length ist die gespeicherte Slot-Zahl - so viele Slots (geklemmt auf min/max)
     // anlegen, nicht nur die Picks in die aktuell vorhandene (anfangs einzige) Zeile mappen.
     const picks = restoreSlots(loaded.picks, { min: minAis, max: maxAis });
     setAiPicks(picks);
-    setAis((prev) => Array.from({ length: picks.length }, (_, i) => prev[i] ?? EMPTY));
-  }, [precons, aiProfiles]);
+    // Gemerkte Decks je Slot; ein Deck, das die Bridge nicht mehr anbietet, bleibt leer.
+    const p = dropMissing(loadPicks(() => localStorage), precons, decks);
+    setHuman(p.human);
+    setAis(Array.from({ length: picks.length }, (_, i) => p.ais[i] ?? EMPTY_PICK));
+  }, [precons, decks, aiProfiles]);
 
   // Auswahl merken, sobald sie geladen ist (kein Ueberschreiben des Storage vor dem obigen Laden).
   useEffect(() => {
     if (!settingsLoaded.current) return;
-    saveAiSettings(() => localStorage, { picks: aiPicks, timeout: aiTimeout, bestOf: loadedBestOf.current });
-  }, [aiPicks, aiTimeout]);
+    saveAiSettings(() => localStorage, { picks: aiPicks, timeout: aiTimeout, bestOf });
+  }, [aiPicks, aiTimeout, bestOf]);
+  useEffect(() => {
+    if (!settingsLoaded.current) return;
+    savePicks(() => localStorage, { human, ais });
+  }, [human, ais]);
+  // Der Store braucht bestOf fuer die Serien-Entscheidung im Spielende-Overlay.
+  useEffect(() => { useStore.getState().setBestOf(bestOf); }, [bestOf]);
 
   const humanRef = toRef(human);
   const aiRefs = ais.map(toRef);
   const msg = buildStartGame(spectate, humanRef, aiRefs, aiPicks, aiTimeout);
   const ready = msg !== undefined;
+  const seatNames = [...(spectate ? [] : ["Du"]), ...ais.map((_, i) => "KI " + (i + 1))];
+  const winner = series ? seriesWinner(series, bestOf) : undefined;
 
   const toggleSpectate = (on: boolean) => {
     setShownError(undefined);
     setSpectate(on);
     // Zuschauer-Modus braucht mindestens 2 KIs (Forges Spectator-Pfad, siehe HumanMatch.startSpectator).
     if (on && ais.length < 2) {
-      setAis([...ais, EMPTY]);
+      setAis([...ais, EMPTY_PICK]);
       setAiPicks([...aiPicks, loadedPicks.current[ais.length] ?? DEFAULT_AI]);
     }
   };
@@ -83,7 +98,7 @@ export default function Lobby() {
   };
   const addAi = () => {
     setShownError(undefined);
-    setAis([...ais, EMPTY]);
+    setAis([...ais, EMPTY_PICK]);
     setAiPicks([...aiPicks, loadedPicks.current[ais.length] ?? DEFAULT_AI]);
   };
   const removeAi = (i: number) => {
@@ -94,44 +109,11 @@ export default function Lobby() {
 
   const start = () => {
     setShownError(undefined);
-    if (msg) send(msg);
+    if (msg) {
+      useStore.getState().noteStart(msg);
+      send(msg);
+    }
   };
-
-  const picker = (p: Pick, onChange: (n: Pick) => void) => (
-    <div className="pick">
-      <select value={p.kind} onChange={(e) => onChange({ ...p, kind: e.target.value as Pick["kind"], value: "" })}>
-        <option value="precon">Precon</option>
-        <option value="saved">Eigenes Deck</option>
-        <option value="text">Textliste</option>
-        <option value="archidekt">Archidekt-URL</option>
-      </select>
-      {p.kind === "precon" && (
-        <select value={p.value} onChange={(e) => onChange({ ...p, value: e.target.value })}>
-          <option value="">– Precon wählen –</option>
-          {precons.map((x) => <option key={x.name} value={x.name}>{x.name}</option>)}
-        </select>
-      )}
-      {p.kind === "saved" && (
-        <select value={p.value} onChange={(e) => onChange({ ...p, value: e.target.value })}>
-          <option value="">– gespeichertes Deck –</option>
-          {decks.map((x) => <option key={x.name} value={x.name}>{x.name}</option>)}
-        </select>
-      )}
-      {p.kind === "text" && (
-        <div className="textdeck">
-          <input placeholder="Name (optional)" value={p.name} onChange={(e) => onChange({ ...p, name: e.target.value })} />
-          <textarea rows={8} placeholder={"Archidekt/Arena-Export einfügen, z. B.\n1 Sol Ring (c21) 263\nCommander\n1 Felothar the Steadfast"}
-            value={p.value} onChange={(e) => onChange({ ...p, value: e.target.value })} />
-        </div>
-      )}
-      {p.kind === "archidekt" && (
-        <div className="textdeck">
-          <input placeholder="https://archidekt.com/decks/12345/…" value={p.value} onChange={(e) => onChange({ ...p, value: e.target.value })} />
-          <input placeholder="Name (optional, sonst Archidekt-Deckname)" value={p.name} onChange={(e) => onChange({ ...p, name: e.target.value })} />
-        </div>
-      )}
-    </div>
-  );
 
   return (
     <div className="lobby">
@@ -148,7 +130,7 @@ export default function Lobby() {
         {!spectate && (
           <section className="lobby-section">
             <label>Dein Deck</label>
-            {picker(human, editHuman)}
+            <DeckPicker pick={human} onChange={editHuman} label="Dein Deck" />
           </section>
         )}
         <section className="lobby-section">
@@ -161,15 +143,24 @@ export default function Lobby() {
               value={aiTimeout}
               onChange={(e) => setAiTimeout(Math.min(60, Math.max(1, Number(e.target.value) || 1)))}
             /> s
-            <span className="hint">Richtwert je Entscheidung, kann bis ~2× überschreiten; gilt für alle KI-Modi, Simulation nutzt das Budget je Entscheidung</span>
+            <label className="series-pick" title="Siege über mehrere Partien mit derselben Deck-Konstellation zählen; „Nochmal spielen“ im Spielende-Overlay setzt die Serie fort">
+              Serie
+              <select value={bestOf} onChange={(e) => setBestOf(Number(e.target.value) as AiSettings["bestOf"])}>
+                <option value={0}>aus</option>
+                <option value={3}>Best of 3</option>
+                <option value={5}>Best of 5</option>
+                <option value={7}>Best of 7</option>
+              </select>
+            </label>
           </div>
+          <span className="hint">Richtwert je Entscheidung, kann bis ~2× überschreiten; gilt für alle KI-Modi, Simulation nutzt das Budget je Entscheidung</span>
         </section>
         {ais.map((a, i) => (
           <section key={i} className="lobby-section">
             <label>KI {i + 1} {ais.length > minAis && (
               <button className="quiet small" title="Gegner entfernen" onClick={() => removeAi(i)}>entfernen</button>
             )}</label>
-            {picker(a, (n) => editAi(i, n))}
+            <DeckPicker pick={a} onChange={(n) => editAi(i, n)} label={"KI " + (i + 1)} />
             <div className="ai-pick">
               <select
                 title="Standard: Forges Regel-KI. Hybrid: simuliert nur die Zauberwahl. Simulation: rechnet Züge vor – stärker, braucht je Entscheidung bis zur vollen Bedenkzeit"
@@ -193,6 +184,12 @@ export default function Lobby() {
           <button className="ghost" onClick={addAi}>+ Gegner hinzufügen</button>
         )}
         <button className="primary big" disabled={!ready} onClick={start}>Spiel starten</button>
+        {series && series.games > 0 && (
+          <div className="hint series-line">
+            Serie: {formatSeries(series, seatNames)}{winner && ` – ${winner} hat die Serie gewonnen`}
+            <button className="quiet small" onClick={resetSeries}>zurücksetzen</button>
+          </div>
+        )}
         {shownError && <pre className="import-error">{shownError}</pre>}
       </div>
     </div>

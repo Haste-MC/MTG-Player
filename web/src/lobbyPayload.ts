@@ -1,4 +1,4 @@
-import type { AiPick, DeckRef, Outbound } from "./protocol";
+import type { AiPick, DeckRef, StartGame } from "./protocol";
 
 /** Wird nicht mitgeschickt, wenn ein Gegner genau darauf steht - Forge nimmt Standard/Default selbst an. */
 export const DEFAULT_AI: AiPick = { mode: "standard", profile: "Default" };
@@ -22,7 +22,7 @@ export function buildStartGame(
   ais: (DeckRef | undefined)[],
   aiPicks: AiPick[],
   aiTimeout: number,
-): Outbound | undefined {
+): StartGame | undefined {
   if (ais.some((r) => r === undefined)) return undefined;
   const opponents = ais.map((r, i) => {
     const pick = aiPicks[i] ?? DEFAULT_AI;

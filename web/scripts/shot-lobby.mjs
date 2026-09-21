@@ -1,13 +1,16 @@
-// Screenshot der Lobby mit Klicks (Picker-Auswahl, Checkbox, Texteingabe) statt nur Fixture-Zustand -
-// window.mtgApply liefert nur "lobby"/"state" etc., aber keine UI-Interaktion (Select-Wert, Eingabefeld).
-// Aufruf (aus web/): node scripts/shot-lobby.mjs <url> <out.png> [--select=archidekt] [--url-value="https://…"]
+// Screenshot der Lobby mit Klicks (Deck-Panel, Reiter, Kachel-Auswahl, Checkbox, Texteingabe) statt nur
+// Fixture-Zustand - window.mtgApply liefert nur "lobby"/"state" etc., aber keine UI-Interaktion.
+// Aufruf (aus web/): node scripts/shot-lobby.mjs <url> <out.png> [--open-panel] [--tab=saved] [--pick="Tinker Time (TDC)"]
+//   [--url-value="https://…"] [--spectate]
+// --open-panel oeffnet das Panel der ersten Deck-Kachel ("Dein Deck", im Zuschauer-Modus "KI 1"); --tab wechselt
+// darin den Reiter; --pick klickt die Deck-Karte mit diesem Namen (schliesst das Panel, die Kachel zeigt das Deck).
 import { chromium } from "playwright";
 import { readFile } from "node:fs/promises";
 
 const [, , url, out, ...rest] = process.argv;
 
 if (!url || !out) {
-  console.error("Usage: node scripts/shot-lobby.mjs <url> <out.png> [--select=<option value für \"Dein Deck\">] [--url-value=<Text fürs erste Eingabefeld>] [--spectate]");
+  console.error("Usage: node scripts/shot-lobby.mjs <url> <out.png> [--open-panel] [--tab=<precons|saved|import>] [--pick=<Deckname>] [--url-value=<Text fürs erste Import-Eingabefeld>] [--spectate]");
   process.exit(1);
 }
 
@@ -16,9 +19,16 @@ function flag(name) {
   return hit ? hit.slice(name.length + 3) : undefined;
 }
 
-const selectValue = flag("select");
+const openPanel = rest.includes("--open-panel");
+const tab = flag("tab");
+const pickName = flag("pick");
 const urlValue = flag("url-value");
 const spectate = rest.includes("--spectate");
+const TAB_LABEL = { precons: "Precons", saved: "Eigene Decks", import: "Import" };
+if (tab && !TAB_LABEL[tab]) {
+  console.error(`unbekannter Reiter: ${tab} (precons|saved|import)`);
+  process.exit(1);
+}
 
 function withDebug(u) {
   return /[?&]debug(=|&|$)/.test(u) ? u : u + (u.includes("?") ? "&" : "?") + "debug=1";
@@ -44,13 +54,24 @@ try {
     await page.click("text=Nur KI – zuschauen");
     await page.waitForTimeout(300);
   }
-  if (selectValue) {
-    // Erster Picker ("Dein Deck" ohne Zuschauer-Modus, sonst "KI 1") - genügt für Screenshots mit einer Auswahl.
-    await page.locator(".lobby-section .pick select").first().selectOption(selectValue);
+  if (openPanel || tab || pickName) {
+    // Erste Kachel ("Dein Deck" ohne Zuschauer-Modus, sonst "KI 1") - genügt für Screenshots mit einer Auswahl.
+    await page.locator(".deck-tile").first().click();
+    await page.locator(".deck-panel").waitFor();
+    await page.waitForTimeout(200);
+  }
+  if (tab) {
+    await page.locator(".deck-tabs .tab", { hasText: TAB_LABEL[tab] }).click();
+    await page.waitForTimeout(200);
+  }
+  if (pickName) {
+    await page.locator(".deck-card", { has: page.locator(".deck-card-name", { hasText: pickName }) }).first().click();
+    await page.locator(".deck-panel").waitFor({ state: "detached" });
     await page.waitForTimeout(200);
   }
   if (urlValue) {
-    await page.locator(".lobby-section .textdeck input").first().fill(urlValue);
+    // Erstes Eingabefeld des Import-Reiters (Textliste: Name, Archidekt: URL) - setzt --tab=import voraus.
+    await page.locator(".deck-import .textdeck input").first().fill(urlValue);
     await page.waitForTimeout(200);
   }
 
