@@ -12,8 +12,15 @@ export type EntryState = "neu" | "aktuell" | "geändert" | "übernehmen";
  * ist) -> "geändert". */
 export function classify(e: ArchidektEntry, own: DeckInfo[]): EntryState {
   const match = own.find((d) => d.archidekt != null && d.archidekt === String(e.id));
-  if (!match) return own.some((d) => d.name === e.name && d.archidekt == null) ? "übernehmen" : "neu";
+  if (!match) return own.some((d) => fileKey(d.name) === fileKey(e.name) && d.archidekt == null) ? "übernehmen" : "neu";
   return match.archidektUpdated === e.updatedAt ? "aktuell" : "geändert";
+}
+
+/** Dieselbe Dateinamen-Bereinigung wie DeckStore.fileName in der Bridge: zwei Namen, die auf dieselbe .dck-Datei
+ * abbilden ("Rin & Seri" / "Rin + Seri"), gelten als gleichnamig - sonst zeigt die Kachel "neu", waehrend die
+ * Bridge das lokale Deck uebernimmt. */
+function fileKey(name: string): string {
+  return name.replace(/[^A-Za-z0-9 _\-\[\]().]/g, "_");
 }
 
 /** Vorbelegung der Auswahl beim Öffnen des Reiters: alle "geändert", Reihenfolge wie `entries`. */

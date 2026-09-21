@@ -59,7 +59,7 @@ Inhalt dieses Decks und versieht es mit den Tags – nicht vorab angehakt, auch 
 aktualisieren". Trägt das gleichnamige Deck dagegen das Tag eines anderen Archidekt-Decks, speichert der
 Import unter „<Name> (<Id>)" – überschrieben wird nichts.
 
-Löschen: jede Kachel unter „Eigene Decks" hat einen „🗑"-Knopf; der erste Klick wird zu „Wirklich löschen?"
+Löschen: jede Kachel unter „Eigene Decks" hat einen Papierkorb-Knopf; der erste Klick wird zu „Wirklich löschen?"
 (nach 4 s oder einem Klick daneben wieder weg), der zweite löscht die Datei. Nur eigene Decks, keine Precons.
 War das Deck in einem Sitz gewählt, ist der Sitz danach leer.
 

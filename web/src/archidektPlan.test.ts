@@ -137,4 +137,9 @@ describe("progressLabel", () => {
   it("gespeicherter Name (Resync) bleibt unveraendert", () => {
     expect(progressLabel("Pilze", [entry({ id: 1, name: "Fun With Fungus" })])).toBe("Pilze");
   });
+
+  it("übernehmen auch bei kollision ueber den bereinigten dateinamen", () => {
+    const own: DeckInfo[] = [{ name: "Rin & Seri", commanders: [] }];
+    expect(classify({ id: 7, name: "Rin + Seri", updatedAt: "x" }, own)).toBe("übernehmen");
+  });
 });

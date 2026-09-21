@@ -230,7 +230,7 @@ export default function DeckPicker({ pick, onChange, label }: { pick: Pick; onCh
                       </button>
                     )}
                     {tab === "saved" && (
-                      <button type="button" className={"delete" + (confirmDelete === d.name ? " confirm" : "")} aria-label={"Deck löschen: " + d.name}
+                      <button type="button" className={"delete" + (confirmDelete === d.name ? " confirm" : "")} aria-label={(confirmDelete === d.name ? "Wirklich löschen: " : "Deck löschen: ") + d.name}
                         title={confirmDelete === d.name ? undefined : "Deck löschen"} disabled={op?.name === d.name} onClick={() => clickDelete(d.name)}>
                         {op?.kind === "delete" && op.name === d.name ? "löscht …" : confirmDelete === d.name ? "Wirklich löschen?" : <TrashIcon />}
                       </button>
