@@ -134,10 +134,13 @@ Ende; dazu Dauer, Züge und Quelle der Partie. Die Datensätze liegen als JSON-A
 wird beim nächsten Schreiben ersetzt, statt den Start zu verhindern.
 
 Nicht jede Partie soll in die Bewertung fließen. Automatisch **nicht gewertet** werden Partien unter drei Zügen
-(„zu kurz"), Partien mit einer Aufgabe („aufgegeben") und abgestürzte Partien („Absturz") – sie stehen mit dem
-Grund in der Liste, zählen aber nicht in den Kennzahlen. Der Knopf „Statistik" in der Lobby öffnet den Screen:
+(„zu kurz"), Partien mit einer Aufgabe („aufgegeben"), abgebrochene Partien („abgebrochen": die Partie wurde
+über „Aufgeben"/„Beenden" oder einen Neustart abgebrochen) und abgestürzte Partien („Absturz") – sie stehen mit
+dem Grund in der Liste, zählen aber nicht in den Kennzahlen. Bei den letzten beiden gilt kein Sitz als Sieger,
+ein nachträgliches „gewertet" kann daraus also keine Siege erfinden. Der Knopf „Statistik" in der Lobby öffnet den Screen:
 links die Decks mit ihrer Partienzahl, rechts die Kennzahlen des gewählten Decks (Bilanz und Siegquote mit
-95-%-Wilson-Intervall, Ø Züge und Dauer, Mulligans, Länder in Zug 3/5, verpasste Landabgaben, Zauber und Mana,
+95-%-Wilson-Intervall, Ø Züge und Dauer, Mulligans, Länder bis zum eigenen Zug 3/5 – nur über Partien, die so
+lange liefen, sonst „–" –, verpasste Landabgaben, Zauber und Mana,
 Commander-Zug und -Steuer, Schaden, Todesursachen, Gegner-Tabelle), darunter alle Partien. Je Zeile setzt die
 Checkbox „gewertet" eine Partie wieder hinein oder heraus, der Papierkorb löscht sie (zwei Klicks, wie beim
 Deck-Löschen); der Filter „nur gewertete" steht standardmäßig an. Ausgewertet wird **deckbezogen**: wer das Deck

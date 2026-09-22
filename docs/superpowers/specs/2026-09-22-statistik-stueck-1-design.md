@@ -30,14 +30,15 @@ Am Ende liest der Recorder aus dem Spielzustand nach: Leben, Gift, Commander-Ste
 Sieger aus `Game.getOutcome()`.
 
 Verpasste Landabgaben: je Zug, in dem der Sitz am Zug war und **kein** Land gespielt hat, während er eine Hand
-hatte; gezählt bis zum Ausscheiden. `firstMissedLandDrop` = erster solcher Zug.
+hatte (geprüft beim Abschluss des Zuges: `getCardsIn(Hand)` nicht leer); gezählt bis zum Ausscheiden.
+`firstMissedLandDrop` = erster solcher Zug.
 
 Der Recorder ist reine Buchhaltung ohne Forge-Nebenwirkungen und liefert am Ende einen `MatchRecord`.
 
 ## 2. Datensatz (`mtgplayer.stats.MatchRecord`, JSON)
 
 ```json
-{ "id": "2026-09-22T19:31:02Z-7f3a", "startedAt": "…", "endedAt": "…", "durationMs": 812345,
+{ "v": 1, "id": "2026-09-22T19:31:02.418Z-7f3a01", "startedAt": "…", "endedAt": "…", "durationMs": 812345,
   "source": "live|spectate|sparring", "turns": 14, "reason": "AllOpponentsLost", "draw": false,
   "counted": true, "excludeReason": null,
   "seats": [ { "name": "Du", "deck": "Titania, Gaea Incarnate", "human": true,
@@ -50,20 +51,33 @@ Der Recorder ist reine Buchhaltung ohne Forge-Nebenwirkungen und liefert am Ende
                "lifeEnd": 22, "poisonEnd": 0 } ] }
 ```
 
+`v` ist die Formatversion des Datensatzes (aktuell 1, erstes Feld); Datensätze ohne das Feld gelten als v1,
+spätere Änderungen der Definition bleiben so unterscheidbar. Die `id` ist der Endzeitpunkt (ISO, Millisekunden)
+plus sechs Hex-Zeichen aus einem hochzählenden Zähler – auch mehrere Partien in derselben Millisekunde
+(Sparring, Stück 3) bekommen verschiedene Ids.
+
 `deck` ist der Deckname, unter dem die Partie gestartet wurde (Lobby-Auswahl: Precon- oder Speichername, bei
 Textliste der Import-Name) – die Statistik gruppiert danach. `ai` fehlt bei menschlichen Sitzen.
 
 **Nicht gewertet (automatisch, `counted: false` mit `excludeReason`):**
 - `turns < 3` → „zu kurz"
 - ein Sitz mit `lossReason == "Conceded"` → „aufgegeben"
+- die Partie wurde über „Aufgeben"/„Beenden" oder einen Neustart abgebrochen (`HumanMatch.end()` meldet
+  `markAborted()`) → „abgebrochen"
 - Absturz während der Partie (`CrashLog` meldet sich beim Recorder) → „Absturz"
+
+Bei „abgebrochen" und „Absturz" trägt **kein** Sitz `winner: true` und `draw` ist `false`: Forges erzwungenes
+Ende (`GameEndReason.AllHumansLost`) macht sonst jeden Sitz ohne eigenen Ausgang zum Sieger, und ein
+nachträgliches „gewertet" würde daraus frei erfundene Siege machen.
 
 ## 3. Speicher (`mtgplayer.stats.MatchStore`)
 
 `~/.mtg-player/matches.json`: ein JSON-Array, neueste zuletzt; Schreiben atomar (Temp-Datei + `ATOMIC_MOVE`).
 Deckel 2000 Datensätze (älteste fallen raus). API: `add(record)`, `all()`, `delete(id)`, `setCounted(id, boolean)`
 (setzt `counted` und löscht/behält `excludeReason` als Hinweis). Kaputte Datei → leere Liste + Fehlerzeile in
-`bridge.log` statt Absturz (die Datei wird beim nächsten Schreiben ersetzt).
+`bridge.log` statt Absturz (die Datei wird beim nächsten Schreiben ersetzt) – über `CrashLog.warn`, nicht
+`CrashLog.report`: die laufende Partie hat damit nichts zu tun und darf davon weder als „Absturz" aus der
+Wertung fallen noch im Browser als abgebrochen gelten.
 
 ## 4. Protokoll
 
@@ -81,7 +95,9 @@ sollen zählen. Je Partie zählt höchstens ein Sitz mit diesem Deck (bevorzugt 
 Spiegelspiel eine Partie bleibt:
 - Bilanz: Siege/Niederlagen/Unentschieden, Siegquote mit 95-%-Wilson-Intervall
 - Ø Zuglänge, Ø Dauer; Mulligan-Quote (Anteil Partien mit ≥ 1 Mulligan) und Ø Mulligans
-- Ø Länder bis Zug 3 und Zug 5; Anteil Partien mit verpasster Landabgabe und Ø verpasste
+- Ø Länder bis zum **eigenen** Zug 3 und 5 – nur über Partien, in denen der Sitz so viele eigene Züge hatte
+  (`landsByTurn.length > n`); gibt es keine solche Partie, fehlt die Kennzahl und die Kachel zeigt „–".
+  Anteil Partien mit verpasster Landabgabe und Ø verpasste
 - Ø Zauber je Partie, Ø Mana-Summe; Ø Zug des ersten Commander-Casts (`firstCommanderTurn`); Ø Commander-Steuer
 - Todesursachen (Verteilung der `lossReason` des gewerteten Sitzes), Ø Schaden genommen/gemacht
 - Gegner-Tabelle: je gegnerischem Deck Partien/Siege

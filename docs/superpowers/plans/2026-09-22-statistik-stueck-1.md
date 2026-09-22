@@ -14,7 +14,7 @@
 - Kevins Bridge (8080/8081) nicht anfassen; nie `mvn clean`; ein Maven-Prozess gleichzeitig (Timeout 600000 ms); eigene Test-Bridge 18086/18097, PID am Ende killen (nicht `pkill -f java`). Tests, die eine echte Partie spielen, bekommen `@Timeout`.
 - Speicherort in Tests immer über den Konstruktor (`new MatchStore(tempDir)`), **nie** `~/.mtg-player` beschreiben.
 - Web: `npm test`, `npm run build` grün; Screenshots unter `/tmp/claude-1000/-home-kevin-projects-DiscordBot/4cee7c96-6aaf-442e-8cd8-a9f8632f3c2b/scratchpad/stats/`, jede mit Read ansehen.
-- Datensatzform und Protokoll exakt wie in der Spec §2/§4; Ausschlussregeln: `turns < 3` → „zu kurz", ein Sitz mit `lossReason == Conceded` → „aufgegeben", Absturz → „Absturz".
+- Datensatzform und Protokoll exakt wie in der Spec §2/§4; Ausschlussregeln: `turns < 3` → „zu kurz", ein Sitz mit `lossReason == Conceded` → „aufgegeben", die Partie wurde über „Aufgeben"/„Beenden" oder einen Neustart abgebrochen → „abgebrochen", Absturz → „Absturz".
 
 ---
 
