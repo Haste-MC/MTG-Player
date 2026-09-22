@@ -161,7 +161,29 @@ export interface LogLine { type: "log"; text: string; kind?: string; card?: numb
 export interface GameOver { type: "gameOver"; winner?: string; }
 export interface ErrorMsg { type: "error"; text: string; }
 
-export type Inbound = Snapshot | Choice | Lobby | LogLine | GameOver | ErrorMsg | ArchidektDecks | ArchidektProgress;
+/** Ein Sitz aus mtgplayer.stats.MatchRecord.Seat (Bridge). ai fehlt/null bei einem menschlichen Sitz.
+ * eliminatedTurn/firstMissedLandDrop/firstCommanderTurn fehlen/null, wenn das Ereignis nicht eintrat.
+ * landsByTurn hat nur ownTurns+1 Eintraege (Index 0 ungenutzt) - ein Zugriff auf einen spaeteren Zug als
+ * ownTurns liegt ausserhalb und muss geklemmt werden (letzter Eintrag gilt, wenn der Sitz vorher ausschied). */
+export interface MatchSeat {
+  name: string; deck: string; human: boolean; ai?: { mode: string; profile: string } | null;
+  winner: boolean; lossReason?: string | null; eliminatedTurn?: number | null; mulligans: number; lands: number;
+  landsByTurn: number[]; missedLandDrops: number; firstMissedLandDrop?: number | null; spells: number; spellMana: number;
+  commanderCasts: number; commanderTax: number; firstCommanderTurn?: number | null; damageDealt: number;
+  damageTaken: number; combatDamageTaken: number; lifeEnd: number; poisonEnd: number;
+}
+/** Eine gespielte Partie aus mtgplayer.stats.MatchRecord (Bridge). reason ist Forges Spielende-Grund
+ * (z. B. "AllOpponentsLost"). counted/excludeReason: automatisch nicht gewertete Partien (zu kurz,
+ * aufgegeben, Absturz) tragen counted:false und einen Grund in excludeReason. */
+export interface MatchRecord {
+  id: string; startedAt: string; endedAt: string; durationMs: number;
+  source: "live" | "spectate" | "sparring"; turns: number; reason: string; draw: boolean; counted: boolean;
+  excludeReason?: string | null; seats: MatchSeat[];
+}
+/** Bei Verbindung und nach jeder Aenderung: die ganze Partienliste (neueste zuletzt), siehe MatchStore. */
+export interface Matches { type: "matches"; matches: MatchRecord[] }
+
+export type Inbound = Snapshot | Choice | Lobby | LogLine | GameOver | ErrorMsg | ArchidektDecks | ArchidektProgress | Matches;
 
 export type Outbound =
   // humanDeck fehlt bei spectate:true (KI-only-Modus, kein eigener Sitz - siehe lobbyPayload.ts)
@@ -182,7 +204,11 @@ export type Outbound =
   // Oeffentliche Commander-Decks eines Archidekt-Kontos auflisten (Bridge antwortet mit archidektDecks oder error).
   | { type: "archidektList"; username: string }
   // Ausgewaehlte Decks importieren/resyncen; die Bridge meldet den Fortschritt ueber archidektProgress.
-  | { type: "archidektImport"; ids: number[] };
+  | { type: "archidektImport"; ids: number[] }
+  // Partie loeschen bzw. gewertet/nicht gewertet umschalten; die Bridge antwortet mit einer frischen
+  // matches-Nachricht oder error ("Partie <id>: ...").
+  | { type: "deleteMatch"; id: string }
+  | { type: "setMatchCounted"; id: string; counted: boolean };
 
 export type StartGame = Extract<Outbound, { type: "startGame" }>;
 

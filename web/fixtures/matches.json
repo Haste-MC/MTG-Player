@@ -1,0 +1,125 @@
+{
+  "type": "matches",
+  "matches": [
+    {
+      "id": "2026-09-10T18:02:11Z-a1b2",
+      "startedAt": "2026-09-10T18:02:11.000Z",
+      "endedAt": "2026-09-10T18:44:33.000Z",
+      "durationMs": 2542000,
+      "source": "live",
+      "turns": 12,
+      "reason": "AllOpponentsLost",
+      "draw": false,
+      "counted": true,
+      "excludeReason": null,
+      "seats": [
+        {
+          "name": "Du", "deck": "Titania, Gaea Incarnate", "human": true, "ai": null,
+          "winner": true, "lossReason": null, "eliminatedTurn": null,
+          "mulligans": 0, "lands": 10, "landsByTurn": [0, 1, 2, 3, 4, 5, 6, 6, 7, 7, 8, 8, 9],
+          "missedLandDrops": 0, "firstMissedLandDrop": null,
+          "spells": 10, "spellMana": 25, "commanderCasts": 1, "commanderTax": 0, "firstCommanderTurn": 4,
+          "damageDealt": 21, "damageTaken": 10, "combatDamageTaken": 8, "lifeEnd": 30, "poisonEnd": 0
+        },
+        {
+          "name": "KI 1", "deck": "Meren Aristocrats", "human": false, "ai": { "mode": "sim", "profile": "Default" },
+          "winner": false, "lossReason": "LifeReachedZero", "eliminatedTurn": 12,
+          "mulligans": 1, "lands": 9, "landsByTurn": [0, 1, 2, 3, 4, 5, 5, 6, 7, 7, 8, 8, 9],
+          "missedLandDrops": 1, "firstMissedLandDrop": 6,
+          "spells": 8, "spellMana": 19, "commanderCasts": 2, "commanderTax": 2, "firstCommanderTurn": 3,
+          "damageDealt": 10, "damageTaken": 21, "combatDamageTaken": 18, "lifeEnd": 0, "poisonEnd": 0
+        }
+      ]
+    },
+    {
+      "id": "2026-09-12T20:15:44Z-c3d4",
+      "startedAt": "2026-09-12T20:15:44.000Z",
+      "endedAt": "2026-09-12T20:34:44.000Z",
+      "durationMs": 1150000,
+      "source": "live",
+      "turns": 9,
+      "reason": "AllOpponentsLost",
+      "draw": false,
+      "counted": true,
+      "excludeReason": null,
+      "seats": [
+        {
+          "name": "Du", "deck": "Titania, Gaea Incarnate", "human": true, "ai": null,
+          "winner": false, "lossReason": "LifeReachedZero", "eliminatedTurn": 2,
+          "mulligans": 1, "lands": 2, "landsByTurn": [0, 1, 2],
+          "missedLandDrops": 1, "firstMissedLandDrop": 2,
+          "spells": 4, "spellMana": 9, "commanderCasts": 0, "commanderTax": 0, "firstCommanderTurn": null,
+          "damageDealt": 8, "damageTaken": 25, "combatDamageTaken": 20, "lifeEnd": 0, "poisonEnd": 0
+        },
+        {
+          "name": "KI 1", "deck": "Muldrotha Reanimator", "human": false, "ai": { "mode": "sim", "profile": "Default" },
+          "winner": true, "lossReason": null, "eliminatedTurn": null,
+          "mulligans": 0, "lands": 9, "landsByTurn": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+          "missedLandDrops": 0, "firstMissedLandDrop": null,
+          "spells": 11, "spellMana": 30, "commanderCasts": 1, "commanderTax": 0, "firstCommanderTurn": 5,
+          "damageDealt": 25, "damageTaken": 8, "combatDamageTaken": 5, "lifeEnd": 33, "poisonEnd": 0
+        }
+      ]
+    },
+    {
+      "id": "2026-09-14T09:05:00Z-e5f6",
+      "startedAt": "2026-09-14T09:05:00.000Z",
+      "endedAt": "2026-09-14T09:11:40.000Z",
+      "durationMs": 400000,
+      "source": "live",
+      "turns": 5,
+      "reason": "Conceded",
+      "draw": false,
+      "counted": false,
+      "excludeReason": "aufgegeben",
+      "seats": [
+        {
+          "name": "Du", "deck": "Titania, Gaea Incarnate", "human": true, "ai": null,
+          "winner": false, "lossReason": "Conceded", "eliminatedTurn": 5,
+          "mulligans": 0, "lands": 5, "landsByTurn": [0, 1, 2, 3, 4, 5],
+          "missedLandDrops": 0, "firstMissedLandDrop": null,
+          "spells": 3, "spellMana": 6, "commanderCasts": 0, "commanderTax": 0, "firstCommanderTurn": null,
+          "damageDealt": 2, "damageTaken": 5, "combatDamageTaken": 5, "lifeEnd": 35, "poisonEnd": 0
+        },
+        {
+          "name": "KI 1", "deck": "Meren Aristocrats", "human": false, "ai": { "mode": "sim", "profile": "Default" },
+          "winner": true, "lossReason": null, "eliminatedTurn": null,
+          "mulligans": 0, "lands": 5, "landsByTurn": [0, 1, 2, 3, 4, 5],
+          "missedLandDrops": 0, "firstMissedLandDrop": null,
+          "spells": 4, "spellMana": 10, "commanderCasts": 0, "commanderTax": 0, "firstCommanderTurn": null,
+          "damageDealt": 5, "damageTaken": 2, "combatDamageTaken": 2, "lifeEnd": 38, "poisonEnd": 0
+        }
+      ]
+    },
+    {
+      "id": "2026-09-18T14:30:00Z-9a1c",
+      "startedAt": "2026-09-18T14:30:00.000Z",
+      "endedAt": "2026-09-18T14:45:00.000Z",
+      "durationMs": 900000,
+      "source": "live",
+      "turns": 8,
+      "reason": "AllOpponentsLost",
+      "draw": false,
+      "counted": true,
+      "excludeReason": null,
+      "seats": [
+        {
+          "name": "Du", "deck": "Krenko Goblins", "human": true, "ai": null,
+          "winner": true, "lossReason": null, "eliminatedTurn": null,
+          "mulligans": 0, "lands": 8, "landsByTurn": [0, 1, 2, 3, 4, 5, 6, 7, 8],
+          "missedLandDrops": 0, "firstMissedLandDrop": null,
+          "spells": 14, "spellMana": 20, "commanderCasts": 3, "commanderTax": 4, "firstCommanderTurn": 2,
+          "damageDealt": 26, "damageTaken": 9, "combatDamageTaken": 9, "lifeEnd": 29, "poisonEnd": 0
+        },
+        {
+          "name": "KI 1", "deck": "Meren Aristocrats", "human": false, "ai": { "mode": "sim", "profile": "Default" },
+          "winner": false, "lossReason": "LifeReachedZero", "eliminatedTurn": 8,
+          "mulligans": 1, "lands": 7, "landsByTurn": [0, 1, 2, 3, 4, 5, 6, 6, 7],
+          "missedLandDrops": 1, "firstMissedLandDrop": 5,
+          "spells": 9, "spellMana": 18, "commanderCasts": 1, "commanderTax": 0, "firstCommanderTurn": 4,
+          "damageDealt": 9, "damageTaken": 26, "combatDamageTaken": 20, "lifeEnd": 0, "poisonEnd": 0
+        }
+      ]
+    }
+  ]
+}

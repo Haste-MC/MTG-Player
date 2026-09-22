@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { ArchidektEntry, ArchidektProgress, Choice, DeckInfo, Inbound, Snapshot, StartGame } from "./protocol";
+import type { ArchidektEntry, ArchidektProgress, Choice, DeckInfo, Inbound, MatchRecord, Snapshot, StartGame } from "./protocol";
 import { recordResult, type Series, startSeries } from "./series";
 import { send } from "./ws";
 
@@ -40,12 +40,15 @@ export interface AppState {
    *  laufenden archidektImport. decks/progress fehlen, bevor je eine Antwort kam; loading ist waehrend
    *  einer laufenden archidektList-Anfrage true, ein "error" beendet es (unabhaengig vom Grund). */
   archidekt: { username?: string; decks?: ArchidektEntry[]; loading: boolean; progress?: ArchidektProgress };
+  /** Ganze Partienliste der Bridge (siehe matches-Nachricht) - bei Verbindung und nach jeder Aenderung
+   *  komplett ersetzt, nie zusammengefuehrt. Grundlage fuer matchStats.ts. */
+  matches: MatchRecord[];
 }
 
 export const initialState: AppState = {
   screen: "lobby", precons: [], decks: [], choices: [], log: [], hiddenKinds: ["MANA", "PHASE"], lastLogId: 0,
   aiModes: ["standard", "hybrid", "sim"], aiProfiles: ["Default"], aiTimeout: 5, bestOf: 0, expectNewMatch: false,
-  archidekt: { loading: false },
+  archidekt: { loading: false }, matches: [],
 };
 
 const LOG_MAX = 500;
@@ -106,6 +109,8 @@ export function reduce(s: AppState, m: Inbound): AppState {
       return { ...s, archidekt: { username: m.username, decks: m.decks, loading: false } };
     case "archidektProgress":
       return { ...s, archidekt: { ...s.archidekt, progress: m } };
+    case "matches":
+      return { ...s, matches: m.matches };
     default:
       return s;
   }

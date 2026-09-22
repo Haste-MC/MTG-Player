@@ -1,11 +1,25 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { INCORRECT_ACTION_TEXT, reduce, initialState, useStore } from "./store";
-import type { ArchidektDecks, ArchidektProgress, Choice, DeckInfo, Snapshot, StartGame } from "./protocol";
+import type { ArchidektDecks, ArchidektProgress, Choice, DeckInfo, MatchRecord, Snapshot, StartGame } from "./protocol";
 import { send } from "./ws";
 
 vi.mock("./ws", () => ({ send: vi.fn() }));
 
 const deck = (name: string): DeckInfo => ({ name, commanders: [] });
+
+const matchRecord = (over: Partial<MatchRecord> = {}): MatchRecord => ({
+  id: "m1", startedAt: "2026-09-10T18:02:11.000Z", endedAt: "2026-09-10T18:44:33.000Z", durationMs: 2542000,
+  source: "live", turns: 12, reason: "AllOpponentsLost", draw: false, counted: true, excludeReason: null,
+  seats: [
+    {
+      name: "Du", deck: "Titania, Gaea Incarnate", human: true, ai: null, winner: true, lossReason: null,
+      eliminatedTurn: null, mulligans: 0, lands: 10, landsByTurn: [0, 1, 2, 3], missedLandDrops: 0,
+      firstMissedLandDrop: null, spells: 10, spellMana: 25, commanderCasts: 1, commanderTax: 0,
+      firstCommanderTurn: 4, damageDealt: 21, damageTaken: 10, combatDamageTaken: 8, lifeEnd: 30, poisonEnd: 0,
+    },
+  ],
+  ...over,
+});
 
 const snap = (over: Partial<Snapshot> = {}): Snapshot => ({
   type: "state",
@@ -288,5 +302,23 @@ describe("store: archidekt", () => {
     useStore.getState().requestArchidektList("kevin");
     expect(useStore.getState().archidekt.loading).toBe(true);
     expect(send).toHaveBeenCalledWith({ type: "archidektList", username: "kevin" });
+  });
+});
+
+describe("store: matches", () => {
+  it("initialState startet mit einer leeren Partienliste", () => {
+    expect(initialState.matches).toEqual([]);
+  });
+
+  it("matches ersetzt die Partienliste", () => {
+    const list = [matchRecord({ id: "m1" }), matchRecord({ id: "m2" })];
+    const s = reduce(initialState, { type: "matches", matches: list });
+    expect(s.matches).toEqual(list);
+  });
+
+  it("eine erneute matches-Nachricht ersetzt die vorige Liste, statt sie zu ergaenzen", () => {
+    const first = reduce(initialState, { type: "matches", matches: [matchRecord({ id: "m1" })] });
+    const second = reduce(first, { type: "matches", matches: [matchRecord({ id: "m2" })] });
+    expect(second.matches.map((m) => m.id)).toEqual(["m2"]);
   });
 });
