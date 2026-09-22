@@ -12,6 +12,8 @@ import forge.game.event.GameEventTurnEnded;
 import forge.game.player.Player;
 import forge.game.player.RegisteredPlayer;
 import mtgplayer.ai.AiConfig;
+import mtgplayer.stats.MatchRecord;
+import mtgplayer.stats.MatchRecorder;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -50,9 +52,19 @@ public final class AiMatch {
      *                 Spieler-Zug einzeln, nicht pro Runde; KI-Spiele können sich festfahren)
      * @param log      bekommt jede Forge-Logzeile, sobald sie entsteht
      */
-    @SuppressWarnings("deprecation")
     public static Result play(List<Deck> decks, List<String> names, List<AiConfig> configs, int aiTimeout,
                                int maxTurns, Consumer<String> log) {
+        return play(decks, names, configs, aiTimeout, maxTurns, log, null);
+    }
+
+    /**
+     * @param sink bekommt den {@link MatchRecord} der Partie, sobald sie vorbei ist - Quelle
+     *             {@code "sparring"}, weil KI-gegen-KI ueber diesen Weg das Sparring aus Stueck 3 ist.
+     *             {@code null} = nicht erfassen (Bench-Laeufe, Tests).
+     */
+    @SuppressWarnings("deprecation")
+    public static Result play(List<Deck> decks, List<String> names, List<AiConfig> configs, int aiTimeout,
+                               int maxTurns, Consumer<String> log, Consumer<MatchRecord> sink) {
         if (maxTurns <= 0) {
             throw new IllegalArgumentException("maxTurns muss > 0 sein");
         }
@@ -79,6 +91,11 @@ public final class AiMatch {
             }
         };
         game.getGameLog().addObserver(observer);
+        if (sink != null) {
+            // Vor match.startGame(...), damit Mulligans und der erste Zug schon mitgezaehlt werden;
+            // der Recorder schliesst sich selbst ueber GameEventGameFinished ab.
+            new MatchRecorder(game, "sparring", sink);
+        }
 
         // Forge selbst kann ein Spiel ebenfalls mit GameEndReason.Draw beenden (gleichzeitiger Verlust,
         // Stack > 999, GameDrawEffect) - dieses Flag markiert nur ein Unentschieden DURCH UNS (Zugdeckel),

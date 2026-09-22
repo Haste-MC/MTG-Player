@@ -9,6 +9,8 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 
 /**
@@ -22,12 +24,34 @@ public final class CrashLog {
 
     private static final DateTimeFormatter STAMP = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     private static volatile Consumer<String> listener;
+    private static final List<Runnable> crashListeners = new CopyOnWriteArrayList<>();
     private static volatile Path fileOverride;
 
     private CrashLog() { }
 
     public static void setListener(Consumer<String> l) {
         listener = l;
+    }
+
+    /**
+     * Zweiter Empfaengerkanal neben {@link #setListener}: beliebig viele Interessenten, die einen
+     * Abbruch nur als Tatsache brauchen (kein Text). {@link mtgplayer.stats.MatchRecorder} markiert
+     * damit die laufende Partie als "Absturz" und nimmt sie aus der Wertung. Bewusst eine Liste statt
+     * eines einzelnen Listeners: {@code setListener} gehoert der Bridge (Fehlerzeile im Browser), und
+     * jede laufende Partie meldet sich zusaetzlich selbst an.
+     *
+     * <p>{@code CopyOnWriteArrayList}, weil {@link #report} vom Spiel-Thread (oder einem beliebigen
+     * Thread mit einer uncaught exception) laeuft, waehrend sich ein Recorder gerade an- oder
+     * abmeldet - so braucht {@link #report} keine Sperre und eine Abmeldung waehrend der Zustellung
+     * ist unproblematisch.</p>
+     */
+    public static void addCrashListener(Runnable l) {
+        crashListeners.add(l);
+    }
+
+    /** Gegenstueck zu {@link #addCrashListener}; eine unbekannte Anmeldung zu entfernen ist erlaubt. */
+    public static void removeCrashListener(Runnable l) {
+        crashListeners.remove(l);
     }
 
     /** Zieldatei umlenken (Tests); {@code null} = wieder {@code ~/.mtg-player/logs/bridge.log}. */
@@ -62,6 +86,13 @@ public final class CrashLog {
             Files.writeString(f, entry, StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
         } catch (IOException io) {
             System.err.println("[crashlog] konnte nicht schreiben: " + io);
+        }
+        for (Runnable r : crashListeners) {
+            try {
+                r.run();
+            } catch (RuntimeException ex) {
+                System.err.println("[crashlog] Listener hat geworfen: " + ex);
+            }
         }
         Consumer<String> l = listener;
         if (l != null) {

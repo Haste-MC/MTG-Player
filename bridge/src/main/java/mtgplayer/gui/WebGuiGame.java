@@ -3,6 +3,7 @@ package mtgplayer.gui;
 import com.fasterxml.jackson.databind.JsonNode;
 import forge.LobbyPlayer;
 import forge.deck.CardPool;
+import forge.game.Game;
 import forge.game.GameEntityView;
 import forge.game.GameLog;
 import forge.game.GameLogEntry;
@@ -47,6 +48,7 @@ import java.util.Observer;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 
 /**
  * Forges GUI-Schnittstelle für einen Browser-Sitz. Zustandsänderungen werden gebündelt als
@@ -62,6 +64,7 @@ public class WebGuiGame extends AbstractGuiGame {
     private volatile Snapshot.PromptSnap prompt = Snapshot.PromptSnap.EMPTY;
     private volatile Stops stops = Stops.defaults();
     private volatile boolean fullControl;
+    private volatile Consumer<Game> newGameHook;
     private final AtomicInteger seq = new AtomicInteger(1);
     @SuppressWarnings("deprecation")
     private Observer inputObserver;
@@ -197,10 +200,30 @@ public class WebGuiGame extends AbstractGuiGame {
         }
     }
 
+    /**
+     * Wird einmal je beginnender Partie mit dem frischen {@code Game} gerufen, bevor der Spiel-Thread
+     * laeuft - {@link mtgplayer.match.HumanMatch} haengt hier den {@code MatchRecorder} an. Siehe
+     * {@link #setGameView}, warum das der Anmeldepunkt ist.
+     */
+    public void onNewGame(Consumer<Game> hook) {
+        newGameHook = hook;
+    }
+
+    /**
+     * {@code HostedMatch.startGame()} ruft das (mit {@code null}, dann mit der neuen Ansicht) noch
+     * auf dem AUFRUFENDEN Thread auf, bevor es das Spiel per {@code game.getAction().invoke(...)} an
+     * Forges Spiel-Thread uebergibt - fuer den menschlichen Sitz wie fuer den Zuschauer-Pfad. Das ist
+     * damit der frueheste Zeitpunkt, an dem das {@code Game} existiert, und der einzige ohne Rennen
+     * gegen die ersten Ereignisse der Partie (Mulligans fallen sonst schon).
+     */
     @Override
     public void setGameView(GameView gameView0) {
         super.setGameView(gameView0);
         watchLogOf(gameView0);
+        Consumer<Game> hook = newGameHook;
+        if (hook != null && gameView0 != null && gameView0.getGame() != null) {
+            hook.accept(gameView0.getGame());
+        }
         push();
     }
 

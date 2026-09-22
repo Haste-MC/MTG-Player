@@ -13,12 +13,15 @@ import forge.model.FModel;
 import forge.player.LobbyPlayerHuman;
 import mtgplayer.ai.AiConfig;
 import mtgplayer.gui.WebGuiGame;
+import mtgplayer.stats.MatchRecord;
+import mtgplayer.stats.MatchRecorder;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 
 /**
  * Ein Commander-Spiel mit genau einem menschlichen Sitz (Browser) und 1–5 KIs über Forges
@@ -28,6 +31,7 @@ import java.util.Map;
 public final class HumanMatch {
 
     private volatile HostedMatch hosted;
+    private volatile MatchRecorder recorder;
     private volatile boolean lastGameOver = true;
 
     public void start(String humanName, Deck humanDeck, List<Deck> aiDecks, List<String> aiNames, WebGuiGame gui) {
@@ -37,6 +41,12 @@ public final class HumanMatch {
 
     public void start(String humanName, Deck humanDeck, List<Deck> aiDecks, List<String> aiNames,
                        List<AiConfig> aiConfigs, int aiTimeout, WebGuiGame gui) {
+        start(humanName, humanDeck, aiDecks, aiNames, aiConfigs, aiTimeout, gui, null);
+    }
+
+    /** @param sink bekommt den Datensatz der Partie, sobald sie vorbei ist (siehe {@link #record}) */
+    public void start(String humanName, Deck humanDeck, List<Deck> aiDecks, List<String> aiNames,
+                       List<AiConfig> aiConfigs, int aiTimeout, WebGuiGame gui, Consumer<MatchRecord> sink) {
         if (aiDecks.size() != aiNames.size() || aiDecks.size() != aiConfigs.size() || aiDecks.isEmpty() || aiDecks.size() > 5) {
             throw new IllegalArgumentException("1–5 KI-Decks mit gleich vielen Namen");
         }
@@ -61,6 +71,7 @@ public final class HumanMatch {
         // HostedMatch.startGame liest diese Preference beim Spielstart (setzt Game.AI_TIMEOUT) - kein save(),
         // die Aenderung soll nur diese JVM/Session betreffen.
         FModel.getPreferences().setPref(FPref.MATCH_AI_TIMEOUT, String.valueOf(aiTimeout));
+        record(gui, "live", sink);
         hosted.startMatch(rules, null, players, guis, null);
     }
 
@@ -75,6 +86,12 @@ public final class HumanMatch {
     }
 
     public void startSpectator(List<Deck> aiDecks, List<String> aiNames, List<AiConfig> aiConfigs, int aiTimeout, WebGuiGame gui) {
+        startSpectator(aiDecks, aiNames, aiConfigs, aiTimeout, gui, null);
+    }
+
+    /** @param sink bekommt den Datensatz der Partie, sobald sie vorbei ist (siehe {@link #record}) */
+    public void startSpectator(List<Deck> aiDecks, List<String> aiNames, List<AiConfig> aiConfigs, int aiTimeout,
+                               WebGuiGame gui, Consumer<MatchRecord> sink) {
         if (aiDecks.size() != aiNames.size() || aiDecks.size() != aiConfigs.size() || aiDecks.size() < 2 || aiDecks.size() > 6) {
             throw new IllegalArgumentException("2–6 KI-Decks mit gleich vielen Namen");
         }
@@ -91,7 +108,29 @@ public final class HumanMatch {
         hosted = new HostedMatch();
         gui.resetForNewMatch(); // sonst haengt Auswahl/Prompt-Zustand aus dem vorigen Spiel noch dran
         FModel.getPreferences().setPref(FPref.MATCH_AI_TIMEOUT, String.valueOf(aiTimeout));
+        record(gui, "spectate", sink);
         hosted.startMatch(rules, null, players, Map.of(), null);
+    }
+
+    /**
+     * Haengt einen {@link MatchRecorder} an die Partie, die {@code hosted.startMatch(...)} gleich
+     * startet. Das {@code Game} entsteht erst dort ({@code HostedMatch.startGame()}), also braucht es
+     * einen Anmeldepunkt INNERHALB des Starts - {@code hosted.getGame()} DANACH waere ein Rennen:
+     * {@code startGame()} uebergibt das Spiel am Ende per {@code game.getAction().invoke(...)} an
+     * Forges Spiel-Thread und kehrt sofort zurueck; bis wir uns anmelden, hat der Spiel-Thread die
+     * Decks schon gemischt und womoeglich die Mulligans hinter sich - genau die Ereignisse, die der
+     * Recorder zaehlen soll.
+     *
+     * <p>Deshalb der Umweg ueber die GUI: {@code HostedMatch.startGame()} ruft
+     * {@code gui.setGameView(view)} noch auf dem aufrufenden Thread (diesem hier), bevor es den
+     * Spiel-Thread anwirft - fuer den menschlichen Sitz wie fuer den Zuschauer-Pfad, der dieselbe
+     * {@code WebGuiGame} bekommt ({@code WebGuiBase.setGuiSupplier}). {@code WebGuiGame.onNewGame}
+     * meldet uns genau dort, ohne Warteschleife. Der Recorder haengt sich selbst an Forges
+     * Ereignisbus und schliesst sich mit {@code GameEventGameFinished} ab; ein abgebrochener Start
+     * hinterlaesst nur den Haken, der beim naechsten Start ersetzt wird.</p>
+     */
+    private void record(WebGuiGame gui, String source, Consumer<MatchRecord> sink) {
+        gui.onNewGame(game -> recorder = new MatchRecorder(game, source, sink));
     }
 
     public boolean isRunning() {
@@ -156,6 +195,14 @@ public final class HumanMatch {
         Game g = h.getGame();
         GameView view = h.getGameView();
         if (g != null && view != null && !view.isGameOver()) {
+            // Vor dem erzwungenen Ende: die Partie taugt nicht fuer die Statistik. AllHumansLost macht
+            // ueber Player.onGameOver() jeden Sitz ohne eigenen Ausgang zum Sieger - ein Datensatz
+            // daraus waere schlicht falsch. Der Recorder schliesst sich gleich selbst ueber
+            // GameEventGameFinished ab und traegt dann "abgebrochen" ein.
+            MatchRecorder r = recorder;
+            if (r != null) {
+                r.markAborted();
+            }
             g.getAction().invoke(() -> g.setGameOver(GameEndReason.AllHumansLost));
             long deadline = System.currentTimeMillis() + 5000;
             while (!view.isGameOver() && System.currentTimeMillis() < deadline) {
