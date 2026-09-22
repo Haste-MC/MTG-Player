@@ -19,6 +19,9 @@ import java.util.function.Consumer;
  * (der Spiel-Thread ist tot, kein Prompt kommt mehr). Jeder Abbruch landet jetzt mit Stacktrace in
  * {@code ~/.mtg-player/logs/bridge.log} und - wenn ein Listener registriert ist (Bridge) - als Fehlermeldung
  * im Browser-Log.
+ *
+ * <p>{@link #warn} schreibt dieselbe Zeile ohne Absturz-Semantik (keine Crash-Listener, kein
+ * "Spiel abgebrochen" im Browser) - fuer Pannen abseits des laufenden Spiels.</p>
  */
 public final class CrashLog {
 
@@ -66,6 +69,43 @@ public final class CrashLog {
 
     /** @param title kurze Ueberschrift (Thread-Name oder Forge-Titel), @param text Forge-Text oder null */
     public static synchronized void report(String title, String text, Throwable e) {
+        write(title, text, e);
+        for (Runnable r : crashListeners) {
+            try {
+                r.run();
+            } catch (RuntimeException ex) {
+                System.err.println("[crashlog] Listener hat geworfen: " + ex);
+            }
+        }
+        Consumer<String> l = listener;
+        if (l != null) {
+            String first = e == null ? (text == null ? title : text.strip().lines().findFirst().orElse(title))
+                    : e.getClass().getSimpleName() + (e.getMessage() == null ? "" : ": " + e.getMessage());
+            l.accept("Spiel abgebrochen (" + title + "): " + first + " – Details in " + file());
+        }
+    }
+
+    /**
+     * Dieselbe Zeile in {@code bridge.log} wie {@link #report}, aber OHNE Absturz-Semantik: die
+     * {@link #addCrashListener}-Empfaenger werden nicht benachrichtigt und im Browser steht kein
+     * "Spiel abgebrochen", sondern eine schlichte Fehlerzeile.
+     *
+     * <p>Fuer Pannen, die nichts mit dem laufenden Spiel zu tun haben - z. B. eine kaputte
+     * {@code matches.json} ({@link mtgplayer.stats.MatchStore}). Ueber {@link #report} gemeldet, haette
+     * sie die gerade laufende Partie als "Absturz" aus der Wertung genommen und dem Browser ein Spielende
+     * vorgegaukelt.</p>
+     */
+    public static synchronized void warn(String title, String text) {
+        write(title, text, null);
+        Consumer<String> l = listener;
+        if (l != null) {
+            l.accept(title + ": " + (text == null || text.isBlank() ? "(ohne Text)" : text.strip().lines().findFirst().orElse(title))
+                    + " – Details in " + file());
+        }
+    }
+
+    /** Zeitstempel + Titel + Text (+ Stacktrace) nach stderr und in {@link #file()}. */
+    private static void write(String title, String text, Throwable e) {
         StringBuilder sb = new StringBuilder();
         sb.append(STAMP.format(LocalDateTime.now())).append(' ').append(title);
         if (text != null && !text.isBlank()) {
@@ -86,19 +126,6 @@ public final class CrashLog {
             Files.writeString(f, entry, StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
         } catch (IOException io) {
             System.err.println("[crashlog] konnte nicht schreiben: " + io);
-        }
-        for (Runnable r : crashListeners) {
-            try {
-                r.run();
-            } catch (RuntimeException ex) {
-                System.err.println("[crashlog] Listener hat geworfen: " + ex);
-            }
-        }
-        Consumer<String> l = listener;
-        if (l != null) {
-            String first = e == null ? (text == null ? title : text.strip().lines().findFirst().orElse(title))
-                    : e.getClass().getSimpleName() + (e.getMessage() == null ? "" : ": " + e.getMessage());
-            l.accept("Spiel abgebrochen (" + title + "): " + first + " – Details in " + file());
         }
     }
 }

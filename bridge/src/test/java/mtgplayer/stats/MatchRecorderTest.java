@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import forge.game.GameEndReason;
 import forge.game.card.Card;
 import forge.game.event.GameEventLandPlayed;
 import forge.game.event.GameEventMulligan;
@@ -29,8 +30,11 @@ import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -117,6 +121,8 @@ class MatchRecorderTest {
     void laenderJeZugUndVerpassteLandabgaben() {
         Scene s = Scene.twoPlayers(AiConfig.DEFAULT, AiConfig.DEFAULT);
         Player a = s.player(0), b = s.player(1);
+        s.card("Forest", a, ZoneType.Hand);          // eine verpasste Abgabe zaehlt nur mit Hand
+        s.card("Forest", b, ZoneType.Hand);
         MatchRecorder rec = new MatchRecorder(s.game(), "live", null);
 
         s.game().fireEvent(new GameEventTurnBegan(a.getView(), 1));
@@ -208,6 +214,26 @@ class MatchRecorderTest {
         assertNull(r.excludeReason());
     }
 
+    @Test
+    @Timeout(value = 3, unit = TimeUnit.MINUTES)
+    void verpassteLandabgabeZaehltNurMitHandkarten() {
+        Scene s = Scene.twoPlayers(AiConfig.DEFAULT, AiConfig.DEFAULT);
+        Player a = s.player(0), b = s.player(1);
+        s.card("Forest", b, ZoneType.Hand);                                  // A bleibt mit leerer Hand
+        MatchRecorder rec = new MatchRecorder(s.game(), "live", null);
+
+        s.game().fireEvent(new GameEventTurnBegan(a.getView(), 1));
+        s.game().fireEvent(new GameEventTurnBegan(b.getView(), 2));          // schliesst A's Zug: leere Hand
+        s.game().fireEvent(new GameEventTurnBegan(a.getView(), 3));          // schliesst B's Zug: Hand voll
+
+        MatchRecord r = rec.finish();
+        MatchRecord.Seat sa = seat(r, "A"), sb = seat(r, "B");
+        assertEquals(0, sa.missedLandDrops(), "ohne Handkarte kann man kein Land legen (Spec §1)");
+        assertNull(sa.firstMissedLandDrop());
+        assertEquals(1, sb.missedLandDrops(), "B hatte eine Hand und hat kein Land gelegt");
+        assertEquals(1, sb.firstMissedLandDrop());
+    }
+
     // ---------------------------------------------------------------- nicht gewertete Partien
 
     @Test
@@ -276,6 +302,27 @@ class MatchRecorderTest {
 
     @Test
     @Timeout(value = 3, unit = TimeUnit.MINUTES)
+    void abgewuergtePartieMachtKeinenSitzZumSieger() {
+        Scene s = Scene.twoPlayers(AiConfig.DEFAULT, AiConfig.DEFAULT);
+        MatchRecorder rec = new MatchRecorder(s.game(), "spectate", null);
+        s.game().fireEvent(new GameEventTurnBegan(s.player(0).getView(), 1));
+        s.game().fireEvent(new GameEventTurnBegan(s.player(1).getView(), 2));
+        s.game().fireEvent(new GameEventTurnBegan(s.player(0).getView(), 3));
+
+        rec.markAborted();
+        s.game().setGameOver(GameEndReason.AllHumansLost);                   // genau das macht HumanMatch.end()
+        assertTrue(s.game().getRegisteredPlayers().stream().allMatch(p -> p.getOutcome() != null && p.getOutcome().hasWon()),
+                "Forge macht dabei jeden Sitz ohne eigenen Ausgang zum Sieger - genau davor schuetzt build()");
+
+        MatchRecord r = rec.finish();
+        assertTrue(r.seats().stream().noneMatch(MatchRecord.Seat::winner),
+                "eine abgebrochene Partie darf keinen Sieg erfinden, auch nicht nach erneutem Werten");
+        assertFalse(r.draw(), "und sie ist auch kein Remis");
+        assertEquals("abgebrochen", r.excludeReason());
+    }
+
+    @Test
+    @Timeout(value = 3, unit = TimeUnit.MINUTES)
     void nachFinishMeldetDerRecorderKeineAbstuerzeMehr() {
         Scene s = Scene.twoPlayers(AiConfig.DEFAULT, AiConfig.DEFAULT);
         MatchRecorder rec = new MatchRecorder(s.game(), "live", null);
@@ -313,5 +360,17 @@ class MatchRecorderTest {
         s.game().fireEvent(new GameEventMulligan(s.player(0).getView()));
         assertEquals(0, seat(rec.finish(), "A").mulligans());
         assertEquals(0, seat(r, "A").mulligans());
+    }
+
+    /** Stueck 3 schreibt Sparring-Partien in Folge zurueck - zwei gleiche Ids und
+     *  {@code MatchStore.delete} traefe den falschen Datensatz. */
+    @Test
+    void tausendIdsInEngerSchleifeSindVerschieden() {
+        Instant now = Instant.now();
+        Set<String> ids = new HashSet<>();
+        for (int i = 0; i < 1000; i++) {
+            ids.add(MatchRecorder.newId(now));
+        }
+        assertEquals(1000, ids.size(), "Ids muessen auch innerhalb derselben Millisekunde eindeutig sein");
     }
 }

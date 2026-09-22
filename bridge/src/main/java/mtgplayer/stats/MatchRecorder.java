@@ -19,6 +19,7 @@ import forge.game.player.PlayerOutcome;
 import forge.game.player.PlayerView;
 import forge.game.player.RegisteredPlayer;
 import forge.game.spellability.SpellAbilityView;
+import forge.game.zone.ZoneType;
 import forge.player.LobbyPlayerHuman;
 import mtgplayer.ai.AiLobbyPlayer;
 import mtgplayer.forge.CrashLog;
@@ -30,6 +31,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
 /**
@@ -59,15 +61,16 @@ import java.util.function.Consumer;
  * (in der Auswertung: kuerzere Partien bei diesem Mittelwert auslassen, nicht mit 0 fuellen).</p>
  *
  * <p><b>Verpasste Landabgabe.</b> Bei jedem {@code GameEventTurnBegan} wird der vorige Zug
- * abgeschlossen: war sein Besitzer noch im Spiel und hat in diesem Zug kein Land gespielt, zaehlt
- * eine verpasste Abgabe (der erste Zug jedes Sitzes zaehlt mit). Der beim Spielende laufende Zug
- * wird nicht mehr gewertet - er war noch nicht vorbei.</p>
+ * abgeschlossen: war sein Besitzer noch im Spiel, hatte Karten auf der Hand und hat in diesem Zug kein
+ * Land gespielt, zaehlt eine verpasste Abgabe (der erste Zug jedes Sitzes zaehlt mit). Der beim
+ * Spielende laufende Zug wird nicht mehr gewertet - er war noch nicht vorbei.</p>
  *
  * <p><b>Nicht gewertet.</b> Ein Absturz waehrend der Partie ({@link #markCrashed()}, gemeldet von
  * {@link CrashLog}), ein Abbruch von aussen ({@link #markAborted()}), ein Sitz mit Verlustgrund
  * {@code Conceded} oder weniger als drei Zuege setzen {@code counted = false} mit Grund. Reihenfolge
  * absichtlich so: ein Absturz erklaert auch den Abbruch, die kurze Partie oder die Aufgabe danach,
- * und die Aufgabe erklaert die kurze Partie.</p>
+ * und die Aufgabe erklaert die kurze Partie. Bei Absturz und Abbruch traegt ausserdem KEIN Sitz
+ * {@code winner} und die Partie ist kein Remis - siehe {@link #build()}.</p>
  *
  * <p>Alle Ereignis-Methoden und {@link #finish()} laufen unter demselben Monitor. Forge feuert die
  * Ereignisse zwar alle auf dem Spiel-Thread, {@link #finish()} kann aber von aussen kommen (Test,
@@ -276,11 +279,16 @@ public final class MatchRecorder {
         noteEliminations();
 
         GameOutcome outcome = game.getOutcome();
+        // Bei Abbruch oder Absturz hat NIEMAND gewonnen und es ist auch kein Remis: HumanMatch.end()
+        // beendet ueber GameEndReason.AllHumansLost, und Player.onGameOver() macht dabei jeden Sitz ohne
+        // eigenen Ausgang zum Sieger. Wer so eine Zeile im Screen wieder auf "gewertet" stellt, bekaeme
+        // sonst frei erfundene Siege in die Bilanz.
+        boolean noWinners = crashed || aborted;
         List<MatchRecord.Seat> out = new ArrayList<>();
         boolean conceded = false;
         boolean anyWinner = false;
         for (Seat s : seats) {
-            MatchRecord.Seat seat = s.toRecord(turns);
+            MatchRecord.Seat seat = s.toRecord(turns, noWinners);
             conceded |= "Conceded".equals(seat.lossReason());
             anyWinner |= seat.winner();
             out.add(seat);
@@ -292,7 +300,7 @@ public final class MatchRecorder {
         finished = new MatchRecord(newId(endedAt), iso(startedAt), iso(endedAt),
                 Math.max(0, endedAt.toEpochMilli() - startedAt.toEpochMilli()), source, turns,
                 outcome == null ? "unbekannt" : String.valueOf(outcome.getWinCondition()),
-                !anyWinner || (outcome != null && outcome.getWinCondition() == GameEndReason.Draw),
+                !noWinners && (!anyWinner || (outcome != null && outcome.getWinCondition() == GameEndReason.Draw)),
                 excludeReason == null, excludeReason, List.copyOf(out));
         // Der Datensatz steht; ab hier braucht niemand mehr die Forge-Objekte. Ohne das haelt der
         // Recorder ueber seats/byView das ganze Game fest, solange ihn irgendwer noch referenziert
@@ -315,12 +323,17 @@ public final class MatchRecorder {
         return c.getController() != null ? c.getController() : c.getOwner();
     }
 
-    /** Wertet den gerade zu Ende gegangenen Zug auf eine verpasste Landabgabe aus. */
+    /**
+     * Wertet den gerade zu Ende gegangenen Zug auf eine verpasste Landabgabe aus. Nur ein Zug mit
+     * Karten auf der Hand zaehlt (Spec §1: "waehrend er eine Hand hatte") - wer leergespielt ist, kann
+     * kein Land legen, und ohne die Bedingung waere die Kennzahl vor allem ein Mass fuer die Spiellaenge.
+     */
     private void closeRunningTurn() {
         if (turnOwner == null) {
             return;
         }
-        if (landsThisTurn == 0 && turnOwner.player.getOutcome() == null) {
+        if (landsThisTurn == 0 && turnOwner.player.getOutcome() == null
+                && !turnOwner.player.getCardsIn(ZoneType.Hand).isEmpty()) {
             turnOwner.missedLandDrops++;
             if (turnOwner.firstMissedLandDrop == null) {
                 turnOwner.firstMissedLandDrop = turnOwner.ownTurns;
@@ -348,8 +361,18 @@ public final class MatchRecorder {
         return t.truncatedTo(ChronoUnit.SECONDS).toString();
     }
 
-    private static String newId(Instant endedAt) {
-        return iso(endedAt) + "-" + String.format("%04x", ThreadLocalRandom.current().nextInt(0x10000));
+    /**
+     * Zufaelliger Startwert je JVM-Lauf, danach hochgezaehlt: innerhalb eines Laufs sind die Ids
+     * garantiert verschieden - auch wenn mehrere Partien in dieselbe Millisekunde fallen (Stueck 3
+     * schreibt Sparring-Partien in Folge zurueck, und {@code MatchStore.delete} traefe bei einer
+     * doppelten Id den falschen Datensatz) - und ueber Laeufe hinweg trotzdem nicht vorhersagbar.
+     */
+    private static final AtomicInteger ID_SEQ = new AtomicInteger(ThreadLocalRandom.current().nextInt());
+
+    /** Zeitpunkt des Endes (ISO, Millisekunden) + "-" + 6 Hex-Zeichen; sichtbar fuer den Test. */
+    static String newId(Instant endedAt) {
+        return endedAt.truncatedTo(ChronoUnit.MILLIS) + "-"
+                + String.format("%06x", ID_SEQ.getAndIncrement() & 0xffffff);
     }
 
     /** Laufende Zaehlung eines Sitzes; wird am Ende in {@link MatchRecord.Seat} umgegossen. */
@@ -374,9 +397,10 @@ public final class MatchRecorder {
             this.player = player;
         }
 
-        private MatchRecord.Seat toRecord(int turns) {
+        /** @param noWinners Abbruch/Absturz: kein Sitz gilt als Sieger (siehe {@link MatchRecorder#build}) */
+        private MatchRecord.Seat toRecord(int turns, boolean noWinners) {
             PlayerOutcome o = player.getOutcome();
-            boolean winner = o != null && o.hasWon();
+            boolean winner = !noWinners && o != null && o.hasWon();
             String lossReason = o == null || o.lossState == null ? null : o.lossState.name();
             Integer eliminated = lossReason == null ? null : eliminatedTurn != null ? eliminatedTurn : Math.max(1, turns);
             return new MatchRecord.Seat(player.getName(), deckName(), human(), ai(), winner, lossReason,

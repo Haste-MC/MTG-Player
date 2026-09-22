@@ -384,7 +384,15 @@ public final class Bridge {
         // Sink: die beendete Partie landet im Speicher, der Client bekommt zusaetzlich zu gameOver
         // (siehe WebGuiGame) die aktualisierte "matches"-Liste.
         Consumer<MatchRecord> sink = r -> {
-            matches.add(r);
+            // Der Sink laeuft im Guava-EventBus des Spiels (GameEventGameFinished): eine Ausnahme von
+            // hier wuerde dort verschluckt, und niemand erfuehre, dass die Partie nicht gespeichert ist.
+            try {
+                matches.add(r);
+            } catch (RuntimeException e) {
+                ws.send(new Messages.ErrorMsg("Partie konnte nicht gespeichert werden: "
+                        + (e.getMessage() == null ? e.toString() : e.getMessage())));
+                return;
+            }
             ws.send(new Messages.Matches(matches.all()));
         };
         ui(() -> {

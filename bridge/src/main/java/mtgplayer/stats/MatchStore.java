@@ -17,8 +17,11 @@ import java.util.List;
  * ist atomar (eindeutige Temp-Datei je Aufruf + {@code ATOMIC_MOVE}), damit ein Absturz waehrend des
  * Schreibens nie eine halbe Datei hinterlaesst. Eine kaputte Datei (fremder Inhalt, abgebrochener
  * Schreibvorgang vor Einfuehrung des atomaren Schreibens, ...) liefert {@link #all()} als leere Liste
- * statt eines Absturzes und meldet sich per {@link CrashLog} in {@code bridge.log} - die Datei wird beim
- * naechsten {@link #add}/{@link #delete}/{@link #setCounted} ersetzt. Alle vier Methoden sind
+ * statt eines Absturzes und meldet sich per {@link CrashLog#warn} in {@code bridge.log} - die Datei wird
+ * beim naechsten {@link #add}/{@link #delete}/{@link #setCounted} ersetzt. Bewusst {@code warn} und nicht
+ * {@code report}: die Datei hat mit der gerade laufenden Partie nichts zu tun, die darf davon weder als
+ * "Absturz" aus der Wertung fallen noch im Browser als abgebrochen gelten. Datensaetze ohne Formatversion
+ * ({@code "v"}) gelten als v1 (siehe {@link MatchRecord}). Alle vier Methoden sind
  * {@code synchronized}: der Forge-Spiel-Thread ruft {@link #add} auf, waehrend der WebSocket-Thread
  * gleichzeitig {@link #delete}/{@link #setCounted} (und {@link #all}) aufrufen kann - ohne Sperre waere
  * das ein verlorenes Update (Read-Modify-Write auf derselben Liste).
@@ -45,7 +48,10 @@ public final class MatchStore {
             List<MatchRecord> list = Json.mapper().readValue(json, new TypeReference<List<MatchRecord>>() { });
             return new ArrayList<>(list);
         } catch (IOException e) {
-            CrashLog.report("MatchStore", "kaputte Datei: " + file, e);
+            // warn statt report: eine kaputte Datei ist kein Spielabsturz. report() wuerde die Crash-
+            // Listener ausloesen (eine gerade laufende Partie waere "Absturz") und dem Browser
+            // "Spiel abgebrochen" melden - beides hat mit der Datei nichts zu tun.
+            CrashLog.warn("MatchStore", "kaputte Datei: " + file + " (" + e + ")");
             return new ArrayList<>();
         }
     }

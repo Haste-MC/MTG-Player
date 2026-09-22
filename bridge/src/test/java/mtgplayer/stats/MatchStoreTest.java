@@ -8,7 +8,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import mtgplayer.forge.CrashLog;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -105,6 +107,42 @@ class MatchStoreTest {
         assertTrue(store.all().isEmpty());
         store.add(record("m1"));
         assertEquals(List.of("m1"), store.all().stream().map(MatchRecord::id).toList());
+    }
+
+    /** Eine kaputte Datei ist kein Spielabsturz: der Crash-Kanal wuerde die LAUFENDE Partie als
+     *  "Absturz" aus der Wertung nehmen und dem Browser ein Spielende melden. */
+    @Test
+    void kaputteDateiLoestKeinenCrashListenerAus(@TempDir Path dir) throws Exception {
+        Path file = dir.resolve("matches.json");
+        Files.writeString(file, "{kaputt");
+        AtomicInteger crashes = new AtomicInteger();
+        List<String> browser = new ArrayList<>();
+        Runnable listener = crashes::incrementAndGet;
+        CrashLog.addCrashListener(listener);
+        CrashLog.setListener(browser::add);
+        try {
+            assertTrue(new MatchStore(file).all().isEmpty());
+        } finally {
+            CrashLog.removeCrashListener(listener);
+            CrashLog.setListener(null);
+        }
+        assertEquals(0, crashes.get(), "kein Crash-Listener bei einer kaputten Datei");
+        assertEquals(1, browser.size(), "aber eine Fehlerzeile im Browser");
+        assertFalse(browser.get(0).contains("Spiel abgebrochen"), "und zwar ohne Spielende: " + browser.get(0));
+        assertTrue(Files.readString(CrashLog.file()).contains("kaputte Datei"), "und eine Zeile in bridge.log");
+    }
+
+    @Test
+    void datensatzTraegtFormatversionUndAelterOhneFeldGiltAlsV1(@TempDir Path dir) throws Exception {
+        Path file = dir.resolve("matches.json");
+        MatchStore store = new MatchStore(file);
+        store.add(record("m1"));
+        assertEquals(MatchRecord.VERSION, store.all().get(0).v());
+        assertTrue(Files.readString(file).startsWith("[{\"v\":1,"), "v steht als erstes Feld im Datensatz");
+
+        // Datei ohne "v" (vor Einfuehrung des Feldes geschrieben)
+        Files.writeString(file, Files.readString(file).replace("{\"v\":1,", "{"));
+        assertEquals(1, new MatchStore(file).all().get(0).v(), "ohne Feld gilt v1");
     }
 
     @Test
