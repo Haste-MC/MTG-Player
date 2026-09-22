@@ -85,7 +85,11 @@ export function reduce(s: AppState, m: Inbound): AppState {
       const freshLog = isNewMatch ? [] : s.log;
       const lastLogId = isNewMatch ? 0 : s.lastLogId;
       return {
-        ...s, state: m, screen: "table", log: freshLog, lastLogId, expectNewMatch: false,
+        // Wie im lobby-Zweig: der Statistik-Screen bleibt stehen. Ein state-Schnappschuss kommt auch
+        // ohne Zutun (Reconnect, requestState der laufenden Partie) und duerfte den Blick auf die
+        // Partien nicht wegreissen - nur ein Spielstart holt einen wieder an den Tisch.
+        ...s, state: m, screen: s.screen === "stats" && !isNewMatch ? "stats" : "table",
+        log: freshLog, lastLogId, expectNewMatch: false,
         winner: isNewMatch ? undefined : s.winner,
       };
     }

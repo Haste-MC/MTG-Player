@@ -163,8 +163,9 @@ export interface ErrorMsg { type: "error"; text: string; }
 
 /** Ein Sitz aus mtgplayer.stats.MatchRecord.Seat (Bridge). ai fehlt/null bei einem menschlichen Sitz.
  * eliminatedTurn/firstMissedLandDrop/firstCommanderTurn fehlen/null, wenn das Ereignis nicht eintrat.
- * landsByTurn hat nur ownTurns+1 Eintraege (Index 0 ungenutzt) - ein Zugriff auf einen spaeteren Zug als
- * ownTurns liegt ausserhalb und muss geklemmt werden (letzter Eintrag gilt, wenn der Sitz vorher ausschied). */
+ * landsByTurn zaehlt die EIGENEN Zuege des Sitzes und hat genau ownTurns+1 Eintraege (Index 0 = vor dem
+ * ersten eigenen Zug, kumulativ) - fragt eine Kennzahl nach einem spaeteren Zug, gehoert diese Partie nicht
+ * in den Mittelwert (auslassen, nicht klemmen; siehe matchStats.landsTurn). */
 export interface MatchSeat {
   name: string; deck: string; human: boolean; ai?: { mode: string; profile: string } | null;
   winner: boolean; lossReason?: string | null; eliminatedTurn?: number | null; mulligans: number; lands: number;
@@ -174,9 +175,11 @@ export interface MatchSeat {
 }
 /** Eine gespielte Partie aus mtgplayer.stats.MatchRecord (Bridge). reason ist Forges Spielende-Grund
  * (z. B. "AllOpponentsLost"). counted/excludeReason: automatisch nicht gewertete Partien (zu kurz,
- * aufgegeben, Absturz) tragen counted:false und einen Grund in excludeReason. */
+ * aufgegeben, abgebrochen, Absturz) tragen counted:false und einen Grund in excludeReason.
+ * v ist die Formatversion des Datensatzes (aktuell 1); die Oberflaeche wertet sie nicht aus, sie steht hier
+ * nur, damit sie beim Durchreichen nicht verlorengeht - Datensaetze ohne Feld gelten der Bridge als v1. */
 export interface MatchRecord {
-  id: string; startedAt: string; endedAt: string; durationMs: number;
+  v?: number; id: string; startedAt: string; endedAt: string; durationMs: number;
   source: "live" | "spectate" | "sparring"; turns: number; reason: string; draw: boolean; counted: boolean;
   excludeReason?: string | null; seats: MatchSeat[];
 }

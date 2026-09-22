@@ -36,7 +36,7 @@ function pickSeat(record: MatchRecord, deck: string): { seat: MatchSeat; index: 
 export interface DeckSummary {
   games: number; wins: number; losses: number; draws: number; winRate: number;
   ci: [number, number]; avgTurns: number; avgDurationMs: number; mulliganRate: number; avgMulligans: number;
-  avgLandsTurn3: number; avgLandsTurn5: number; missedLandDropRate: number; avgMissedLandDrops: number;
+  avgLandsTurn3?: number; avgLandsTurn5?: number; missedLandDropRate: number; avgMissedLandDrops: number;
   avgSpells: number; avgSpellMana: number; avgCommanderTurn?: number; avgCommanderTax: number;
   avgDamageDealt: number; avgDamageTaken: number; lossReasons: Record<string, number>;
   opponents: { deck: string; games: number; wins: number }[];
@@ -67,15 +67,17 @@ export function summarize(records: MatchRecord[], deck: string): DeckSummary | u
     }
   }
 
+  // Je Partie zaehlt auch auf der Gegenseite jedes Deck nur einmal (dieselbe Regel wie pickSeat und
+  // deckGames): zwei Sitze mit demselben Gegner-Deck sind eine Partie gegen dieses Deck, kein Doppel.
   const opponents = new Map<string, { games: number; wins: number }>();
   for (const e of entries) {
-    e.record.seats.forEach((other, j) => {
-      if (j === e.index) return;
-      const cur = opponents.get(other.deck) ?? { games: 0, wins: 0 };
+    const decks = new Set(e.record.seats.filter((_, j) => j !== e.index).map((other) => other.deck));
+    for (const other of decks) {
+      const cur = opponents.get(other) ?? { games: 0, wins: 0 };
       cur.games += 1;
       if (e.seat.winner) cur.wins += 1;
-      opponents.set(other.deck, cur);
-    });
+      opponents.set(other, cur);
+    }
   }
 
   const commanderTurns = entries
@@ -88,8 +90,8 @@ export function summarize(records: MatchRecord[], deck: string): DeckSummary | u
     avgDurationMs: avg(entries.map((e) => e.record.durationMs)),
     mulliganRate: entries.filter((e) => e.seat.mulligans >= 1).length / games,
     avgMulligans: avg(entries.map((e) => e.seat.mulligans)),
-    avgLandsTurn3: avg(entries.map((e) => landsAtTurn(e.seat.landsByTurn, 3))),
-    avgLandsTurn5: avg(entries.map((e) => landsAtTurn(e.seat.landsByTurn, 5))),
+    ...landsTurn("avgLandsTurn3", entries, 3),
+    ...landsTurn("avgLandsTurn5", entries, 5),
     missedLandDropRate: entries.filter((e) => e.seat.missedLandDrops >= 1).length / games,
     avgMissedLandDrops: avg(entries.map((e) => e.seat.missedLandDrops)),
     avgSpells: avg(entries.map((e) => e.seat.spells)),
@@ -105,11 +107,14 @@ export function summarize(records: MatchRecord[], deck: string): DeckSummary | u
   };
 }
 
-/** Laender bei `turn` (0 = Zugbeginn vor dem ersten eigenen Zug); landsByTurn hat nur ownTurns+1
- * Eintraege - schied der Sitz vorher aus (oder das Spiel war kuerzer), gilt der letzte Eintrag. */
-function landsAtTurn(landsByTurn: number[], turn: number): number {
-  if (landsByTurn.length === 0) return 0;
-  return landsByTurn[Math.min(turn, landsByTurn.length - 1)] ?? 0;
+/** Mittelwert der Laender bis zum EIGENEN Zug `turn`, nur ueber die Partien, in denen der Sitz so viele
+ * eigene Zuege ueberhaupt hatte (`landsByTurn.length > turn`; die Liste hat genau ownTurns+1 Eintraege).
+ * Kuerzere Partien werden ausgelassen statt auf den letzten Eintrag geklemmt - sonst zoege jeder frueh
+ * ausgeschiedene Sitz den Mittelwert nach unten und die Kachel behauptete eine Kurve, die es nie gab.
+ * Ohne passende Partie fehlt der Schluessel (die Kachel zeigt dann "–"). */
+function landsTurn<K extends string>(key: K, entries: { seat: MatchSeat }[], turn: number): Partial<Record<K, number>> {
+  const values = entries.filter((e) => e.seat.landsByTurn.length > turn).map((e) => e.seat.landsByTurn[turn]);
+  return values.length > 0 ? ({ [key]: avg(values) } as Record<K, number>) : {};
 }
 
 function avg(nums: number[]): number {

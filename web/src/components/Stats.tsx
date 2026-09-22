@@ -19,6 +19,9 @@ const MATCH_ERROR = /^⚠ Partie /;
 
 const pct = (x: number) => Math.round(x * 100) + " %";
 const one = (x: number) => x.toFixed(1).replace(".", ",");
+/** Kennzahl mit einer Nachkommastelle, oder "–", wenn keine Partie dazu etwas hergibt (z. B. "Länder bis
+ * zum eigenen Zug 5", wenn keine gewertete Partie so lange lief - siehe matchStats.landsTurn). */
+const num = (x?: number) => (x != null ? one(x) : "–");
 /** Dauer als mm:ss (Minuten laufen ueber 60 weiter - eine lange Partie zeigt lieber 84:10 als 1:24:10). */
 const mmss = (ms: number) => {
   const s = Math.round(ms / 1000);
@@ -131,7 +134,13 @@ export default function Stats() {
                 <span className="num">Züge</span><span className="num">Dauer</span>
                 <span className="match-counted">gewertet</span><span />
               </div>
-              {rows.length === 0 && <p className="muted">Keine Partie in dieser Auswahl.</p>}
+              {rows.length === 0 && (
+                <p className="muted">
+                  {onlyCounted
+                    ? "Keine gewertete Partie – nimm den Haken bei „nur gewertete“ weg, um alle zu sehen."
+                    : "Keine Partie in dieser Auswahl."}
+                </p>
+              )}
               {rows.map((m) => (
                 <Row key={m.id} record={m} deck={deck} confirm={confirmDelete === m.id} onDelete={() => clickDelete(m.id)} />
               ))}
@@ -184,10 +193,10 @@ function Tiles({ s }: { s: DeckSummary }) {
       <Tile value={one(s.avgTurns)} label="Ø Züge" />
       <Tile value={mmss(s.avgDurationMs)} label="Ø Dauer (mm:ss)" />
       <Tile value={pct(s.mulliganRate)} label="Partien mit Mulligan" sub={`Ø ${one(s.avgMulligans)}`} />
-      <Tile value={one(s.avgLandsTurn3)} label="Ø Länder Zug 3" sub={`Zug 5: ${one(s.avgLandsTurn5)}`} />
+      <Tile value={num(s.avgLandsTurn3)} label="Ø Länder bis zum eigenen Zug 3" sub={`eigener Zug 5: ${num(s.avgLandsTurn5)}`} />
       <Tile value={pct(s.missedLandDropRate)} label="Partien mit verpasster Landabgabe" sub={`Ø ${one(s.avgMissedLandDrops)}`} />
       <Tile value={one(s.avgSpells)} label="Ø Zauber" sub={`Ø Mana ${one(s.avgSpellMana)}`} />
-      <Tile value={s.avgCommanderTurn != null ? one(s.avgCommanderTurn) : "–"} label="Ø Zug des 1. Commanders"
+      <Tile value={num(s.avgCommanderTurn)} label="Ø Zug des 1. Commanders"
         sub={`Ø Steuer ${one(s.avgCommanderTax)}`} />
       <Tile value={one(s.avgDamageDealt)} label="Ø Schaden gemacht" sub={`genommen ${one(s.avgDamageTaken)}`} />
     </div>

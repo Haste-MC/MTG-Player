@@ -334,4 +334,18 @@ describe("store: matches", () => {
     expect(s.screen).toBe("stats");
     expect(s.precons).toEqual([deck("A")]);
   });
+
+  it("ein state-Schnappschuss der laufenden Partie laesst den Statistik-Screen stehen", () => {
+    // Reconnect/requestState waehrend die Statistik offen ist: der Snapshot kommt an (s.state wird
+    // aktualisiert), reisst den Blick aber nicht an den Tisch zurueck - wie im lobby-Zweig.
+    const laufend = { ...initialState, screen: "stats" as const, state: snap({ turn: 4 }) };
+    const s = reduce(laufend, snap({ turn: 5 }));
+    expect(s.screen).toBe("stats");
+    expect(s.state?.turn).toBe(5);
+  });
+
+  it("ein Spielstart holt auch vom Statistik-Screen an den Tisch", () => {
+    const s = reduce({ ...initialState, screen: "stats" }, snap({ turn: 0 }));
+    expect(s.screen).toBe("table");
+  });
 });
