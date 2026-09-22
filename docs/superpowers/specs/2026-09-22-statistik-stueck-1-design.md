@@ -75,12 +75,15 @@ Deckel 2000 Datensätze (älteste fallen raus). API: `add(record)`, `all()`, `de
 ## 5. Auswertung (Web, rein, getestet: `web/src/matchStats.ts`)
 
 `deckNames(records)` → Decks mit mindestens einer Partie (Name + Anzahl). `summarize(records, deck)` über die
-**gewerteten** Partien mit diesem Deck:
+**gewerteten** Partien mit diesem Deck. Ausgewertet wird **deckbezogen, nicht sitzbezogen**: wer das Deck gespielt
+hat (Mensch oder KI), spielt keine Rolle – im Sparring pilotiert eine KI Kevins Deck, und genau diese Partien
+sollen zählen. Je Partie zählt höchstens ein Sitz mit diesem Deck (bevorzugt der menschliche), damit ein
+Spiegelspiel eine Partie bleibt:
 - Bilanz: Siege/Niederlagen/Unentschieden, Siegquote mit 95-%-Wilson-Intervall
 - Ø Zuglänge, Ø Dauer; Mulligan-Quote (Anteil Partien mit ≥ 1 Mulligan) und Ø Mulligans
 - Ø Länder bis Zug 3 und Zug 5; Anteil Partien mit verpasster Landabgabe und Ø verpasste
 - Ø Zauber je Partie, Ø Mana-Summe; Ø Zug des ersten Commander-Casts (`firstCommanderTurn`); Ø Commander-Steuer
-- Todesursachen (Verteilung der `lossReason` des eigenen Sitzes), Ø Schaden genommen/gemacht
+- Todesursachen (Verteilung der `lossReason` des gewerteten Sitzes), Ø Schaden genommen/gemacht
 - Gegner-Tabelle: je gegnerischem Deck Partien/Siege
 
 Das Modul rechnet nur; es kennt keine Bewertung („gut/schlecht") – das ist Stück 2.
