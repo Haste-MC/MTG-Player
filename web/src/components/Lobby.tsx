@@ -16,6 +16,7 @@ export default function Lobby() {
   const aiProfiles = useStore((s) => s.aiProfiles);
   const series = useStore((s) => s.series);
   const resetSeries = useStore((s) => s.resetSeries);
+  const openStats = useStore((s) => s.openStats);
   // true zwischen "Spiel starten" und dem ersten Snapshot (bzw. error) - schuetzt vor einem zweiten startGame.
   const expectNewMatch = useStore((s) => s.expectNewMatch);
   const [human, setHuman] = useState<Pick>(EMPTY_PICK);
@@ -196,7 +197,10 @@ export default function Lobby() {
         {ais.length < maxAis && (
           <button className="ghost" onClick={addAi}>+ Gegner hinzufügen</button>
         )}
-        <button className="primary big" disabled={!ready || expectNewMatch} onClick={start}>Spiel starten</button>
+        <div className="lobby-actions">
+          <button className="primary big" disabled={!ready || expectNewMatch} onClick={start}>Spiel starten</button>
+          <button className="ghost big" title="Bilanz und Kennzahlen der gespielten Partien" onClick={openStats}>Statistik</button>
+        </div>
         {series && series.games > 0 && (
           <div className="hint series-line">
             Serie: {formatSeries(series, seatNames)}{winner && ` – ${winner} hat die Serie gewonnen`}

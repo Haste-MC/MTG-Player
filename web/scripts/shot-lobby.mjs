@@ -4,6 +4,9 @@
 //   [--url-value="https://…"] [--spectate] [--apply=fixtures/archidekt-decks.json …] [--click=".deck-card .delete" …]
 // --apply (mehrfach moeglich) wendet nach dem Oeffnen des Panels und dem Reiterwechsel weitere Inbound-Fixtures per
 // window.mtgApply an, z. B. die Archidekt-Deckliste und einen laufenden Import fuer den Reiter "Archidekt".
+// Statistik-Screen (Stats.tsx) ohne Bridge-Daten: --apply=fixtures/matches.json --click="text=Statistik"; ein
+// weiteres --click=".match-filter input" schaltet den Filter "nur gewertete" ab, --click=".match-row .delete"
+// zeigt den Papierkorb im Bestaetigungszustand.
 // --pick oeffnet das Panel der ersten Deck-Kachel ("Dein Deck", im Zuschauer-Modus "KI 1"), klickt die Deck-Karte mit
 // diesem Namen und schliesst es damit (die Kachel zeigt das Deck). --open-panel laesst das Panel am Ende offen (nach
 // einem --pick wird es dafuer erneut geoeffnet); --tab wechselt darin den Reiter. --click (mehrfach moeglich) klickt zum

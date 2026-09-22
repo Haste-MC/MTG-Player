@@ -124,6 +124,33 @@ und meldet je Deck `archidektProgress` (`done`, `total`, `current` = gespeichert
 jedem Deck eine frische `lobby`-Nachricht und zum Schluss `archidektProgress` mit `current: null`; ein zweiter
 `archidektImport` während eines Laufs wird mit `error` abgewiesen.
 
+## Statistik
+
+Jede beendete Partie (eigenes Spiel und Zuschauer-Modus, später auch das Sparring) wird mitgeschrieben: je Sitz
+Deckname, Sieger bzw. Verlustgrund, Mulligans, Länder je Zug und verpasste Landabgaben, Zauber und Mana-Summe,
+Commander-Casts samt Steuer und Zug des ersten Commanders, Schaden gemacht/genommen sowie Leben und Gift am
+Ende; dazu Dauer, Züge und Quelle der Partie. Die Datensätze liegen als JSON-Array in
+`~/.mtg-player/matches.json` (neueste zuletzt, Deckel 2000 Partien, atomar geschrieben); eine kaputte Datei
+wird beim nächsten Schreiben ersetzt, statt den Start zu verhindern.
+
+Nicht jede Partie soll in die Bewertung fließen. Automatisch **nicht gewertet** werden Partien unter drei Zügen
+(„zu kurz"), Partien mit einer Aufgabe („aufgegeben") und abgestürzte Partien („Absturz") – sie stehen mit dem
+Grund in der Liste, zählen aber nicht in den Kennzahlen. Der Knopf „Statistik" in der Lobby öffnet den Screen:
+links die Decks mit ihrer Partienzahl, rechts die Kennzahlen des gewählten Decks (Bilanz und Siegquote mit
+95-%-Wilson-Intervall, Ø Züge und Dauer, Mulligans, Länder in Zug 3/5, verpasste Landabgaben, Zauber und Mana,
+Commander-Zug und -Steuer, Schaden, Todesursachen, Gegner-Tabelle), darunter alle Partien. Je Zeile setzt die
+Checkbox „gewertet" eine Partie wieder hinein oder heraus, der Papierkorb löscht sie (zwei Klicks, wie beim
+Deck-Löschen); der Filter „nur gewertete" steht standardmäßig an. Ausgewertet wird **deckbezogen**: wer das Deck
+gespielt hat – du oder eine KI – spielt keine Rolle, damit die kommenden Sparring-Partien (KI spielt dein Deck)
+mitzählen; je Partie zählt höchstens ein Sitz je Deck, ein Spiegel bleibt also eine Partie.
+
+Protokoll: die Bridge schickt bei Verbindung, nach jeder Änderung und nach jedem Spielende
+`matches` (die ganze Liste); der Client schickt `deleteMatch` (`id`) und `setMatchCounted` (`id`, `counted`),
+Fehler kommen als `error` („Partie <id>: …") und stehen im Screen über der Liste.
+
+Als Nächstes: Sparring (die KI spielt dein Deck gegen sich selbst, füllt die Statistik schnell) und daraus eine
+Schwächen-Analyse mit Kartenvorschlägen.
+
 ## Wenn der Tisch einfriert
 
 Friert ein Spiel ein (kein Prompt mehr, Log steht), ist meist der Spiel-Thread mit einer Ausnahme abgebrochen.

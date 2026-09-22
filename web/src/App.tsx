@@ -1,6 +1,7 @@
 import { useStore } from "./store";
 import Lobby from "./components/Lobby";
 import Table from "./components/Table";
+import Stats from "./components/Stats";
 import ChoiceDialog from "./components/ChoiceDialog";
 
 export default function App() {
@@ -8,7 +9,7 @@ export default function App() {
   const choice = useStore((s) => s.choices[0]);
   return (
     <>
-      {screen === "lobby" ? <Lobby /> : <Table />}
+      {screen === "stats" ? <Stats /> : screen === "lobby" ? <Lobby /> : <Table />}
       {choice && <ChoiceDialog key={choice.id} choice={choice} />}
     </>
   );

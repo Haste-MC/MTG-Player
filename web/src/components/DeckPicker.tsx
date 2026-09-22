@@ -315,8 +315,8 @@ export default function DeckPicker({ pick, onChange, label }: { pick: Pick; onCh
 }
 
 /** Papierkorb als Inline-SVG statt Emoji: das Emoji haengt an einer installierten Emoji-Schrift und wird sonst zum
- * Kaestchen (so im headless Chromium der Screenshots). */
-function TrashIcon() {
+ * Kaestchen (so im headless Chromium der Screenshots). Auch die Partienliste (Stats.tsx) nutzt ihn. */
+export function TrashIcon() {
   return (
     <svg className="icon" viewBox="0 0 16 16" width="12" height="12" aria-hidden="true" focusable="false">
       <path fill="currentColor" d="M6 1.5h4l.5 1H14v1.5H2V2.5h3.5l.5-1ZM3 5h10l-.7 9.1A1.5 1.5 0 0 1 10.8 15.5H5.2a1.5 1.5 0 0 1-1.5-1.4L3 5Zm3 2v6h1.3V7H6Zm2.7 0v6H10V7H8.7Z" />

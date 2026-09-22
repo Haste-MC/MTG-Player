@@ -6,7 +6,7 @@ import { send } from "./ws";
 export interface LogEntry { text: string; kind?: string; card?: number; warn?: boolean; id?: number }
 
 export interface AppState {
-  screen: "lobby" | "table";
+  screen: "lobby" | "table" | "stats";
   precons: DeckInfo[];
   decks: DeckInfo[];
   /** Von der Bridge angebotene KI-Modi/-Profile und die Standard-Bedenkzeit (Sekunden) - siehe Lobby.tsx. */
@@ -71,7 +71,9 @@ export function reduce(s: AppState, m: Inbound): AppState {
         aiModes: m.aiModes ?? initialState.aiModes,
         aiProfiles: m.aiProfiles ?? initialState.aiProfiles,
         aiTimeout: m.aiTimeout ?? initialState.aiTimeout,
-        screen: s.state ? s.screen : "lobby",
+        // Der Statistik-Screen bleibt stehen: eine frische lobby-Nachricht (Reconnect, Deck-Import)
+        // darf den Blick auf die Partien nicht wegreissen.
+        screen: s.state || s.screen === "stats" ? s.screen : "lobby",
       };
     case "state": {
       // Spielstart nach der Lobby (erster Snapshot, s.state war noch undefined) oder Replay aus dem
@@ -119,7 +121,10 @@ export function reduce(s: AppState, m: Inbound): AppState {
 interface Store extends AppState {
   apply: (m: Inbound) => void;
   clearChoice: (id: number) => void;
+  /** Zurueck zur Lobby (aus dem Spielende-Overlay oder aus der Statistik) - verwirft den Tischzustand. */
   backToLobby: () => void;
+  /** Statistik-Screen oeffnen (Knopf in der Lobby); die Partien liegen schon im Store. */
+  openStats: () => void;
   setHover: (id?: number) => void;
   toggleKind: (kind: string) => void;
   clearToast: () => void;
@@ -136,6 +141,7 @@ export const useStore = create<Store>((set) => ({
   apply: (m) => set((s) => reduce(s, m)),
   clearChoice: (id) => set((s) => ({ choices: s.choices.filter((c) => c.id !== id) })),
   backToLobby: () => set({ screen: "lobby", state: undefined, winner: undefined, choices: [] }),
+  openStats: () => set({ screen: "stats" }),
   setHover: (id) => set({ hover: id }),
   clearToast: () => set({ toast: undefined }),
   noteStart: (msg) => set((s) => ({ lastStart: msg, series: startSeries(s.series, msg), expectNewMatch: true })),

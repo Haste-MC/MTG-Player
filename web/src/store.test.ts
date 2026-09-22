@@ -321,4 +321,17 @@ describe("store: matches", () => {
     const second = reduce(first, { type: "matches", matches: [matchRecord({ id: "m2" })] });
     expect(second.matches.map((m) => m.id)).toEqual(["m2"]);
   });
+
+  it("openStats oeffnet den Screen, backToLobby schliesst ihn wieder", () => {
+    useStore.getState().openStats();
+    expect(useStore.getState().screen).toBe("stats");
+    useStore.getState().backToLobby();
+    expect(useStore.getState().screen).toBe("lobby");
+  });
+
+  it("eine lobby-Nachricht laesst den Statistik-Screen stehen", () => {
+    const s = reduce({ ...initialState, screen: "stats" }, { type: "lobby", precons: [deck("A")] });
+    expect(s.screen).toBe("stats");
+    expect(s.precons).toEqual([deck("A")]);
+  });
 });
