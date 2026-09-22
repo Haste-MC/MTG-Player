@@ -4,6 +4,8 @@ import type { MatchRecord } from "./protocol";
 
 // Gleicher Inhalt wie fixtures/matches.json (Statistik-Screen/Screenshots, siehe scripts/shot.mjs) - hier als
 // getypte Konstante, damit kein resolveJsonModule noetig ist (kein anderer Test im Repo importiert JSON).
+// ACHTUNG: beide Dateien von Hand synchron halten - eine Aenderung hier ohne die dortige (oder umgekehrt)
+// faellt bei keinem Build/Test automatisch auf.
 const records: MatchRecord[] = [
   {
     id: "2026-09-10T18:02:11Z-a1b2", startedAt: "2026-09-10T18:02:11.000Z", endedAt: "2026-09-10T18:44:33.000Z",
@@ -89,6 +91,50 @@ const records: MatchRecord[] = [
       },
     ],
   },
+  {
+    id: "2026-09-20T10:00:00Z-b7c8", startedAt: "2026-09-20T10:00:00.000Z", endedAt: "2026-09-20T10:11:40.000Z",
+    durationMs: 700000, source: "sparring", turns: 7, reason: "AllOpponentsLost", draw: false, counted: true,
+    excludeReason: null,
+    seats: [
+      {
+        name: "Sparring-KI", deck: "Krenko Goblins", human: false, ai: { mode: "sim", profile: "Default" },
+        winner: false, lossReason: "LifeReachedZero", eliminatedTurn: 7, mulligans: 1, lands: 6,
+        landsByTurn: [0, 1, 2, 3, 4, 5, 6], missedLandDrops: 1, firstMissedLandDrop: 4, spells: 9,
+        spellMana: 16, commanderCasts: 2, commanderTax: 2, firstCommanderTurn: 3, damageDealt: 14,
+        damageTaken: 22, combatDamageTaken: 18, lifeEnd: 0, poisonEnd: 0,
+      },
+      {
+        name: "Sparring-Gegner", deck: "Grix Control", human: false, ai: { mode: "sim", profile: "Default" },
+        winner: true, lossReason: null, eliminatedTurn: null, mulligans: 0, lands: 7,
+        landsByTurn: [0, 1, 2, 3, 4, 5, 6, 7], missedLandDrops: 0, firstMissedLandDrop: null, spells: 12,
+        spellMana: 29, commanderCasts: 1, commanderTax: 0, firstCommanderTurn: 4, damageDealt: 22,
+        damageTaken: 14, combatDamageTaken: 10, lifeEnd: 31, poisonEnd: 0,
+      },
+    ],
+  },
+  {
+    id: "2026-09-21T16:00:00Z-d9e0", startedAt: "2026-09-21T16:00:00.000Z", endedAt: "2026-09-21T16:40:00.000Z",
+    durationMs: 2400000, source: "live", turns: 20, reason: "IntentionalDraw", draw: true, counted: true,
+    excludeReason: null,
+    seats: [
+      {
+        name: "Du", deck: "Ojutai Flyers", human: true, ai: null, winner: false, lossReason: "IntentionalDraw",
+        eliminatedTurn: null, mulligans: 0, lands: 11,
+        landsByTurn: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11],
+        missedLandDrops: 0, firstMissedLandDrop: null, spells: 14, spellMana: 27, commanderCasts: 1,
+        commanderTax: 0, firstCommanderTurn: 5, damageDealt: 9, damageTaken: 9, combatDamageTaken: 7,
+        lifeEnd: 31, poisonEnd: 0,
+      },
+      {
+        name: "KI 1", deck: "Golgari Midrange", human: false, ai: { mode: "sim", profile: "Default" },
+        winner: false, lossReason: "IntentionalDraw", eliminatedTurn: null, mulligans: 1, lands: 10,
+        landsByTurn: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10],
+        missedLandDrops: 1, firstMissedLandDrop: 6, spells: 13, spellMana: 24, commanderCasts: 0,
+        commanderTax: 0, firstCommanderTurn: null, damageDealt: 9, damageTaken: 9, combatDamageTaken: 7,
+        lifeEnd: 31, poisonEnd: 0,
+      },
+    ],
+  },
 ];
 
 describe("wilson", () => {
@@ -106,10 +152,13 @@ describe("wilson", () => {
 describe("deckGames", () => {
   it("ignoriert nicht gewertete Partien und sortiert absteigend nach Partienzahl, dann Name", () => {
     expect(deckGames(records)).toEqual([
+      { deck: "Krenko Goblins", games: 2 },
       { deck: "Meren Aristocrats", games: 2 },
       { deck: "Titania, Gaea Incarnate", games: 2 },
-      { deck: "Krenko Goblins", games: 1 },
+      { deck: "Golgari Midrange", games: 1 },
+      { deck: "Grix Control", games: 1 },
       { deck: "Muldrotha Reanimator", games: 1 },
+      { deck: "Ojutai Flyers", games: 1 },
     ]);
   });
 
@@ -152,16 +201,24 @@ describe("summarize", () => {
     ]);
   });
 
-  it("Krenko Goblins: eine gewertete Partie", () => {
+  it("Krenko Goblins: zwei gewertete Partien, eine davon Sparring (kein menschlicher Sitz)", () => {
     const s = summarize(records, "Krenko Goblins");
     expect(s).toBeDefined();
     if (!s) return;
-    expect(s.games).toBe(1);
+    // m4 (Du, Sieg) + die Sparring-Partie (Sparring-KI, Niederlage) - source/human sind fuer die
+    // Auswertung unerheblich, beide zaehlen normal.
+    expect(s.games).toBe(2);
     expect(s.wins).toBe(1);
-    expect(s.losses).toBe(0);
-    expect(s.avgCommanderTurn).toBe(2);
-    expect(s.opponents).toEqual([{ deck: "Meren Aristocrats", games: 1, wins: 1 }]);
-    expect(s.lossReasons).toEqual({});
+    expect(s.losses).toBe(1);
+    expect(s.draws).toBe(0);
+    expect(s.avgTurns).toBeCloseTo(7.5, 6);
+    expect(s.avgCommanderTurn).toBeCloseTo(2.5, 6);
+    expect(s.avgCommanderTax).toBeCloseTo(3, 6);
+    expect(s.lossReasons).toEqual({ LifeReachedZero: 1 });
+    expect(s.opponents).toEqual([
+      { deck: "Grix Control", games: 1, wins: 0 },
+      { deck: "Meren Aristocrats", games: 1, wins: 1 },
+    ]);
   });
 
   it("Deck ohne gewertete Partien -> undefined", () => {
@@ -207,5 +264,91 @@ describe("summarize", () => {
     const s = summarize(noCast, "Ohne Commander-Cast");
     expect(s).toBeDefined();
     expect(s?.avgCommanderTurn).toBeUndefined();
+  });
+
+  it("Spiegelspiel (gleiches Deck auf beiden Sitzen) zaehlt als eine Partie fuer dieses Deck, bevorzugt den menschlichen Sitz", () => {
+    const mirror: MatchRecord[] = [
+      {
+        id: "mirror-1", startedAt: "s", endedAt: "e", durationMs: 1000, source: "live", turns: 6,
+        reason: "AllOpponentsLost", draw: false, counted: true,
+        seats: [
+          // KI-Sitz steht zuerst und verliert - waere die Wahl "immer der erste Sitz", zaehlte das als
+          // Niederlage. Bevorzugt wird aber der menschliche Sitz (Sieg).
+          {
+            name: "KI 1", deck: "Spiegeldeck", human: false, winner: false, lossReason: "LifeReachedZero",
+            mulligans: 0, lands: 6, landsByTurn: [0, 1, 2, 3, 4, 5, 6], missedLandDrops: 0,
+            spells: 7, spellMana: 14, commanderCasts: 1, commanderTax: 0,
+            damageDealt: 5, damageTaken: 20, combatDamageTaken: 20, lifeEnd: 0, poisonEnd: 0,
+          },
+          {
+            name: "Du", deck: "Spiegeldeck", human: true, winner: true,
+            mulligans: 0, lands: 6, landsByTurn: [0, 1, 2, 3, 4, 5, 6], missedLandDrops: 0,
+            spells: 8, spellMana: 15, commanderCasts: 1, commanderTax: 0,
+            damageDealt: 20, damageTaken: 5, combatDamageTaken: 5, lifeEnd: 35, poisonEnd: 0,
+          },
+        ],
+      },
+    ];
+    expect(deckGames(mirror)).toEqual([{ deck: "Spiegeldeck", games: 1 }]);
+    const s = summarize(mirror, "Spiegeldeck");
+    expect(s?.games).toBe(1);
+    expect(s?.wins).toBe(1);
+    expect(s?.losses).toBe(0);
+  });
+
+  it("Sparring (source: sparring, kein menschlicher Sitz) zaehlt wie jede andere gewertete Partie", () => {
+    const sparring: MatchRecord[] = [
+      {
+        id: "sparring-1", startedAt: "s", endedAt: "e", durationMs: 500000, source: "sparring", turns: 5,
+        reason: "AllOpponentsLost", draw: false, counted: true,
+        seats: [
+          {
+            name: "Sparring-KI", deck: "Krenko Goblins", human: false, ai: { mode: "sim", profile: "Default" },
+            winner: true, mulligans: 0, lands: 5, landsByTurn: [0, 1, 2, 3, 4, 5], missedLandDrops: 0,
+            spells: 6, spellMana: 11, commanderCasts: 1, commanderTax: 0, firstCommanderTurn: 2,
+            damageDealt: 15, damageTaken: 3, combatDamageTaken: 3, lifeEnd: 37, poisonEnd: 0,
+          },
+          {
+            name: "Gegner-KI", deck: "Grix Control", human: false, ai: { mode: "sim", profile: "Default" },
+            winner: false, lossReason: "LifeReachedZero", mulligans: 0, lands: 5,
+            landsByTurn: [0, 1, 2, 3, 4, 5], missedLandDrops: 0, spells: 5, spellMana: 12,
+            commanderCasts: 0, commanderTax: 0, damageDealt: 3, damageTaken: 15, combatDamageTaken: 12,
+            lifeEnd: 0, poisonEnd: 0,
+          },
+        ],
+      },
+    ];
+    const s = summarize(sparring, "Krenko Goblins");
+    expect(s?.games).toBe(1);
+    expect(s?.wins).toBe(1);
+  });
+
+  it("Unentschieden zaehlt als draw, weder als sieg noch als niederlage", () => {
+    const drawRecord: MatchRecord[] = [
+      {
+        id: "draw-1", startedAt: "s", endedAt: "e", durationMs: 800000, source: "live", turns: 20,
+        reason: "IntentionalDraw", draw: true, counted: true,
+        seats: [
+          {
+            name: "Du", deck: "Remis-Deck", human: true, winner: false, lossReason: "IntentionalDraw",
+            mulligans: 0, lands: 10, landsByTurn: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+            missedLandDrops: 0, spells: 12, spellMana: 22, commanderCasts: 1, commanderTax: 0,
+            damageDealt: 8, damageTaken: 8, combatDamageTaken: 6, lifeEnd: 32, poisonEnd: 0,
+          },
+          {
+            name: "KI 1", deck: "Gegner-Deck", human: false, winner: false, lossReason: "IntentionalDraw",
+            mulligans: 0, lands: 9, landsByTurn: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+            missedLandDrops: 0, spells: 10, spellMana: 19, commanderCasts: 0, commanderTax: 0,
+            damageDealt: 8, damageTaken: 8, combatDamageTaken: 6, lifeEnd: 32, poisonEnd: 0,
+          },
+        ],
+      },
+    ];
+    const s = summarize(drawRecord, "Remis-Deck");
+    expect(s).toBeDefined();
+    if (!s) return;
+    expect(s.draws).toBe(1);
+    expect(s.wins + s.losses + s.draws).toBe(s.games);
+    expect(s.winRate).toBeCloseTo(s.wins / s.games, 6);
   });
 });

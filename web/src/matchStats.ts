@@ -1,19 +1,36 @@
 import type { MatchRecord, MatchSeat } from "./protocol";
 
+// Die Auswertung ist deckbezogen, nicht spielerbezogen: wer das Deck gespielt hat (Mensch oder KI - im
+// Sparring, Stueck 3, spielt eine KI Kevins Deck), ist unerheblich; entscheidend ist nur seat.deck. Je
+// Partie zaehlt aber hoechstens ein Sitz je Deck (siehe pickSeat) - ein Spiegel (dasselbe Deck auf zwei
+// Sitzen) ist eine Partie, kein Doppelzaehler.
+
 /** Ein Deck mit mindestens einer gewerteten Partie, fuer die Deckliste des Statistik-Screens. */
 export interface DeckGames { deck: string; games: number }
 
 /** Decks aus den gewerteten Partien (ueber alle Sitze, nicht nur den eigenen) mit Partienzahl,
- * absteigend sortiert (Partienzahl, dann Name). */
+ * absteigend sortiert (Partienzahl, dann Name). Ein Deck auf zwei Sitzen derselben Partie (Spiegel)
+ * zaehlt fuer diese Partie nur einmal. */
 export function deckGames(records: MatchRecord[]): DeckGames[] {
   const counts = new Map<string, number>();
   for (const r of records) {
     if (!r.counted) continue;
-    for (const seat of r.seats) counts.set(seat.deck, (counts.get(seat.deck) ?? 0) + 1);
+    const decks = new Set(r.seats.map((seat) => seat.deck));
+    for (const deck of decks) counts.set(deck, (counts.get(deck) ?? 0) + 1);
   }
   return [...counts.entries()]
     .map(([deck, games]) => ({ deck, games }))
     .sort((a, b) => b.games - a.games || a.deck.localeCompare(b.deck));
+}
+
+/** Waehlt fuer `deck` innerhalb einer Partie hoechstens einen Sitz: bevorzugt den menschlichen, sonst
+ * den ersten passenden (Reihenfolge von `record.seats`). undefined, wenn kein Sitz dieses Deck spielt. */
+function pickSeat(record: MatchRecord, deck: string): { seat: MatchSeat; index: number } | undefined {
+  const matching = record.seats
+    .map((seat, index) => ({ seat, index }))
+    .filter((e) => e.seat.deck === deck);
+  if (matching.length === 0) return undefined;
+  return matching.find((e) => e.seat.human) ?? matching[0];
 }
 
 export interface DeckSummary {
@@ -25,17 +42,16 @@ export interface DeckSummary {
   opponents: { deck: string; games: number; wins: number }[];
 }
 
-/** Kennzahlen fuer `deck` ueber die gewerteten Partien, in denen ein Sitz genau diesen Deck-Namen traegt
- * (mehrmals im selben Match, z. B. Spiegel, zaehlt als mehrere Partien - je einer je Sitz). Metriken
- * stammen vom jeweils passenden Sitz, die Gegner-Tabelle von den uebrigen Sitzen derselben Partie.
+/** Kennzahlen fuer `deck` ueber die gewerteten Partien, in denen ein Sitz genau diesen Deck-Namen traegt -
+ * je Partie hoechstens ein Sitz (siehe pickSeat; ein Spiegel zaehlt also als eine Partie). Metriken
+ * stammen vom jeweils gewaehlten Sitz, die Gegner-Tabelle von den uebrigen Sitzen derselben Partie.
  * undefined, wenn keine gewertete Partie mit diesem Deck existiert. */
 export function summarize(records: MatchRecord[], deck: string): DeckSummary | undefined {
   const entries: { record: MatchRecord; seat: MatchSeat; index: number }[] = [];
   for (const r of records) {
     if (!r.counted) continue;
-    r.seats.forEach((seat, index) => {
-      if (seat.deck === deck) entries.push({ record: r, seat, index });
-    });
+    const picked = pickSeat(r, deck);
+    if (picked) entries.push({ record: r, seat: picked.seat, index: picked.index });
   }
   if (entries.length === 0) return undefined;
 

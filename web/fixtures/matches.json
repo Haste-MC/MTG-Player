@@ -120,6 +120,68 @@
           "damageDealt": 9, "damageTaken": 26, "combatDamageTaken": 20, "lifeEnd": 0, "poisonEnd": 0
         }
       ]
+    },
+    {
+      "id": "2026-09-20T10:00:00Z-b7c8",
+      "startedAt": "2026-09-20T10:00:00.000Z",
+      "endedAt": "2026-09-20T10:11:40.000Z",
+      "durationMs": 700000,
+      "source": "sparring",
+      "turns": 7,
+      "reason": "AllOpponentsLost",
+      "draw": false,
+      "counted": true,
+      "excludeReason": null,
+      "seats": [
+        {
+          "name": "Sparring-KI", "deck": "Krenko Goblins", "human": false, "ai": { "mode": "sim", "profile": "Default" },
+          "winner": false, "lossReason": "LifeReachedZero", "eliminatedTurn": 7,
+          "mulligans": 1, "lands": 6, "landsByTurn": [0, 1, 2, 3, 4, 5, 6],
+          "missedLandDrops": 1, "firstMissedLandDrop": 4,
+          "spells": 9, "spellMana": 16, "commanderCasts": 2, "commanderTax": 2, "firstCommanderTurn": 3,
+          "damageDealt": 14, "damageTaken": 22, "combatDamageTaken": 18, "lifeEnd": 0, "poisonEnd": 0
+        },
+        {
+          "name": "Sparring-Gegner", "deck": "Grix Control", "human": false, "ai": { "mode": "sim", "profile": "Default" },
+          "winner": true, "lossReason": null, "eliminatedTurn": null,
+          "mulligans": 0, "lands": 7, "landsByTurn": [0, 1, 2, 3, 4, 5, 6, 7],
+          "missedLandDrops": 0, "firstMissedLandDrop": null,
+          "spells": 12, "spellMana": 29, "commanderCasts": 1, "commanderTax": 0, "firstCommanderTurn": 4,
+          "damageDealt": 22, "damageTaken": 14, "combatDamageTaken": 10, "lifeEnd": 31, "poisonEnd": 0
+        }
+      ]
+    },
+    {
+      "id": "2026-09-21T16:00:00Z-d9e0",
+      "startedAt": "2026-09-21T16:00:00.000Z",
+      "endedAt": "2026-09-21T16:40:00.000Z",
+      "durationMs": 2400000,
+      "source": "live",
+      "turns": 20,
+      "reason": "IntentionalDraw",
+      "draw": true,
+      "counted": true,
+      "excludeReason": null,
+      "seats": [
+        {
+          "name": "Du", "deck": "Ojutai Flyers", "human": true, "ai": null,
+          "winner": false, "lossReason": "IntentionalDraw", "eliminatedTurn": null,
+          "mulligans": 0, "lands": 11,
+          "landsByTurn": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11],
+          "missedLandDrops": 0, "firstMissedLandDrop": null,
+          "spells": 14, "spellMana": 27, "commanderCasts": 1, "commanderTax": 0, "firstCommanderTurn": 5,
+          "damageDealt": 9, "damageTaken": 9, "combatDamageTaken": 7, "lifeEnd": 31, "poisonEnd": 0
+        },
+        {
+          "name": "KI 1", "deck": "Golgari Midrange", "human": false, "ai": { "mode": "sim", "profile": "Default" },
+          "winner": false, "lossReason": "IntentionalDraw", "eliminatedTurn": null,
+          "mulligans": 1, "lands": 10,
+          "landsByTurn": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10],
+          "missedLandDrops": 1, "firstMissedLandDrop": 6,
+          "spells": 13, "spellMana": 24, "commanderCasts": 0, "commanderTax": 0, "firstCommanderTurn": null,
+          "damageDealt": 9, "damageTaken": 9, "combatDamageTaken": 7, "lifeEnd": 31, "poisonEnd": 0
+        }
+      ]
     }
   ]
 }
