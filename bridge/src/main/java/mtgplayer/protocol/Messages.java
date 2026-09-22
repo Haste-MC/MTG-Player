@@ -1,6 +1,7 @@
 package mtgplayer.protocol;
 
 import mtgplayer.ai.AiConfig;
+import mtgplayer.stats.MatchRecord;
 
 import java.util.List;
 
@@ -100,4 +101,9 @@ public final class Messages {
 
     /** Phasen, in denen angehalten wird (Namen der PhaseType-Konstanten), je eigener/gegnerischer Zug. */
     public record StopsMsg(List<String> own, List<String> opp) { }
+
+    /** Bei Verbindung (nach {@link Lobby}) und nach jeder Aenderung (siehe {@link mtgplayer.server.Bridge}): die ganze Liste. */
+    public record Matches(String type, List<MatchRecord> matches) {
+        public Matches(List<MatchRecord> matches) { this("matches", matches); }
+    }
 }

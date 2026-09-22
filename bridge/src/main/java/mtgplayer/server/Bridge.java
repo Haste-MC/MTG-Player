@@ -15,10 +15,13 @@ import mtgplayer.gui.WebGuiGame;
 import mtgplayer.match.HumanMatch;
 import mtgplayer.protocol.Json;
 import mtgplayer.protocol.Messages;
+import mtgplayer.stats.MatchRecord;
+import mtgplayer.stats.MatchStore;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 
 /**
  * Verdrahtet WebSocket ↔ WebGuiGame/HumanMatch. Eingaben, die Forges Input-System berühren,
@@ -34,18 +37,21 @@ public final class Bridge {
     private final DeckStore store;
     private final Archidekt archidekt;
     private final DeckSource decks;
+    private final MatchStore matches;
     /** Genau ein archidektImport-Lauf zur Zeit (siehe handle, "archidektImport"). */
     private final AtomicBoolean importRunning = new AtomicBoolean();
 
     public Bridge(int wsPort) {
-        this(wsPort, DeckStore.standard(), Archidekt.standard());
+        this(wsPort, DeckStore.standard(), Archidekt.standard(), MatchStore.standard());
     }
 
-    /** Fuer Tests (siehe BridgeArchidektImportTest): eigenes Deck-Verzeichnis und Archidekt ohne Netz. */
-    Bridge(int wsPort, DeckStore store, Archidekt archidekt) {
+    /** Fuer Tests (siehe BridgeArchidektImportTest/BridgeEndToEndTest): eigenes Deck-Verzeichnis,
+     *  Archidekt ohne Netz und eigener Partien-Speicher - Kevins ~/.mtg-player bleibt unberuehrt. */
+    Bridge(int wsPort, DeckStore store, Archidekt archidekt, MatchStore matches) {
         this.store = store;
         this.archidekt = archidekt;
         this.decks = new DeckSource(store, archidekt);
+        this.matches = matches;
         this.ws = new WsServer(wsPort, this::handle, this::onClientConnected);
         this.gui = new WebGuiGame(ws);
         // KI-only-Modus: HostedMatch.startGame holt sich bei einer leeren guis-Map (Zuschauer, kein
@@ -75,6 +81,7 @@ public final class Bridge {
 
     private void onClientConnected() {
         ws.send(new Messages.Lobby(Precons.infos(), store.infos()));
+        ws.send(new Messages.Matches(matches.all()));
         // state vor choice: beides in EINEM Runnable, sonst kann pending() vor pushState() beim Client ankommen
         GuiBase.getInterface().invokeInEdtLater(() -> {
             gui.pushState();
@@ -170,9 +177,41 @@ public final class Bridge {
             }
             case "archidektList" -> archidektList(msg.path("username").asText(""));
             case "archidektImport" -> archidektImport(msg.path("ids"));
+            case "deleteMatch" -> deleteMatch(msg.path("id").asText());
+            case "setMatchCounted" -> setMatchCounted(msg.path("id").asText(), msg.path("counted").asBoolean());
             case "requestState" -> onClientConnected();
             default -> ws.send(new Messages.ErrorMsg("unbekannter Nachrichtentyp: " + type));
         }
+    }
+
+    /** {"type":"deleteMatch","id":"..."} → aktualisierte {@link Messages.Matches} oder error "Partie <id>: ...". */
+    private void deleteMatch(String id) {
+        GuiBase.getInterface().runBackgroundTask("delete-match", () -> {
+            try {
+                matches.delete(id);
+                ws.send(new Messages.Matches(matches.all()));
+            } catch (RuntimeException e) {
+                // wie bei "concede": sonst stirbt der Fehler still auf dem Hintergrund-Thread
+                e.printStackTrace();
+                ws.send(new Messages.ErrorMsg("Partie " + id + ": "
+                        + (e instanceof IllegalArgumentException ? e.getMessage() : e.toString())));
+            }
+        });
+    }
+
+    /** {"type":"setMatchCounted","id":"...","counted":true|false} → aktualisierte {@link Messages.Matches} oder error "Partie <id>: ...". */
+    private void setMatchCounted(String id, boolean counted) {
+        GuiBase.getInterface().runBackgroundTask("set-match-counted", () -> {
+            try {
+                matches.setCounted(id, counted);
+                ws.send(new Messages.Matches(matches.all()));
+            } catch (RuntimeException e) {
+                // wie bei "concede": sonst stirbt der Fehler still auf dem Hintergrund-Thread
+                e.printStackTrace();
+                ws.send(new Messages.ErrorMsg("Partie " + id + ": "
+                        + (e instanceof IllegalArgumentException ? e.getMessage() : e.toString())));
+            }
+        });
     }
 
     /** {"type":"archidektList","username":"..."} → archidektDecks (Konto-Liste, nur Commander) oder error. */
@@ -342,12 +381,18 @@ public final class Bridge {
         ws.send(new Messages.Lobby(Precons.infos(), store.infos())); // ggf. neu gespeichertes Deck
         Deck humanDeck = human;
         int timeout = aiTimeout;
+        // Sink: die beendete Partie landet im Speicher, der Client bekommt zusaetzlich zu gameOver
+        // (siehe WebGuiGame) die aktualisierte "matches"-Liste.
+        Consumer<MatchRecord> sink = r -> {
+            matches.add(r);
+            ws.send(new Messages.Matches(matches.all()));
+        };
         ui(() -> {
             try {
                 if (spectate) {
-                    match.startSpectator(ai, names, configs, timeout, gui);
+                    match.startSpectator(ai, names, configs, timeout, gui, sink);
                 } else {
-                    match.start("Du", humanDeck, ai, names, configs, timeout, gui);
+                    match.start("Du", humanDeck, ai, names, configs, timeout, gui, sink);
                 }
             } catch (RuntimeException e) {
                 ws.send(new Messages.ErrorMsg("Spielstart fehlgeschlagen: " + e));

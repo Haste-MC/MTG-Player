@@ -6,8 +6,11 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import mtgplayer.decks.Archidekt;
+import mtgplayer.decks.DeckStore;
 import mtgplayer.forge.ForgeBoot;
 import mtgplayer.protocol.Json;
+import mtgplayer.stats.MatchStore;
 import org.java_websocket.client.WebSocketClient;
 import org.java_websocket.handshake.ServerHandshake;
 import org.junit.jupiter.api.AfterAll;
@@ -17,8 +20,10 @@ import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestMethodOrder;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.net.URI;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -51,11 +56,23 @@ class BridgeEndToEndTest {
     // mitgeschnitten werden, sonst sind sie laengst durch den Draht und verworfen, bis der Test explizit
     // danach fragt.
     private static final List<JsonNode> seenLogLines = Collections.synchronizedList(new ArrayList<>());
+    // Task 3: "matches" nach gameOver ist nicht garantiert NACH gameOver auf dem Draht - der
+    // MatchRecorder haengt am Forge-Ereignisbus (Spiel-Thread), "gameOver" kommt aus
+    // WebGuiGame.finishGame() (UI-Thread); beides kann sich ueberschneiden. Ein await("matches",...)
+    // DIREKT nach await("gameOver",...) kann daher ins Leere laufen, wenn "matches" schon waehrend
+    // des gameOver-Wartens durchkam und dort stillschweigend verworfen wurde - deshalb hier
+    // mitgeschnitten wie seenLogLines, siehe awaitMatches().
+    private static final List<JsonNode> seenMatches = Collections.synchronizedList(new ArrayList<>());
+
+    @TempDir
+    static Path matchDir;
 
     @BeforeAll
     static void start() throws Exception {
         ForgeBoot.init();
-        bridge = new Bridge(PORT);
+        // eigener MatchStore (Task 3): Kevins echte ~/.mtg-player/matches.json wird nie angefasst,
+        // obwohl dieser Test mehrere echte Partien bis gameOver spielt (concede).
+        bridge = new Bridge(PORT, DeckStore.standard(), Archidekt.standard(), new MatchStore(matchDir.resolve("matches.json")));
         bridge.start();
         client = new WebSocketClient(new URI("ws://127.0.0.1:" + PORT)) {
             @Override public void onOpen(ServerHandshake h) { }
@@ -83,9 +100,37 @@ class BridgeEndToEndTest {
             if ("log".equals(n.path("type").asText())) {
                 seenLogLines.add(n);
             }
+            if ("matches".equals(n.path("type").asText())) {
+                seenMatches.add(n);
+            }
             if (type.equals(n.path("type").asText()) && cond.test(n)) return n;
         }
         throw new AssertionError("keine Nachricht '" + type + "' innerhalb " + seconds + " s");
+    }
+
+    /** Wie {@link #await}, sucht aber zuerst im Mitschnitt {@link #seenMatches} - siehe dessen Kommentar. */
+    private static JsonNode awaitMatches(Predicate<JsonNode> cond, int seconds) throws InterruptedException {
+        synchronized (seenMatches) {
+            for (int i = seenMatches.size() - 1; i >= 0; i--) {
+                if (cond.test(seenMatches.get(i))) return seenMatches.get(i);
+            }
+        }
+        long end = System.currentTimeMillis() + seconds * 1000L;
+        while (System.currentTimeMillis() < end) {
+            JsonNode n = inbox.poll(Math.max(1, end - System.currentTimeMillis()), TimeUnit.MILLISECONDS);
+            if (n == null) break;
+            if ("error".equals(n.path("type").asText())) {
+                System.err.println("[bridge error] " + n.path("text").asText());
+            }
+            if ("log".equals(n.path("type").asText())) {
+                seenLogLines.add(n);
+            }
+            if ("matches".equals(n.path("type").asText())) {
+                seenMatches.add(n);
+                if (cond.test(n)) return n;
+            }
+        }
+        throw new AssertionError("keine Nachricht 'matches' innerhalb " + seconds + " s (auch nicht im Mitschnitt)");
     }
 
     private static void send(String json) {
@@ -160,6 +205,11 @@ class BridgeEndToEndTest {
         assertTrue(Json.mapper().convertValue(lobby.get("aiProfiles"), List.class).contains("Default"),
                 "aiProfiles enthaelt Default: " + lobby.get("aiProfiles"));
 
+        // Task 3: nach "lobby" kommt beim Connect zusaetzlich "matches" - noch leer, es lief noch keine Partie.
+        JsonNode initialMatches = await("matches", n -> true, 5);
+        assertTrue(initialMatches.get("matches").isArray());
+        assertEquals(0, initialMatches.get("matches").size(), initialMatches.toString());
+
         send("{\"type\":\"startGame\",\"humanDeck\":{\"precon\":\"Abzan Armor [TDC] [2025]\"},"
                 + "\"opponents\":[{\"precon\":\"Adaptive Enchantment [C18] [2018]\",\"name\":\"KI 1\"}]}");
 
@@ -222,6 +272,32 @@ class BridgeEndToEndTest {
 
         JsonNode over = await("gameOver", n -> true, 60);
         assertNotNull(over);
+
+        // Task 3: die beendete (aufgegebene) Partie landet in einer aktualisierten "matches"-Liste.
+        // awaitMatches() statt await(): siehe seenMatches-Kommentar oben (Reihenfolge zu gameOver
+        // ist nicht garantiert).
+        JsonNode updated = awaitMatches(n -> n.get("matches").size() >= 1, 10);
+        assertEquals(1, updated.get("matches").size(), updated.toString());
+        String matchId = updated.get("matches").get(0).get("id").asText();
+        assertFalse(updated.get("matches").get(0).get("counted").asBoolean(), "aufgegebene Partie zaehlt nicht");
+
+        // setMatchCounted schickt die aktualisierte Liste mit geaendertem counted.
+        send("{\"type\":\"setMatchCounted\",\"id\":\"" + matchId + "\",\"counted\":true}");
+        JsonNode afterSetCounted = await("matches", n -> matchWithId(n, matchId) != null
+                && matchWithId(n, matchId).get("counted").asBoolean(), 10);
+        assertTrue(matchWithId(afterSetCounted, matchId).get("counted").asBoolean());
+
+        // deleteMatch entfernt die Partie aus der naechsten "matches"-Liste.
+        send("{\"type\":\"deleteMatch\",\"id\":\"" + matchId + "\"}");
+        JsonNode afterDelete = await("matches", n -> matchWithId(n, matchId) == null, 10);
+        assertEquals(0, afterDelete.get("matches").size(), afterDelete.toString());
+    }
+
+    private static JsonNode matchWithId(JsonNode matchesMsg, String id) {
+        for (JsonNode m : matchesMsg.get("matches")) {
+            if (id.equals(m.get("id").asText())) return m;
+        }
+        return null;
     }
 
     /** Deckt AiConfig/aiTimeout ueber das echte Protokoll ab: unbekanntes Profil wird abgelehnt
@@ -286,5 +362,25 @@ class BridgeEndToEndTest {
         send("{\"type\":\"deleteDeck\",\"name\":\"gibt es nicht\"}");
         JsonNode err = await("error", n -> n.path("text").asText().startsWith("Löschen gibt es nicht:"), 10);
         assertTrue(err.path("text").asText().startsWith("Löschen gibt es nicht:"), err.toString());
+    }
+
+    /** deleteMatch mit unbekannter Id: "error" beginnend mit "Partie <id>: " statt still zu bleiben. */
+    @Test
+    @Order(7)
+    @Timeout(value = 1, unit = TimeUnit.MINUTES)
+    void deleteMatchUnbekannteIdLiefertError() throws Exception {
+        send("{\"type\":\"deleteMatch\",\"id\":\"gibt es nicht\"}");
+        JsonNode err = await("error", n -> n.path("text").asText().startsWith("Partie gibt es nicht:"), 10);
+        assertTrue(err.path("text").asText().startsWith("Partie gibt es nicht:"), err.toString());
+    }
+
+    /** setMatchCounted mit unbekannter Id: "error" beginnend mit "Partie <id>: " statt still zu bleiben. */
+    @Test
+    @Order(8)
+    @Timeout(value = 1, unit = TimeUnit.MINUTES)
+    void setMatchCountedUnbekannteIdLiefertError() throws Exception {
+        send("{\"type\":\"setMatchCounted\",\"id\":\"gibt es nicht\",\"counted\":false}");
+        JsonNode err = await("error", n -> n.path("text").asText().startsWith("Partie gibt es nicht:"), 10);
+        assertTrue(err.path("text").asText().startsWith("Partie gibt es nicht:"), err.toString());
     }
 }

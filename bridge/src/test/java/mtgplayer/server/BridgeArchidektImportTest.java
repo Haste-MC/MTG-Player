@@ -9,6 +9,7 @@ import mtgplayer.decks.Archidekt;
 import mtgplayer.decks.DeckStore;
 import mtgplayer.forge.ForgeBoot;
 import mtgplayer.protocol.Json;
+import mtgplayer.stats.MatchStore;
 import org.java_websocket.client.WebSocketClient;
 import org.java_websocket.handshake.ServerHandshake;
 import org.junit.jupiter.api.AfterAll;
@@ -56,7 +57,7 @@ class BridgeArchidektImportTest {
             if (url.contains("/decks/v3/")) return list1;
             throw new IOException("unerwartete URL im Test: " + url);
         });
-        bridge = new Bridge(PORT, new DeckStore(deckDir), archidekt);
+        bridge = new Bridge(PORT, new DeckStore(deckDir), archidekt, new MatchStore(deckDir.resolve("matches.json")));
         bridge.start();
         client = new WebSocketClient(new URI("ws://127.0.0.1:" + PORT)) {
             @Override public void onOpen(ServerHandshake h) { }

@@ -6,16 +6,21 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import mtgplayer.decks.Archidekt;
+import mtgplayer.decks.DeckStore;
 import mtgplayer.forge.ForgeBoot;
 import mtgplayer.protocol.Json;
+import mtgplayer.stats.MatchStore;
 import org.java_websocket.client.WebSocketClient;
 import org.java_websocket.handshake.ServerHandshake;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.net.URI;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -41,10 +46,15 @@ class BridgeSpectatorTest {
     // mitgeschnitten werden, sonst sind sie laengst verworfen, bis der Test danach fragt.
     private static final List<JsonNode> seenLogLines = Collections.synchronizedList(new ArrayList<>());
 
+    @TempDir
+    static Path matchDir;
+
     @BeforeAll
     static void start() throws Exception {
         ForgeBoot.init();
-        bridge = new Bridge(PORT);
+        // eigener MatchStore (Task 3): dieser Test spielt echte Zuschauer-Partien bis gameOver -
+        // Kevins echte ~/.mtg-player/matches.json darf davon nichts abbekommen.
+        bridge = new Bridge(PORT, DeckStore.standard(), Archidekt.standard(), new MatchStore(matchDir.resolve("matches.json")));
         bridge.start();
         client = new WebSocketClient(new URI("ws://127.0.0.1:" + PORT)) {
             @Override public void onOpen(ServerHandshake h) { }
