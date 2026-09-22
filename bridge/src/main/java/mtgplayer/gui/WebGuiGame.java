@@ -65,6 +65,7 @@ public class WebGuiGame extends AbstractGuiGame {
     private volatile Stops stops = Stops.defaults();
     private volatile boolean fullControl;
     private volatile Consumer<Game> newGameHook;
+    private volatile Game hookedGame;
     private final AtomicInteger seq = new AtomicInteger(1);
     @SuppressWarnings("deprecation")
     private Observer inputObserver;
@@ -206,6 +207,7 @@ public class WebGuiGame extends AbstractGuiGame {
      * {@link #setGameView}, warum das der Anmeldepunkt ist.
      */
     public void onNewGame(Consumer<Game> hook) {
+        hookedGame = null;                       // gibt auch die Referenz auf das alte Spiel frei
         newGameHook = hook;
     }
 
@@ -215,14 +217,26 @@ public class WebGuiGame extends AbstractGuiGame {
      * Forges Spiel-Thread uebergibt - fuer den menschlichen Sitz wie fuer den Zuschauer-Pfad. Das ist
      * damit der frueheste Zeitpunkt, an dem das {@code Game} existiert, und der einzige ohne Rennen
      * gegen die ersten Ereignisse der Partie (Mulligans fallen sonst schon).
+     *
+     * <p>Der Haken feuert genau einmal je Spiel, denn {@code setGameView} kommt oefter: schon im
+     * normalen Start einmal mit {@code null} und einmal mit der Ansicht, und bei einem Teilspiel
+     * (Shahrazad) ruft {@code HostedMatch.visit(GameEventSubgameStart/SubgameEnd)} die Folge
+     * {@code null}/Ansicht je ZWEIMAL - am Teilspielende wieder mit dem HAUPTspiel, das laengst einen
+     * Recorder hat. Ohne Schutz waeren das mehrere Datensaetze je Partie und ein
+     * {@code HumanMatch.recorder}, der auf den falschen zeigt. Deshalb zwei Bedingungen: dasselbe
+     * {@code Game} wie zuletzt wird uebersprungen (Identitaetsvergleich, {@code Game} hat kein
+     * eigenes {@code equals}), und ein Teilspiel ({@code getMaingame() != null}) ist gar keine Partie
+     * und wird nie gehakt.</p>
      */
     @Override
     public void setGameView(GameView gameView0) {
         super.setGameView(gameView0);
         watchLogOf(gameView0);
         Consumer<Game> hook = newGameHook;
-        if (hook != null && gameView0 != null && gameView0.getGame() != null) {
-            hook.accept(gameView0.getGame());
+        Game game = gameView0 == null ? null : gameView0.getGame();
+        if (hook != null && game != null && game != hookedGame && game.getMaingame() == null) {
+            hookedGame = game;
+            hook.accept(game);
         }
         push();
     }
@@ -236,6 +250,7 @@ public class WebGuiGame extends AbstractGuiGame {
     @Override
     public void resetForNewMatch() {
         super.resetForNewMatch();
+        hookedGame = null;
         synchronized (recentLog) { recentLog.clear(); logId = 0; }
         watchLogOf(null);
     }

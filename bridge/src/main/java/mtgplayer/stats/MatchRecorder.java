@@ -53,7 +53,10 @@ import java.util.function.Consumer;
  * </ul>
  * <p>{@code landsByTurn} ist kumulativ und nach eigenem Zug indiziert: Index 0 ist immer 0 (vor dem
  * ersten eigenen Zug), Index n die Gesamtzahl gespielter Laender bis einschliesslich des n-ten
- * eigenen Zuges. "Laender bis Zug 3" ist damit schlicht {@code landsByTurn.get(3)}.</p>
+ * eigenen Zuges. "Laender bis Zug 3" ist damit schlicht {@code landsByTurn.get(3)}.
+ * <b>Die Liste hat genau {@code eigeneZuege + 1} Eintraege</b> - ein Sitz, der nur zwei eigene Zuege
+ * hatte, liefert {@code [0, 1, 2]} und sonst nichts. Wer nach "Zug 5" fragt, muss die Laenge pruefen
+ * (in der Auswertung: kuerzere Partien bei diesem Mittelwert auslassen, nicht mit 0 fuellen).</p>
  *
  * <p><b>Verpasste Landabgabe.</b> Bei jedem {@code GameEventTurnBegan} wird der vorige Zug
  * abgeschlossen: war sein Besitzer noch im Spiel und hat in diesem Zug kein Land gespielt, zaehlt
@@ -75,7 +78,8 @@ public final class MatchRecorder {
     /** Weniger Zuege als das zaehlen nicht als Partie (Spec: "zu kurz"). */
     public static final int MIN_TURNS = 3;
 
-    private final Game game;
+    /** Nach {@link #finish()} {@code null} - siehe dort, warum die Forge-Objekte losgelassen werden. */
+    private Game game;
     private final String source;
     private final Consumer<MatchRecord> sink;
     private final Instant startedAt = Instant.now();
@@ -290,6 +294,14 @@ public final class MatchRecorder {
                 outcome == null ? "unbekannt" : String.valueOf(outcome.getWinCondition()),
                 !anyWinner || (outcome != null && outcome.getWinCondition() == GameEndReason.Draw),
                 excludeReason == null, excludeReason, List.copyOf(out));
+        // Der Datensatz steht; ab hier braucht niemand mehr die Forge-Objekte. Ohne das haelt der
+        // Recorder ueber seats/byView das ganze Game fest, solange ihn irgendwer noch referenziert
+        // (HumanMatch.recorder bis zum naechsten Spiel, oder der CrashLog-Listener, falls ein
+        // haengender Spiel-Thread finish() nie erreicht).
+        seats.clear();
+        byView.clear();
+        turnOwner = null;
+        game = null;
         return finished;
     }
 
