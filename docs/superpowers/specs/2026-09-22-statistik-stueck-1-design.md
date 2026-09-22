@@ -45,7 +45,7 @@ Der Recorder ist reine Buchhaltung ohne Forge-Nebenwirkungen und liefert am Ende
                "winner": true, "lossReason": null, "eliminatedTurn": null,
                "mulligans": 1, "lands": 7, "landsByTurn": [0,1,2,2,3,…],
                "missedLandDrops": 2, "firstMissedLandDrop": 4,
-               "spells": 12, "spellMana": 34, "commanderCasts": 2, "commanderTax": 2,
+               "spells": 12, "spellMana": 34, "commanderCasts": 2, "commanderTax": 2, "firstCommanderTurn": 4,
                "damageDealt": 21, "damageTaken": 18, "combatDamageTaken": 12,
                "lifeEnd": 22, "poisonEnd": 0 } ] }
 ```
@@ -79,7 +79,7 @@ Deckel 2000 Datensätze (älteste fallen raus). API: `add(record)`, `all()`, `de
 - Bilanz: Siege/Niederlagen/Unentschieden, Siegquote mit 95-%-Wilson-Intervall
 - Ø Zuglänge, Ø Dauer; Mulligan-Quote (Anteil Partien mit ≥ 1 Mulligan) und Ø Mulligans
 - Ø Länder bis Zug 3 und Zug 5; Anteil Partien mit verpasster Landabgabe und Ø verpasste
-- Ø Zauber je Partie, Ø Mana-Summe; Ø Zug des ersten Commander-Casts; Ø Commander-Steuer
+- Ø Zauber je Partie, Ø Mana-Summe; Ø Zug des ersten Commander-Casts (`firstCommanderTurn`); Ø Commander-Steuer
 - Todesursachen (Verteilung der `lossReason` des eigenen Sitzes), Ø Schaden genommen/gemacht
 - Gegner-Tabelle: je gegnerischem Deck Partien/Siege
 

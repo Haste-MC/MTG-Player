@@ -29,7 +29,8 @@
 public record Seat(String name, String deck, boolean human, Ai ai, boolean winner, String lossReason,
                    Integer eliminatedTurn, int mulligans, int lands, List<Integer> landsByTurn,
                    int missedLandDrops, Integer firstMissedLandDrop, int spells, int spellMana,
-                   int commanderCasts, int commanderTax, int damageDealt, int damageTaken,
+                   int commanderCasts, int commanderTax, Integer firstCommanderTurn,
+                   int damageDealt, int damageTaken,
                    int combatDamageTaken, int lifeEnd, int poisonEnd) { }
 public record Ai(String mode, String profile) { }
 public record MatchRecord(String id, String startedAt, String endedAt, long durationMs, String source,
@@ -119,7 +120,7 @@ public record Matches(String type, List<MatchRecord> matches) { public Matches(L
 export interface MatchSeat { name: string; deck: string; human: boolean; ai?: { mode: string; profile: string } | null;
   winner: boolean; lossReason?: string | null; eliminatedTurn?: number | null; mulligans: number; lands: number;
   landsByTurn: number[]; missedLandDrops: number; firstMissedLandDrop?: number | null; spells: number; spellMana: number;
-  commanderCasts: number; commanderTax: number; damageDealt: number; damageTaken: number; combatDamageTaken: number;
+  commanderCasts: number; commanderTax: number; firstCommanderTurn?: number | null; damageDealt: number; damageTaken: number; combatDamageTaken: number;
   lifeEnd: number; poisonEnd: number }
 export interface MatchRecord { id: string; startedAt: string; endedAt: string; durationMs: number;
   source: "live" | "spectate" | "sparring"; turns: number; reason: string; draw: boolean; counted: boolean;
@@ -138,7 +139,7 @@ export interface DeckSummary { games: number; wins: number; losses: number; draw
 export function summarize(records: MatchRecord[], deck: string): DeckSummary | undefined  // undefined bei 0 gewerteten Partien
 export function wilson(wins: number, games: number): [number, number]                    // 95 %, [0,0] bei games 0
 ```
-`avgCommanderTurn`: aus `landsByTurn`? Nein – der Datensatz hat keinen Zug des ersten Commander-Casts; **Spec-Abgleich:** `commanderCasts` ist vorhanden, der Zug nicht. Deshalb hier weglassen und in §5 der Spec streichen (Anmerkung im Commit), oder – besser – `Seat` in Task 1 um `firstCommanderTurn` (Integer, nullable) erweitern und im Recorder beim ersten Commander-Cast setzen. **Entscheidung: Feld ergänzen** (Task 1 Interface entsprechend, Recorder Task 2, Spec-Zeile anpassen).
+`avgCommanderTurn` mittelt `Seat.firstCommanderTurn` über die Partien, in denen der Commander gewirkt wurde (fehlt er überall: Feld weglassen/`undefined`).
 
 - [ ] **Step 1: Failing Tests** – `matchStats.test.ts`: `wilson(7, 10)` ≈ `[0.397, 0.892]` (auf 3 Stellen), `wilson(0, 0)` → `[0, 0]`; `deckGames` ignoriert nicht gewertete Partien und sortiert; `summarize` über eine kleine Fixture-Liste (3 Partien, eine nicht gewertet) prüft Bilanz, Ø Züge, Mulligan-Quote, Ø Länder bis Zug 3, Todesursachen-Verteilung und Gegner-Tabelle; `summarize` für ein Deck ohne gewertete Partien → `undefined`. `store.test.ts`: `matches`-Reducer.
 - [ ] **Step 2–4: Rot → Implementieren → Grün** (`npm test`, `npm run build`). Fixture `web/fixtures/matches.json` = `{ "type": "matches", "matches": [ … 4 realistische Datensätze, zwei Decks, einer nicht gewertet („aufgegeben") … ] }`.
