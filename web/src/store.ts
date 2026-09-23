@@ -40,6 +40,11 @@ export interface AppState {
    *  laufenden archidektImport. decks/progress fehlen, bevor je eine Antwort kam; loading ist waehrend
    *  einer laufenden archidektList-Anfrage true, ein "error" beendet es (unabhaengig vom Grund). */
   archidekt: { username?: string; decks?: ArchidektEntry[]; loading: boolean; progress?: ArchidektProgress };
+  /** Laeuft die Bridge gerade laenger als 3 s ohne sichtbare Aktivitaet, steht hier die bisherige Dauer
+   *  und (wenn bekannt) der Sitz mit Prioritaet - siehe Thinking und components/Thinking.tsx. Die Bridge
+   *  schickt seconds: 0, sobald wieder etwas passiert; dann faellt das Feld weg. Auch jeder Snapshot
+   *  loescht es: ein neuer Zustand ist sichtbare Aktivitaet, die Anzeige waere sonst kurz falsch. */
+  thinking?: { player?: number | null; seconds: number };
   /** Ganze Partienliste der Bridge (siehe matches-Nachricht) - bei Verbindung und nach jeder Aenderung
    *  komplett ersetzt, nie zusammengefuehrt. Grundlage fuer matchStats.ts. */
   matches: MatchRecord[];
@@ -89,7 +94,7 @@ export function reduce(s: AppState, m: Inbound): AppState {
         // ohne Zutun (Reconnect, requestState der laufenden Partie) und duerfte den Blick auf die
         // Partien nicht wegreissen - nur ein Spielstart holt einen wieder an den Tisch.
         ...s, state: m, screen: s.screen === "stats" && !isNewMatch ? "stats" : "table",
-        log: freshLog, lastLogId, expectNewMatch: false,
+        log: freshLog, lastLogId, expectNewMatch: false, thinking: undefined,
         winner: isNewMatch ? undefined : s.winner,
       };
     }
@@ -101,6 +106,9 @@ export function reduce(s: AppState, m: Inbound): AppState {
       const lastLogId = m.id !== undefined ? m.id : s.lastLogId;
       return { ...s, log: [...s.log, { text: m.text, kind: m.kind, card: m.card, id: m.id }].slice(-LOG_MAX), lastLogId };
     }
+    case "thinking":
+      // seconds: 0 ist das Ende der Stille - Feld loeschen statt eine "0 s"-Zeile stehen zu lassen.
+      return m.seconds > 0 ? { ...s, thinking: { player: m.player, seconds: m.seconds } } : { ...s, thinking: undefined };
     case "gameOver":
       return { ...s, winner: m.winner ?? null, choices: [], series: s.series ? recordResult(s.series, m.winner ?? null) : s.series };
     case "error": {
@@ -144,7 +152,7 @@ export const useStore = create<Store>((set) => ({
   ...initialState,
   apply: (m) => set((s) => reduce(s, m)),
   clearChoice: (id) => set((s) => ({ choices: s.choices.filter((c) => c.id !== id) })),
-  backToLobby: () => set({ screen: "lobby", state: undefined, winner: undefined, choices: [] }),
+  backToLobby: () => set({ screen: "lobby", state: undefined, winner: undefined, choices: [], thinking: undefined }),
   openStats: () => set({ screen: "stats" }),
   setHover: (id) => set({ hover: id }),
   clearToast: () => set({ toast: undefined }),

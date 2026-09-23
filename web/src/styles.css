@@ -561,6 +561,23 @@ input[type="checkbox"] { accent-color: var(--accent); width: 14px; height: 14px;
 .prompt .phase-chip .turn { color: var(--muted); font-weight: 500; }
 .prompt .phase-chip .sep { color: var(--faint); }
 .prompt .message { flex: 1; min-width: 0; font-size: 14px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Denk-Anzeige (ThinkingTicker -> store.thinking, components/Thinking.tsx): steht in der Leiste und nicht
+   als eigene Zeile darueber - eine Zeile mehr in .mine aendert die Spielfeldhoehe, useBoardSize misst neu
+   und das Board skaliert bei jedem Beginn/Ende des Rechnens um. Die Leiste ist so hoch wie ihre Knoepfe
+   (~34px), die bis zu zweizeilige Anzeige passt hinein: nichts springt, wenn sie kommt oder geht. */
+.thinking { display: flex; flex-direction: column; justify-content: center; gap: 1px; flex: none; min-width: 0; max-width: 42%; font-size: 13px; line-height: 1.15; color: var(--muted); }
+.thinking .line { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
+.thinking .secs { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+.thinking .hint { font-size: 11px; color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.thinking.compact { font-size: 12px; }
+.thinking.compact .hint { font-size: 10.5px; }
+.thinking .dots { display: inline-flex; align-items: center; gap: 3px; }
+.thinking .dots i { width: 3px; height: 3px; border-radius: 50%; background: currentColor; opacity: 0.25; animation: thinking-dot 1.4s ease-in-out infinite; }
+.thinking .dots i:nth-child(2) { animation-delay: 0.2s; }
+.thinking .dots i:nth-child(3) { animation-delay: 0.4s; }
+@keyframes thinking-dot { 0%, 55%, 100% { opacity: 0.25; } 25% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .thinking .dots i { animation: none; opacity: 0.55; } }
+
 .prompt .actions { display: inline-flex; gap: 3px; align-items: center; flex: none; padding: 3px; border-radius: 999px; background: rgba(0, 0, 0, 0.28); border: 1px solid var(--line); }
 .prompt .actions button { border-radius: 999px; padding: 6px 14px; }
 .prompt .actions button.quiet { padding: 6px 12px; }
@@ -788,7 +805,8 @@ button.stat-deck.on { background: var(--accent-soft); border-color: rgba(79, 140
 .match-title { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
 .match-filter { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); cursor: pointer; }
 .match-list > .muted { margin: 4px 0 0; font-size: 12px; }
-.match-row { position: relative; display: grid; grid-template-columns: 112px 78px minmax(0, 1fr) 172px 46px 58px 80px 44px; align-items: center; gap: 8px; padding: 5px 8px; border-radius: var(--radius-sm); font-size: 12px; }
+/* Spalte "Quelle" traegt zwei Chips (Quelle + KI-Bedenkzeit), daher 118px statt 78px. */
+.match-row { position: relative; display: grid; grid-template-columns: 112px 118px minmax(0, 1fr) 172px 46px 58px 80px 44px; align-items: center; gap: 8px; padding: 5px 8px; border-radius: var(--radius-sm); font-size: 12px; }
 .match-row:not(.head) { background: rgba(0, 0, 0, 0.22); border: 1px solid var(--line); }
 .match-row:not(.head):hover { border-color: var(--line-2); }
 .match-row.head { padding: 0 8px; font-size: 10px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--faint); }
@@ -803,6 +821,9 @@ button.stat-deck.on { background: var(--accent-soft); border-color: rgba(79, 140
 .match-result.win { color: var(--green); }
 .match-result.loss { color: var(--red); }
 .match-result.draw { color: var(--muted); }
+.match-source { display: flex; align-items: center; gap: 5px; min-width: 0; }
+.match-source .chip { flex: none; }
+.chip.timeout { font-weight: 500; color: var(--faint); }
 .chip.src-spectate { color: var(--blue); border-color: rgba(92, 184, 255, 0.35); }
 .chip.src-sparring { color: var(--gold); border-color: var(--gold-line); }
 .chip.excl { font-weight: 500; color: var(--gold); border-color: var(--gold-line); background: var(--gold-soft); }

@@ -169,7 +169,14 @@ function Row({ record, deck, confirm, onDelete }: { record: MatchRecord; deck?: 
   return (
     <div className={"match-row" + (record.counted ? "" : " uncounted")}>
       <span className="match-when">{stamp(record.startedAt)}</span>
-      <span><span className={"chip src-" + record.source}>{SOURCE_LABEL[record.source]}</span></span>
+      <span className="match-source">
+        <span className={"chip src-" + record.source}>{SOURCE_LABEL[record.source]}</span>
+        {/* Bedenkzeit der Partie, sofern der Datensatz sie kennt (aeltere haben sie nicht) - dezent
+            hinter der Quelle, weil sie erklaert, warum eine Partie lange lief. */}
+        {record.aiTimeout != null && (
+          <span className="chip timeout" title="KI-Bedenkzeit je Entscheidung">{record.aiTimeout} s</span>
+        )}
+      </span>
       <span className="match-decks">
         <b>{seat?.deck ?? "?"}</b>
         {opponents && <span className="muted"> gegen {opponents}</span>}

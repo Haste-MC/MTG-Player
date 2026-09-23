@@ -88,6 +88,9 @@ export default function Lobby() {
   const msg = buildStartGame(spectate, humanRef, aiRefs, aiPicks, aiTimeout);
   const ready = msg !== undefined;
   const seatNames = [...(spectate ? [] : ["Du"]), ...ais.map((_, i) => "KI " + (i + 1))];
+  // Jeder simulierende Sitz rechnet je Entscheidung bis zur vollen Bedenkzeit - ab zwei Sitzen summiert
+  // sich das sichtbar (Spec §3). Nur ein Hinweis, kein Zwang und keine Aenderung der Voreinstellung.
+  const simSeats = aiPicks.filter((p) => p.mode === "sim").length;
   const winner = series ? seriesWinner(series, bestOf) : undefined;
 
   const toggleSpectate = (on: boolean) => {
@@ -168,6 +171,13 @@ export default function Lobby() {
             </label>
           </div>
           <span className="hint">Richtwert je Entscheidung, kann bis ~2× überschreiten; gilt für alle KI-Modi, Simulation nutzt das Budget je Entscheidung</span>
+          {simSeats > 1 && (
+            <span className="hint sim-hint">
+              <b>{simSeats} Simulations-Sitze</b>: die KIs rechnen reihum – in einer 4er-Runde dauert eine Partie
+              schnell 15–30 Minuten, einzelne Züge über eine Minute. Weniger Sim-Sitze oder ein kleineres Budget
+              machen es flüssiger.
+            </span>
+          )}
         </section>
         {ais.map((a, i) => (
           <section key={i} className="lobby-section">

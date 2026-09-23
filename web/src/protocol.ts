@@ -158,6 +158,10 @@ export type DeckRef =
  * AiConfig-Profils (siehe Lobby.aiModes/aiProfiles). Fehlt bei einem Gegner-Eintrag, gilt Standard/Default. */
 export interface AiPick { mode: "standard" | "hybrid" | "sim"; profile: string }
 export interface LogLine { type: "log"; text: string; kind?: string; card?: number; id?: number; }
+/** Die Bridge rechnet und am Tisch passiert sichtbar nichts (mtgplayer.gui.ThinkingTicker): seconds ist
+ * die Dauer der bisherigen Stille, player der Sitz mit Prioritaet - er fehlt/ist null, wenn kein Snapshot
+ * ihn hergibt. seconds: 0 beendet die Anzeige (kommt einmalig, sobald wieder etwas passiert). */
+export interface Thinking { type: "thinking"; player?: number | null; seconds: number }
 export interface GameOver { type: "gameOver"; winner?: string; }
 export interface ErrorMsg { type: "error"; text: string; }
 
@@ -180,13 +184,16 @@ export interface MatchSeat {
  * nur, damit sie beim Durchreichen nicht verlorengeht - Datensaetze ohne Feld gelten der Bridge als v1. */
 export interface MatchRecord {
   v?: number; id: string; startedAt: string; endedAt: string; durationMs: number;
-  source: "live" | "spectate" | "sparring"; turns: number; reason: string; draw: boolean; counted: boolean;
+  source: "live" | "spectate" | "sparring";
+  /** KI-Bedenkzeit je Entscheidung in Sekunden, mit der die Partie lief; fehlt/null bei aelteren Datensaetzen. */
+  aiTimeout?: number | null;
+  turns: number; reason: string; draw: boolean; counted: boolean;
   excludeReason?: string | null; seats: MatchSeat[];
 }
 /** Bei Verbindung und nach jeder Aenderung: die ganze Partienliste (neueste zuletzt), siehe MatchStore. */
 export interface Matches { type: "matches"; matches: MatchRecord[] }
 
-export type Inbound = Snapshot | Choice | Lobby | LogLine | GameOver | ErrorMsg | ArchidektDecks | ArchidektProgress | Matches;
+export type Inbound = Snapshot | Choice | Lobby | LogLine | Thinking | GameOver | ErrorMsg | ArchidektDecks | ArchidektProgress | Matches;
 
 export type Outbound =
   // humanDeck fehlt bei spectate:true (KI-only-Modus, kein eigener Sitz - siehe lobbyPayload.ts)

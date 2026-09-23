@@ -6,6 +6,7 @@ import Hand from "./Hand";
 import Prompt from "./Prompt";
 import Log from "./Log";
 import PhaseBar from "./PhaseBar";
+import Thinking from "./Thinking";
 import CardDetail from "./CardDetail";
 import CardImage from "./CardImage";
 
@@ -71,12 +72,13 @@ export default function Table() {
         <Log />
       </div>
       {spectator ? (
-        <Prompt state={state} dangerLabel="Beenden" />
+        // Zuschauer: die Prompt-Leiste ist die Fusszeile - die Denk-Anzeige steht neben den Steuerknoepfen.
+        <Prompt state={state} dangerLabel="Beenden"><Thinking compact /></Prompt>
       ) : (
         <div className="mine">
           {me && <PlayerZone p={me} state={state} compact={false} />}
           <PhaseBar state={state} />
-          <Prompt state={state} />
+          <Prompt state={state}><Thinking /></Prompt>
           <Hand state={state} />
         </div>
       )}

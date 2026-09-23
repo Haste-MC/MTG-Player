@@ -1,9 +1,11 @@
-import { useEffect } from "react";
+import { useEffect, type ReactNode } from "react";
 import type { Snapshot } from "../protocol";
 import { useStore } from "../store";
 import { send } from "../ws";
 
-export default function Prompt({ state, dangerLabel = "Aufgeben" }: { state: Snapshot; dangerLabel?: string }) {
+/** children stehen zwischen Nachricht und Knoepfen in der Leiste (Table.tsx haengt dort die Denk-Anzeige
+ *  ein - in der Leiste statt darueber, damit nichts umbricht oder das Spielfeld umskaliert). */
+export default function Prompt({ state, dangerLabel = "Aufgeben", children }: { state: Snapshot; dangerLabel?: string; children?: ReactNode }) {
   const p = state.prompt;
   const choiceOpen = useStore((s) => s.choices.length > 0);
   const toast = useStore((s) => s.toast);
@@ -30,6 +32,7 @@ export default function Prompt({ state, dangerLabel = "Aufgeben" }: { state: Sna
       <span className="phase-chip"><span className="turn">Zug {state.turn}</span><span className="sep">·</span>{state.phase ?? ""}</span>
       <span className="message">{p.message}</span>
       {toast && <span className="toast" role="status" key={toast.n}>{toast.text}</span>}
+      {children}
       <span className="actions">
         <button className="primary" disabled={!p.okEnabled} onClick={() => send({ type: "ok", seq: p.seq })}>{p.okLabel}</button>
         <button disabled={!p.cancelEnabled} onClick={() => send({ type: "cancel", seq: p.seq })}>{p.cancelLabel}</button>

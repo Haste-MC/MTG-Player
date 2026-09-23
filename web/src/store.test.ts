@@ -9,7 +9,7 @@ const deck = (name: string): DeckInfo => ({ name, commanders: [] });
 
 const matchRecord = (over: Partial<MatchRecord> = {}): MatchRecord => ({
   id: "m1", startedAt: "2026-09-10T18:02:11.000Z", endedAt: "2026-09-10T18:44:33.000Z", durationMs: 2542000,
-  source: "live", turns: 12, reason: "AllOpponentsLost", draw: false, counted: true, excludeReason: null,
+  source: "live", aiTimeout: 5, turns: 12, reason: "AllOpponentsLost", draw: false, counted: true, excludeReason: null,
   seats: [
     {
       name: "Du", deck: "Titania, Gaea Incarnate", human: true, ai: null, winner: true, lossReason: null,
@@ -347,5 +347,38 @@ describe("store: matches", () => {
   it("ein Spielstart holt auch vom Statistik-Screen an den Tisch", () => {
     const s = reduce({ ...initialState, screen: "stats" }, snap({ turn: 0 }));
     expect(s.screen).toBe("table");
+  });
+});
+
+describe("store: thinking", () => {
+  it("thinking setzt Sitz und Sekunden", () => {
+    const s = reduce(initialState, { type: "thinking", player: 2, seconds: 5 });
+    expect(s.thinking).toEqual({ player: 2, seconds: 5 });
+  });
+
+  it("thinking ohne bekannten Sitz setzt die Anzeige trotzdem", () => {
+    // Die Bridge laesst null-Felder weg (Jackson) - "player" kann fehlen, nicht nur null sein.
+    const s = reduce(initialState, { type: "thinking", seconds: 8 });
+    expect(s.thinking).toEqual({ player: undefined, seconds: 8 });
+  });
+
+  it("thinking mit seconds 0 loescht das Feld", () => {
+    const laufend = reduce(initialState, { type: "thinking", player: 2, seconds: 42 });
+    const s = reduce(laufend, { type: "thinking", seconds: 0 });
+    expect(s.thinking).toBeUndefined();
+  });
+
+  it("ein state-Schnappschuss loescht die Anzeige (sichtbare Aktivitaet)", () => {
+    const laufend = reduce({ ...initialState, state: snap({ turn: 4 }) }, { type: "thinking", player: 2, seconds: 12 });
+    expect(laufend.thinking).toBeDefined();
+    const s = reduce(laufend, snap({ turn: 5 }));
+    expect(s.thinking).toBeUndefined();
+  });
+
+  it("backToLobby raeumt die Anzeige weg", () => {
+    useStore.getState().apply({ type: "thinking", player: 1, seconds: 9 });
+    expect(useStore.getState().thinking).toBeDefined();
+    useStore.getState().backToLobby();
+    expect(useStore.getState().thinking).toBeUndefined();
   });
 });
