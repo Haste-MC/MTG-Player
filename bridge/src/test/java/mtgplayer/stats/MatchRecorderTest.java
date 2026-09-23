@@ -9,15 +9,21 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import forge.game.GameEndReason;
 import forge.game.card.Card;
+import forge.game.ability.AbilityKey;
 import forge.game.event.GameEventLandPlayed;
+import forge.game.card.CardView;
+import forge.game.event.GameEventCardChangeZone;
 import forge.game.event.GameEventMulligan;
 import forge.game.event.GameEventSpellAbilityCast;
+import forge.game.event.GameEventSpellRemovedFromStack;
+import forge.game.event.GameEventSpellResolved;
 import forge.game.event.GameEventTurnBegan;
 import forge.game.phase.PhaseType;
 import forge.game.player.Player;
 import forge.game.spellability.SpellAbility;
 import forge.game.spellability.SpellAbilityView;
 import forge.game.zone.ZoneType;
+import forge.game.zone.ZoneView;
 import mtgplayer.ai.AiConfig;
 import mtgplayer.forge.CrashLog;
 import mtgplayer.forge.ForgeBoot;
@@ -256,6 +262,228 @@ class MatchRecorderTest {
         assertNull(sa.firstMissedLandDrop());
         assertEquals(1, sb.missedLandDrops(), "B hatte eine Hand und hat kein Land gelegt");
         assertEquals(1, sb.firstMissedLandDrop());
+    }
+
+    // ---------------------------------------------------------------- Vorfall-Kennzahlen (Runde B)
+
+    /**
+     * Beide Seiten eines Konters in einem Bild: A wirkt die Baeren, B den Counterspell, danach
+     * verlaesst der Baeren-Zauber den Stapel, ohne aufgeloest zu haben. Gewirkt wird ueber
+     * {@code MagicStack.add} - genau der Weg, auf dem Forge sein {@code GameEventSpellAbilityCast}
+     * feuert, und der Zauber liegt dabei wirklich auf dem Stapel (nur dort findet der Recorder die
+     * Faehigkeitskette zum {@code ApiType.Counter}).
+     */
+    @Test
+    @Timeout(value = 3, unit = TimeUnit.MINUTES)
+    void gekonterterZauberZaehltBeimZaubernden() {
+        Scene s = Scene.twoPlayers(AiConfig.DEFAULT, AiConfig.DEFAULT);
+        Player a = s.player(0), b = s.player(1);
+        Card bears = s.card("Grizzly Bears", a, ZoneType.Hand);
+        Card counter = s.card("Counterspell", b, ZoneType.Hand);
+        SpellAbility bearsSa = bears.getFirstSpellAbility();
+        bearsSa.setActivatingPlayer(a);
+        SpellAbility counterSa = counter.getFirstSpellAbility();
+        counterSa.setActivatingPlayer(b);
+        MatchRecorder rec = new MatchRecorder(s.game(), "live", null);
+
+        s.game().getStack().add(bearsSa);
+        counterSa.getTargets().add(bearsSa);                 // ohne Ziel legt Forge ihn gar nicht erst
+        s.game().getStack().add(counterSa);
+        // Forge entfernt einen gekonterten Zauber ohne vorheriges GameEventSpellResolved vom Stapel.
+        s.game().fireEvent(new GameEventSpellRemovedFromStack(SpellAbilityView.get(bearsSa)));
+
+        MatchRecord r = rec.finish();
+        MatchRecord.Seat sa = seat(r, "A"), sb = seat(r, "B");
+        assertEquals(1, sa.spellsCountered(), "A's Baeren haben den Stapel ohne Aufloesung verlassen");
+        assertEquals(0, sa.counterspellsCast(), "die Baeren sind kein Counterspell");
+        assertEquals(1, sb.spells(), "der Counterspell zaehlt als gewirkter Zauber");
+        assertEquals(1, sb.counterspellsCast(), "B hat einen Zauber mit ApiType.Counter gewirkt");
+        assertEquals(0, sb.spellsCountered());
+        assertEquals(0, sa.spellsFizzled());
+    }
+
+    /**
+     * Nach jeder normalen Aufloesung feuert Forge erst {@code GameEventSpellResolved} und danach
+     * {@code GameEventSpellRemovedFromStack} fuer denselben Zauber - ohne Merkliste waere jeder
+     * aufgeloeste Zauber "gekontert".
+     */
+    @Test
+    @Timeout(value = 3, unit = TimeUnit.MINUTES)
+    void aufgeloesterZauberGiltNichtAlsGekontertVerpuffterZaehltGesondert() {
+        Scene s = Scene.twoPlayers(AiConfig.DEFAULT, AiConfig.DEFAULT);
+        Player a = s.player(0);
+        SpellAbilityView resolved = SpellAbilityView.get(
+                s.card("Grizzly Bears", a, ZoneType.Hand).getFirstSpellAbility());
+        SpellAbilityView fizzled = SpellAbilityView.get(
+                s.card("Shock", a, ZoneType.Hand).getFirstSpellAbility());
+        MatchRecorder rec = new MatchRecorder(s.game(), "live", null);
+
+        s.game().fireEvent(new GameEventSpellResolved(resolved, false, "Grizzly Bears"));
+        s.game().fireEvent(new GameEventSpellRemovedFromStack(resolved));
+        s.game().fireEvent(new GameEventSpellResolved(fizzled, true, "Shock"));
+        s.game().fireEvent(new GameEventSpellRemovedFromStack(fizzled));
+
+        MatchRecord.Seat sa = seat(rec.finish(), "A");
+        assertEquals(0, sa.spellsCountered(), "aufgeloest und verpufft sind nicht gekontert");
+        assertEquals(1, sa.spellsFizzled(), "nur der Zauber mit hasFizzled zaehlt");
+    }
+
+    /** Echte Zonenwechsel ueber Forges eigene Wege ({@code drawCards}, {@code discard},
+     *  {@code moveTo}); der Recorder sieht dabei dieselben Ereignisse wie im Spiel. */
+    @Test
+    @Timeout(value = 3, unit = TimeUnit.MINUTES)
+    void ziehenAbwerfenUndMillenAusEchtenZonenwechseln() {
+        Scene s = Scene.twoPlayers(AiConfig.DEFAULT, AiConfig.DEFAULT);
+        Player a = s.player(0);
+        s.cards("Forest", 10, a, ZoneType.Library);
+        Card handkarte = s.card("Grizzly Bears", a, ZoneType.Hand);
+        MatchRecorder rec = new MatchRecorder(s.game(), "live", null);
+
+        a.drawCards(2);
+        a.discard(handkarte, null, false, AbilityKey.newMap());
+        List<Card> bibliothek = new ArrayList<>();
+        for (Card c : a.getCardsIn(ZoneType.Library)) {
+            bibliothek.add(c);
+        }
+        for (int i = 0; i < 3; i++) {
+            s.game().getAction().moveTo(ZoneType.Graveyard, bibliothek.get(i), null, null);   // gemillt
+        }
+
+        MatchRecord r = rec.finish();
+        MatchRecord.Seat sa = seat(r, "A"), sb = seat(r, "B");
+        assertEquals(2, sa.cardsDrawn());
+        assertEquals(1, sa.cardsDiscarded());
+        assertEquals(3, sa.cardsMilled(), "Bibliothek -> Friedhof, nicht ueber die Hand");
+        assertEquals(0, sb.cardsDrawn());
+        assertEquals(0, sb.cardsDiscarded());
+        assertEquals(0, sb.cardsMilled());
+    }
+
+    /** Echter Zug: A greift mit einem 3/3 an, B steht auf 3 Leben und muss chump-blocken. */
+    @Test
+    @Timeout(value = 3, unit = TimeUnit.MINUTES)
+    void kreaturImKampfVerloren() {
+        Scene s = Scene.twoPlayers(AiConfig.DEFAULT, AiConfig.DEFAULT);
+        Player a = s.player(0), b = s.player(1);
+        s.cards("Forest", 5, a, ZoneType.Library);
+        s.cards("Forest", 5, b, ZoneType.Library);
+        s.card("Hill Giant", a, ZoneType.Battlefield);        // nicht einsatzverzoegert -> kann angreifen
+        s.card("Grizzly Bears", b, ZoneType.Battlefield);
+        b.setLife(3, null);                                    // toedlich -> die KI muss blocken
+        s.setPhase(PhaseType.MAIN1, a);
+        MatchRecorder rec = new MatchRecorder(s.game(), "live", null);
+
+        s.loopUntil(PhaseType.END_OF_TURN, a);
+
+        MatchRecord r = rec.finish();
+        MatchRecord.Seat sb = seat(r, "B");
+        assertEquals(1, sb.permanentsLost(), "B hat die Baeren verloren:\n" + s.log(15));
+        assertEquals(1, sb.creaturesLostInCombat(), "gestorben im Kampfschadenschritt:\n" + s.log(15));
+        assertEquals(0, sb.creaturesLostOther());
+        assertEquals(0, seat(r, "A").permanentsLost(), "der Riese ueberlebt den Chump-Block");
+    }
+
+    /** Echter Zug: die KI raeumt die einzige gegnerische Kreatur mit einer Hexerei ab - ausserhalb
+     *  des Kampfschadenschritts, also {@code creaturesLostOther}. */
+    @Test
+    @Timeout(value = 3, unit = TimeUnit.MINUTES)
+    void kreaturPerEntfernungVerloren() {
+        Scene s = Scene.twoPlayers(AiConfig.DEFAULT, AiConfig.DEFAULT);
+        Player a = s.player(0), b = s.player(1);
+        s.cards("Forest", 5, a, ZoneType.Library);
+        s.cards("Forest", 5, b, ZoneType.Library);
+        s.cards("Mountain", 2, a, ZoneType.Battlefield);
+        s.card("Flame Slash", a, ZoneType.Hand);               // Hexerei, 4 Schaden auf eine Kreatur
+        s.card("Hill Giant", b, ZoneType.Battlefield);
+        s.setPhase(PhaseType.MAIN1, a);
+        MatchRecorder rec = new MatchRecorder(s.game(), "live", null);
+
+        s.loopUntil(PhaseType.END_OF_TURN, a);
+
+        MatchRecord r = rec.finish();
+        MatchRecord.Seat sb = seat(r, "B");
+        assertEquals(1, sb.permanentsLost(), "der Riese sollte weg sein:\n" + s.log(15));
+        assertEquals(1, sb.creaturesLostOther(), "gestorben ausserhalb des Kampfes:\n" + s.log(15));
+        assertEquals(0, sb.creaturesLostInCombat());
+    }
+
+    /**
+     * Massenentfernung: vier Kreaturen gehen in EINEM Aufloesungsfenster verloren. Gewirkt und
+     * aufgeloest wird ueber den echten Stapel ({@code add} + {@code resolveStack}), damit die
+     * Zonenwechsel und das abschliessende {@code GameEventSpellResolved} in der Reihenfolge kommen,
+     * in der Forge sie feuert - daran haengt die Fenstergrenze.
+     */
+    @Test
+    @Timeout(value = 3, unit = TimeUnit.MINUTES)
+    void massenentfernungIstEinFenster() {
+        Scene s = Scene.twoPlayers(AiConfig.DEFAULT, AiConfig.DEFAULT);
+        Player a = s.player(0), b = s.player(1);
+        s.cards("Grizzly Bears", 4, b, ZoneType.Battlefield);
+        Card doj = s.card("Day of Judgment", a, ZoneType.Hand);
+        SpellAbility sa = doj.getFirstSpellAbility();
+        sa.setActivatingPlayer(a);
+        MatchRecorder rec = new MatchRecorder(s.game(), "live", null);
+
+        s.game().getAction().moveToStack(doj, sa);
+        s.game().getStack().add(sa);
+        s.game().getStack().resolveStack();
+
+        MatchRecord r = rec.finish();
+        MatchRecord.Seat sb = seat(r, "B"), sa2 = seat(r, "A");
+        assertEquals(4, sb.permanentsLost(), "vier Baeren:\n" + s.state());
+        assertEquals(4, sb.creaturesLostOther());
+        assertEquals(4, sb.biggestSweep(), "alle vier in einem Fenster");
+        assertEquals(1, sb.sweepsSuffered(), "ein Fenster ab drei Verlusten");
+        assertEquals(0, sa2.permanentsLost());
+        assertEquals(0, sa2.biggestSweep());
+        assertEquals(0, sa2.sweepsSuffered());
+    }
+
+    /** Spielsteine kommen ohne eigenes Ereignis ins Spiel ({@code GameEventTokenCreated} hat keine
+     *  Nutzlast) - gezaehlt wird der Zonenwechsel nach Battlefield mit {@code CardView.isToken}. */
+    @Test
+    @Timeout(value = 3, unit = TimeUnit.MINUTES)
+    void spielsteineZaehlenBeimErzeuger() {
+        Scene s = Scene.twoPlayers(AiConfig.DEFAULT, AiConfig.DEFAULT);
+        Player a = s.player(0);
+        Card fodder = s.card("Dragon Fodder", a, ZoneType.Hand);   // "Create two 1/1 red Goblin tokens."
+        SpellAbility sa = fodder.getFirstSpellAbility();
+        sa.setActivatingPlayer(a);
+        MatchRecorder rec = new MatchRecorder(s.game(), "live", null);
+
+        s.game().getAction().moveToStack(fodder, sa);
+        s.game().getStack().add(sa);
+        s.game().getStack().resolveStack();
+
+        MatchRecord r = rec.finish();
+        assertEquals(2, seat(r, "A").tokensCreated(), "zwei Goblins:\n" + s.state());
+        assertEquals(0, seat(r, "B").tokensCreated());
+    }
+
+    /** Ein Ereignis ohne Quelle darf die Erfassung weder abschiessen noch verfaelschen. */
+    @Test
+    @Timeout(value = 3, unit = TimeUnit.MINUTES)
+    void ereignisseOhneQuelleBrechenDieErfassungNichtAb() {
+        Scene s = Scene.twoPlayers(AiConfig.DEFAULT, AiConfig.DEFAULT);
+        Player a = s.player(0);
+        s.cards("Forest", 5, a, ZoneType.Library);
+        MatchRecorder rec = new MatchRecorder(s.game(), "live", null);
+
+        s.game().fireEvent(new GameEventCardChangeZone((CardView) null, null, null));
+        s.game().fireEvent(new GameEventCardChangeZone(
+                s.card("Grizzly Bears", a, ZoneType.Hand).getView(),
+                new ZoneView(null, ZoneType.Hand), new ZoneView(null, ZoneType.Graveyard)));
+        s.game().fireEvent(new GameEventSpellRemovedFromStack(null));        // MagicStack.clear()
+        s.game().fireEvent(new GameEventSpellResolved(null, true, null));
+        a.drawCards(1);                                                      // danach zaehlt es weiter
+
+        MatchRecord r = rec.finish();
+        MatchRecord.Seat sa = seat(r, "A");
+        assertEquals(0, rec.counterFailures(), "kein Zaehler ist in eine Ausnahme gelaufen");
+        assertEquals(0, sa.cardsDiscarded(), "ohne Sitz an der Zone wird nichts zugeordnet");
+        assertEquals(0, sa.spellsCountered());
+        assertEquals(0, sa.spellsFizzled());
+        assertEquals(1, sa.cardsDrawn(), "die Erfassung laeuft nach den kaputten Ereignissen weiter");
     }
 
     // ---------------------------------------------------------------- nicht gewertete Partien

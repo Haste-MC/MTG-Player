@@ -85,8 +85,34 @@ class MatchRecorderAiTest {
             assertEquals(s.lands(), s.landsByTurn().get(s.landsByTurn().size() - 1),
                     "landsByTurn ist kumulativ und endet bei der Gesamtzahl");
             lands += s.lands();
+            pruefeVorfallKennzahlen(s);
         }
         assertTrue(lands > 0, "in vier Zuegen sollte mindestens ein Land liegen");
+        assertEquals(2, rec.v(), "Runde B schreibt Formatversion 2");
         System.out.println("[MatchRecorderAiTest] " + rec);
+    }
+
+    /**
+     * Die Vorfall-Kennzahlen aus Runde B haengen an den Entscheidungen der KI, geprueft wird deshalb
+     * nur, dass keine negativ ist und die Teilmengen-Beziehungen stimmen: gekonterte Zauber und
+     * Counterspells sind Teilmengen der gewirkten Zauber, verlorene Kreaturen eine Teilmenge der
+     * verlorenen bleibenden Karten, und ein Fenster mit Massenentfernung kann es nur geben, wenn
+     * ueberhaupt genug verloren ging.
+     */
+    private static void pruefeVorfallKennzahlen(MatchRecord.Seat s) {
+        for (int n : new int[]{s.spellsCountered(), s.spellsFizzled(), s.counterspellsCast(),
+                s.cardsDrawn(), s.cardsDiscarded(), s.cardsMilled(), s.permanentsLost(),
+                s.creaturesLostInCombat(), s.creaturesLostOther(), s.biggestSweep(),
+                s.sweepsSuffered(), s.tokensCreated()}) {
+            assertTrue(n >= 0, "kein Zaehler darf negativ werden: " + s);
+        }
+        assertTrue(s.counterspellsCast() <= s.spells(),
+                "Counterspells sind gewirkte Zauber: " + s.counterspellsCast() + " von " + s.spells());
+        assertTrue(s.creaturesLostInCombat() + s.creaturesLostOther() <= s.permanentsLost(),
+                "verlorene Kreaturen sind eine Teilmenge der verlorenen bleibenden Karten: " + s);
+        assertTrue(s.biggestSweep() <= s.permanentsLost(),
+                "ein Fenster kann nicht mehr fassen als insgesamt verloren ging: " + s);
+        assertTrue(s.sweepsSuffered() * MatchRecorder.SWEEP_MIN <= s.permanentsLost(),
+                "jede Massenentfernung kostet mindestens " + MatchRecorder.SWEEP_MIN + ": " + s);
     }
 }

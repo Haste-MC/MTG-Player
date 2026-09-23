@@ -6,27 +6,38 @@ import forge.deck.Deck;
 import forge.game.Game;
 import forge.game.GameEndReason;
 import forge.game.GameOutcome;
+import forge.game.ability.ApiType;
 import forge.game.card.Card;
 import forge.game.card.CardView;
+import forge.game.event.GameEventCardChangeZone;
 import forge.game.event.GameEventGameFinished;
 import forge.game.event.GameEventLandPlayed;
 import forge.game.event.GameEventMulligan;
 import forge.game.event.GameEventPlayerDamaged;
 import forge.game.event.GameEventSpellAbilityCast;
+import forge.game.event.GameEventSpellRemovedFromStack;
+import forge.game.event.GameEventSpellResolved;
 import forge.game.event.GameEventTurnBegan;
+import forge.game.event.GameEventTurnPhase;
+import forge.game.phase.PhaseType;
 import forge.game.player.Player;
 import forge.game.player.PlayerOutcome;
 import forge.game.player.PlayerView;
 import forge.game.player.RegisteredPlayer;
+import forge.game.spellability.SpellAbility;
+import forge.game.spellability.SpellAbilityStackInstance;
 import forge.game.spellability.SpellAbilityView;
 import forge.game.zone.ZoneType;
+import forge.game.zone.ZoneView;
 import forge.player.LobbyPlayerHuman;
 import mtgplayer.ai.AiLobbyPlayer;
 import mtgplayer.forge.CrashLog;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -73,6 +84,12 @@ import java.util.function.Consumer;
  * Partie. Bei Absturz und Abbruch traegt ausserdem KEIN Sitz {@code winner} und die Partie ist kein
  * Remis - beim Zugdeckel dagegen bleiben die Sitz-Ausgaenge stehen, siehe {@link #build()}.</p>
  *
+ * <p><b>Vorfall-Kennzahlen (Runde B).</b> Ueber Zauber, Karten und Verluste zaehlt der Recorder nur,
+ * was Forge typisiert liefert: {@code GameEventCardDestroyed} und {@code GameEventTokenCreated}
+ * haben keine Nutzlast, Verluste und Spielsteine kommen deshalb aus
+ * {@code GameEventCardChangeZone}. Kein Zaehler darf eine Partie abschiessen - jeder neue Handler
+ * faengt {@code RuntimeException} und zaehlt den Fall nur in {@link #counterFailures()} mit.</p>
+ *
  * <p>Alle Ereignis-Methoden und {@link #finish()} laufen unter demselben Monitor. Forge feuert die
  * Ereignisse zwar alle auf dem Spiel-Thread, {@link #finish()} kann aber von aussen kommen (Test,
  * Abbruch) und {@link #markCrashed()} von einem beliebigen Thread mit einer uncaught exception.</p>
@@ -81,6 +98,17 @@ public final class MatchRecorder {
 
     /** Weniger Zuege als das zaehlen nicht als Partie (Spec: "zu kurz"). */
     public static final int MIN_TURNS = 3;
+
+    /** Ab so vielen eigenen bleibenden Karten in EINEM Fenster heisst der Verlust Massenentfernung. */
+    public static final int SWEEP_MIN = 3;
+
+    /**
+     * So viele zuletzt aufgeloeste Zauber merkt sich {@link #justResolved}. Forge feuert
+     * {@code GameEventSpellRemovedFromStack} unmittelbar nach dem zugehoerigen
+     * {@code GameEventSpellResolved}; die Liste braucht also nur Luft fuer verschachtelte
+     * Aufloesungen, nicht fuer die ganze Partie.
+     */
+    private static final int RESOLVED_MEMORY = 16;
 
     /** Nach {@link #finish()} {@code null} - siehe dort, warum die Forge-Objekte losgelassen werden. */
     private Game game;
@@ -99,6 +127,14 @@ public final class MatchRecorder {
     private volatile boolean aborted;
     private volatile boolean turnCapped;
     private volatile MatchRecord finished;
+    private int counterFailures;
+
+    /**
+     * Die zuletzt aufgeloesten Zauber-Ansichten, aelteste zuerst. Verglichen wird ueber
+     * Objektidentitaet: {@code SpellAbility.getView()} liefert immer dieselbe Instanz, und
+     * {@code SpellAbilityView} hat kein eigenes {@code equals}.
+     */
+    private final Deque<SpellAbilityView> justResolved = new ArrayDeque<>();
 
     /** Ohne bekannte Bedenkzeit ({@code aiTimeout == null}) - fuer Aufrufer, die sie nicht setzen. */
     public MatchRecorder(Game game, String source, Consumer<MatchRecord> sink) {
@@ -197,6 +233,9 @@ public final class MatchRecorder {
         if (cost != null) {
             s.spellMana += cost.getCMC();
         }
+        if (isCounterspell(sa)) {
+            s.counterspellsCast++;
+        }
         if (host.isCommander()) {
             s.commanderCasts++;
             if (s.firstCommanderTurn == null) {
@@ -204,6 +243,127 @@ public final class MatchRecorder {
                 // eigene Zug, in dem der Sitz zuletzt am Zug war (mindestens 1).
                 s.firstCommanderTurn = Math.max(1, s.ownTurns);
             }
+        }
+    }
+
+    /**
+     * Ein Zauber hat aufgeloest. Das Ereignis erfuellt hier zwei Aufgaben: es haelt die Ansicht in
+     * {@link #justResolved} fest (damit das gleich folgende
+     * {@code GameEventSpellRemovedFromStack} nicht als Konter durchgeht) und es schliesst das
+     * Aufloesungsfenster fuer {@code biggestSweep}. Forge feuert es NACH den Zonenwechseln der
+     * Aufloesung ({@code MagicStack.resolveStack}), die Toten einer Massenentfernung liegen also
+     * noch im gerade geschlossenen Fenster.
+     */
+    @Subscribe
+    public synchronized void onSpellResolved(GameEventSpellResolved e) {
+        if (finished != null) {
+            return;
+        }
+        try {
+            SpellAbilityView sa = e.spell();
+            if (sa != null) {
+                rememberResolved(sa);
+                Seat s = e.hasFizzled() && sa.isSpell() ? seatOfSpell(sa) : null;
+                if (s != null) {
+                    s.spellsFizzled++;
+                }
+            }
+            closeSweepWindow();
+        } catch (RuntimeException ex) {
+            counterFailures++;
+        }
+    }
+
+    /**
+     * Ein Eintrag verlaesst den Stapel. Nach einer normalen Aufloesung kam dafuer eben erst
+     * {@code GameEventSpellResolved} - dann ist es kein Konter. Bleibt die Ansicht unbekannt, hat
+     * der Eintrag den Stapel ohne Aufloesung verlassen: gekontert, oder von einem Effekt entfernt.
+     * Forge nennt beides nicht genauer, der Datensatz auch nicht. {@code sa == null} ist
+     * {@code MagicStack.clear()} (Spielende) und zaehlt niemandem.
+     */
+    @Subscribe
+    public synchronized void onSpellRemovedFromStack(GameEventSpellRemovedFromStack e) {
+        if (finished != null) {
+            return;
+        }
+        try {
+            SpellAbilityView sa = e.sa();
+            if (sa == null || forgetResolved(sa) || !sa.isSpell()) {
+                return;
+            }
+            Seat s = seatOfSpell(sa);
+            if (s != null) {
+                s.spellsCountered++;
+            }
+        } catch (RuntimeException ex) {
+            counterFailures++;
+        }
+    }
+
+    /** Phasenwechsel beendet ebenfalls ein Aufloesungsfenster (Kampfschaden hat keinen Zauber). */
+    @Subscribe
+    public synchronized void onTurnPhase(GameEventTurnPhase e) {
+        if (finished != null) {
+            return;
+        }
+        try {
+            closeSweepWindow();
+        } catch (RuntimeException ex) {
+            counterFailures++;
+        }
+    }
+
+    /**
+     * Ziehen, Abwerfen, Millen, Verluste und Spielsteine kommen alle aus demselben Ereignis: Forges
+     * {@code GameEventCardDestroyed} und {@code GameEventTokenCreated} tragen keine Nutzlast, der
+     * Zonenwechsel dagegen Karte, Quell- und Zielzone samt Besitzer der Zone.
+     *
+     * <p>Zugeordnet wird ueber den Besitzer der QUELLzone ({@code from.player()}) - wer eine Karte
+     * verliert, verliert sie aus seiner Zone. Nur Spielsteine zaehlen ueber die Zielzone, sie kommen
+     * aus dem Nichts. Eine Zone ohne bekannten Sitz (fremdes Spiel, Nutzlast ohne Spieler) wird
+     * still uebergangen.</p>
+     */
+    @Subscribe
+    public synchronized void onCardChangeZone(GameEventCardChangeZone e) {
+        if (finished != null) {
+            return;
+        }
+        try {
+            CardView card = e.card();
+            ZoneView from = e.from(), to = e.to();
+            if (card == null) {
+                return;
+            }
+            if (to != null && to.zoneType() == ZoneType.Battlefield && card.isToken()) {
+                Seat owner = seat(to.player());
+                if (owner != null) {
+                    owner.tokensCreated++;
+                }
+            }
+            Seat s = from == null ? null : seat(from.player());
+            if (s == null || to == null || from.zoneType() == null || to.zoneType() == null) {
+                return;
+            }
+            boolean gone = to.zoneType() == ZoneType.Graveyard || to.zoneType() == ZoneType.Exile;
+            if (from.zoneType() == ZoneType.Library && to.zoneType() == ZoneType.Hand) {
+                s.cardsDrawn++;
+            } else if (from.zoneType() == ZoneType.Hand && to.zoneType() == ZoneType.Graveyard) {
+                s.cardsDiscarded++;
+            } else if (from.zoneType() == ZoneType.Library && gone) {
+                s.cardsMilled++;
+            } else if (from.zoneType() == ZoneType.Battlefield && gone) {
+                s.permanentsLost++;
+                s.lostInWindow++;
+                if (card.getCurrentState() != null && card.getCurrentState().isCreature()) {
+                    if (inCombatDamage()) {
+                        s.creaturesLostInCombat++;
+                    } else {
+                        s.creaturesLostOther++;
+                    }
+                }
+            }
+        } catch (RuntimeException ex) {
+            counterFailures++;
         }
     }
 
@@ -277,6 +437,15 @@ public final class MatchRecorder {
         }
     }
 
+    /**
+     * Wie oft ein Vorfall-Zaehler in eine {@code RuntimeException} gelaufen ist. Ein kaputter Zaehler
+     * darf keine Partie abschiessen, also faengt jeder Handler und zaehlt den Fall nur hier mit.
+     * (Die einmalige Meldung ueber {@code CrashLog.note} kommt in Stueck 3.)
+     */
+    synchronized int counterFailures() {
+        return counterFailures;
+    }
+
     // ------------------------------------------------------------------ Abschluss
 
     /**
@@ -306,6 +475,7 @@ public final class MatchRecorder {
         }
         turns = Math.max(turns, game.getPhaseHandler().getTurn());
         noteEliminations();
+        closeSweepWindow();                      // das beim Spielende laufende Fenster zaehlt mit
 
         GameOutcome outcome = game.getOutcome();
         // Bei Abbruch oder Absturz hat NIEMAND gewonnen und es ist auch kein Remis: HumanMatch.end()
@@ -353,6 +523,83 @@ public final class MatchRecorder {
 
     private static PlayerView controllerOf(CardView c) {
         return c.getController() != null ? c.getController() : c.getOwner();
+    }
+
+    /** Der Sitz, der diesen Zauber gewirkt hat: Beherrscher seiner Ursprungskarte. */
+    private Seat seatOfSpell(SpellAbilityView sa) {
+        CardView host = sa.getHostCard();
+        return host == null ? null : seat(controllerOf(host));
+    }
+
+    /**
+     * Steht {@code ApiType.Counter} irgendwo in der Faehigkeitskette dieses Zaubers? Die Kette gibt
+     * es nur am Spielobjekt - {@code SpellAbilityView} kennt weder API noch Unterfaehigkeiten -,
+     * deshalb wird der Zauber auf dem Stapel nachgeschlagen. Das geht auf, weil
+     * {@code MagicStack.add} den Eintrag legt, BEVOR es {@code GameEventSpellAbilityCast} feuert.
+     * Ein Zauber, der dort nicht (mehr) liegt, zaehlt nicht mit - lieber eine Kennzahl zu niedrig
+     * als eine erfundene.
+     */
+    private boolean isCounterspell(SpellAbilityView view) {
+        try {
+            for (SpellAbilityStackInstance si : game.getStack()) {
+                SpellAbility sa = si.getSpellAbility();
+                if (sa == null || sa.getView() != view) {
+                    continue;
+                }
+                for (SpellAbility part = sa; part != null; part = part.getSubAbility()) {
+                    if (part.getApi() == ApiType.Counter) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+        } catch (RuntimeException ex) {
+            counterFailures++;
+        }
+        return false;
+    }
+
+    private void rememberResolved(SpellAbilityView sa) {
+        justResolved.addLast(sa);
+        while (justResolved.size() > RESOLVED_MEMORY) {
+            justResolved.removeFirst();
+        }
+    }
+
+    /** @return {@code true}, wenn dieser Zauber eben aufgeloest hat (dann ist er nicht gekontert) */
+    private boolean forgetResolved(SpellAbilityView sa) {
+        for (var it = justResolved.iterator(); it.hasNext(); ) {
+            if (it.next() == sa) {                // Objektidentitaet, siehe justResolved
+                it.remove();
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Schliesst das laufende Aufloesungsfenster: was ein Sitz darin an bleibenden Karten verloren
+     * hat, gilt als EIN Vorgang. Das ist die Naeherung aus Spec Paragraph 2 - zustandsbasierte
+     * Aktionen aus mehreren Quellen landen im selben Fenster -, aber sie kommt ohne Eingriff in
+     * Forge aus.
+     */
+    private void closeSweepWindow() {
+        for (Seat s : seats) {
+            if (s.lostInWindow <= 0) {
+                continue;
+            }
+            s.biggestSweep = Math.max(s.biggestSweep, s.lostInWindow);
+            if (s.lostInWindow >= SWEEP_MIN) {
+                s.sweepsSuffered++;
+            }
+            s.lostInWindow = 0;
+        }
+    }
+
+    /** Kampfschadenschritt (auch Erstschlag) - daran haengt "im Kampf verloren". */
+    private boolean inCombatDamage() {
+        PhaseType phase = game.getPhaseHandler().getPhase();
+        return phase == PhaseType.COMBAT_DAMAGE || phase == PhaseType.COMBAT_FIRST_STRIKE_DAMAGE;
     }
 
     /**
@@ -420,6 +667,20 @@ public final class MatchRecorder {
         private int spellMana;
         private int commanderCasts;
         private Integer firstCommanderTurn;
+        private int spellsCountered;
+        private int spellsFizzled;
+        private int counterspellsCast;
+        private int cardsDrawn;
+        private int cardsDiscarded;
+        private int cardsMilled;
+        private int permanentsLost;
+        private int creaturesLostInCombat;
+        private int creaturesLostOther;
+        private int biggestSweep;
+        private int sweepsSuffered;
+        private int tokensCreated;
+        /** Verluste im laufenden Aufloesungsfenster; siehe {@link MatchRecorder#closeSweepWindow}. */
+        private int lostInWindow;
         private int damageDealt;
         private int damageTaken;
         private int combatDamageTaken;
@@ -437,7 +698,12 @@ public final class MatchRecorder {
             Integer eliminated = lossReason == null ? null : eliminatedTurn != null ? eliminatedTurn : Math.max(1, turns);
             return new MatchRecord.Seat(player.getName(), deckName(), human(), ai(), winner, lossReason,
                     eliminated, mulligans, lands, List.copyOf(landsByTurn), missedLandDrops,
-                    firstMissedLandDrop, spells, spellMana, commanderCasts, commanderTax(),
+                    firstMissedLandDrop, spells, spellMana,
+                    spellsCountered, spellsFizzled, counterspellsCast,
+                    cardsDrawn, cardsDiscarded, cardsMilled,
+                    permanentsLost, creaturesLostInCombat, creaturesLostOther,
+                    biggestSweep, sweepsSuffered, tokensCreated,
+                    commanderCasts, commanderTax(),
                     firstCommanderTurn, damageDealt, damageTaken, combatDamageTaken,
                     player.getLife(), player.getPoisonCounters());
         }

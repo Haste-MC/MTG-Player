@@ -32,7 +32,9 @@ class MatchStoreTest {
 
     private static MatchRecord record(String id) {
         MatchRecord.Seat seat = new MatchRecord.Seat("Du", "Titania, Gaea Incarnate", true, null, true, null,
-                null, 1, 7, List.of(0, 1, 2, 2, 3), 2, 4, 12, 34, 2, 2, 4, 21, 18, 12, 22, 0);
+                null, 1, 7, List.of(0, 1, 2, 2, 3), 2, 4, 12, 34,
+                1, 0, 2, 9, 3, 6, 5, 2, 3, 4, 1, 2,
+                2, 2, 4, 21, 18, 12, 22, 0);
         return new MatchRecord(id, "2026-09-22T19:00:00Z", "2026-09-22T19:13:32Z", 812345, "live",
                 5, 14, "AllOpponentsLost", false, true, null, List.of(seat));
     }
@@ -138,11 +140,13 @@ class MatchStoreTest {
         MatchStore store = new MatchStore(file);
         store.add(record("m1"));
         assertEquals(MatchRecord.VERSION, store.all().get(0).v());
-        assertTrue(Files.readString(file).startsWith("[{\"v\":1,"), "v steht als erstes Feld im Datensatz");
+        assertTrue(Files.readString(file).startsWith("[{\"v\":" + MatchRecord.VERSION + ","),
+                "v steht als erstes Feld im Datensatz");
 
         // Datei ohne "v" (vor Einfuehrung des Feldes geschrieben)
-        Files.writeString(file, Files.readString(file).replace("{\"v\":1,", "{"));
-        assertEquals(1, new MatchStore(file).all().get(0).v(), "ohne Feld gilt v1");
+        Files.writeString(file, Files.readString(file).replace("{\"v\":" + MatchRecord.VERSION + ",", "{"));
+        assertEquals(1, new MatchStore(file).all().get(0).v(),
+                "ohne Feld gilt v1 - eine neue Formatversion macht einen alten Datensatz nicht neuer");
     }
 
     @Test
