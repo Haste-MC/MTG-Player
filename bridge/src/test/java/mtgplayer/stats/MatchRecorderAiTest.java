@@ -18,6 +18,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -47,7 +48,7 @@ class MatchRecorderAiTest {
 
     @Test
     @Timeout(value = 5, unit = TimeUnit.MINUTES)
-    void kurzeKiPartieLiefertEinenDatensatz() {
+    void kurzeKiPartieLiefertEinenDatensatz() throws Exception {
         List<String> precons = List.of("Abzan Armor [TDC] [2025]", "Adaptive Enchantment [C18] [2018]");
         List<Deck> decks = precons.stream().map(Precons::load).toList();
         List<MatchRecord> sunk = new ArrayList<>();
@@ -89,7 +90,24 @@ class MatchRecorderAiTest {
         }
         assertTrue(lands > 0, "in vier Zuegen sollte mindestens ein Land liegen");
         assertEquals(2, rec.v(), "Runde B schreibt Formatversion 2");
+        pruefeRobustheitsMeldung();
         System.out.println("[MatchRecorderAiTest] " + rec);
+    }
+
+    /**
+     * {@code MatchRecord} traegt {@code counterFailures}/{@code castsNotOnStack} selbst nicht (siehe
+     * {@code MatchRecorder} - AiMatch bleibt unveraendert, der Recorder ist nach der Partie nicht mehr
+     * erreichbar), pruefbar bleibt aber das Log: ueber viele echte Ereignisse einer ganzen KI-Partie
+     * hinweg darf die Sammelmeldung hoechstens EINMAL auftauchen, nicht einmal je Vorfall.
+     */
+    private static void pruefeRobustheitsMeldung() throws Exception {
+        Path log = CrashLog.file();
+        if (!Files.exists(log)) {
+            return;                                    // nichts zu melden ist der haeufige, gute Fall
+        }
+        String text = Files.readString(log);
+        int meldungen = text.split("MatchRecorder", -1).length - 1;
+        assertTrue(meldungen <= 1, "hoechstens eine Sammelmeldung je Partie, nicht eine je Vorfall: " + text);
     }
 
     /**

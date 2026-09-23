@@ -139,6 +139,17 @@ Ende; dazu Dauer, Züge und Quelle der Partie. Die Datensätze liegen als JSON-A
 `~/.mtg-player/matches.json` (neueste zuletzt, Deckel 2000 Partien, atomar geschrieben); eine kaputte Datei
 wird beim nächsten Schreiben ersetzt, statt den Start zu verhindern.
 
+Seit Runde B kommen vier Gruppen an **Vorfall-Kennzahlen** je Sitz dazu: **Zauber und Karten** – gekonterte und
+verpuffte eigene Zauber, selbst gewirkte Counterspells, gezogene, abgeworfene und gemillte Karten; **Brett und
+Verluste** – verlorene bleibende Karten (davon Kreaturen im Kampf bzw. außerhalb des Kampfes), die größte
+Massenentfernung in einem Auflösungsfenster samt Anzahl solcher Fenster, und erzeugte Spielsteine; **Kampf und
+Schaden** – eigene Angriffe und Angriffszüge, gegnerische Angreifer und eigene Blocks, Kampfschaden am Sitz nach
+Fliegen/Trampelschaden/sonstiger Quelle, Nicht-Kampfschaden, ausgeteilter Schaden im und außerhalb des Kampfes,
+Commander-Schaden und Lebensgewinn; **Zeitachse** – je eigenem Zug (gedeckelt auf 60 Punkte) Länder, Kreaturen,
+Leben und Handkarten zu Zugbeginn, als Grundlage für spätere Kurven wie „wann bist du zurückgefallen". Diese
+Kennzahlen werden erst **ab jetzt** gesammelt (Formatversion `v: 2`) – ältere Partien haben sie nicht und lesen
+sich für die Auswertung als **keine Daten**, nicht als 0.
+
 Nicht jede Partie soll in die Bewertung fließen. Automatisch **nicht gewertet** werden Partien unter drei Zügen
 („zu kurz"), Partien mit einer Aufgabe („aufgegeben"), am Zugdeckel abgeschnittene Partien („Zugdeckel"),
 abgebrochene Partien („abgebrochen": die Partie wurde

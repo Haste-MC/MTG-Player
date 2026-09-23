@@ -35,6 +35,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -484,6 +485,75 @@ class MatchRecorderTest {
         assertEquals(0, sa.spellsCountered());
         assertEquals(0, sa.spellsFizzled());
         assertEquals(1, sa.cardsDrawn(), "die Erfassung laeuft nach den kaputten Ereignissen weiter");
+    }
+
+    // ---------------------------------------------------------------- Robustheit: Sammelmeldung (Runde B, Stueck 3)
+
+    /**
+     * Der Fangnetz-Effekt selbst: kein reales Forge-Objekt laesst sich (ohne Mocking, das dieses
+     * Modul nicht einbindet) so praeparieren, dass einer der durchgehend null-geprueften Handler
+     * wirft - und Guavas EventBus wuerde eine echte Ausnahme aus {@code game.fireEvent(...)} ohnehin
+     * selbst abfangen und nur loggen, sie kaeme nie bei {@link MatchRecorder#counterFailures()} an.
+     * Getestet wird deshalb direkt am (oeffentlichen) Handler: ein {@code null}-Ereignis laesst
+     * {@code e.card()} eine echte {@code NullPointerException} werfen, genau die Art Fehler, vor der
+     * der try/catch schuetzen soll.
+     */
+    @Test
+    @Timeout(value = 3, unit = TimeUnit.MINUTES)
+    void handlerAusnahmeWirdGezaehltUndEinmaligGemeldet() throws Exception {
+        Scene s = Scene.twoPlayers(AiConfig.DEFAULT, AiConfig.DEFAULT);
+        MatchRecorder rec = new MatchRecorder(s.game(), "live", null);
+
+        rec.onCardChangeZone(null);
+
+        rec.finish();
+        assertEquals(1, rec.counterFailures(), "die NullPointerException wurde gefangen und gezaehlt");
+        String log = Files.readString(CrashLog.file());
+        assertEquals(1, log.split("MatchRecorder", -1).length - 1,
+                "genau eine Sammelmeldung am Partieende, nicht eine je Fehler: " + log);
+        assertTrue(log.contains("1 Ereignisse nicht gezaehlt"), log);
+        assertTrue(log.contains("0 gewirkte Zauber"), log);
+    }
+
+    /**
+     * Die Nachtrag-Kennzahl aus der Review von Stueck 1: ein Zauber, der beim Nachschlagen nicht
+     * mehr auf dem Stapel lag, ist kein Fehler (keine Ausnahme, {@code counterFailures} bleibt 0),
+     * zaehlt aber getrennt mit - sonst laese sich {@code counterspellsCast} fuer immer unauffaellig
+     * 0, ohne dass irgendwo auffaellt, dass gar nicht gesucht werden konnte.
+     */
+    @Test
+    @Timeout(value = 3, unit = TimeUnit.MINUTES)
+    void zauberNichtAufDemStapelGefundenZaehltGetrenntVonAusnahmen() throws Exception {
+        Scene s = Scene.twoPlayers(AiConfig.DEFAULT, AiConfig.DEFAULT);
+        Player a = s.player(0);
+        SpellAbility sa = s.card("Grizzly Bears", a, ZoneType.Hand).getFirstSpellAbility();
+        MatchRecorder rec = new MatchRecorder(s.game(), "live", null);
+
+        // Bewusst NICHT ueber game.getStack().add() gewirkt: das Ereignis kommt, der Zauber liegt
+        // aber nicht auf dem Stapel - genau der Fall aus dem Nachtrag.
+        s.game().fireEvent(new GameEventSpellAbilityCast(SpellAbilityView.get(sa), null, 0, null));
+
+        MatchRecord r = rec.finish();
+        assertEquals(0, rec.counterFailures(), "kein Fehler, nur eine erfolglose Suche");
+        assertEquals(1, rec.castsNotOnStack());
+        assertEquals(0, seat(r, "A").counterspellsCast(), "ohne Fund gilt der Zauber nicht als Counterspell");
+        String log = Files.readString(CrashLog.file());
+        assertTrue(log.contains("0 Ereignisse nicht gezaehlt"), log);
+        assertTrue(log.contains("1 gewirkte Zauber"), log);
+    }
+
+    /** Ohne etwas zu melden bleibt die Sammelmeldung ganz aus - {@code bridge.log} bleibt unberuehrt. */
+    @Test
+    @Timeout(value = 3, unit = TimeUnit.MINUTES)
+    void ohneFehlerBleibtDieSammelmeldungAus() throws Exception {
+        Scene s = Scene.twoPlayers(AiConfig.DEFAULT, AiConfig.DEFAULT);
+        MatchRecorder rec = new MatchRecorder(s.game(), "live", null);
+
+        rec.finish();
+
+        assertEquals(0, rec.counterFailures());
+        assertEquals(0, rec.castsNotOnStack());
+        assertFalse(Files.exists(CrashLog.file()), "ohne etwas zu melden schreibt CrashLog.note gar nichts");
     }
 
     // ---------------------------------------------------------------- nicht gewertete Partien

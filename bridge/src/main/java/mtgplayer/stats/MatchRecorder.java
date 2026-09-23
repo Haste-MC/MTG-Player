@@ -106,6 +106,15 @@ import java.util.function.Consumer;
  * {@code GameEventPlayerLivesChanged}. Die Zeitachse haengt am Zugbeginn: je eigenem Zug ein Punkt
  * mit dem Stand aus dem Spielzustand, gedeckelt auf {@link #TIMELINE_MAX}.</p>
  *
+ * <p><b>Robustheit (Runde B, Stueck 3).</b> Zwei Zaehler bleiben sonst unsichtbar, weil sie keine
+ * eigene Kennzahl im Datensatz sind: {@link #counterFailures} (ein Handler ist in eine
+ * {@code RuntimeException} gelaufen) und {@code castsNotOnStack} (ein gewirkter Zauber liess sich in
+ * {@link #isCounterspell} nicht mehr auf dem Stapel finden - {@code counterspellsCast} liest sich
+ * dann unauffaellig als 0, ohne dass irgendwo auffaellt, dass gar nicht gesucht werden konnte). Beide
+ * werden am Partieende genau einmal ueber {@code CrashLog.note("MatchRecorder", ...)} gemeldet (nur
+ * ins Log, kein Browser-Hinweis - siehe {@link CrashLog#note}), und nur, wenn mindestens einer der
+ * beiden ueber 0 liegt.</p>
+ *
  * <p>Alle Ereignis-Methoden und {@link #finish()} laufen unter demselben Monitor. Forge feuert die
  * Ereignisse zwar alle auf dem Spiel-Thread, {@link #finish()} kann aber von aussen kommen (Test,
  * Abbruch) und {@link #markCrashed()} von einem beliebigen Thread mit einer uncaught exception.</p>
@@ -151,6 +160,8 @@ public final class MatchRecorder {
     private volatile boolean turnCapped;
     private volatile MatchRecord finished;
     private int counterFailures;
+    /** Siehe {@link #isCounterspell}: ein gewirkter Zauber war beim Nachschlagen nicht mehr auf dem Stapel. */
+    private int castsNotOnStack;
 
     /**
      * Die zuletzt aufgeloesten Zauber-Ansichten, aelteste zuerst. Verglichen wird ueber
@@ -243,30 +254,34 @@ public final class MatchRecorder {
         if (finished != null) {
             return;
         }
-        SpellAbilityView sa = e.sa();
-        if (sa == null || !sa.isSpell()) {
-            return;
-        }
-        CardView host = sa.getHostCard();
-        Seat s = host == null ? null : seat(controllerOf(host));
-        if (s == null) {
-            return;
-        }
-        s.spells++;
-        ManaCost cost = host.getCurrentState() == null ? null : host.getCurrentState().getManaCost();
-        if (cost != null) {
-            s.spellMana += cost.getCMC();
-        }
-        if (isCounterspell(sa)) {
-            s.counterspellsCast++;
-        }
-        if (host.isCommander()) {
-            s.commanderCasts++;
-            if (s.firstCommanderTurn == null) {
-                // Ein Commander kann per Blitz auch im gegnerischen Zug kommen; dann zaehlt der
-                // eigene Zug, in dem der Sitz zuletzt am Zug war (mindestens 1).
-                s.firstCommanderTurn = Math.max(1, s.ownTurns);
+        try {
+            SpellAbilityView sa = e.sa();
+            if (sa == null || !sa.isSpell()) {
+                return;
             }
+            CardView host = sa.getHostCard();
+            Seat s = host == null ? null : seat(controllerOf(host));
+            if (s == null) {
+                return;
+            }
+            s.spells++;
+            ManaCost cost = host.getCurrentState() == null ? null : host.getCurrentState().getManaCost();
+            if (cost != null) {
+                s.spellMana += cost.getCMC();
+            }
+            if (isCounterspell(sa)) {
+                s.counterspellsCast++;
+            }
+            if (host.isCommander()) {
+                s.commanderCasts++;
+                if (s.firstCommanderTurn == null) {
+                    // Ein Commander kann per Blitz auch im gegnerischen Zug kommen; dann zaehlt der
+                    // eigene Zug, in dem der Sitz zuletzt am Zug war (mindestens 1).
+                    s.firstCommanderTurn = Math.max(1, s.ownTurns);
+                }
+            }
+        } catch (RuntimeException ex) {
+            counterFailures++;
         }
     }
 
@@ -589,11 +604,16 @@ public final class MatchRecorder {
 
     /**
      * Wie oft ein Vorfall-Zaehler in eine {@code RuntimeException} gelaufen ist. Ein kaputter Zaehler
-     * darf keine Partie abschiessen, also faengt jeder Handler und zaehlt den Fall nur hier mit.
-     * (Die einmalige Meldung ueber {@code CrashLog.note} kommt in Stueck 3.)
+     * darf keine Partie abschiessen, also faengt jeder Handler und zaehlt den Fall nur hier mit. Am
+     * Partieende einmalig gemeldet ueber {@code CrashLog.note}, siehe {@link #build()}.
      */
     synchronized int counterFailures() {
         return counterFailures;
+    }
+
+    /** Wie oft {@link #isCounterspell} einen gewirkten Zauber nicht mehr auf dem Stapel fand. */
+    synchronized int castsNotOnStack() {
+        return castsNotOnStack;
     }
 
     // ------------------------------------------------------------------ Abschluss
@@ -654,6 +674,7 @@ public final class MatchRecorder {
                 outcome == null ? "unbekannt" : String.valueOf(outcome.getWinCondition()),
                 !noWinners && (!anyWinner || (outcome != null && outcome.getWinCondition() == GameEndReason.Draw)),
                 excludeReason == null, excludeReason, List.copyOf(out));
+        reportCounterFailures();
         // Der Datensatz steht; ab hier braucht niemand mehr die Forge-Objekte. Ohne das haelt der
         // Recorder ueber seats/byView das ganze Game fest, solange ihn irgendwer noch referenziert
         // (HumanMatch.recorder bis zum naechsten Spiel, oder der CrashLog-Listener, falls ein
@@ -663,6 +684,19 @@ public final class MatchRecorder {
         turnOwner = null;
         game = null;
         return finished;
+    }
+
+    /**
+     * Einmalige Sammelmeldung am Partieende (Spec Stueck 3): die beiden Robustheits-Zaehler stehen in
+     * keiner Kennzahl im Datensatz und blieben sonst unsichtbar. Nur ins Log ({@link CrashLog#note}) -
+     * das geht niemanden im Browser etwas an - und nur, wenn ueberhaupt etwas zu melden ist.
+     */
+    private void reportCounterFailures() {
+        if (counterFailures == 0 && castsNotOnStack == 0) {
+            return;
+        }
+        CrashLog.note("MatchRecorder", counterFailures + " Ereignisse nicht gezaehlt (Ausnahme im Handler), "
+                + castsNotOnStack + " gewirkte Zauber beim Counterspell-Check nicht auf dem Stapel gefunden");
     }
 
     // ------------------------------------------------------------------ Hilfen
@@ -734,6 +768,12 @@ public final class MatchRecorder {
      * {@code MagicStack.add} den Eintrag legt, BEVOR es {@code GameEventSpellAbilityCast} feuert.
      * Ein Zauber, der dort nicht (mehr) liegt, zaehlt nicht mit - lieber eine Kennzahl zu niedrig
      * als eine erfundene.
+     *
+     * <p><b>Nachtrag aus der Review von Stueck 1.</b> Bleibt die Suche erfolglos, zaehlt das getrennt
+     * in {@link #castsNotOnStack} statt still {@code false} zu liefern: aendert Forge einmal die
+     * Reihenfolge (Stack-Eintrag erst nach dem Ereignis), liesse {@code counterspellsCast} sonst fuer
+     * immer unauffaellig 0, ohne dass es irgendwo auffiele. Eine echte {@code RuntimeException} beim
+     * Nachschlagen ist davon zu unterscheiden - die zaehlt weiter in {@link #counterFailures}.</p>
      */
     private boolean isCounterspell(SpellAbilityView view) {
         try {
@@ -749,6 +789,7 @@ public final class MatchRecorder {
                 }
                 return false;
             }
+            castsNotOnStack++;
         } catch (RuntimeException ex) {
             counterFailures++;
         }

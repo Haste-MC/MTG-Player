@@ -157,6 +157,81 @@ class MatchStoreTest {
                 "eine fehlende Zeitachse liest sich leer, nicht als null");
     }
 
+    /**
+     * Ein von Hand getippter Datensatz, genau wie ihn ein Bridge-Lauf vor Runde B geschrieben hat:
+     * kein {@code "v"}-Feld, kein {@code "timeline"} im Sitz, und der Sitz traegt nur die Felder, die
+     * es damals gab (siehe die v1-Fassung von {@code MatchRecord.Seat} vor Einfuehrung der
+     * Vorfall-Kennzahlen). Anders als {@link #datensatzTraegtFormatversionUndAelterOhneFeldGiltAlsV1}
+     * haengt dieser Test nicht an der HEUTIGEN Serialisierung (kein Umbauen eines frisch
+     * geschriebenen v2-Datensatzes per Textersatz) - er schreibt das alte Format unabhaengig davon
+     * hin und bleibt deshalb auch dann aussagekraeftig, wenn sich die v2-Serialisierung spaeter
+     * aendert.
+     */
+    @Test
+    void handgeschriebenerV1DatensatzLiestSichWeiterhin(@TempDir Path dir) throws Exception {
+        Path file = dir.resolve("matches.json");
+        String v1Json = """
+                [{
+                  "id": "alt-1",
+                  "startedAt": "2025-01-01T10:00:00Z",
+                  "endedAt": "2025-01-01T10:20:00Z",
+                  "durationMs": 1200000,
+                  "source": "live",
+                  "aiTimeout": 5,
+                  "turns": 8,
+                  "reason": "AllOpponentsLost",
+                  "draw": false,
+                  "counted": true,
+                  "seats": [{
+                    "name": "Du",
+                    "deck": "Ein altes Deck",
+                    "human": true,
+                    "ai": null,
+                    "winner": true,
+                    "lossReason": null,
+                    "eliminatedTurn": null,
+                    "mulligans": 1,
+                    "lands": 6,
+                    "landsByTurn": [0, 1, 2, 3, 4, 5, 6],
+                    "missedLandDrops": 0,
+                    "firstMissedLandDrop": null,
+                    "spells": 5,
+                    "spellMana": 14,
+                    "commanderCasts": 1,
+                    "commanderTax": 0,
+                    "firstCommanderTurn": 2,
+                    "damageDealt": 20,
+                    "damageTaken": 3,
+                    "combatDamageTaken": 3,
+                    "lifeEnd": 37,
+                    "poisonEnd": 0
+                  }]
+                }]
+                """;
+        Files.writeString(file, v1Json);
+
+        MatchRecord r = new MatchStore(file).all().get(0);
+        assertEquals(1, r.v(), "kein \"v\"-Feld im Text - gilt als v1");
+        assertEquals("alt-1", r.id());
+        assertEquals(8, r.turns());
+
+        MatchRecord.Seat seat = r.seats().get(0);
+        assertEquals("Du", seat.name());
+        assertEquals(5, seat.spells(), "die alten Felder lesen sich unveraendert");
+        assertEquals(1, seat.commanderCasts());
+        assertEquals(List.of(), seat.timeline(), "eine fehlende Zeitachse liest sich leer, nicht als null");
+        for (int n : new int[]{seat.spellsCountered(), seat.spellsFizzled(), seat.counterspellsCast(),
+                seat.cardsDrawn(), seat.cardsDiscarded(), seat.cardsMilled(), seat.permanentsLost(),
+                seat.creaturesLostInCombat(), seat.creaturesLostOther(), seat.biggestSweep(),
+                seat.sweepsSuffered(), seat.tokensCreated(), seat.attacksDeclared(), seat.attackedTurns(),
+                seat.attackersFaced(), seat.blocksDeclared(), seat.damageTakenFlying(),
+                seat.damageTakenTrample(), seat.damageTakenOther(), seat.damageTakenNonCombat(),
+                seat.damageDealtCombat(), seat.damageDealtNonCombat(), seat.commanderDamageTaken(),
+                seat.lifeGained()}) {
+            assertEquals(0, n, "eine v1-Partie hat die Runde-B-Kennzahlen nie gezaehlt - sie lesen sich als 0");
+        }
+    }
+
     @Test
     void withCountedAendertNurCountedUndExcludeReason(@TempDir Path dir) {
         MatchRecord r = record("m1");
