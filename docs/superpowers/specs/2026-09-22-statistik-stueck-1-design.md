@@ -65,10 +65,26 @@ Textliste der Import-Name) – die Statistik gruppiert danach. `ai` fehlt bei me
 - die Partie wurde über „Aufgeben"/„Beenden" oder einen Neustart abgebrochen (`HumanMatch.end()` meldet
   `markAborted()`) → „abgebrochen"
 - Absturz während der Partie (`CrashLog` meldet sich beim Recorder) → „Absturz"
+- **Zugdeckel**: eine headless Partie lief in die Notbremse (siehe unten) → „Zugdeckel“
 
 Bei „abgebrochen" und „Absturz" trägt **kein** Sitz `winner: true` und `draw` ist `false`: Forges erzwungenes
 Ende (`GameEndReason.AllHumansLost`) macht sonst jeden Sitz ohne eigenen Ausgang zum Sieger, und ein
 nachträgliches „gewertet" würde daraus frei erfundene Siege machen.
+
+### Zugdeckel
+
+Headless Partien (Bench, später Sparring) brechen nach `maxTurns` Spielerzügen ab (`AiMatch`, Standard im Bench 200).
+Technisch setzt die Bridge dafür bei allen Sitzen `intentionalDraw()` und beendet mit `GameEndReason.Draw`, sonst macht
+Forges `Player.onGameOver()` jeden Sitz zum Sieger. Der Verlustgrund jedes Sitzes ist dadurch `IntentionalDraw` –
+fachlich hat sich aber niemand auf ein Remis geeinigt, die Partie wurde abgeschnitten.
+
+Solche Partien zählen deshalb **nicht** in die Bilanz (`counted: false`, `excludeReason: "Zugdeckel"`); die Sitze
+behalten ihren echten Ausgang (Remis, kein Sieger), eine Neuwertung von Hand erfindet also nichts. Die Häufigkeit ist
+aber selbst eine Kennzahl: ein Deck, das regelmäßig in den Deckel läuft, hat keine verlässliche Siegbedingung.
+`summarize` liefert dafür `turnCappedGames` (Anzahl) und `turnCappedRate` (Anteil an gewerteten + Zugdeckel-Partien);
+der Screen zeigt eine Kachel „Zugdeckel“, sobald es mindestens eine gibt. `MatchRecorder.markTurnCapped()` setzt das
+Flag, `AiMatch` ruft es dort auf, wo es heute schon `turnCapped` setzt. `IntentionalDraw` bleibt als Todesursache nur
+für echte, im Spiel vereinbarte Remis übrig.
 
 ## 3. Speicher (`mtgplayer.stats.MatchStore`)
 
