@@ -114,6 +114,30 @@ class MatchRecorderTest {
         assertNotNull(r.endedAt());
     }
 
+    /**
+     * Die Bedenkzeit je KI-Entscheidung steht dem Aufrufer beim Start ohnehin zur Verfuegung
+     * ({@code HumanMatch}/{@code AiMatch} setzen sie); ohne sie im Datensatz laesst sich eine lange
+     * Partie spaeter nicht mehr mit ihrem Budget erklaeren.
+     */
+    @Test
+    @Timeout(value = 3, unit = TimeUnit.MINUTES)
+    void datensatzTraegtDieUebergebeneBedenkzeit() {
+        Scene s = Scene.twoPlayers(AiConfig.DEFAULT, AiConfig.DEFAULT);
+        MatchRecord r = new MatchRecorder(s.game(), "spectate", 12, null).finish();
+
+        assertEquals(12, r.aiTimeout());
+    }
+
+    /** Wer die Bedenkzeit nicht kennt (Altaufrufe, Tests), schreibt kein erfundenes Budget hinein. */
+    @Test
+    @Timeout(value = 3, unit = TimeUnit.MINUTES)
+    void ohneBekannteBedenkzeitBleibtDasFeldLeer() {
+        Scene s = Scene.twoPlayers(AiConfig.DEFAULT, AiConfig.DEFAULT);
+        MatchRecord r = new MatchRecorder(s.game(), "live", null).finish();
+
+        assertNull(r.aiTimeout());
+    }
+
     // ---------------------------------------------------------------- Buchhaltung ueber Ereignisse
 
     @Test

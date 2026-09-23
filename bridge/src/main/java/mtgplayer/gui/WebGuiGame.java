@@ -80,6 +80,19 @@ public class WebGuiGame extends AbstractGuiGame {
     /** Fortlaufende id je Partie (siehe {@link #remember}), unter dem Puffer-Lock gepflegt. */
     private int logId;
 
+    /**
+     * Denk-Anzeige und Wachhund der laufenden Partie; {@code null}, solange keine laeuft. Je Partie
+     * ein eigener (siehe {@link ThinkingTicker#close()}).
+     */
+    private volatile ThinkingTicker ticker;
+    /** Der zuletzt gebaute Snapshot - daraus kommen Prioritaetssitz und Phase fuer die Anzeige. */
+    private volatile Snapshot lastSnapshot;
+    /**
+     * Forges Spiel-Thread, gemerkt beim ersten Log-Ereignis (der Observer laeuft dort). Der Wachhund
+     * braucht genau diesen Stacktrace, um "die KI rechnet" von "es haengt wirklich" zu unterscheiden.
+     */
+    private volatile Thread gameThread;
+
     public WebGuiGame(Transport out) {
         this.out = out;
         this.broker = new ChoiceBroker(out);
@@ -111,7 +124,57 @@ public class WebGuiGame extends AbstractGuiGame {
         ViewContext ctx = new ViewContext(me, this::mayView, this::isSelectable, this::isWeaklySelectable,
                 this::isHighlighted, p -> isTargetingInput(), prompt,
                 new Messages.StopsMsg(Stops.names(stops.own()), Stops.names(stops.opp())), fullControl, isSpectator);
-        out.send(StateSerializer.snapshot(gv, ctx));
+        Snapshot snap = StateSerializer.snapshot(gv, ctx);
+        lastSnapshot = snap;
+        touchTicker();                           // ein Zustands-Push ist sichtbarer Fortschritt
+        out.send(snap);
+    }
+
+    // ---- Denk-Anzeige ------------------------------------------------------------
+
+    /**
+     * Neue Partie: frischer Ticker. Der Spiel-Thread ist noch unbekannt - der Log-Observer traegt
+     * ihn beim ersten Ereignis nach, ein alter waere fuer den Wachhund schlicht der falsche.
+     */
+    private void startTicker() {
+        stopTicker();
+        gameThread = null;
+        ThinkingTicker t = new ThinkingTicker(out::send, System::nanoTime, this::priorityPlayer,
+                this::thinkingInfo, () -> gameThread);
+        ticker = t;
+        t.start();
+    }
+
+    private void stopTicker() {
+        ThinkingTicker t = ticker;
+        ticker = null;
+        if (t != null) {
+            t.close();
+        }
+    }
+
+    private void touchTicker() {
+        ThinkingTicker t = ticker;
+        if (t != null) {
+            t.touch();
+        }
+    }
+
+    private Integer priorityPlayer() {
+        Snapshot s = lastSnapshot;
+        return s == null ? null : s.priorityPlayer();
+    }
+
+    /** Kontextzeile fuer den Wachhund: wer am Zug ist, in welcher Phase und in welchem Zug. */
+    private String thinkingInfo() {
+        Snapshot s = lastSnapshot;
+        if (s == null) {
+            return null;
+        }
+        String name = s.players().stream()
+                .filter(p -> Integer.valueOf(p.id()).equals(s.priorityPlayer()))
+                .map(Snapshot.PlayerSnap::name).findFirst().orElse("unbekannt");
+        return "Priorität: " + name + ", Phase: " + s.phase() + ", Zug " + s.turn();
     }
 
     /** Forge markiert Spieler nicht als wählbar – wir leiten es aus dem aktiven Input ab. */
@@ -232,11 +295,16 @@ public class WebGuiGame extends AbstractGuiGame {
     public void setGameView(GameView gameView0) {
         super.setGameView(gameView0);
         watchLogOf(gameView0);
-        Consumer<Game> hook = newGameHook;
         Game game = gameView0 == null ? null : gameView0.getGame();
-        if (hook != null && game != null && game != hookedGame && game.getMaingame() == null) {
+        if (game != null && game != hookedGame && game.getMaingame() == null) {
             hookedGame = game;
-            hook.accept(game);
+            startTicker();
+            // Der Haken haengt den Recorder an; die Denk-Anzeige laeuft unabhaengig davon, ob sich
+            // jemand angemeldet hat.
+            Consumer<Game> hook = newGameHook;
+            if (hook != null) {
+                hook.accept(game);
+            }
         }
         push();
     }
@@ -251,6 +319,8 @@ public class WebGuiGame extends AbstractGuiGame {
     public void resetForNewMatch() {
         super.resetForNewMatch();
         hookedGame = null;
+        stopTicker();
+        lastSnapshot = null;
         synchronized (recentLog) { recentLog.clear(); logId = 0; }
         watchLogOf(null);
     }
@@ -274,6 +344,7 @@ public class WebGuiGame extends AbstractGuiGame {
     }
 
     private void sendLog(Messages.LogLine line) {
+        touchTicker();                           // eine Log-Zeile ist sichtbarer Fortschritt
         out.send(remember(line));
     }
 
@@ -297,6 +368,9 @@ public class WebGuiGame extends AbstractGuiGame {
         if (gv == null || gv.getGameLog() == null) return;
         GameLog log = gv.getGameLog();
         logObserver = (o, arg) -> {
+            // Der Observer laeuft auf Forges Spiel-Thread - der einzige Ort, an dem wir ihn ohne
+            // Forge-Interna bekommen. Genau dessen Stacktrace will der Wachhund.
+            gameThread = Thread.currentThread();
             List<Messages.LogLine> fresh = new ArrayList<>();
             synchronized (recentLog) {
                 // Veralteter Observer eines vorigen Spiels (watchLogOf inzwischen erneut aufgerufen,
@@ -311,6 +385,7 @@ public class WebGuiGame extends AbstractGuiGame {
                     fresh.add(remember(line));
                 }
             }
+            touchTicker();                       // neue Log-Zeilen = sichtbarer Fortschritt
             fresh.forEach(out::send);
         };
         observedLog = log;
@@ -371,6 +446,7 @@ public class WebGuiGame extends AbstractGuiGame {
         // Snapshot muss den Client also synchron vor GameOver erreichen statt erst später über invokeInEdtLater.
         pushState();
         out.send(new Messages.GameOver(winner));
+        stopTicker();                            // beendet auch eine noch laufende Denk-Anzeige
     }
 
     @Override

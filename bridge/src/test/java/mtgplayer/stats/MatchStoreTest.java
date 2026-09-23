@@ -34,7 +34,7 @@ class MatchStoreTest {
         MatchRecord.Seat seat = new MatchRecord.Seat("Du", "Titania, Gaea Incarnate", true, null, true, null,
                 null, 1, 7, List.of(0, 1, 2, 2, 3), 2, 4, 12, 34, 2, 2, 4, 21, 18, 12, 22, 0);
         return new MatchRecord(id, "2026-09-22T19:00:00Z", "2026-09-22T19:13:32Z", 812345, "live",
-                14, "AllOpponentsLost", false, true, null, List.of(seat));
+                5, 14, "AllOpponentsLost", false, true, null, List.of(seat));
     }
 
     @Test

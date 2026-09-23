@@ -71,7 +71,7 @@ public final class HumanMatch {
         // HostedMatch.startGame liest diese Preference beim Spielstart (setzt Game.AI_TIMEOUT) - kein save(),
         // die Aenderung soll nur diese JVM/Session betreffen.
         FModel.getPreferences().setPref(FPref.MATCH_AI_TIMEOUT, String.valueOf(aiTimeout));
-        record(gui, "live", sink);
+        record(gui, "live", aiTimeout, sink);
         hosted.startMatch(rules, null, players, guis, null);
     }
 
@@ -108,7 +108,7 @@ public final class HumanMatch {
         hosted = new HostedMatch();
         gui.resetForNewMatch(); // sonst haengt Auswahl/Prompt-Zustand aus dem vorigen Spiel noch dran
         FModel.getPreferences().setPref(FPref.MATCH_AI_TIMEOUT, String.valueOf(aiTimeout));
-        record(gui, "spectate", sink);
+        record(gui, "spectate", aiTimeout, sink);
         hosted.startMatch(rules, null, players, Map.of(), null);
     }
 
@@ -129,8 +129,8 @@ public final class HumanMatch {
      * Ereignisbus und schliesst sich mit {@code GameEventGameFinished} ab; ein abgebrochener Start
      * hinterlaesst nur den Haken, der beim naechsten Start ersetzt wird.</p>
      */
-    private void record(WebGuiGame gui, String source, Consumer<MatchRecord> sink) {
-        gui.onNewGame(game -> recorder = new MatchRecorder(game, source, sink));
+    private void record(WebGuiGame gui, String source, int aiTimeout, Consumer<MatchRecord> sink) {
+        gui.onNewGame(game -> recorder = new MatchRecorder(game, source, aiTimeout, sink));
     }
 
     public boolean isRunning() {

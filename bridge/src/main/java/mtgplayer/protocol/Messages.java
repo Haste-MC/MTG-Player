@@ -91,6 +91,15 @@ public final class Messages {
         public LogLine withId(int id) { return new LogLine(type, text, kind, card, id); }
     }
 
+    /**
+     * Die Bridge rechnet und der Browser haette sonst nichts zu zeigen: {@code seconds} ist die
+     * Dauer der bisherigen Stille, {@code player} der Sitz mit Prioritaet ({@code null} wenn
+     * unbekannt). {@code seconds == 0} beendet die Anzeige (siehe {@link mtgplayer.gui.ThinkingTicker}).
+     */
+    public record Thinking(String type, Integer player, int seconds) {
+        public Thinking(Integer player, int seconds) { this("thinking", player, seconds); }
+    }
+
     public record GameOver(String type, String winner) {
         public GameOver(String winner) { this("gameOver", winner); }
     }

@@ -94,7 +94,7 @@ public final class AiMatch {
         // Lokale Variable statt anonymer Anmeldung: der Zugdeckel-Haken unten muss den Recorder erreichen.
         // Vor match.startGame(...), damit Mulligans und der erste Zug schon mitgezaehlt werden; der
         // Recorder schliesst sich selbst ueber GameEventGameFinished ab.
-        final MatchRecorder recorder = sink == null ? null : new MatchRecorder(game, "sparring", sink);
+        final MatchRecorder recorder = sink == null ? null : new MatchRecorder(game, "sparring", aiTimeout, sink);
 
         // Forge selbst kann ein Spiel ebenfalls mit GameEndReason.Draw beenden (gleichzeitiger Verlust,
         // Stack > 999, GameDrawEffect) - dieses Flag markiert nur ein Unentschieden DURCH UNS (Zugdeckel),

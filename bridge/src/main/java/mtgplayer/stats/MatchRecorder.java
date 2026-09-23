@@ -85,6 +85,7 @@ public final class MatchRecorder {
     /** Nach {@link #finish()} {@code null} - siehe dort, warum die Forge-Objekte losgelassen werden. */
     private Game game;
     private final String source;
+    private final Integer aiTimeout;
     private final Consumer<MatchRecord> sink;
     private final Instant startedAt = Instant.now();
     private final List<Seat> seats = new ArrayList<>();
@@ -99,15 +100,24 @@ public final class MatchRecorder {
     private volatile boolean turnCapped;
     private volatile MatchRecord finished;
 
-    /**
-     * @param game   das laufende Spiel; der Recorder meldet sich sofort an seinem Ereignisbus an
-     * @param source {@code "live"}, {@code "spectate"} oder {@code "sparring"}
-     * @param sink   bekommt den fertigen Datensatz genau einmal (aus {@link #finish()}); darf
-     *               {@code null} sein (Tests, oder wenn der Aufrufer selbst abholt)
-     */
+    /** Ohne bekannte Bedenkzeit ({@code aiTimeout == null}) - fuer Aufrufer, die sie nicht setzen. */
     public MatchRecorder(Game game, String source, Consumer<MatchRecord> sink) {
+        this(game, source, null, sink);
+    }
+
+    /**
+     * @param game      das laufende Spiel; der Recorder meldet sich sofort an seinem Ereignisbus an
+     * @param source    {@code "live"}, {@code "spectate"} oder {@code "sparring"}
+     * @param aiTimeout Bedenkzeit je KI-Entscheidung in Sekunden, wie der Starter sie gesetzt hat
+     *                  ({@code Game.AI_TIMEOUT}); {@code null} wenn unbekannt. Steht im Datensatz,
+     *                  weil sich eine lange Partie sonst nicht mehr mit ihrem Budget erklaeren laesst.
+     * @param sink      bekommt den fertigen Datensatz genau einmal (aus {@link #finish()}); darf
+     *                  {@code null} sein (Tests, oder wenn der Aufrufer selbst abholt)
+     */
+    public MatchRecorder(Game game, String source, Integer aiTimeout, Consumer<MatchRecord> sink) {
         this.game = game;
         this.source = source;
+        this.aiTimeout = aiTimeout;
         this.sink = sink;
         // getRegisteredPlayers() statt getPlayers(): die Liste schrumpft nicht, wenn ein Sitz
         // ausscheidet - sonst fehlte am Ende genau der Sitz, dessen Niederlage wir festhalten wollen.
@@ -320,7 +330,7 @@ public final class MatchRecorder {
                 : turnCapped ? "Zugdeckel" : conceded ? "aufgegeben" : turns < MIN_TURNS ? "zu kurz" : null;
         Instant endedAt = Instant.now();
         finished = new MatchRecord(newId(endedAt), iso(startedAt), iso(endedAt),
-                Math.max(0, endedAt.toEpochMilli() - startedAt.toEpochMilli()), source, turns,
+                Math.max(0, endedAt.toEpochMilli() - startedAt.toEpochMilli()), source, aiTimeout, turns,
                 outcome == null ? "unbekannt" : String.valueOf(outcome.getWinCondition()),
                 !noWinners && (!anyWinner || (outcome != null && outcome.getWinCondition() == GameEndReason.Draw)),
                 excludeReason == null, excludeReason, List.copyOf(out));
