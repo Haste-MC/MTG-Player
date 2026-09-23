@@ -24,7 +24,9 @@ länger als **3 s** zurück, schickt der Ticker einmal je Sekunde
 
 `player` ist der Sitz mit Priorität aus dem zuletzt gebauten Snapshot (sonst `null`). Sobald wieder etwas
 passiert – oder das Spiel endet –, geht einmalig `{ "type": "thinking", "seconds": 0 }` raus. Der Ticker läuft
-nur, solange ein Spiel läuft (Start in `setGameView`/`onNewGame`, Stopp in `finishGame`/`resetForNewMatch`).
+nur, solange ein Spiel läuft (Start in `setGameView`/`onNewGame`, Stopp in `finishGame`/`resetForNewMatch`), und
+**schweigt, solange die Bridge auf einen Menschen wartet** (offene Frage im `ChoiceBroker` oder Priorität bei einem
+lokalen Sitz) – sonst meldete jede lange Überlegung des Spielers „KI denkt" und der Wachhund einen Hänger.
 
 Web: Store-Feld `thinking?: { player?: number; seconds: number }` (0 → gelöscht). Anzeige als ruhige Zeile mit
 Punkt-Animation: in der Tischansicht über dem Prompt, im Zuschauer-Modus in der Fußzeile neben den Steuerknöpfen:
@@ -33,8 +35,9 @@ Ist kein Spielername bekannt: „KI denkt …".
 
 ## 2. Wachhund (nur Beweismittel, kein Eingriff)
 
-Derselbe Ticker: überschreitet die Stille **120 s**, schreibt er **einmal je Vorfall** über `CrashLog.warn`
-(kein Crash-Kanal, keine Fehlermeldung im Browser) nach `~/.mtg-player/logs/bridge.log`:
+Derselbe Ticker: überschreitet die Stille **120 s**, schreibt er **einmal je Vorfall** über `CrashLog.note`
+(kein Crash-Kanal, keine Fehlermeldung im Browser; `CrashLog.warn` schickt eine Zeile an den Browser und ist
+dafür ungeeignet) nach `~/.mtg-player/logs/bridge.log`:
 
 ```
 Wachhund: 120 s ohne Fortschritt – Priorität: KI 2, Phase: MAIN1, Zug 14
