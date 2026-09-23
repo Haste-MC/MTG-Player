@@ -180,8 +180,10 @@ export interface MatchSeat {
 /** Eine gespielte Partie aus mtgplayer.stats.MatchRecord (Bridge). reason ist Forges Spielende-Grund
  * (z. B. "AllOpponentsLost"). counted/excludeReason: automatisch nicht gewertete Partien (zu kurz,
  * aufgegeben, Zugdeckel, abgebrochen, Absturz) tragen counted:false und einen Grund in excludeReason.
- * v ist die Formatversion des Datensatzes (aktuell 1); die Oberflaeche wertet sie nicht aus, sie steht hier
- * nur, damit sie beim Durchreichen nicht verlorengeht - Datensaetze ohne Feld gelten der Bridge als v1. */
+ * v ist die Formatversion des Datensatzes (aktuell 2). Ab v2 traegt jeder Sitz die Vorfall-Kennzahlen aus
+ * Runde B (gekonterte Zauber, Verluste, Kampf und Schaden, Zeitachse; hier noch nicht getippt - das kommt mit
+ * der Anzeige in Runde A). v < 2 heisst fuer die: KEINE DATEN, nicht "0" - dort wurde nie gezaehlt, und eine
+ * Quote daraus waere erfunden. Datensaetze ganz ohne Feld gelten der Bridge als v1. */
 export interface MatchRecord {
   v?: number; id: string; startedAt: string; endedAt: string; durationMs: number;
   source: "live" | "spectate" | "sparring";
