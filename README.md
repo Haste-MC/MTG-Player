@@ -125,6 +125,10 @@ und meldet je Deck `archidektProgress` (`done`, `total`, `current` = gespeichert
 `Deck <id>` bei einem Neuimport – der Client zeigt dafür den Namen aus der Konto-Liste, `errors`), nach
 jedem Deck eine frische `lobby`-Nachricht und zum Schluss `archidektProgress` mit `current: null`; ein zweiter
 `archidektImport` während eines Laufs wird mit `error` abgewiesen.
+`thinking` (`player` = Sitz mit Priorität oder `null`, `seconds`) meldet ab 3 s ohne sichtbaren Fortschritt
+je Sekunde, dass gerechnet wird; `seconds: 0` löscht die Anzeige wieder (kommt einmal, sobald es weitergeht
+oder das Spiel endet). Wartet die Bridge auf eine Eingabe **von dir**, schweigt sie – die eigene Bedenkzeit
+ist kein Rechnen.
 
 ## Statistik
 
@@ -158,6 +162,11 @@ Deck-Löschen); der Filter „nur gewertete" steht standardmäßig an. Ausgewert
 gespielt hat – du oder eine KI – spielt keine Rolle, damit die kommenden Sparring-Partien (KI spielt dein Deck)
 mitzählen; je Partie zählt höchstens ein Sitz je Deck, ein Spiegel bleibt also eine Partie.
 
+Je Partie hält der Datensatz auch die eingestellte KI-Bedenkzeit (`aiTimeout`, Sekunden je Entscheidung); in
+der Partienliste steht sie als kleines Feld „<n> s" neben der Quelle. Sie gehört zum Vergleich von Dauern dazu –
+eine lange Partie kann an der hohen Bedenkzeit liegen und nicht am Deck. Ältere Datensätze kennen den Wert
+nicht, dort fehlt das Feld.
+
 Protokoll: die Bridge schickt bei Verbindung, nach jeder Änderung und nach jedem Spielende
 `matches` (die ganze Liste); der Client schickt `deleteMatch` (`id`) und `setMatchCounted` (`id`, `counted`),
 Fehler kommen als `error` („Partie <id>: …") und stehen im Screen über der Liste.
@@ -170,6 +179,28 @@ Schwächen-Analyse mit Kartenvorschlägen.
 Friert ein Spiel ein (kein Prompt mehr, Log steht), ist meist der Spiel-Thread mit einer Ausnahme abgebrochen.
 Die Bridge schreibt jeden solchen Abbruch mit Stacktrace nach `~/.mtg-player/logs/bridge.log` und als rote
 Zeile ins Browser-Log („Spiel abgebrochen …"). Für einen Bugreport reicht der letzte Block aus der Datei.
+
+Steht dort nichts, rechnet vermutlich nur die KI. Ein Sitz im Simulations-Modus braucht je Entscheidung bis zur
+vollen Bedenkzeit, und gemessen kosten **vier Simulations-Sitze 20–31 s je Entscheidung** – in dieser Zeit
+erreicht den Browser nichts. Deshalb steht ab 3 s Stille „… denkt" in der Prompt-Leiste (Zuschauer-Modus: in
+der Fußzeile); solange die Sekunden dort hochlaufen, ist alles in Ordnung.
+
+Bleibt der Tisch trotzdem stehen, hilft der Wachhund: nach 120 s Stille legt die Bridge **einmal je Vorfall**
+den Stacktrace des Spiel-Threads im Log ab (nur dort, nicht im Browser):
+
+```bash
+grep -A40 Wachhund ~/.mtg-player/logs/bridge.log | tail -60
+```
+
+Der Stack sagt, was los ist:
+
+* `GameSimulator` / `GameCopier` (auch `SpellAbilityPicker`, `AiController`) – die KI rechnet. Kein Fehler,
+  höchstens ein Grund, die Bedenkzeit zu senken oder weniger Simulations-Sitze zu setzen.
+* `ChoiceBroker` / `CompletableFuture.get` – **echter Hänger**: der Spiel-Thread wartet auf eine Antwort, die
+  nie kommt (verlorene Frage, abgerissene Verbindung). Das gehört in den Bugreport.
+
+Während die Bridge auf *deine* Eingabe wartet, ruhen Anzeige und Wachhund – sonst stünde nach zwei Minuten
+Nachdenken ein `ChoiceBroker`-Stack im Log, also genau die Signatur des echten Hängers.
 
 ## Forge-Fork
 

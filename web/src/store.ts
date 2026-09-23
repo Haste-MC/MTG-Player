@@ -110,7 +110,10 @@ export function reduce(s: AppState, m: Inbound): AppState {
       // seconds: 0 ist das Ende der Stille - Feld loeschen statt eine "0 s"-Zeile stehen zu lassen.
       return m.seconds > 0 ? { ...s, thinking: { player: m.player, seconds: m.seconds } } : { ...s, thinking: undefined };
     case "gameOver":
-      return { ...s, winner: m.winner ?? null, choices: [], series: s.series ? recordResult(s.series, m.winner ?? null) : s.series };
+      // thinking mit raus: die Partie ist vorbei, es rechnet niemand mehr. Die Bridge schickt zwar beim
+      // Schliessen des Tickers ihr seconds: 0 hinterher, aber ein Reconnect mitten im Spielende-Overlay
+      // liesse sonst "KI 2 denkt ... 31 s" unter dem Ergebnis stehen.
+      return { ...s, winner: m.winner ?? null, choices: [], thinking: undefined, series: s.series ? recordResult(s.series, m.winner ?? null) : s.series };
     case "error": {
       // Ein fehlgeschlagenes startGame (z. B. Deckfehler) darf expectNewMatch nicht scharf lassen - sonst
       // wuerde der naechste turn-0-Snapshot (Reconnect der alten Partie) faelschlich als Spielstart gelten.

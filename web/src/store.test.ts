@@ -133,6 +133,12 @@ describe("reduce", () => {
     expect(s.state).toBeDefined();
   });
 
+  it("gameOver loescht eine laufende denk-anzeige", () => {
+    const laufend = reduce(reduce(initialState, snap()), { type: "thinking", player: 2, seconds: 31 });
+    expect(laufend.thinking).toBeDefined();
+    expect(reduce(laufend, { type: "gameOver", winner: "KI 1" }).thinking).toBeUndefined();
+  });
+
   it("gameOver leert offene choices", () => {
     const c7: Choice = { type: "choice", id: 7, kind: "confirm", title: "T", message: "?", options: [], min: 1, max: 1 };
     const c3: Choice = { type: "choice", id: 3, kind: "confirm", title: "T", message: "?", options: [], min: 1, max: 1 };
