@@ -138,10 +138,8 @@ class DeckSourceTest {
     void importArchidektUebernimmtGleichnamigesDeckOhneTag(@TempDir Path dir) throws Exception {
         String body = java.nio.file.Files.readString(Path.of("src/test/resources/archidekt-1.json"));
         DeckStore store = new DeckStore(dir);
-        // lokales Deck ohne Tag unter dem Archidekt-Namen (alter Textimport) - Adaptive Enchantment statt
-        // Abzan Armor: Precons.load() liefert die geteilte Forge-Instanz, und DeckStoreTest taggt "Abzan
-        // Armor" in anderen Tests dauerhaft mit ARCHIDEKT_TAG (siehe dortiger Kommentar) - dieses Precon
-        // bleibt ueber die ganze Suite hinweg garantiert ungetaggt.
+        // lokales Deck ohne Tag unter dem Archidekt-Namen (alter Textimport). Precons.load() liefert eine
+        // Kopie (siehe PreconsTest), das Deck kommt hier also garantiert ungetaggt an.
         store.save("Fun With Fungus", Precons.load("Adaptive Enchantment [C18] [2018]"));
         DeckSource src = new DeckSource(store, new Archidekt(url -> body));
         src.importArchidekt(1).save().run();

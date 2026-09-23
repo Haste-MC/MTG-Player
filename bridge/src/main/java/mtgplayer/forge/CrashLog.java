@@ -21,7 +21,8 @@ import java.util.function.Consumer;
  * im Browser-Log.
  *
  * <p>{@link #warn} schreibt dieselbe Zeile ohne Absturz-Semantik (keine Crash-Listener, kein
- * "Spiel abgebrochen" im Browser) - fuer Pannen abseits des laufenden Spiels.</p>
+ * "Spiel abgebrochen" im Browser) - fuer Pannen abseits des laufenden Spiels. {@link #note} schreibt nur
+ * in die Datei, ohne jede Meldung im Browser.</p>
  */
 public final class CrashLog {
 
@@ -102,6 +103,17 @@ public final class CrashLog {
             l.accept(title + ": " + (text == null || text.isBlank() ? "(ohne Text)" : text.strip().lines().findFirst().orElse(title))
                     + " – Details in " + file());
         }
+    }
+
+    /**
+     * Nur ins Log, sonst nichts: weder Crash-Listener noch die Fehlerzeile im Browser. Fuer Vermerke, die
+     * beim Nachsehen helfen, aber den Spieler nichts angehen - z. B. der Wachhund der
+     * {@link mtgplayer.gui.ThinkingTicker Denk-Anzeige}, der nach zwei Minuten Stille einen Stacktrace
+     * ablegt. Ueber {@link #warn} gemeldet, stuende mitten in einer (voellig normalen) langen
+     * KI-Rechnung eine Warnung im Browser-Log - genau der Fehlalarm, den die Anzeige verhindern soll.
+     */
+    public static synchronized void note(String title, String text) {
+        write(title, text, null);
     }
 
     /** Zeitstempel + Titel + Text (+ Stacktrace) nach stderr und in {@link #file()}. */

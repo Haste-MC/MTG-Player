@@ -33,6 +33,8 @@ class ThinkingTickerTest {
     private final long[] now = {0};
     private Integer priority = 2;
     private Thread gameThread;
+    /** Wartet die Bridge auf den Menschen? Voreinstellung: nein - die meisten Tests takten eine KI. */
+    private boolean waitingForHuman;
 
     /** Nie in die echte {@code ~/.mtg-player/logs/bridge.log} schreiben. */
     @BeforeEach
@@ -49,7 +51,7 @@ class ThinkingTickerTest {
 
     private ThinkingTicker ticker() {
         return new ThinkingTicker(sent::add, () -> now[0], () -> priority,
-                () -> "Prioritaet: KI 2, Phase: MAIN1, Zug 14", () -> gameThread);
+                () -> "Prioritaet: KI 2, Phase: MAIN1, Zug 14", () -> gameThread, () -> waitingForHuman);
     }
 
     private void advance(int seconds) {
@@ -206,6 +208,73 @@ class ThinkingTickerTest {
         String log = log();
         assertEquals(1, count(log, "Wachhund:"), log);
         assertTrue(log.contains("(Spiel-Thread unbekannt)"), log);
+    }
+
+    // ---------------------------------------------------------------- Warten auf den Menschen
+
+    @Test
+    void waehrendDieBridgeAufDenMenschenWartetZeigtDerTickerNichts() {
+        ThinkingTicker t = ticker();
+        t.arm();
+
+        waitingForHuman = true;
+        advance(10);
+        t.tick();
+        advance(10);
+        t.tick();
+
+        assertEquals(List.of(), thinking(), "meine eigene Bedenkzeit ist keine Denk-Anzeige");
+    }
+
+    @Test
+    void wirdAufDenMenschenGewartetSchliesstEineLaufendeAnzeigeGenauEinmal() {
+        ThinkingTicker t = ticker();
+        t.arm();
+
+        advance(4);
+        t.tick();                                    // die KI rechnet noch: "denkt seit 4 s"
+        waitingForHuman = true;                      // jetzt liegt die Frage bei mir
+        t.tick();
+        t.tick();
+        t.tick();
+
+        assertEquals(List.of(new Messages.Thinking(2, 4), new Messages.Thinking(null, 0)), thinking(),
+                "genau eine Abschlussmeldung, danach Ruhe");
+    }
+
+    @Test
+    void auchNachFuenfMinutenNachdenkenSchweigtDerWachhund() throws Exception {
+        gameThread = Thread.currentThread();
+        ThinkingTicker t = ticker();
+        t.arm();
+
+        waitingForHuman = true;
+        for (int i = 0; i < 300; i++) {              // fuenf Minuten in Sekundentakten
+            advance(1);
+            t.tick();
+        }
+
+        assertEquals(List.of(), thinking());
+        assertEquals("", log(), "ein ueberlegender Mensch steht im ChoiceBroker - das ist kein Haenger");
+    }
+
+    @Test
+    void nachDerAntwortTicktAllesWiederNormal() {
+        ThinkingTicker t = ticker();
+        t.arm();
+
+        waitingForHuman = true;
+        advance(300);
+        t.tick();                                    // fuenf Minuten Bedenkzeit des Menschen
+
+        waitingForHuman = false;                     // geantwortet; die KI ist dran
+        advance(2);
+        t.tick();
+        assertEquals(List.of(), thinking(), "die Stille zaehlt ab der Antwort, nicht ab dem Zugbeginn");
+
+        advance(1);
+        t.tick();
+        assertEquals(List.of(new Messages.Thinking(2, 3)), thinking());
     }
 
     // ---------------------------------------------------------------- kein Spiel

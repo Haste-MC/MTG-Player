@@ -140,7 +140,7 @@ public class WebGuiGame extends AbstractGuiGame {
         stopTicker();
         gameThread = null;
         ThinkingTicker t = new ThinkingTicker(out::send, System::nanoTime, this::priorityPlayer,
-                this::thinkingInfo, () -> gameThread);
+                this::thinkingInfo, () -> gameThread, this::waitingForHuman);
         ticker = t;
         t.start();
     }
@@ -158,6 +158,32 @@ public class WebGuiGame extends AbstractGuiGame {
         if (t != null) {
             t.touch();
         }
+    }
+
+    /**
+     * Wartet die Bridge gerade auf <em>mich</em>? Dann ruht die Denk-Anzeige samt Wachhund: waehrend ich
+     * ueberlege, steht Forges Spiel-Thread im {@code ChoiceBroker} - genau der Stack, den der Wachhund als
+     * echten Haenger meldet. Zwei Minuten Nachdenken wuerden also ein Beweismittel erzeugen, das keines ist.
+     *
+     * <p>Zwei Faelle: eine offene Frage im Broker (Dialog, Kartenwahl) oder - noch ohne Frage - der Sitz mit
+     * Prioritaet gehoert mir (Forge wartet im Input auf den Klick, z. B. auf "Zug beenden"). Im
+     * Zuschauer-Modus ist {@code getLocalPlayers()} leer, dort greift nur der erste Fall (und auch der
+     * praktisch nie).</p>
+     */
+    private boolean waitingForHuman() {
+        if (!broker.pending().isEmpty()) {
+            return true;
+        }
+        Integer prio = priorityPlayer();
+        if (prio == null) {
+            return false;
+        }
+        for (PlayerView p : getLocalPlayers()) {
+            if (prio.equals(p.getId())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private Integer priorityPlayer() {

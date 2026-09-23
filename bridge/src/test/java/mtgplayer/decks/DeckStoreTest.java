@@ -108,8 +108,8 @@ class DeckStoreTest {
         assertEquals("2026-09-21T18:41:17.869883Z", infos.get(0).archidektUpdated());
         assertEquals("Mein Abzan", store.byArchidektId("12345"));
         assertNull(store.byArchidektId("0"));
-        // ohne Tags: null statt Fehler (anderes Precon - Precons.load liefert die geteilte Forge-Instanz,
-        // das oben getaggte Abzan-Deck traegt die Tags also weiterhin)
+        // ohne Tags: null statt Fehler (bewusst ein anderes Precon, damit der Fall auch dann sauber
+        // bleibt, wenn oben mal etwas am Abzan-Deck haengen bleibt)
         store.save("Ohne", Precons.load("Adaptive Enchantment [C18] [2018]"));
         assertNull(store.infos().stream().filter(i -> i.name().equals("Ohne")).findFirst().orElseThrow().archidektUpdated());
     }
