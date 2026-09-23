@@ -35,9 +35,9 @@ class MatchStoreTest {
                 null, 1, 7, List.of(0, 1, 2, 2, 3), 2, 4, 12, 34,
                 1, 0, 2, 9, 3, 6, 5, 2, 3, 4, 1, 2,
                 8, 5, 6, 3, 4, 2, 6, 6, 15, 6, 4, 7,
-                List.of(new MatchRecord.TurnPoint(1, 1, 0, 40, 6),
-                        new MatchRecord.TurnPoint(3, 2, 1, 38, 5)),
-                2, 2, 4, 21, 18, 12, 22, 0);
+                List.of(new MatchRecord.TurnPoint(1, 1, 0, 40, 6, 2),
+                        new MatchRecord.TurnPoint(3, 2, 1, 38, 5, 1)),
+                2, 2, 4, 21, 18, 12, 22, 0, 5, 2, 3);
         return new MatchRecord(id, "2026-09-22T19:00:00Z", "2026-09-22T19:13:32Z", 812345, "live",
                 5, 14, "AllOpponentsLost", false, true, null, List.of(seat));
     }
@@ -227,9 +227,28 @@ class MatchStoreTest {
                 seat.attackersFaced(), seat.blocksDeclared(), seat.damageTakenFlying(),
                 seat.damageTakenTrample(), seat.damageTakenOther(), seat.damageTakenNonCombat(),
                 seat.damageDealtCombat(), seat.damageDealtNonCombat(), seat.commanderDamageTaken(),
-                seat.lifeGained()}) {
+                seat.lifeGained(), seat.handEnd(), seat.openingLands(), seat.removalCast()}) {
             assertEquals(0, n, "eine v1-Partie hat die Runde-B-Kennzahlen nie gezaehlt - sie lesen sich als 0");
         }
+    }
+
+    /**
+     * Ein Feld, das diese Bridge noch nicht kennt, darf die ganze Historie nicht kosten: waere
+     * {@code FAIL_ON_UNKNOWN_PROPERTIES} an, wuerfe {@link MatchStore#all()} beim Lesen, lieferte
+     * eine LEERE Liste - und der naechste Schreibvorgang ersetzte die Datei. Genau der Fall, wenn
+     * ein aelterer Bridge-Stand eine von einer neueren geschriebene {@code matches.json} liest.
+     */
+    @Test
+    void unbekanntesFeldKostetNichtDieGanzeHistorie(@TempDir Path dir) throws Exception {
+        Path file = dir.resolve("matches.json");
+        MatchStore store = new MatchStore(file);
+        store.add(record("m1"));
+        Files.writeString(file, Files.readString(file)
+                .replaceFirst("\\{", "{\"nochNichtErfunden\":42,"));
+
+        MatchStore aelterePlayerBridge = new MatchStore(file);
+        assertEquals(List.of("m1"), aelterePlayerBridge.all().stream().map(MatchRecord::id).toList(),
+                "das unbekannte Feld wird ueberlesen, die Partie bleibt");
     }
 
     @Test

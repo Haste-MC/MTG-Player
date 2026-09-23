@@ -77,6 +77,35 @@ public record MatchRecord(int v, String id, String startedAt, String endedAt, lo
      * <p><b>timeline</b> haelt je eigenem Zug den Stand zu Zugbeginn fest und ist auf
      * {@code MatchRecorder.TIMELINE_MAX} Punkte gedeckelt (danach faellt jeder weitere Zug weg) -
      * nie {@code null}, in einem v1-Datensatz oder ohne einen einzigen Zug schlicht leer.
+     *
+     * <p><b>Ende, Eroeffnung, Entfernung (Nachtrag).</b> {@code handEnd} sind die Handkarten des
+     * Sitzes, als er aus dem Spiel ging - gemessen beim letzten Ereignis, das der Recorder VOR dem
+     * Ausscheiden gesehen hat. Spaeter nachzusehen geht nicht: {@code Game.onPlayerLost} nimmt einem
+     * ausgeschiedenen Sitz in einer Mehrspieler-Partie sofort alle Karten aus dem Spiel, die Hand
+     * waere dann immer leer. Ein Sitz, der die Partie ueberlebt, traegt seinen Stand am Partieende.
+     * {@code openingLands} sind die Laender in der Hand, die der Sitz nach allen Mulligans behalten
+     * hat, gezaehlt beim ersten {@code GameEventTurnBegan} der Partie (Mulligans sind da durch, der
+     * erste Zug noch nicht gezogen) - die Grundlage fuer "behaelt Zwei-Land-Haende".
+     * {@code removalCast} zaehlt eigene Zauber, deren Faehigkeitskette eine Entfernung enthaelt;
+     * die Abgrenzung und ihre Grenzen stehen bei {@code MatchRecorder.classifyCast}.
+     *
+     * <p><b>Drei Naeherungen, die man kennen muss</b> - sie heissen anders, als ihr Name vermuten
+     * laesst, und eine Auswertung, die das nicht weiss, rechnet falsch:</p>
+     * <ul>
+     *   <li>{@code cardsDiscarded} zaehlt JEDEN Weg Hand -&gt; Friedhof, nicht nur das Abwerfen im
+     *       Wortsinn. Eine Karte, die als Kosten von der Hand in den Friedhof geht, steht hier
+     *       genauso drin wie eine, die der Gegner mit einem Handkartenangriff herausgeholt hat.
+     *       "Wie oft werde ich leergeraeumt" laesst sich daraus allein nicht beantworten.</li>
+     *   <li><b>Infektschaden zaehlt in den Kampf-Toepfen mit, kostet aber kein Leben.</b> Forge
+     *       feuert {@code GameEventPlayerDamaged} auch fuer Infekt (Feld {@code infect}); der
+     *       Recorder wertet es nicht aus. {@code damageTaken} ist deshalb NICHT das verlorene Leben -
+     *       gegen ein Infekt-Deck steht hier Schaden, waehrend {@code lifeEnd} unveraendert bleibt
+     *       und stattdessen {@code poisonEnd} steigt. Wer Leben rechnen will, rechnet mit
+     *       {@code lifeEnd}, nicht mit {@code damageTaken}.</li>
+     *   <li>{@code commanderDamageTaken} ist die Summe ueber ALLE gegnerischen Commander zusammen,
+     *       nicht je Commander. Die 21-Punkte-Regel (CR 903.10a) laesst sich daraus nicht ableiten:
+     *       21 hier koennen 11 von dem einen und 10 von dem anderen Commander sein.</li>
+     * </ul>
      */
     public record Seat(String name, String deck, boolean human, Ai ai, boolean winner, String lossReason,
                        Integer eliminatedTurn, int mulligans, int lands, List<Integer> landsByTurn,
@@ -91,7 +120,8 @@ public record MatchRecord(int v, String id, String startedAt, String endedAt, lo
                        int commanderDamageTaken, int lifeGained, List<TurnPoint> timeline,
                        int commanderCasts, int commanderTax, Integer firstCommanderTurn,
                        int damageDealt, int damageTaken,
-                       int combatDamageTaken, int lifeEnd, int poisonEnd) {
+                       int combatDamageTaken, int lifeEnd, int poisonEnd,
+                       int handEnd, int openingLands, int removalCast) {
 
         /**
          * {@code timeline} ist nie {@code null}: in einem v1-Datensatz fehlt das Feld ganz, und
@@ -112,8 +142,19 @@ public record MatchRecord(int v, String id, String startedAt, String endedAt, lo
      * {@code lands}/{@code creatures} sind die eigenen Laender bzw. Kreaturen IM SPIEL (Bestand,
      * nicht kumulierte Abgaben - dafuer gibt es {@code landsByTurn}), {@code life} das Leben und
      * {@code hand} die Zahl der Handkarten.
+     *
+     * <p>{@code spells} faellt aus der Reihe: die anderen vier sind ein Stand ZU Zugbeginn,
+     * {@code spells} ist die Zahl der Zauber, die der Sitz in dem Zug-ABSCHNITT gewirkt hat, den
+     * dieser Punkt eroeffnet - vom Beginn seines eigenen Zuges bis zum Beginn seines naechsten
+     * eigenen Zuges. Ein Blitz im Zug eines Gegners zaehlt damit zum vorangegangenen eigenen Zug
+     * ("was habe ich in diesem Zugzyklus gewirkt"). Zwei Folgen davon: Zauber vor dem ersten eigenen
+     * Zug haben keinen Punkt und fehlen in der Zeitachse, und hinter dem Deckel
+     * ({@code MatchRecorder.TIMELINE_MAX}) zaehlt gar nichts mehr - der letzte Punkt sammelt nicht
+     * den Rest der Partie ein. Die Gesamtzahl steht unabhaengig davon in {@code Seat.spells}. In
+     * einem v1-Datensatz (und in jedem vor dieser Aenderung geschriebenen v2-Datensatz) fehlt das
+     * Feld und liest sich als 0.
      */
-    public record TurnPoint(int turn, int lands, int creatures, int life, int hand) { }
+    public record TurnPoint(int turn, int lands, int creatures, int life, int hand, int spells) { }
 
     /** KI-Konfiguration eines Sitzes (mode/profile, siehe {@code mtgplayer.ai.AiConfig}). */
     public record Ai(String mode, String profile) { }

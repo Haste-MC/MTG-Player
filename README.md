@@ -146,9 +146,17 @@ Massenentfernung in einem Auflösungsfenster samt Anzahl solcher Fenster, und er
 Schaden** – eigene Angriffe und Angriffszüge, gegnerische Angreifer und eigene Blocks, Kampfschaden am Sitz nach
 Fliegen/Trampelschaden/sonstiger Quelle, Nicht-Kampfschaden, ausgeteilter Schaden im und außerhalb des Kampfes,
 Commander-Schaden und Lebensgewinn; **Zeitachse** – je eigenem Zug (gedeckelt auf 60 Punkte) Länder, Kreaturen,
-Leben und Handkarten zu Zugbeginn, als Grundlage für spätere Kurven wie „wann bist du zurückgefallen". Diese
+Leben, Handkarten und die in diesem Zugabschnitt gewirkten Zauber, als Grundlage für spätere Kurven wie „wann
+bist du zurückgefallen". Dazu je Sitz die Handkarten beim Ausscheiden („mit voller Hand gestorben"), die Länder
+der nach den Mulligans behaltenen Eröffnungshand und die Zahl gewirkter Entfernungszauber. Diese
 Kennzahlen werden erst **ab jetzt** gesammelt (Formatversion `v: 2`) – ältere Partien haben sie nicht und lesen
 sich für die Auswertung als **keine Daten**, nicht als 0.
+
+Drei davon sind Näherungen, die anders heißen, als sie zählen: „abgeworfene Karten" ist jeder Weg von der Hand in
+den Friedhof (auch als Kosten); **Infektschaden steht im genommenen Schaden, kostet aber kein Leben** – wer Leben
+rechnet, rechnet mit dem Leben am Ende, nicht mit dem Schaden; und der Commander-Schaden ist die Summe über alle
+gegnerischen Commander zusammen, die 21-Punkte-Regel lässt sich daraus nicht ableiten. Die gewirkte Entfernung
+zählt die Absicht, nicht den Erfolg.
 
 Nicht jede Partie soll in die Bewertung fließen. Automatisch **nicht gewertet** werden Partien unter drei Zügen
 („zu kurz"), Partien mit einer Aufgabe („aufgegeben"), am Zugdeckel abgeschnittene Partien („Zugdeckel"),

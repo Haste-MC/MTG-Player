@@ -56,9 +56,42 @@ Kennzahlen aus fehlenden Feldern als „keine Daten" behandeln, nicht als „0 %
 - `commanderDamageTaken` – Kampfschaden von Karten mit `isCommander()`
 - `lifeGained` – Summe positiver Lebensänderungen
 
-**Zeitachse** (`timeline`, Liste je eigenem Zug, Eintrag `{ turn, lands, creatures, life, hand }`): Stand jeweils
-zu Beginn des eigenen Zuges, gedeckelt auf 60 Einträge. Damit lassen sich später Kurven zeichnen („wann bist du
-zurückgefallen") ohne neue Erfassung.
+**Zeitachse** (`timeline`, Liste je eigenem Zug, Eintrag `{ turn, lands, creatures, life, hand, spells }`): Stand
+jeweils zu Beginn des eigenen Zuges, gedeckelt auf 60 Einträge. Damit lassen sich später Kurven zeichnen („wann
+bist du zurückgefallen") ohne neue Erfassung. `spells` fällt aus der Reihe: kein Stand, sondern die Zauber, die
+der Sitz in dem **Zugabschnitt** gewirkt hat, den der Punkt eröffnet (vom Beginn seines eigenen Zuges bis zum
+Beginn seines nächsten eigenen Zuges) – ein Blitz im Zug des Gegners zählt also zum vorangegangenen eigenen Zug.
+Zauber vor dem ersten eigenen Zug und Züge hinter dem Deckel haben keinen Punkt und fallen aus der Zeitachse; die
+Gesamtzahl steht unabhängig davon in `Seat.spells`.
+
+**Nachtrag (nach der Review von Runde B): vier Felder, die jetzt fast nichts kosten und sich später aus keinem
+Datensatz mehr rekonstruieren ließen.** Rein additiv, `VERSION` bleibt `2` – ein `v: 1`-Datensatz liest sie als 0.
+- `TurnPoint.spells` – siehe oben
+- `handEnd` – Handkarten des Sitzes, als er aus dem Spiel ging („mit voller Hand gestorben"). Gemessen beim
+  **letzten Ereignis vor dem Ausscheiden**: `Game.onPlayerLost` lässt nach CR 800.4a alle Karten eines
+  ausgeschiedenen Sitzes aufhören zu existieren, später nachzusehen liefert immer 0, und ein eigenes Ereignis für
+  den Moment des Ausscheidens feuert Forge nicht. Ein Sitz, der überlebt, trägt seinen Stand am Partieende.
+- `openingLands` – Länder in der Hand, die der Sitz nach allen Mulligans behalten hat, gezählt beim **ersten
+  `GameEventTurnBegan`** der Partie (Mulligans sind durch, der erste Zug hat noch nicht gezogen). Grundlage für
+  „behält Zwei-Land-Hände".
+- `removalCast` – eigene Zauber, deren Fähigkeitskette `ApiType.Destroy`, `ApiType.DealDamage` auf ein Ziel, das
+  eine bleibende Karte sein kann, oder `ApiType.ChangeZone` **vom Schlachtfeld weg** enthält. Gelaufen wird die
+  Kette in demselben Gang wie für `counterspellsCast`.
+
+**Genäherte Kennzahlen – wer sie auswertet, muss das wissen:**
+- `cardsDiscarded` zählt **jeden** Weg Hand → Friedhof, nicht nur das Abwerfen im Wortsinn: Kosten, Wahnsinn und
+  der Handkartenangriff des Gegners stehen alle darin.
+- **Infektschaden zählt in den Kampf-Töpfen mit, kostet aber kein Leben.** Forge feuert `GameEventPlayerDamaged`
+  auch für Infekt; der Recorder wertet das Feld `infect` nicht aus. `damageTaken` ist deshalb **nicht** das
+  verlorene Leben – wer Leben rechnen will, rechnet mit `lifeEnd` (der Giftanteil steht in `poisonEnd`).
+- `commanderDamageTaken` ist die Summe über **alle** gegnerischen Commander zusammen, nicht je Commander. Die
+  21-Punkte-Regel (CR 903.10a) lässt sich daraus nicht ableiten.
+- `removalCast` zählt die **Absicht, nicht den Erfolg**: ein gekonterter, verpuffter oder ins Gesicht geschossener
+  Blitz zählt mit. Die Massenvarianten (`DestroyAll`, `ChangeZoneAll`, `DamageAll`) zählen **nicht** – eine
+  Massenentfernung schlägt sich beim Gegner in `sweepsSuffered` nieder.
+- `attackersFaced` löst eine Battle über ihren **Beschützer** auf (wie `Combat.getDefenderPlayerByAttacker`),
+  `blocksDeclared` hängt an Forges `defendingPlayer` und damit am **Kontrolleur**. Die Asymmetrie steckt in Forge;
+  wer eine Seite „geradezieht", verschiebt die Kennzahl auf den falschen Sitz.
 
 **Auflösungsfenster** (für `biggestSweep`): ein Fenster beginnt bei `GameEventSpellResolved` bzw. bei einem
 Phasenwechsel und endet beim nächsten dieser Ereignisse. Verluste innerhalb eines Fensters zählen als ein Vorgang.
@@ -74,7 +107,14 @@ ignoriert. Kein Zähler darf eine Ausnahme werfen können: jede Handler-Methode 
 den Fall nur nicht mit (ein kaputter Zähler darf keine Partie abschießen) – gemeldet wird das einmal je Partie
 über `CrashLog.note`.
 
-`AiMatch` und `HumanMatch` bleiben unverändert; `MatchStore` liest `v: 1`-Datensätze weiter.
+`AiMatch` und `HumanMatch` bleiben unverändert; `MatchStore` liest `v: 1`-Datensätze weiter. `Json.mapper()`
+überliest unbekannte Felder (`FAIL_ON_UNKNOWN_PROPERTIES` aus): sonst kostet ein Rückschritt auf einen älteren
+Bridge-Stand die ganze Historie – der wirft beim Lesen, `MatchStore.all()` meldet „kaputte Datei" und liefert
+eine leere Liste, und der nächste Schreibvorgang ersetzt die Datei.
+
+Die Sammelmeldung am Partieende (`CrashLog.note`) läuft in `build()` in einem `try/catch (RuntimeException)`:
+sie ist die Nebensache, der Datensatz die Hauptsache. Würfe sie (kaputter Log-Pfad, volle Platte), stünde
+`finished` zwar, der Sink bekäme die Partie aber nie – und ein zweiter `finish()`-Versuch kehrte sofort um.
 
 ## 4. Nachweise
 
@@ -89,6 +129,13 @@ Szenen-Tests (`mtgplayer.scene.Scene`, 2 Spieler) je Zähler, jeweils mit echtem
 - Schaden von einer fliegenden Kreatur → `damageTakenFlying`; Blitz vom Gegner → `damageTakenNonCombat`
 - Zeitachse: nach drei eigenen Zügen drei Einträge mit steigenden Ländern
 - Robustheit: ein Handler, dem die Quelle fehlt (`fireEvent` mit `null`-Feldern), bricht die Erfassung nicht ab
+- Nachtrag: Murder/Flame Slash/Unsummon über den echten Stapel → `removalCast == 3`, Rampant Growth (ChangeZone
+  aus der Bibliothek) und ein Kreaturenzauber zählen nicht, der Counterspell derselben Szene landet in
+  `counterspellsCast`; Tod mit drei Handkarten → `handEnd == 3`; zwei Länder in der behaltenen Hand →
+  `openingLands == 2` (ein danach gezogenes Land nicht mehr); Zauber vor/zwischen/nach eigenen Zügen →
+  `TurnPoint.spells` je Zugabschnitt, hinter dem Deckel 0
+- Robustheit: eine werfende Sammelmeldung (Log-Pfad ohne Elternverzeichnis) verschluckt den Datensatz nicht, und
+  ein Datensatz mit unbekanntem Feld bleibt lesbar (`MatchStoreTest`)
 
 Dazu ein Durchlauf `MatchRecorderAiTest` (echte KI-Partie): alle neuen Zähler sind ≥ 0 und plausibel
 (`spellsCast >= counterspellsCast`, `permanentsLost >= creaturesLostInCombat + creaturesLostOther` gilt **nicht**

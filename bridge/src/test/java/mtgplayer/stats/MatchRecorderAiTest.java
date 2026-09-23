@@ -106,7 +106,10 @@ class MatchRecorderAiTest {
             return;                                    // nichts zu melden ist der haeufige, gute Fall
         }
         String text = Files.readString(log);
-        int meldungen = text.split("MatchRecorder", -1).length - 1;
+        // Auf den Anfang der MELDUNG geprueft, nicht auf den blossen Klassennamen: ein Stacktrace aus
+        // einer ganz anderen Panne enthaelt "mtgplayer.stats.MatchRecorder.…" ebenfalls und haette hier
+        // als zweite Sammelmeldung gezaehlt.
+        int meldungen = text.split(MatchRecorderTest.MELDUNG, -1).length - 1;
         assertTrue(meldungen <= 1, "hoechstens eine Sammelmeldung je Partie, nicht eine je Vorfall: " + text);
     }
 
@@ -132,6 +135,11 @@ class MatchRecorderAiTest {
                 "ein Fenster kann nicht mehr fassen als insgesamt verloren ging: " + s);
         assertTrue(s.sweepsSuffered() * MatchRecorder.SWEEP_MIN <= s.permanentsLost(),
                 "jede Massenentfernung kostet mindestens " + MatchRecorder.SWEEP_MIN + ": " + s);
+        assertTrue(s.removalCast() <= s.spells(),
+                "Entfernung ist ein gewirkter Zauber: " + s.removalCast() + " von " + s.spells());
+        assertTrue(s.handEnd() >= 0, "kein negativer Handstand: " + s);
+        assertTrue(s.openingLands() >= 0 && s.openingLands() <= 7,
+                "die Eroeffnungshand hat hoechstens sieben Karten, war " + s.openingLands());
         pruefeKampfUndZeitachse(s);
     }
 
@@ -166,10 +174,14 @@ class MatchRecorderAiTest {
         assertEquals(Math.min(MatchRecorder.TIMELINE_MAX, s.landsByTurn().size() - 1), s.timeline().size(),
                 "je eigenem Zug ein Punkt, wie bei landsByTurn: " + s);
         int last = 0;
+        int zauberInDerZeitachse = 0;
         for (MatchRecord.TurnPoint p : s.timeline()) {
             assertTrue(p.turn() > last, "Zugnummern steigen: " + s.timeline());
             last = p.turn();
             assertTrue(p.lands() >= 0 && p.creatures() >= 0 && p.hand() >= 0, "kein negativer Stand: " + p);
+            zauberInDerZeitachse += p.spells();
         }
+        assertTrue(zauberInDerZeitachse <= s.spells(),
+                "die Zeitachse kann nicht mehr Zauber kennen als der Sitz gewirkt hat: " + s);
     }
 }

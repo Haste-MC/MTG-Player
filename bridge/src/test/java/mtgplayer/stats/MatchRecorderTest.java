@@ -69,6 +69,14 @@ class MatchRecorderTest {
         CrashLog.setFile(null);
     }
 
+    /**
+     * Der Anfang der Sammelmeldung in {@code bridge.log}, wie {@code CrashLog.note} sie schreibt
+     * (Zeitstempel + Leerzeichen + Titel + ": "). Bewusst NICHT der blosse Klassenname: ein
+     * Stacktrace aus einer ganz anderen Panne enthaelt {@code mtgplayer.stats.MatchRecorder.…}
+     * ebenfalls und wuerde als zweite Meldung durchgehen.
+     */
+    static final String MELDUNG = " MatchRecorder: ";
+
     private static MatchRecord.Seat seat(MatchRecord r, String name) {
         return r.seats().stream().filter(s -> s.name().equals(name)).findFirst()
                 .orElseThrow(() -> new AssertionError("kein Sitz " + name + " in " + r.seats()));
@@ -509,7 +517,7 @@ class MatchRecorderTest {
         rec.finish();
         assertEquals(1, rec.counterFailures(), "die NullPointerException wurde gefangen und gezaehlt");
         String log = Files.readString(CrashLog.file());
-        assertEquals(1, log.split("MatchRecorder", -1).length - 1,
+        assertEquals(1, log.split(MELDUNG, -1).length - 1,
                 "genau eine Sammelmeldung am Partieende, nicht eine je Fehler: " + log);
         assertTrue(log.contains("1 Ereignisse nicht gezaehlt"), log);
         assertTrue(log.contains("0 gewirkte Zauber"), log);
@@ -554,6 +562,142 @@ class MatchRecorderTest {
         assertEquals(0, rec.counterFailures());
         assertEquals(0, rec.castsNotOnStack());
         assertFalse(Files.exists(CrashLog.file()), "ohne etwas zu melden schreibt CrashLog.note gar nichts");
+    }
+
+    /**
+     * Das Melden darf den Datensatz nicht kosten. {@code build()} setzt {@code finished} und meldet
+     * danach - wirft die Meldung (hier: ein Log-Pfad ohne Elternverzeichnis, {@code createDirectories}
+     * laeuft in eine {@code NullPointerException}), kaeme der Sink nie dran, und ein zweiter Versuch
+     * kehrte wegen {@code finished != null} sofort um: die Partie waere weg.
+     */
+    @Test
+    @Timeout(value = 3, unit = TimeUnit.MINUTES)
+    void fehlerBeimMeldenVerschlucktDenDatensatzNicht() {
+        Scene s = Scene.twoPlayers(AiConfig.DEFAULT, AiConfig.DEFAULT);
+        List<MatchRecord> sunk = new ArrayList<>();
+        MatchRecorder rec = new MatchRecorder(s.game(), "live", sunk::add);
+        rec.onCardChangeZone(null);                          // damit es ueberhaupt etwas zu melden gibt
+        Path ohneElternverzeichnis = Path.of("bridge.log");
+        CrashLog.setFile(ohneElternverzeichnis);
+
+        MatchRecord r = rec.finish();
+
+        assertNotNull(r, "der Datensatz steht, auch wenn die Meldung scheitert");
+        assertEquals(1, sunk.size(), "und der Sink bekommt ihn trotzdem");
+        assertSame(r, sunk.get(0));
+        assertFalse(Files.exists(ohneElternverzeichnis), "die kaputte Meldung schreibt nichts ins Arbeitsverzeichnis");
+    }
+
+    // ---------------------------------------------------------------- Nachtrag: Entfernung, Hand, Eroeffnung
+
+    /**
+     * {@code removalCast} und {@code counterspellsCast} kommen aus DEMSELBEN Gang durch die
+     * Faehigkeitskette des Zaubers auf dem Stapel. Gewirkt wird deshalb wie im Konter-Test ueber
+     * {@code MagicStack.add} - nur dort findet der Recorder die Kette.
+     *
+     * <p>Die drei Entfernungs-Apis in einem Bild: {@code Destroy} (Murder), {@code DealDamage} auf
+     * eine Kreatur (Flame Slash) und {@code ChangeZone} VOM SCHLACHTFELD (Unsummon). Rampant Growth
+     * ist ebenfalls {@code ChangeZone}, holt aber aus der Bibliothek - und ist keine Entfernung.</p>
+     */
+    @Test
+    @Timeout(value = 3, unit = TimeUnit.MINUTES)
+    void entfernungGezaehltUeberDieselbeKetteWieDerCounterspell() {
+        Scene s = Scene.twoPlayers(AiConfig.DEFAULT, AiConfig.DEFAULT);
+        Player a = s.player(0), b = s.player(1);
+        Card opfer = s.card("Grizzly Bears", b, ZoneType.Battlefield);
+        MatchRecorder rec = new MatchRecorder(s.game(), "live", null);
+
+        SpellAbility murder = wirken(s, a, "Murder", opfer);
+        wirken(s, a, "Flame Slash", opfer);
+        wirken(s, a, "Unsummon", opfer);
+        wirken(s, a, "Rampant Growth", null);                // ChangeZone aus der Bibliothek
+        wirken(s, a, "Grizzly Bears", null);                 // gar keine Faehigkeit
+        wirken(s, b, "Counterspell", murder);                // Konter auf den Zauber, nicht auf die Kreatur
+
+        MatchRecord r = rec.finish();
+        MatchRecord.Seat sa = seat(r, "A"), sb = seat(r, "B");
+        assertEquals(5, sa.spells(), "fuenf eigene Zauber von A:\n" + s.state());
+        assertEquals(3, sa.removalCast(), "Murder, Flame Slash und Unsummon - nicht Rampant Growth, nicht die Baeren");
+        assertEquals(0, sa.counterspellsCast());
+        assertEquals(0, rec.castsNotOnStack(), "jeder Zauber lag beim Nachschlagen auf dem Stapel");
+        assertEquals(1, sb.counterspellsCast(), "derselbe Gang durch die Kette findet auch den Konter");
+        assertEquals(0, sb.removalCast(), "ein Counterspell entfernt nichts vom Schlachtfeld");
+    }
+
+    /** Wirkt {@code name} aus der Hand von {@code p} ueber den echten Stapel; {@code ziel} darf fehlen. */
+    private static SpellAbility wirken(Scene s, Player p, String name, Object ziel) {
+        SpellAbility sa = s.card(name, p, ZoneType.Hand).getFirstSpellAbility();
+        sa.setActivatingPlayer(p);
+        if (ziel instanceof Card c) {
+            sa.getTargets().add(c);
+        } else if (ziel instanceof SpellAbility other) {
+            sa.getTargets().add(other);
+        }
+        s.game().getStack().add(sa);
+        return sa;
+    }
+
+    /**
+     * "Mit voller Hand gestorben" steht in keiner anderen Kennzahl: Forge nimmt einem
+     * ausgeschiedenen Sitz seine Karten sofort aus dem Spiel ({@code Game.onPlayerLost}), spaeter
+     * nachzusehen liefert also immer 0. Gezaehlt wird deshalb der letzte Stand, den der Recorder VOR
+     * dem Ausscheiden gesehen hat.
+     */
+    @Test
+    @Timeout(value = 3, unit = TimeUnit.MINUTES)
+    void handEndHaeltDenStandBeimAusscheidenFest() {
+        Scene s = Scene.twoPlayers(AiConfig.DEFAULT, AiConfig.DEFAULT);
+        Player a = s.player(0), b = s.player(1);
+        s.cards("Forest", 3, b, ZoneType.Hand);
+        s.cards("Forest", 2, a, ZoneType.Hand);
+        MatchRecorder rec = new MatchRecorder(s.game(), "live", null);
+        s.game().fireEvent(new GameEventTurnBegan(a.getView(), 1));
+        s.game().fireEvent(new GameEventTurnBegan(b.getView(), 2));
+        s.game().fireEvent(new GameEventTurnBegan(a.getView(), 3));
+
+        b.setLife(0, null);
+        s.game().getAction().checkStateEffects(true);
+        assertTrue(s.game().isGameOver(), "B sollte bei 0 Leben verlieren");
+
+        MatchRecord r = rec.finish();
+        assertEquals(3, seat(r, "B").handEnd(), "B ist mit drei Karten auf der Hand gestorben");
+        assertEquals(2, seat(r, "A").handEnd(), "der Ueberlebende traegt seinen Stand am Partieende");
+    }
+
+    /** Ohne Spielende hat kein Sitz einen Ausgang - dann steht der Stand aus dem Abschluss drin. */
+    @Test
+    @Timeout(value = 3, unit = TimeUnit.MINUTES)
+    void handEndOhneSpielendeKommtAusDemAbschluss() {
+        Scene s = Scene.twoPlayers(AiConfig.DEFAULT, AiConfig.DEFAULT);
+        s.cards("Forest", 4, s.player(0), ZoneType.Hand);
+
+        MatchRecord r = new MatchRecorder(s.game(), "live", null).finish();
+
+        assertEquals(4, seat(r, "A").handEnd());
+        assertEquals(0, seat(r, "B").handEnd());
+    }
+
+    /**
+     * {@code openingLands} beantwortet "behaelt das Deck Zwei-Land-Haende": gezaehlt wird beim ersten
+     * {@code GameEventTurnBegan} der Partie, also nach allen Mulligans und vor dem ersten Ziehen.
+     */
+    @Test
+    @Timeout(value = 3, unit = TimeUnit.MINUTES)
+    void eroeffnungshandZaehltNurLaenderVorDemErstenZug() {
+        Scene s = Scene.twoPlayers(AiConfig.DEFAULT, AiConfig.DEFAULT);
+        Player a = s.player(0), b = s.player(1);
+        s.cards("Forest", 2, a, ZoneType.Hand);
+        s.card("Grizzly Bears", a, ZoneType.Hand);
+        s.card("Grizzly Bears", b, ZoneType.Hand);
+        MatchRecorder rec = new MatchRecorder(s.game(), "live", null);
+
+        s.game().fireEvent(new GameEventTurnBegan(a.getView(), 1));
+        s.card("Forest", a, ZoneType.Hand);                  // danach dazugekommen - zaehlt nicht mehr
+        s.game().fireEvent(new GameEventTurnBegan(b.getView(), 2));
+
+        MatchRecord r = rec.finish();
+        assertEquals(2, seat(r, "A").openingLands(), "nur die Laender der behaltenen Eroeffnungshand");
+        assertEquals(0, seat(r, "B").openingLands(), "B hat nur eine Kreatur auf der Hand");
     }
 
     // ---------------------------------------------------------------- nicht gewertete Partien

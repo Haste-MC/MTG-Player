@@ -109,11 +109,19 @@ import java.util.function.Consumer;
  * <p><b>Robustheit (Runde B, Stueck 3).</b> Zwei Zaehler bleiben sonst unsichtbar, weil sie keine
  * eigene Kennzahl im Datensatz sind: {@link #counterFailures} (ein Handler ist in eine
  * {@code RuntimeException} gelaufen) und {@code castsNotOnStack} (ein gewirkter Zauber liess sich in
- * {@link #isCounterspell} nicht mehr auf dem Stapel finden - {@code counterspellsCast} liest sich
- * dann unauffaellig als 0, ohne dass irgendwo auffaellt, dass gar nicht gesucht werden konnte). Beide
+ * {@link #classifyCast} nicht mehr auf dem Stapel finden - {@code counterspellsCast} und
+ * {@code removalCast} lesen sich dann unauffaellig als 0, ohne dass irgendwo auffaellt, dass gar
+ * nicht gesucht werden konnte). Beide
  * werden am Partieende genau einmal ueber {@code CrashLog.note("MatchRecorder", ...)} gemeldet (nur
  * ins Log, kein Browser-Hinweis - siehe {@link CrashLog#note}), und nur, wenn mindestens einer der
  * beiden ueber 0 liegt.</p>
+ *
+ * <p><b>Nachtrag zu Runde B.</b> Vier Kennzahlen kosten jetzt fast nichts und liessen sich spaeter aus
+ * keinem Datensatz mehr rekonstruieren: {@code TurnPoint.spells} (Zauber je Zugabschnitt, siehe
+ * {@link #notePointSpell}), {@code handEnd} (Handkarten beim Ausscheiden, siehe
+ * {@link #rememberHands}), {@code openingLands} (Laender der behaltenen Eroeffnungshand, siehe
+ * {@link #noteOpeningHands}) und {@code removalCast} (gewirkte Entfernung, siehe
+ * {@link #classifyCast}). Alle vier sind rein additiv - ein v1-Datensatz liest sie als 0.</p>
  *
  * <p>Alle Ereignis-Methoden und {@link #finish()} laufen unter demselben Monitor. Forge feuert die
  * Ereignisse zwar alle auf dem Spiel-Thread, {@link #finish()} kann aber von aussen kommen (Test,
@@ -160,7 +168,9 @@ public final class MatchRecorder {
     private volatile boolean turnCapped;
     private volatile MatchRecord finished;
     private int counterFailures;
-    /** Siehe {@link #isCounterspell}: ein gewirkter Zauber war beim Nachschlagen nicht mehr auf dem Stapel. */
+    /** Die Eroeffnungshaende sind einmal je Partie zu zaehlen; siehe {@link #noteOpeningHands}. */
+    private boolean openingTaken;
+    /** Siehe {@link #classifyCast}: ein gewirkter Zauber war beim Nachschlagen nicht mehr auf dem Stapel. */
     private int castsNotOnStack;
 
     /**
@@ -207,6 +217,8 @@ public final class MatchRecorder {
         if (finished != null) {
             return;
         }
+        rememberHands();
+        noteOpeningHands();                      // beim ersten Zug: die behaltene Eroeffnungshand
         closeRunningTurn();
         noteEliminations();                      // noch mit der Nummer des gerade beendeten Zuges
         turns = Math.max(turns, e.turnNumber());
@@ -225,6 +237,7 @@ public final class MatchRecorder {
         if (finished != null || s == null) {
             return;
         }
+        rememberHands();
         s.lands++;
         if (s.ownTurns > 0) {
             s.landsByTurn.set(s.landsByTurn.size() - 1, s.lands);
@@ -240,6 +253,7 @@ public final class MatchRecorder {
         if (finished != null || s == null) {
             return;
         }
+        rememberHands();
         s.mulligans++;
     }
 
@@ -254,6 +268,7 @@ public final class MatchRecorder {
         if (finished != null) {
             return;
         }
+        rememberHands();
         try {
             SpellAbilityView sa = e.sa();
             if (sa == null || !sa.isSpell()) {
@@ -265,13 +280,12 @@ public final class MatchRecorder {
                 return;
             }
             s.spells++;
+            notePointSpell(s);
             ManaCost cost = host.getCurrentState() == null ? null : host.getCurrentState().getManaCost();
             if (cost != null) {
                 s.spellMana += cost.getCMC();
             }
-            if (isCounterspell(sa)) {
-                s.counterspellsCast++;
-            }
+            classifyCast(sa, s);
             if (host.isCommander()) {
                 s.commanderCasts++;
                 if (s.firstCommanderTurn == null) {
@@ -298,6 +312,7 @@ public final class MatchRecorder {
         if (finished != null) {
             return;
         }
+        rememberHands();
         try {
             SpellAbilityView sa = e.spell();
             if (sa != null) {
@@ -325,6 +340,7 @@ public final class MatchRecorder {
         if (finished != null) {
             return;
         }
+        rememberHands();
         try {
             SpellAbilityView sa = e.sa();
             if (sa == null || forgetResolved(sa) || !sa.isSpell()) {
@@ -345,6 +361,7 @@ public final class MatchRecorder {
         if (finished != null) {
             return;
         }
+        rememberHands();
         try {
             closeSweepWindow();
         } catch (RuntimeException ex) {
@@ -367,6 +384,7 @@ public final class MatchRecorder {
         if (finished != null) {
             return;
         }
+        rememberHands();
         try {
             CardView card = e.card();
             ZoneView from = e.from(), to = e.to();
@@ -420,6 +438,7 @@ public final class MatchRecorder {
         if (finished != null) {
             return;
         }
+        rememberHands();
         try {
             Multimap<GameEntityView, CardView> map = e.attackersMap();
             if (map == null || map.isEmpty()) {
@@ -457,6 +476,7 @@ public final class MatchRecorder {
         if (finished != null) {
             return;
         }
+        rememberHands();
         try {
             Map<GameEntityView, Multimap<CardView, CardView>> blockers = e.blockers();
             Seat s = seat(e.defendingPlayer());
@@ -495,6 +515,7 @@ public final class MatchRecorder {
         if (finished != null) {
             return;
         }
+        rememberHands();
         try {
             CardView src = e.source();
             int amount = e.amount();
@@ -541,6 +562,7 @@ public final class MatchRecorder {
         if (finished != null) {
             return;
         }
+        rememberHands();
         try {
             Seat s = seat(e.player());
             if (s != null && e.newLives() > e.oldLives()) {
@@ -611,7 +633,7 @@ public final class MatchRecorder {
         return counterFailures;
     }
 
-    /** Wie oft {@link #isCounterspell} einen gewirkten Zauber nicht mehr auf dem Stapel fand. */
+    /** Wie oft {@link #classifyCast} einen gewirkten Zauber nicht mehr auf dem Stapel fand. */
     synchronized int castsNotOnStack() {
         return castsNotOnStack;
     }
@@ -644,6 +666,7 @@ public final class MatchRecorder {
             return null;
         }
         turns = Math.max(turns, game.getPhaseHandler().getTurn());
+        rememberHands();                         // laeuft die Partie noch, steht handEnd erst hier
         noteEliminations();
         closeSweepWindow();                      // das beim Spielende laufende Fenster zaehlt mit
 
@@ -674,7 +697,15 @@ public final class MatchRecorder {
                 outcome == null ? "unbekannt" : String.valueOf(outcome.getWinCondition()),
                 !noWinners && (!anyWinner || (outcome != null && outcome.getWinCondition() == GameEndReason.Draw)),
                 excludeReason == null, excludeReason, List.copyOf(out));
-        reportCounterFailures();
+        try {
+            reportCounterFailures();
+        } catch (RuntimeException ex) {
+            // Die Meldung ist die Nebensache, der Datensatz die Hauptsache. Wirft sie (kaputter
+            // Log-Pfad, volle Platte), stuende finished zwar, der Sink bekaeme die Partie aber nie -
+            // und ein zweiter finish()-Versuch kehrte wegen finished != null sofort um: die Partie
+            // waere weg. Ueber CrashLog laesst sich das nicht melden, genau das ist ja kaputt.
+            System.err.println("[MatchRecorder] Sammelmeldung fehlgeschlagen: " + ex);
+        }
         // Der Datensatz steht; ab hier braucht niemand mehr die Forge-Objekte. Ohne das haelt der
         // Recorder ueber seats/byView das ganze Game fest, solange ihn irgendwer noch referenziert
         // (HumanMatch.recorder bis zum naechsten Spiel, oder der CrashLog-Listener, falls ein
@@ -720,6 +751,13 @@ public final class MatchRecorder {
      * : def.getController()}); ohne diese Unterscheidung stuende ein Angriff auf eine Battle beim
      * falschen Sitz. Ist kein Beschuetzer gesetzt, zaehlt der Angriff niemandem - lieber eine
      * Kennzahl zu niedrig als beim falschen Sitz.</p>
+     *
+     * <p><b>Die Asymmetrie zu {@code blocksDeclared} ist Forges eigene und soll so bleiben:</b>
+     * {@code attackersFaced} loest eine Battle hier ueber ihren Beschuetzer auf (wie
+     * {@code Combat.getDefenderPlayerByAttacker}), waehrend {@code blocksDeclared} an Forges
+     * {@code defendingPlayer} aus {@code GameEventBlockersDeclared} haengt - und das ist der
+     * KONTROLLEUR. Wer eine der beiden Seiten "geradezieht", damit sie zueinander passen, verschiebt
+     * die Kennzahl auf den falschen Sitz; der Unterschied steckt in Forge, nicht hier.</p>
      */
     private Seat seatOfDefender(GameEntityView defender) {
         if (defender instanceof PlayerView pv) {
@@ -745,11 +783,83 @@ public final class MatchRecorder {
     private void notePoint(Seat s, int turn) {
         try {
             if (s.timeline.size() >= TIMELINE_MAX) {
+                s.timelineCapped = true;
                 return;
             }
             s.timeline.add(new MatchRecord.TurnPoint(Math.max(1, turn), s.player.getLandsInPlay().size(),
                     s.player.getCreaturesInPlay().size(), s.player.getLife(),
-                    s.player.getCardsIn(ZoneType.Hand).size()));
+                    s.player.getCardsIn(ZoneType.Hand).size(), 0));
+        } catch (RuntimeException ex) {
+            counterFailures++;
+        }
+    }
+
+    /**
+     * Zaehlt einen gewirkten Zauber in den zuletzt angehaengten Punkt der Zeitachse. Der Punkt
+     * gehoert zu dem Zug-ABSCHNITT, den er eroeffnet (siehe {@link MatchRecord.TurnPoint}): vom
+     * Beginn des eigenen Zuges bis zum Beginn des naechsten eigenen Zuges, ein Blitz im Zug eines
+     * Gegners zaehlt also zum vorangegangenen eigenen Zug. {@code TurnPoint} ist unveraenderlich,
+     * der letzte Punkt wird deshalb ersetzt (fester Index, kein Suchen).
+     *
+     * <p>Zwei Faelle haben keinen Punkt, in den gezaehlt werden koennte: vor dem ersten eigenen Zug
+     * und hinter dem Deckel ({@link #TIMELINE_MAX}, danach kommt kein Punkt mehr dazu). Dort faellt
+     * der Zauber aus der Zeitachse, statt beim falschen Zug zu landen - sonst sammelte der letzte
+     * Punkt einer langen Partie den ganzen Rest ein. In {@code Seat.spells} steht er weiter.</p>
+     */
+    private void notePointSpell(Seat s) {
+        if (s.timelineCapped || s.timeline.isEmpty()) {
+            return;
+        }
+        int i = s.timeline.size() - 1;
+        MatchRecord.TurnPoint p = s.timeline.get(i);
+        s.timeline.set(i, new MatchRecord.TurnPoint(p.turn(), p.lands(), p.creatures(), p.life(),
+                p.hand(), p.spells() + 1));
+    }
+
+    /**
+     * Schreibt je noch lebendem Sitz die Zahl seiner Handkarten mit - die Quelle von
+     * {@code handEnd}. Spaeter nachzusehen geht nicht: {@code Game.onPlayerLost} laesst in einer
+     * Mehrspieler-Partie alle Karten eines ausgeschiedenen Sitzes aufhoeren zu existieren
+     * (CR 800.4a), seine Hand ist danach IMMER leer, und ein eigenes Ereignis fuer den Moment des
+     * Ausscheidens feuert Forge nicht. Deshalb wird der Stand bei jedem Ereignis fortgeschrieben und
+     * fuer einen Sitz mit Ausgang eingefroren: was drinsteht, ist der letzte Blick vor seinem Ende.
+     * Billig genug fuer jedes Ereignis - {@code Player.getCardsIn} gibt bei einer Zone abseits des
+     * Schlachtfelds die Liste selbst zurueck, {@code size()} ist dann O(1).
+     */
+    private void rememberHands() {
+        try {
+            for (Seat s : seats) {
+                if (s.player.getOutcome() == null) {
+                    s.handEnd = s.player.getCardsIn(ZoneType.Hand).size();
+                }
+            }
+        } catch (RuntimeException ex) {
+            counterFailures++;
+        }
+    }
+
+    /**
+     * Einmal je Partie, beim ersten gesehenen {@code GameEventTurnBegan}: die Laender in der Hand,
+     * die jeder Sitz nach allen Mulligans behalten hat ({@code openingLands}, Grundlage fuer
+     * "behaelt Zwei-Land-Haende"). Genau dieser Zeitpunkt, weil davor noch gemulligant und die Hand
+     * neu gezogen wird und gleich danach der erste Zug zieht - einen Punkt spaeter waere es nicht
+     * mehr die Eroeffnungshand.
+     */
+    private void noteOpeningHands() {
+        if (openingTaken) {
+            return;
+        }
+        openingTaken = true;
+        try {
+            for (Seat s : seats) {
+                int lands = 0;
+                for (Card c : s.player.getCardsIn(ZoneType.Hand)) {
+                    if (c.isLand()) {
+                        lands++;
+                    }
+                }
+                s.openingLands = lands;
+            }
         } catch (RuntimeException ex) {
             counterFailures++;
         }
@@ -762,38 +872,93 @@ public final class MatchRecorder {
     }
 
     /**
-     * Steht {@code ApiType.Counter} irgendwo in der Faehigkeitskette dieses Zaubers? Die Kette gibt
-     * es nur am Spielobjekt - {@code SpellAbilityView} kennt weder API noch Unterfaehigkeiten -,
-     * deshalb wird der Zauber auf dem Stapel nachgeschlagen. Das geht auf, weil
-     * {@code MagicStack.add} den Eintrag legt, BEVOR es {@code GameEventSpellAbilityCast} feuert.
-     * Ein Zauber, der dort nicht (mehr) liegt, zaehlt nicht mit - lieber eine Kennzahl zu niedrig
-     * als eine erfundene.
+     * Ordnet einen gewirkten Zauber ein - Konter und Entfernung in EINEM Gang durch seine
+     * Faehigkeitskette. Die Kette gibt es nur am Spielobjekt ({@code SpellAbilityView} kennt weder
+     * API noch Unterfaehigkeiten), deshalb wird der Zauber auf dem Stapel nachgeschlagen. Das geht
+     * auf, weil {@code MagicStack.add} den Eintrag legt, BEVOR es
+     * {@code GameEventSpellAbilityCast} feuert. Ein Zauber, der dort nicht (mehr) liegt, zaehlt in
+     * keiner der beiden Kennzahlen mit - lieber eine Kennzahl zu niedrig als eine erfundene.
      *
      * <p><b>Nachtrag aus der Review von Stueck 1.</b> Bleibt die Suche erfolglos, zaehlt das getrennt
-     * in {@link #castsNotOnStack} statt still {@code false} zu liefern: aendert Forge einmal die
-     * Reihenfolge (Stack-Eintrag erst nach dem Ereignis), liesse {@code counterspellsCast} sonst fuer
-     * immer unauffaellig 0, ohne dass es irgendwo auffiele. Eine echte {@code RuntimeException} beim
-     * Nachschlagen ist davon zu unterscheiden - die zaehlt weiter in {@link #counterFailures}.</p>
+     * in {@link #castsNotOnStack} statt still nichts zu tun: aendert Forge einmal die Reihenfolge
+     * (Stack-Eintrag erst nach dem Ereignis), liessen {@code counterspellsCast} und
+     * {@code removalCast} sonst fuer immer unauffaellig 0, ohne dass es irgendwo auffiele. Eine
+     * echte {@code RuntimeException} beim Nachschlagen ist davon zu unterscheiden - die zaehlt
+     * weiter in {@link #counterFailures}.</p>
+     *
+     * <p><b>{@code removalCast} zaehlt die Absicht, nicht den Erfolg.</b> Gezaehlt wird, dass der
+     * Sitz einen Zauber gewirkt hat, der eine bleibende Karte loswerden will (siehe
+     * {@link #isRemoval}) - ob er aufloest, gekontert wird, verpufft oder der Blitz am Ende ins
+     * Gesicht geht, steht hier nicht drin. Das ist gewollt: gefragt ist "wie viel Interaktion hat
+     * dieses Deck gewirkt", und die Frage nach dem Erfolg beantwortet Forge ohnehin nicht
+     * (welcher Zauber welche Kreatur zerstoert hat, liefert keine Nutzlast). Die Massenvarianten
+     * ({@code DestroyAll}, {@code ChangeZoneAll}, {@code DamageAll}) zaehlen NICHT mit - eine
+     * Massenentfernung schlaegt sich beim Gegner in {@code sweepsSuffered} nieder.</p>
      */
-    private boolean isCounterspell(SpellAbilityView view) {
+    private void classifyCast(SpellAbilityView view, Seat s) {
         try {
             for (SpellAbilityStackInstance si : game.getStack()) {
                 SpellAbility sa = si.getSpellAbility();
                 if (sa == null || sa.getView() != view) {
                     continue;
                 }
+                boolean counter = false;
+                boolean removal = false;
                 for (SpellAbility part = sa; part != null; part = part.getSubAbility()) {
-                    if (part.getApi() == ApiType.Counter) {
-                        return true;
-                    }
+                    counter |= part.getApi() == ApiType.Counter;
+                    removal |= isRemoval(part);
                 }
-                return false;
+                if (counter) {
+                    s.counterspellsCast++;
+                }
+                if (removal) {
+                    s.removalCast++;
+                }
+                return;
             }
             castsNotOnStack++;
         } catch (RuntimeException ex) {
             counterFailures++;
         }
+    }
+
+    /**
+     * Will diese Teilfaehigkeit eine bleibende Karte loswerden? Die Naeherung aus dem Nachtrag zu
+     * Runde B, siehe {@link #classifyCast}:
+     * <ul>
+     *   <li>{@code Destroy} - trifft per Definition eine bleibende Karte.</li>
+     *   <li>{@code DealDamage} nur, wenn das Ziel eine bleibende Karte sein KANN: ein Blitz mit
+     *       {@code ValidTgts$ Player} ist Reichweite, keine Entfernung. {@code Any} zaehlt mit, denn
+     *       genau dafuer spielt man ihn.</li>
+     *   <li>{@code ChangeZone} nur VOM Schlachtfeld weg (Rueckhand, Exil). Dieselbe API holt sonst
+     *       aus der Bibliothek auf die Hand (Tutor) oder aus dem Friedhof zurueck - das ist keine
+     *       Entfernung.</li>
+     * </ul>
+     */
+    private static boolean isRemoval(SpellAbility part) {
+        ApiType api = part.getApi();
+        if (api == ApiType.Destroy) {
+            return true;
+        }
+        if (api == ApiType.DealDamage) {
+            return hitsPermanent(part.getParam("ValidTgts")) || hitsPermanent(part.getParam("Defined"));
+        }
+        return api == ApiType.ChangeZone && contains(part.getParam("Origin"), "Battlefield");
+    }
+
+    /** Nennt diese Ziel- bzw. Auswahlbedingung etwas, das auf dem Schlachtfeld stehen kann? */
+    private static boolean hitsPermanent(String valid) {
+        for (String typ : new String[]{"Any", "Permanent", "Creature", "Planeswalker", "Battle",
+                "Artifact", "Enchantment"}) {
+            if (contains(valid, typ)) {
+                return true;
+            }
+        }
         return false;
+    }
+
+    private static boolean contains(String param, String needle) {
+        return param != null && param.contains(needle);
     }
 
     private void rememberResolved(SpellAbilityView sa) {
@@ -932,7 +1097,14 @@ public final class MatchRecorder {
         private int damageDealtNonCombat;
         private int commanderDamageTaken;
         private int lifeGained;
+        private int removalCast;
+        /** Handkarten beim letzten Blick vor dem Ausscheiden; siehe {@link MatchRecorder#rememberHands}. */
+        private int handEnd;
+        /** Laender der behaltenen Eroeffnungshand; siehe {@link MatchRecorder#noteOpeningHands}. */
+        private int openingLands;
         private final List<MatchRecord.TurnPoint> timeline = new ArrayList<>();
+        /** Ab hier kommt kein Punkt mehr dazu; siehe {@link MatchRecorder#notePointSpell}. */
+        private boolean timelineCapped;
         private int damageDealt;
         private int damageTaken;
         private int combatDamageTaken;
@@ -961,7 +1133,8 @@ public final class MatchRecorder {
                     List.copyOf(timeline),
                     commanderCasts, commanderTax(),
                     firstCommanderTurn, damageDealt, damageTaken, combatDamageTaken,
-                    player.getLife(), player.getPoisonCounters());
+                    player.getLife(), player.getPoisonCounters(),
+                    handEnd, openingLands, removalCast);
         }
 
         /** Der Name, unter dem die Partie gestartet wurde (Lobby-Auswahl) - danach gruppiert die Statistik. */

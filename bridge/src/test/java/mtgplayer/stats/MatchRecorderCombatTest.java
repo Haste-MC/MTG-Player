@@ -13,11 +13,13 @@ import forge.game.event.GameEventAttackersDeclared;
 import forge.game.event.GameEventBlockersDeclared;
 import forge.game.event.GameEventPlayerDamaged;
 import forge.game.event.GameEventPlayerLivesChanged;
+import forge.game.event.GameEventSpellAbilityCast;
 import forge.game.event.GameEventTurnBegan;
 import forge.game.keyword.Keyword;
 import forge.game.phase.PhaseType;
 import forge.game.player.Player;
 import forge.game.player.PlayerView;
+import forge.game.spellability.SpellAbilityView;
 import forge.game.zone.ZoneType;
 import mtgplayer.ai.AiConfig;
 import mtgplayer.forge.CrashLog;
@@ -362,9 +364,9 @@ class MatchRecorderCombatTest {
         MatchRecord r = rec.finish();
         List<MatchRecord.TurnPoint> tl = seat(r, "A").timeline();
         assertEquals(2, tl.size(), "zwei eigene Zuege, zwei Punkte: " + tl);
-        assertEquals(new MatchRecord.TurnPoint(1, 2, 1, 20, 3), tl.get(0));
-        assertEquals(new MatchRecord.TurnPoint(3, 3, 1, 17, 3), tl.get(1));
-        assertEquals(List.of(new MatchRecord.TurnPoint(2, 0, 0, 20, 0)), seat(r, "B").timeline());
+        assertEquals(new MatchRecord.TurnPoint(1, 2, 1, 20, 3, 0), tl.get(0));
+        assertEquals(new MatchRecord.TurnPoint(3, 3, 1, 17, 3, 0), tl.get(1));
+        assertEquals(List.of(new MatchRecord.TurnPoint(2, 0, 0, 20, 0, 0)), seat(r, "B").timeline());
     }
 
     /** Lange Partien duerfen den Datensatz nicht aufblaehen - der Deckel greift bei 60 Punkten. */
@@ -379,11 +381,17 @@ class MatchRecorderCombatTest {
             s.game().fireEvent(new GameEventTurnBegan(a.getView(), turn));
         }
 
+        s.game().fireEvent(new GameEventSpellAbilityCast(SpellAbilityView.get(
+                s.card("Grizzly Bears", a, ZoneType.Hand).getFirstSpellAbility()), null, 0, null));
+
         MatchRecord r = rec.finish();
         List<MatchRecord.TurnPoint> tl = seat(r, "A").timeline();
         assertEquals(MatchRecorder.TIMELINE_MAX, tl.size());
         assertEquals(1, tl.get(0).turn(), "gedeckelt wird hinten, der Anfang bleibt stehen");
         assertEquals(MatchRecorder.TIMELINE_MAX, tl.get(tl.size() - 1).turn());
+        assertEquals(0, tl.get(tl.size() - 1).spells(),
+                "hinter dem Deckel faellt der Zug weg - der letzte Punkt sammelt nicht den Rest der Partie ein");
+        assertEquals(1, seat(r, "A").spells(), "der Zauber selbst zaehlt in der Gesamtsumme weiter");
     }
 
     /** Ohne einen einzigen Zug ist die Zeitachse leer - und nie {@code null}. */
@@ -397,6 +405,44 @@ class MatchRecorderCombatTest {
             assertNotNull(st.timeline(), "timeline ist nie null");
             assertEquals(List.of(), st.timeline());
         }
+    }
+
+    /**
+     * {@code TurnPoint.spells} gehoert zu dem Zug-ABSCHNITT, den der Punkt eroeffnet: gezaehlt wird in
+     * den zuletzt angehaengten Punkt, also vom Beginn des eigenen Zuges bis zum Beginn des naechsten
+     * eigenen Zuges. Ein Blitz im Zug des Gegners zaehlt damit zum vorangegangenen eigenen Zug - das
+     * ist die Absicht ("was habe ich in diesem Zugzyklus gewirkt"). Zauber vor dem ersten eigenen Zug
+     * haben keinen Punkt und fallen aus der Zeitachse (in {@code spells} stehen sie weiter).
+     */
+    @Test
+    @Timeout(value = 3, unit = TimeUnit.MINUTES)
+    void zeitachseZaehltDieZauberJeZugabschnitt() {
+        Scene s = Scene.twoPlayers(AiConfig.DEFAULT, AiConfig.DEFAULT);
+        Player a = s.player(0), b = s.player(1);
+        MatchRecorder rec = new MatchRecorder(s.game(), "live", null);
+
+        zauber(s, a);                                          // vor jedem Punkt - faellt aus der Zeitachse
+        s.game().fireEvent(new GameEventTurnBegan(a.getView(), 1));
+        zauber(s, a);
+        s.game().fireEvent(new GameEventTurnBegan(b.getView(), 2));
+        zauber(s, a);                                          // Blitz im Zug des Gegners
+        zauber(s, b);
+        s.game().fireEvent(new GameEventTurnBegan(a.getView(), 3));
+        zauber(s, a);
+
+        MatchRecord r = rec.finish();
+        List<MatchRecord.TurnPoint> tl = seat(r, "A").timeline();
+        assertEquals(2, tl.size(), "zwei eigene Zuege: " + tl);
+        assertEquals(2, tl.get(0).spells(), "eigener Zug 1 plus der Blitz im Zug dazwischen: " + tl);
+        assertEquals(1, tl.get(1).spells(), "der Zauber im zweiten eigenen Zug: " + tl);
+        assertEquals(4, seat(r, "A").spells(), "die Gesamtsumme kennt auch den Zauber vor dem ersten Punkt");
+        assertEquals(List.of(1), seat(r, "B").timeline().stream().map(MatchRecord.TurnPoint::spells).toList());
+    }
+
+    /** Ein gewirkter Zauber ohne Stapel-Eintrag; fuer die Zeitachse reicht das Ereignis. */
+    private static void zauber(Scene s, Player p) {
+        s.game().fireEvent(new GameEventSpellAbilityCast(SpellAbilityView.get(
+                s.card("Grizzly Bears", p, ZoneType.Hand).getFirstSpellAbility()), null, 0, null));
     }
 
     // ---------------------------------------------------------------- Robustheit
