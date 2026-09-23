@@ -27,12 +27,17 @@ public final class Precons {
         return names;
     }
 
+    /**
+     * Precon als eigene Kopie. Forges {@code IStorage} liefert bei jedem Aufruf dieselbe Instanz - wer daran
+     * etwas aendert (Tags, Name, Karten), aendert das Precon fuer die ganze JVM. Genau so hat ein Test einem
+     * Precon ein Archidekt-Tag angehaengt, das ein spaeterer Test dann vorfand. Deshalb hier kopieren.
+     */
     public static Deck load(String name) {
         Deck d = storage().get(name);
         if (d == null) {
             throw new IllegalArgumentException("unbekanntes Precon: " + name);
         }
-        return d;
+        return (Deck) d.copyTo(d.getName());
     }
 
     /**
