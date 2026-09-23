@@ -1,6 +1,7 @@
 package mtgplayer.stats;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -64,6 +65,14 @@ class MatchRecorderAiTest {
         assertTrue(rec.turns() <= 5, "Zugdeckel 4 eingehalten, war " + rec.turns());
         assertNotNull(rec.id());
         assertNotNull(rec.reason());
+        // Mit maxTurns 4 laeuft die Partie praktisch immer in den Deckel; dann muss der Datensatz das
+        // auch sagen. Endet sie ausnahmsweise von selbst, greift nur die uebliche "zu kurz"-Regel.
+        if (r.turnCapped()) {
+            assertFalse(rec.counted(), "eine am Zugdeckel abgeschnittene Partie zaehlt nicht");
+            assertEquals("Zugdeckel", rec.excludeReason());
+            assertTrue(rec.draw(), "AiMatch beendet den Deckel als Remis - der Ausgang bleibt stehen");
+            assertTrue(rec.seats().stream().noneMatch(MatchRecord.Seat::winner), "ein Remis hat keinen Sieger");
+        }
 
         int lands = 0;
         for (int i = 0; i < rec.seats().size(); i++) {

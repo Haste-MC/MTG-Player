@@ -91,11 +91,10 @@ public final class AiMatch {
             }
         };
         game.getGameLog().addObserver(observer);
-        if (sink != null) {
-            // Vor match.startGame(...), damit Mulligans und der erste Zug schon mitgezaehlt werden;
-            // der Recorder schliesst sich selbst ueber GameEventGameFinished ab.
-            new MatchRecorder(game, "sparring", sink);
-        }
+        // Lokale Variable statt anonymer Anmeldung: der Zugdeckel-Haken unten muss den Recorder erreichen.
+        // Vor match.startGame(...), damit Mulligans und der erste Zug schon mitgezaehlt werden; der
+        // Recorder schliesst sich selbst ueber GameEventGameFinished ab.
+        final MatchRecorder recorder = sink == null ? null : new MatchRecorder(game, "sparring", sink);
 
         // Forge selbst kann ein Spiel ebenfalls mit GameEndReason.Draw beenden (gleichzeitiger Verlust,
         // Stack > 999, GameDrawEffect) - dieses Flag markiert nur ein Unentschieden DURCH UNS (Zugdeckel),
@@ -107,6 +106,10 @@ public final class AiMatch {
                 if (!game.isGameOver() && game.getPhaseHandler().getTurn() >= maxTurns) {
                     log.accept("[bridge] turn-cap " + maxTurns + " erreicht, breche ab");
                     turnCapped[0] = true;
+                    if (recorder != null) {
+                        // Abgeschnitten statt ausgespielt: die Partie zaehlt nicht in die Statistik.
+                        recorder.markTurnCapped();
+                    }
                     // Spieler vorher auf Draw setzen, sonst markiert Player.onGameOver() alle als Gewinner.
                     for (Player p : game.getPlayers()) {
                         p.intentionalDraw();

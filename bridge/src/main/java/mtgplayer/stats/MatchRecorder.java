@@ -66,11 +66,12 @@ import java.util.function.Consumer;
  * Spielende laufende Zug wird nicht mehr gewertet - er war noch nicht vorbei.</p>
  *
  * <p><b>Nicht gewertet.</b> Ein Absturz waehrend der Partie ({@link #markCrashed()}, gemeldet von
- * {@link CrashLog}), ein Abbruch von aussen ({@link #markAborted()}), ein Sitz mit Verlustgrund
- * {@code Conceded} oder weniger als drei Zuege setzen {@code counted = false} mit Grund. Reihenfolge
- * absichtlich so: ein Absturz erklaert auch den Abbruch, die kurze Partie oder die Aufgabe danach,
- * und die Aufgabe erklaert die kurze Partie. Bei Absturz und Abbruch traegt ausserdem KEIN Sitz
- * {@code winner} und die Partie ist kein Remis - siehe {@link #build()}.</p>
+ * {@link CrashLog}), ein Abbruch von aussen ({@link #markAborted()}), der Zugdeckel
+ * ({@link #markTurnCapped()}), ein Sitz mit Verlustgrund {@code Conceded} oder weniger als drei Zuege
+ * setzen {@code counted = false} mit Grund. Reihenfolge absichtlich so: ein Absturz erklaert auch den
+ * Abbruch, den Deckel, die kurze Partie oder die Aufgabe danach, und die Aufgabe erklaert die kurze
+ * Partie. Bei Absturz und Abbruch traegt ausserdem KEIN Sitz {@code winner} und die Partie ist kein
+ * Remis - beim Zugdeckel dagegen bleiben die Sitz-Ausgaenge stehen, siehe {@link #build()}.</p>
  *
  * <p>Alle Ereignis-Methoden und {@link #finish()} laufen unter demselben Monitor. Forge feuert die
  * Ereignisse zwar alle auf dem Spiel-Thread, {@link #finish()} kann aber von aussen kommen (Test,
@@ -95,6 +96,7 @@ public final class MatchRecorder {
     private int landsThisTurn;
     private volatile boolean crashed;
     private volatile boolean aborted;
+    private volatile boolean turnCapped;
     private volatile MatchRecord finished;
 
     /**
@@ -248,6 +250,23 @@ public final class MatchRecorder {
         }
     }
 
+    /**
+     * Die Partie hat den Zugdeckel erreicht ({@code AiMatch}: nach {@code maxTurns} Spielerzuegen) - sie
+     * kommt nicht in die Wertung. Anders als bei Abbruch und Absturz bleiben die Sitz-Ausgaenge dabei
+     * stehen: {@code AiMatch} setzt alle Sitze auf {@code intentionalDraw()} und beendet mit
+     * {@code GameEndReason.Draw}, das Ergebnis im Datensatz ist also ein echtes Remis ohne Sieger und
+     * erfindet nichts. Nur fachlich hat sich niemand auf ein Remis geeinigt - die Partie wurde
+     * abgeschnitten, und deshalb zaehlt sie nicht in die Bilanz.
+     *
+     * <p>Wie {@link #markCrashed()} bewusst ohne Monitor: der Aufruf kommt aus einem Ereignis-Haken auf
+     * dem Spiel-Thread, das {@code volatile} Flag reicht.</p>
+     */
+    public void markTurnCapped() {
+        if (finished == null) {
+            turnCapped = true;
+        }
+    }
+
     // ------------------------------------------------------------------ Abschluss
 
     /**
@@ -283,6 +302,9 @@ public final class MatchRecorder {
         // beendet ueber GameEndReason.AllHumansLost, und Player.onGameOver() macht dabei jeden Sitz ohne
         // eigenen Ausgang zum Sieger. Wer so eine Zeile im Screen wieder auf "gewertet" stellt, bekaeme
         // sonst frei erfundene Siege in die Bilanz.
+        // Der Zugdeckel steht bewusst NICHT hier: dort setzt AiMatch alle Sitze selbst auf
+        // intentionalDraw(), das Remis ohne Sieger ist also der echte Ausgang und darf so im Datensatz
+        // stehen - nur gewertet wird die Partie nicht (siehe markTurnCapped).
         boolean noWinners = crashed || aborted;
         List<MatchRecord.Seat> out = new ArrayList<>();
         boolean conceded = false;
@@ -295,7 +317,7 @@ public final class MatchRecorder {
         }
 
         String excludeReason = crashed ? "Absturz" : aborted ? "abgebrochen"
-                : conceded ? "aufgegeben" : turns < MIN_TURNS ? "zu kurz" : null;
+                : turnCapped ? "Zugdeckel" : conceded ? "aufgegeben" : turns < MIN_TURNS ? "zu kurz" : null;
         Instant endedAt = Instant.now();
         finished = new MatchRecord(newId(endedAt), iso(startedAt), iso(endedAt),
                 Math.max(0, endedAt.toEpochMilli() - startedAt.toEpochMilli()), source, turns,

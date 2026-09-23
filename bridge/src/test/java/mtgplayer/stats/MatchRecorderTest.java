@@ -323,6 +323,47 @@ class MatchRecorderTest {
 
     @Test
     @Timeout(value = 3, unit = TimeUnit.MINUTES)
+    void zugdeckelWirdNichtGewertetLaesstDenSitzenAberIhrRemis() {
+        Scene s = Scene.twoPlayers(AiConfig.DEFAULT, AiConfig.DEFAULT);
+        MatchRecorder rec = new MatchRecorder(s.game(), "sparring", null);
+        s.game().fireEvent(new GameEventTurnBegan(s.player(0).getView(), 1));
+        s.game().fireEvent(new GameEventTurnBegan(s.player(1).getView(), 2));
+        s.game().fireEvent(new GameEventTurnBegan(s.player(0).getView(), 3));
+
+        rec.markTurnCapped();                                                // AiMatch am Zugdeckel
+        for (Player p : s.game().getPlayers()) {                             // genau das macht AiMatch dort auch
+            p.intentionalDraw();
+        }
+        s.game().setGameOver(GameEndReason.Draw);
+
+        MatchRecord r = rec.finish();
+        assertFalse(r.counted());
+        assertEquals("Zugdeckel", r.excludeReason());
+        assertTrue(r.draw(), "am Deckel ist es ein echtes Remis - der Ausgang bleibt stehen");
+        assertTrue(r.seats().stream().noneMatch(MatchRecord.Seat::winner), "ein Remis hat keinen Sieger");
+        assertEquals("IntentionalDraw", seat(r, "A").lossReason(), "der Verlustgrund des Sitzes bleibt unangetastet");
+        assertEquals("IntentionalDraw", seat(r, "B").lossReason());
+    }
+
+    @Test
+    @Timeout(value = 3, unit = TimeUnit.MINUTES)
+    void absturzUndAbbruchGehenDemZugdeckelVor() {
+        Scene crash = Scene.twoPlayers(AiConfig.DEFAULT, AiConfig.DEFAULT);
+        MatchRecorder recCrash = new MatchRecorder(crash.game(), "sparring", null);
+        recCrash.markTurnCapped();
+        recCrash.markCrashed();
+        assertEquals("Absturz", recCrash.finish().excludeReason(),
+                "ein Absturz erklaert auch den Deckel, der danach noch gesetzt wurde");
+
+        Scene abort = Scene.twoPlayers(AiConfig.DEFAULT, AiConfig.DEFAULT);
+        MatchRecorder recAbort = new MatchRecorder(abort.game(), "sparring", null);
+        recAbort.markTurnCapped();
+        recAbort.markAborted();
+        assertEquals("abgebrochen", recAbort.finish().excludeReason());
+    }
+
+    @Test
+    @Timeout(value = 3, unit = TimeUnit.MINUTES)
     void nachFinishMeldetDerRecorderKeineAbstuerzeMehr() {
         Scene s = Scene.twoPlayers(AiConfig.DEFAULT, AiConfig.DEFAULT);
         MatchRecorder rec = new MatchRecorder(s.game(), "live", null);
