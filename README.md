@@ -144,8 +144,8 @@ Sieger, ein nachträgliches „gewertet" kann daraus also keine Siege erfinden.
 alle Sitze auf ein vereinbartes Remis und beendet das Spiel, sonst liefe eine festgefahrene KI-Partie endlos.
 Technisch ist das ein Remis, fachlich hat sich aber niemand darauf geeinigt – die Partie wurde abgeschnitten,
 deshalb zählt sie nicht. Der echte Ausgang (Remis, kein Sieger) bleibt trotzdem im Datensatz stehen. Wie oft ein
-Deck dort hineinläuft, ist selbst eine Kennzahl und steht als eigene Kachel „Partien am Zugdeckel" (Anteil an
-allen gespielten Partien, darunter „n von m"): ein Deck, das regelmäßig in den Deckel läuft, hat keine
+Deck dort hineinläuft, ist selbst eine Kennzahl und steht als eigene Kachel „Partien am Zugdeckel" (Anteil an den
+gewerteten plus den Zugdeckel-Partien dieses Decks, darunter „n von m"): ein Deck, das regelmäßig in den Deckel läuft, hat keine
 verlässliche Siegbedingung. Der Knopf „Statistik" in der Lobby öffnet den Screen:
 links die Decks mit ihrer Partienzahl, rechts die Kennzahlen des gewählten Decks (Bilanz und Siegquote mit
 95-%-Wilson-Intervall, Ø Züge und Dauer, Mulligans, Länder bis zum eigenen Zug 3/5 – nur über Partien, die so
