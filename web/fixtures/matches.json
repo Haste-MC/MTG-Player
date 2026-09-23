@@ -225,6 +225,68 @@
           "damageDealt": 9, "damageTaken": 14, "combatDamageTaken": 12, "lifeEnd": 26, "poisonEnd": 0
         }
       ]
+    },
+    {
+      "v": 1,
+      "id": "2026-09-22T18:30:00.110Z-4b1d0e",
+      "startedAt": "2026-09-22T17:50:00.000Z",
+      "endedAt": "2026-09-22T18:30:00.000Z",
+      "durationMs": 2400000,
+      "source": "sparring",
+      "turns": 40,
+      "reason": "Draw",
+      "draw": true,
+      "counted": false,
+      "excludeReason": "Zugdeckel",
+      "seats": [
+        {
+          "name": "Sparring-KI", "deck": "Lantern Stax", "human": false, "ai": {"mode": "sim", "profile": "Default"},
+          "winner": false, "lossReason": "IntentionalDraw", "eliminatedTurn": 40,
+          "mulligans": 0, "lands": 12, "landsByTurn": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 12, 12, 12, 12, 12, 12, 12, 12],
+          "missedLandDrops": 8, "firstMissedLandDrop": 13,
+          "spells": 18, "spellMana": 33, "commanderCasts": 1, "commanderTax": 0, "firstCommanderTurn": 6,
+          "damageDealt": 4, "damageTaken": 6, "combatDamageTaken": 4, "lifeEnd": 36, "poisonEnd": 0
+        },
+        {
+          "name": "Sparring-Gegner", "deck": "Atraxa Superfriends", "human": false, "ai": {"mode": "sim", "profile": "Default"},
+          "winner": false, "lossReason": "IntentionalDraw", "eliminatedTurn": 40,
+          "mulligans": 1, "lands": 11, "landsByTurn": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11],
+          "missedLandDrops": 9, "firstMissedLandDrop": 12,
+          "spells": 17, "spellMana": 38, "commanderCasts": 2, "commanderTax": 2, "firstCommanderTurn": 5,
+          "damageDealt": 6, "damageTaken": 4, "combatDamageTaken": 2, "lifeEnd": 34, "poisonEnd": 0
+        }
+      ]
+    },
+    {
+      "v": 1,
+      "id": "2026-09-23T09:15:00.550Z-4b1d0f",
+      "startedAt": "2026-09-23T08:35:00.000Z",
+      "endedAt": "2026-09-23T09:15:00.000Z",
+      "durationMs": 2400000,
+      "source": "sparring",
+      "turns": 40,
+      "reason": "Draw",
+      "draw": true,
+      "counted": false,
+      "excludeReason": "Zugdeckel",
+      "seats": [
+        {
+          "name": "Sparring-KI", "deck": "Lantern Stax", "human": false, "ai": {"mode": "sim", "profile": "Default"},
+          "winner": false, "lossReason": "IntentionalDraw", "eliminatedTurn": 40,
+          "mulligans": 1, "lands": 13, "landsByTurn": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 13, 13, 13, 13, 13, 13, 13],
+          "missedLandDrops": 7, "firstMissedLandDrop": 14,
+          "spells": 21, "spellMana": 39, "commanderCasts": 1, "commanderTax": 0, "firstCommanderTurn": 7,
+          "damageDealt": 2, "damageTaken": 5, "combatDamageTaken": 3, "lifeEnd": 35, "poisonEnd": 0
+        },
+        {
+          "name": "Sparring-Gegner", "deck": "Ojutai Flyers", "human": false, "ai": {"mode": "sim", "profile": "Default"},
+          "winner": false, "lossReason": "IntentionalDraw", "eliminatedTurn": 40,
+          "mulligans": 0, "lands": 12, "landsByTurn": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 12, 12, 12, 12, 12, 12, 12, 12],
+          "missedLandDrops": 8, "firstMissedLandDrop": 13,
+          "spells": 19, "spellMana": 36, "commanderCasts": 1, "commanderTax": 0, "firstCommanderTurn": 6,
+          "damageDealt": 5, "damageTaken": 2, "combatDamageTaken": 0, "lifeEnd": 38, "poisonEnd": 0
+        }
+      ]
     }
   ]
 }

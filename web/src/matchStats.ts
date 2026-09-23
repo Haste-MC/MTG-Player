@@ -5,22 +5,37 @@ import type { MatchRecord, MatchSeat } from "./protocol";
 // Partie zaehlt aber hoechstens ein Sitz je Deck (siehe pickSeat) - ein Spiegel (dasselbe Deck auf zwei
 // Sitzen) ist eine Partie, kein Doppelzaehler.
 
-/** Ein Deck mit mindestens einer gewerteten Partie, fuer die Deckliste des Statistik-Screens. */
-export interface DeckGames { deck: string; games: number }
+/** Ausschlussgrund der Bridge fuer eine am Zugdeckel abgeschnittene Partie (MatchRecorder.markTurnCapped). */
+const TURN_CAPPED = "Zugdeckel";
 
-/** Decks aus den gewerteten Partien (ueber alle Sitze, nicht nur den eigenen) mit Partienzahl,
- * absteigend sortiert (Partienzahl, dann Name). Ein Deck auf zwei Sitzen derselben Partie (Spiegel)
- * zaehlt fuer diese Partie nur einmal. */
+/** Ein Deck mit mindestens einer gewerteten oder einer Zugdeckel-Partie, fuer die Deckliste des
+ * Statistik-Screens. `games` sind die gewerteten, `capped` die am Zugdeckel abgeschnittenen. */
+export interface DeckGames { deck: string; games: number; capped: number }
+
+/** Decks aus den gewerteten UND den Zugdeckel-Partien (ueber alle Sitze, nicht nur den eigenen), je mit
+ * ihrer Partienzahl, absteigend sortiert nach `games + capped`, dann Name. Ein Deck auf zwei Sitzen
+ * derselben Partie (Spiegel) zaehlt fuer diese Partie nur einmal.
+ *
+ * Die Zugdeckel-Partien stehen hier mit drin, obwohl sie nicht gewertet sind: ein Deck, das AUSSCHLIESSLICH
+ * am Deckel endet, hat keine Bilanz (summarize liefert undefined) und waere sonst im ganzen Screen nicht
+ * auffindbar - ausgerechnet der Fall, den die Kennzahl zeigen soll. Alle anderen Ausschlussgruende
+ * (Absturz, Abbruch, Aufgabe, zu kurz) bleiben aussen vor; sie sagen nichts ueber das Deck aus. */
 export function deckGames(records: MatchRecord[]): DeckGames[] {
-  const counts = new Map<string, number>();
+  const counts = new Map<string, { games: number; capped: number }>();
   for (const r of records) {
-    if (!r.counted) continue;
+    const counted = r.counted;
+    if (!counted && r.excludeReason !== TURN_CAPPED) continue;
     const decks = new Set(r.seats.map((seat) => seat.deck));
-    for (const deck of decks) counts.set(deck, (counts.get(deck) ?? 0) + 1);
+    for (const deck of decks) {
+      const cur = counts.get(deck) ?? { games: 0, capped: 0 };
+      if (counted) cur.games += 1;
+      else cur.capped += 1;
+      counts.set(deck, cur);
+    }
   }
   return [...counts.entries()]
-    .map(([deck, games]) => ({ deck, games }))
-    .sort((a, b) => b.games - a.games || a.deck.localeCompare(b.deck));
+    .map(([deck, v]) => ({ deck, games: v.games, capped: v.capped }))
+    .sort((a, b) => b.games + b.capped - (a.games + a.capped) || a.deck.localeCompare(b.deck));
 }
 
 /** Waehlt fuer `deck` innerhalb einer Partie hoechstens einen Sitz: bevorzugt den menschlichen, sonst
@@ -46,9 +61,6 @@ export interface DeckSummary {
   /** Anteil der Zugdeckel-Partien an allen gespielten: turnCappedGames / (games + turnCappedGames). */
   turnCappedRate: number;
 }
-
-/** Ausschlussgrund der Bridge fuer eine am Zugdeckel abgeschnittene Partie (MatchRecorder.markTurnCapped). */
-const TURN_CAPPED = "Zugdeckel";
 
 /** Kennzahlen fuer `deck` ueber die gewerteten Partien, in denen ein Sitz genau diesen Deck-Namen traegt -
  * je Partie hoechstens ein Sitz (siehe pickSeat; ein Spiegel zaehlt also als eine Partie). Metriken

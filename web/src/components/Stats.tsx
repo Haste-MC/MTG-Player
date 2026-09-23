@@ -58,6 +58,7 @@ export default function Stats() {
   // geloescht oder nicht mehr gewertet), greift wieder die erste Zeile.
   const deck = pick && decks.some((d) => d.deck === pick) ? pick : decks[0]?.deck;
   const summary = useMemo(() => (deck ? summarize(matches, deck) : undefined), [matches, deck]);
+  const picked = decks.find((d) => d.deck === deck);
   // Neueste zuerst; die Liste zeigt bewusst alle Partien, nicht nur die des gewaehlten Decks: eine nicht
   // gewertete Partie taucht in der Deckliste gar nicht auf und waere sonst nicht mehr erreichbar.
   const rows = useMemo(
@@ -113,12 +114,18 @@ export default function Stats() {
                 {decks.map((d) => (
                   <button key={d.deck} className={"stat-deck" + (d.deck === deck ? " on" : "")} onClick={() => setPick(d.deck)}>
                     <span className="stat-deck-name">{d.deck}</span>
+                    {/* Nur fuer Decks ganz ohne gewertete Partie: sonst stuende neben fast jeder Zeile eine
+                        zweite Zahl und die Liste liesse sich nicht mehr ueberfliegen. Wie oft ein Deck mit
+                        Bilanz in den Deckel laeuft, sagt die Kachel. */}
+                    {d.games === 0 && <span className="stat-deck-capped" title={TURN_CAP_HINT}>{d.capped} Deckel</span>}
                     <span className="stat-deck-games">{d.games}</span>
                   </button>
                 ))}
               </div>
               <div className="stat-right">
-                {summary ? <Tiles s={summary} /> : <p className="muted">Kein Deck ausgewählt.</p>}
+                {summary ? <Tiles s={summary} />
+                  : picked && picked.capped > 0 ? <OnlyCapped capped={picked.capped} />
+                  : <p className="muted">Kein Deck ausgewählt.</p>}
                 {summary && <Tables s={summary} />}
               </div>
             </div>
@@ -191,6 +198,13 @@ function Tiles({ s }: { s: DeckSummary }) {
   return (
     <div className="stat-grid">
       <Tile value={String(s.games)} label="Partien" sub={`${s.wins} S · ${s.losses} N · ${s.draws} R`} />
+      {/* Direkt hinter "Partien": Bilanz und der Anteil, der gar nicht erst in ihr steckt, gehoeren
+          nebeneinander. Nur wenn es welche gab - sonst stuende in fast jedem Deck eine 0-Kachel.
+          Nenner ist alles Gespielte (gewertete + Deckel), siehe matchStats.turnCappedRate. */}
+      {s.turnCappedGames > 0 && (
+        <Tile value={pct(s.turnCappedRate)} label="Partien am Zugdeckel"
+          sub={`${s.turnCappedGames} von ${s.games + s.turnCappedGames}`} title={TURN_CAP_HINT} />
+      )}
       <Tile value={pct(s.winRate)} label="Siegquote" sub={`95 %: ${pct(s.ci[0])} – ${pct(s.ci[1])}`} />
       <Tile value={one(s.avgTurns)} label="Ø Züge" />
       <Tile value={mmss(s.avgDurationMs)} label="Ø Dauer (mm:ss)" />
@@ -201,12 +215,19 @@ function Tiles({ s }: { s: DeckSummary }) {
       <Tile value={num(s.avgCommanderTurn)} label="Ø Zug des 1. Commanders"
         sub={`Ø Steuer ${one(s.avgCommanderTax)}`} />
       <Tile value={one(s.avgDamageDealt)} label="Ø Schaden gemacht" sub={`genommen ${one(s.avgDamageTaken)}`} />
-      {/* Nur wenn es welche gab: sonst stuende in fast jedem Deck eine 0-Kachel und die Reihe waere
-          krumm. Nenner ist alles Gespielte (gewertete + Deckel), siehe matchStats.turnCappedRate. */}
-      {s.turnCappedGames > 0 && (
-        <Tile value={pct(s.turnCappedRate)} label="Partien am Zugdeckel"
-          sub={`${s.turnCappedGames} von ${s.games + s.turnCappedGames}`} title={TURN_CAP_HINT} />
-      )}
+    </div>
+  );
+}
+
+/** Statt der Kacheln fuer ein Deck, das nur am Zugdeckel endet: summarize hat dafuer keine Bilanz
+ * (undefined), die Partien stehen aber unten in der Liste, sobald der Filter "nur gewertete" aus ist. */
+function OnlyCapped({ capped }: { capped: number }) {
+  return (
+    <div className="stat-empty">
+      <div className="stat-decks-title">Keine gewertete Partie</div>
+      <p className="muted">
+        {capped} von {capped} Partien liefen in den Zugdeckel – das Deck beendet die Partie nicht.
+      </p>
     </div>
   );
 }

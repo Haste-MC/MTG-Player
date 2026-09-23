@@ -196,6 +196,58 @@ const records: MatchRecord[] = [
       },
     ],
   },
+  // "Lantern Stax" endet AUSSCHLIESSLICH am Zugdeckel - genau der Fall, den die Statistik zeigen soll:
+  // ohne gewertete Partie gibt es keine Bilanz, das Deck muss trotzdem in der Deckliste auftauchen.
+  {
+    v: 1, id: "2026-09-22T18:30:00.110Z-4b1d0e", startedAt: "2026-09-22T17:50:00.000Z", endedAt: "2026-09-22T18:30:00.000Z",
+    durationMs: 2400000, source: "sparring", turns: 40, reason: "Draw",
+    draw: true, counted: false, excludeReason: "Zugdeckel",
+    seats: [
+      {
+        name: "Sparring-KI", deck: "Lantern Stax", human: false,
+        ai: { mode: "sim", profile: "Default" }, winner: false, lossReason: "IntentionalDraw", eliminatedTurn: 40,
+        mulligans: 0, lands: 12, landsByTurn: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 12, 12, 12, 12, 12, 12, 12, 12],
+        missedLandDrops: 8, firstMissedLandDrop: 13,
+        spells: 18, spellMana: 33, commanderCasts: 1, commanderTax: 0,
+        firstCommanderTurn: 6, damageDealt: 4, damageTaken: 6,
+        combatDamageTaken: 4, lifeEnd: 36, poisonEnd: 0,
+      },
+      {
+        name: "Sparring-Gegner", deck: "Atraxa Superfriends", human: false,
+        ai: { mode: "sim", profile: "Default" }, winner: false, lossReason: "IntentionalDraw", eliminatedTurn: 40,
+        mulligans: 1, lands: 11, landsByTurn: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11],
+        missedLandDrops: 9, firstMissedLandDrop: 12,
+        spells: 17, spellMana: 38, commanderCasts: 2, commanderTax: 2,
+        firstCommanderTurn: 5, damageDealt: 6, damageTaken: 4,
+        combatDamageTaken: 2, lifeEnd: 34, poisonEnd: 0,
+      },
+    ],
+  },
+  {
+    v: 1, id: "2026-09-23T09:15:00.550Z-4b1d0f", startedAt: "2026-09-23T08:35:00.000Z", endedAt: "2026-09-23T09:15:00.000Z",
+    durationMs: 2400000, source: "sparring", turns: 40, reason: "Draw",
+    draw: true, counted: false, excludeReason: "Zugdeckel",
+    seats: [
+      {
+        name: "Sparring-KI", deck: "Lantern Stax", human: false,
+        ai: { mode: "sim", profile: "Default" }, winner: false, lossReason: "IntentionalDraw", eliminatedTurn: 40,
+        mulligans: 1, lands: 13, landsByTurn: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 13, 13, 13, 13, 13, 13, 13],
+        missedLandDrops: 7, firstMissedLandDrop: 14,
+        spells: 21, spellMana: 39, commanderCasts: 1, commanderTax: 0,
+        firstCommanderTurn: 7, damageDealt: 2, damageTaken: 5,
+        combatDamageTaken: 3, lifeEnd: 35, poisonEnd: 0,
+      },
+      {
+        name: "Sparring-Gegner", deck: "Ojutai Flyers", human: false,
+        ai: { mode: "sim", profile: "Default" }, winner: false, lossReason: "IntentionalDraw", eliminatedTurn: 40,
+        mulligans: 0, lands: 12, landsByTurn: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 12, 12, 12, 12, 12, 12, 12, 12],
+        missedLandDrops: 8, firstMissedLandDrop: 13,
+        spells: 19, spellMana: 36, commanderCasts: 1, commanderTax: 0,
+        firstCommanderTurn: 6, damageDealt: 5, damageTaken: 2,
+        combatDamageTaken: 0, lifeEnd: 38, poisonEnd: 0,
+      },
+    ],
+  },
 ];
 
 describe("wilson", () => {
@@ -211,17 +263,26 @@ describe("wilson", () => {
 });
 
 describe("deckGames", () => {
-  it("ignoriert nicht gewertete Partien und sortiert absteigend nach Partienzahl, dann Name", () => {
+  it("zaehlt gewertete und Zugdeckel-Partien getrennt und sortiert nach beidem zusammen, dann Name", () => {
+    // Sortierschluessel ist games + capped: "Lantern Stax" hat keine einzige gewertete Partie, steht aber
+    // mit seinen zwei Deckel-Partien gleichauf mit einem Deck, das zweimal gewertet gespielt hat.
     expect(deckGames(records)).toEqual([
-      { deck: "Krenko Goblins", games: 2 },
-      { deck: "Meren Aristocrats", games: 2 },
-      { deck: "Titania, Gaea Incarnate", games: 2 },
-      { deck: "Atraxa Superfriends", games: 1 },
-      { deck: "Golgari Midrange", games: 1 },
-      { deck: "Grix Control", games: 1 },
-      { deck: "Muldrotha Reanimator", games: 1 },
-      { deck: "Ojutai Flyers", games: 1 },
+      { deck: "Krenko Goblins", games: 2, capped: 1 },
+      { deck: "Atraxa Superfriends", games: 1, capped: 1 },
+      { deck: "Grix Control", games: 1, capped: 1 },
+      { deck: "Lantern Stax", games: 0, capped: 2 },
+      { deck: "Meren Aristocrats", games: 2, capped: 0 },
+      { deck: "Ojutai Flyers", games: 1, capped: 1 },
+      { deck: "Titania, Gaea Incarnate", games: 2, capped: 0 },
+      { deck: "Golgari Midrange", games: 1, capped: 0 },
+      { deck: "Muldrotha Reanimator", games: 1, capped: 0 },
     ]);
+  });
+
+  it("ignoriert Partien, die aus einem anderen Grund nicht gewertet sind", () => {
+    // Die aufgegebene Partie (Titania gegen Meren) taucht in keiner der beiden Zahlen auf.
+    const titania = deckGames(records).find((d) => d.deck === "Titania, Gaea Incarnate");
+    expect(titania).toEqual({ deck: "Titania, Gaea Incarnate", games: 2, capped: 0 });
   });
 
   it("leere Eingabe -> leere Liste", () => {
@@ -316,7 +377,11 @@ describe("summarize", () => {
       },
     ];
     expect(summarize(onlyCapped, "Deckel-Deck")).toBeUndefined();
-    expect(deckGames(onlyCapped)).toEqual([]);
+    // …steht aber sehr wohl in der Deckliste: ohne das waere genau der schlimmste Fall unsichtbar.
+    expect(deckGames(onlyCapped)).toEqual([
+      { deck: "Deckel-Deck", games: 0, capped: 1 },
+      { deck: "Gegner", games: 0, capped: 1 },
+    ]);
   });
 
   it("Spiegel am Zugdeckel zaehlt einmal, und ein anderer Ausschlussgrund zaehlt gar nicht", () => {
@@ -356,11 +421,14 @@ describe("summarize", () => {
       ],
     };
     // Spiegel am Deckel: dasselbe Deck auf beiden Sitzen ist eine Partie, kein Doppelzaehler.
-    const s = summarize([gewertet, base("cap-mirror", "Zugdeckel", "Deckel-Deck"),
-      base("cap-abort", "abgebrochen", "Gegner")], "Deckel-Deck");
+    const alle = [gewertet, base("cap-mirror", "Zugdeckel", "Deckel-Deck"),
+      base("cap-abort", "abgebrochen", "Gegner")];
+    const s = summarize(alle, "Deckel-Deck");
     expect(s?.games).toBe(1);
     expect(s?.turnCappedGames).toBe(1);
     expect(s?.turnCappedRate).toBeCloseTo(0.5, 6);
+    // dieselbe Regel in deckGames: der Spiegel am Deckel ist eine Partie, die abgebrochene keine.
+    expect(deckGames(alle).find((d) => d.deck === "Deckel-Deck")).toEqual({ deck: "Deckel-Deck", games: 1, capped: 1 });
   });
 
   it("Deck ohne gewertete Partien -> undefined", () => {
@@ -431,7 +499,7 @@ describe("summarize", () => {
         ],
       },
     ];
-    expect(deckGames(mirror)).toEqual([{ deck: "Spiegeldeck", games: 1 }]);
+    expect(deckGames(mirror)).toEqual([{ deck: "Spiegeldeck", games: 1, capped: 0 }]);
     const s = summarize(mirror, "Spiegeldeck");
     expect(s?.games).toBe(1);
     expect(s?.wins).toBe(1);
