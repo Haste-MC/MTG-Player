@@ -34,6 +34,9 @@ class MatchStoreTest {
         MatchRecord.Seat seat = new MatchRecord.Seat("Du", "Titania, Gaea Incarnate", true, null, true, null,
                 null, 1, 7, List.of(0, 1, 2, 2, 3), 2, 4, 12, 34,
                 1, 0, 2, 9, 3, 6, 5, 2, 3, 4, 1, 2,
+                8, 5, 6, 3, 4, 2, 6, 6, 15, 6, 4, 7,
+                List.of(new MatchRecord.TurnPoint(1, 1, 0, 40, 6),
+                        new MatchRecord.TurnPoint(3, 2, 1, 38, 5)),
                 2, 2, 4, 21, 18, 12, 22, 0);
         return new MatchRecord(id, "2026-09-22T19:00:00Z", "2026-09-22T19:13:32Z", 812345, "live",
                 5, 14, "AllOpponentsLost", false, true, null, List.of(seat));
@@ -143,10 +146,15 @@ class MatchStoreTest {
         assertTrue(Files.readString(file).startsWith("[{\"v\":" + MatchRecord.VERSION + ","),
                 "v steht als erstes Feld im Datensatz");
 
-        // Datei ohne "v" (vor Einfuehrung des Feldes geschrieben)
-        Files.writeString(file, Files.readString(file).replace("{\"v\":" + MatchRecord.VERSION + ",", "{"));
-        assertEquals(1, new MatchStore(file).all().get(0).v(),
+        // Datei wie vor Runde B: ohne "v" und ohne die Zeitachse im Sitz
+        Files.writeString(file, Files.readString(file)
+                .replace("{\"v\":" + MatchRecord.VERSION + ",", "{")
+                .replaceAll("\"timeline\":\\[[^]]*],", ""));
+        MatchRecord alt = new MatchStore(file).all().get(0);
+        assertEquals(1, alt.v(),
                 "ohne Feld gilt v1 - eine neue Formatversion macht einen alten Datensatz nicht neuer");
+        assertEquals(List.of(), alt.seats().get(0).timeline(),
+                "eine fehlende Zeitachse liest sich leer, nicht als null");
     }
 
     @Test

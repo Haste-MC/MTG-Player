@@ -1,24 +1,30 @@
 package mtgplayer.stats;
 
+import com.google.common.collect.Multimap;
 import com.google.common.eventbus.Subscribe;
 import forge.card.mana.ManaCost;
 import forge.deck.Deck;
 import forge.game.Game;
 import forge.game.GameEndReason;
+import forge.game.GameEntityView;
 import forge.game.GameOutcome;
 import forge.game.ability.ApiType;
 import forge.game.card.Card;
 import forge.game.card.CardView;
+import forge.game.event.GameEventAttackersDeclared;
+import forge.game.event.GameEventBlockersDeclared;
 import forge.game.event.GameEventCardChangeZone;
 import forge.game.event.GameEventGameFinished;
 import forge.game.event.GameEventLandPlayed;
 import forge.game.event.GameEventMulligan;
 import forge.game.event.GameEventPlayerDamaged;
+import forge.game.event.GameEventPlayerLivesChanged;
 import forge.game.event.GameEventSpellAbilityCast;
 import forge.game.event.GameEventSpellRemovedFromStack;
 import forge.game.event.GameEventSpellResolved;
 import forge.game.event.GameEventTurnBegan;
 import forge.game.event.GameEventTurnPhase;
+import forge.game.keyword.Keyword;
 import forge.game.phase.PhaseType;
 import forge.game.player.Player;
 import forge.game.player.PlayerOutcome;
@@ -37,10 +43,13 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Deque;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
@@ -90,6 +99,12 @@ import java.util.function.Consumer;
  * {@code GameEventCardChangeZone}. Kein Zaehler darf eine Partie abschiessen - jeder neue Handler
  * faengt {@code RuntimeException} und zaehlt den Fall nur in {@link #counterFailures()} mit.</p>
  *
+ * <p><b>Kampf und Zeitachse (Runde B, Stueck 2).</b> Angriff und Block kommen aus
+ * {@code GameEventAttackersDeclared}/{@code GameEventBlockersDeclared}, der Schaden samt seiner
+ * Quelle aus {@code GameEventPlayerDamaged}, der Lebensgewinn aus
+ * {@code GameEventPlayerLivesChanged}. Die Zeitachse haengt am Zugbeginn: je eigenem Zug ein Punkt
+ * mit dem Stand aus dem Spielzustand, gedeckelt auf {@link #TIMELINE_MAX}.</p>
+ *
  * <p>Alle Ereignis-Methoden und {@link #finish()} laufen unter demselben Monitor. Forge feuert die
  * Ereignisse zwar alle auf dem Spiel-Thread, {@link #finish()} kann aber von aussen kommen (Test,
  * Abbruch) und {@link #markCrashed()} von einem beliebigen Thread mit einer uncaught exception.</p>
@@ -101,6 +116,13 @@ public final class MatchRecorder {
 
     /** Ab so vielen eigenen bleibenden Karten in EINEM Fenster heisst der Verlust Massenentfernung. */
     public static final int SWEEP_MIN = 3;
+
+    /**
+     * So viele Punkte fasst die Zeitachse eines Sitzes hoechstens. Eine Partie, die aus dem Ruder
+     * laeuft, darf den Datensatz nicht aufblaehen; abgeschnitten wird hinten, weil die Frage "wann
+     * bist du zurueckgefallen" am Anfang haengt.
+     */
+    public static final int TIMELINE_MAX = 60;
 
     /**
      * So viele zuletzt aufgeloeste Zauber merkt sich {@link #justResolved}. Forge feuert
@@ -181,6 +203,7 @@ public final class MatchRecorder {
         if (turnOwner != null) {
             turnOwner.ownTurns++;
             turnOwner.landsByTurn.add(turnOwner.lands);
+            notePoint(turnOwner, e.turnNumber());
         }
     }
 
@@ -367,22 +390,148 @@ public final class MatchRecorder {
         }
     }
 
+    /**
+     * Angriffe. Das Ereignis traegt den angreifenden Sitz im Kopf und die Angreifer nach Verteidiger
+     * geordnet; {@code attacksDeclared} ist schlicht die Zahl der Angreifer. {@code attackedTurns}
+     * zaehlt Zuege, nicht Kaempfe: eine zweite Kampfphase im selben Zug ist kein zweiter
+     * Angriffszug, deshalb der Zug-Merker je Sitz. Dass der laufende Zug ueber {@link #turns} kommt
+     * (und nicht ueber den Phasenhandler), haelt den Zaehler in Szenen ohne
+     * {@code GameEventTurnBegan} bei mindestens 1 - ein Angriff ohne bekannten Zug ist immer noch
+     * ein Angriffszug.
+     */
+    @Subscribe
+    public synchronized void onAttackersDeclared(GameEventAttackersDeclared e) {
+        if (finished != null) {
+            return;
+        }
+        try {
+            Multimap<GameEntityView, CardView> map = e.attackersMap();
+            if (map == null || map.isEmpty()) {
+                return;
+            }
+            Seat attacker = seat(e.player());
+            if (attacker != null) {
+                attacker.attacksDeclared += map.size();
+                int turn = Math.max(1, turns);
+                if (attacker.lastAttackTurn != turn) {
+                    attacker.lastAttackTurn = turn;
+                    attacker.attackedTurns++;
+                }
+            }
+            for (Map.Entry<GameEntityView, Collection<CardView>> entry : map.asMap().entrySet()) {
+                Seat defender = seatOfDefender(entry.getKey());
+                if (defender != null) {
+                    defender.attackersFaced += entry.getValue().size();
+                }
+            }
+        } catch (RuntimeException ex) {
+            counterFailures++;
+        }
+    }
+
+    /**
+     * Bloecke. Das Ereignis kommt je verteidigendem Sitz und bildet Verteidiger =&gt; (Angreifer =&gt;
+     * Blocker) ab. <b>Achtung:</b> {@code PhaseHandler} traegt einen UNGEBLOCKTEN Angreifer als
+     * seinen eigenen "Blocker" ein ({@code getBlockers(att).isEmpty() ? List.of(att) : ...}) - wer
+     * die Werte roh mitzaehlt, meldet Bloecke, die es nie gab. Eine Kreatur, die mehrere Angreifer
+     * blockt, zaehlt einmal: die Kennzahl heisst "Kreaturen, die geblockt haben".
+     */
+    @Subscribe
+    public synchronized void onBlockersDeclared(GameEventBlockersDeclared e) {
+        if (finished != null) {
+            return;
+        }
+        try {
+            Map<GameEntityView, Multimap<CardView, CardView>> blockers = e.blockers();
+            Seat s = seat(e.defendingPlayer());
+            if (s == null || blockers == null) {
+                return;
+            }
+            Set<CardView> blocked = new HashSet<>();
+            for (Multimap<CardView, CardView> perDefender : blockers.values()) {
+                if (perDefender == null) {
+                    continue;
+                }
+                for (Map.Entry<CardView, CardView> pair : perDefender.entries()) {
+                    if (pair.getValue() != pair.getKey()) {     // Objektidentitaet: CardView ist je Karte eine
+                        blocked.add(pair.getValue());
+                    }
+                }
+            }
+            s.blocksDeclared += blocked.size();
+        } catch (RuntimeException ex) {
+            counterFailures++;
+        }
+    }
+
+    /**
+     * Schaden am Spieler, von beiden Seiten gezaehlt: beim Ziel nach Art der Quelle, beim
+     * Kontrolleur der Quelle als ausgeteilter Schaden.
+     *
+     * <p>Fliegen geht vor Trampelschaden - eine Quelle mit beidem zaehlt als Flieger, sonst haenge
+     * die Zuordnung an der Reihenfolge der Abfrage. Ein Commander bringt keinen vierten Topf:
+     * {@code commanderDamageTaken} liegt quer zu den drei Kampfschaden-Toepfen. Ohne Quelle (Forge
+     * feuert das Ereignis auch mit {@code null}) bleibt Kampfschaden "other" und niemand bekommt ihn
+     * gutgeschrieben - lieber eine Kennzahl zu niedrig als eine erfundene.</p>
+     */
     @Subscribe
     public synchronized void onPlayerDamaged(GameEventPlayerDamaged e) {
         if (finished != null) {
             return;
         }
-        Seat target = seat(e.target());
-        if (target != null) {
-            target.damageTaken += e.amount();
-            if (e.combat()) {
-                target.combatDamageTaken += e.amount();
+        try {
+            CardView src = e.source();
+            int amount = e.amount();
+            Seat target = seat(e.target());
+            if (target != null) {
+                target.damageTaken += amount;
+                if (e.combat()) {
+                    target.combatDamageTaken += amount;
+                    if (hasKeyword(src, Keyword.FLYING)) {
+                        target.damageTakenFlying += amount;
+                    } else if (hasKeyword(src, Keyword.TRAMPLE)) {
+                        target.damageTakenTrample += amount;
+                    } else {
+                        target.damageTakenOther += amount;
+                    }
+                    if (src != null && src.isCommander()) {
+                        target.commanderDamageTaken += amount;
+                    }
+                } else {
+                    target.damageTakenNonCombat += amount;
+                }
             }
+            Seat dealer = src == null ? null : seat(controllerOf(src));
+            if (dealer != null) {
+                dealer.damageDealt += amount;
+                if (e.combat()) {
+                    dealer.damageDealtCombat += amount;
+                } else {
+                    dealer.damageDealtNonCombat += amount;
+                }
+            }
+        } catch (RuntimeException ex) {
+            counterFailures++;
         }
-        CardView src = e.source();
-        Seat dealer = src == null ? null : seat(controllerOf(src));
-        if (dealer != null) {
-            dealer.damageDealt += e.amount();
+    }
+
+    /**
+     * Lebensgewinn. Forge feuert dasselbe Ereignis fuer jede Aenderung, gezaehlt wird nur die
+     * positive Differenz - der Verlust steht schon in {@code damageTaken} bzw. geht als Zahlung
+     * niemanden etwas an.
+     */
+    @Subscribe
+    public synchronized void onLivesChanged(GameEventPlayerLivesChanged e) {
+        if (finished != null) {
+            return;
+        }
+        try {
+            Seat s = seat(e.player());
+            if (s != null && e.newLives() > e.oldLives()) {
+                s.lifeGained += e.newLives() - e.oldLives();
+            }
+        } catch (RuntimeException ex) {
+            counterFailures++;
         }
     }
 
@@ -523,6 +672,41 @@ public final class MatchRecorder {
 
     private static PlayerView controllerOf(CardView c) {
         return c.getController() != null ? c.getController() : c.getOwner();
+    }
+
+    /**
+     * Der Sitz hinter einem Verteidiger: ein Spieler steht fuer sich selbst, ein Planeswalker (oder
+     * eine Battle) fuer seinen Kontrolleur - ein Angriff auf meinen Planeswalker ist ein Angriff auf
+     * mich.
+     */
+    private Seat seatOfDefender(GameEntityView defender) {
+        if (defender instanceof PlayerView pv) {
+            return seat(pv);
+        }
+        return defender instanceof CardView cv ? seat(controllerOf(cv)) : null;
+    }
+
+    private static boolean hasKeyword(CardView c, Keyword kw) {
+        return c != null && c.getCurrentState() != null && c.getCurrentState().hasKeyword(kw);
+    }
+
+    /**
+     * Haengt den Stand zu Beginn dieses eigenen Zuges an die Zeitachse: Laender und Kreaturen im
+     * Spiel, Leben und Handkarten. Ab {@link #TIMELINE_MAX} Punkten faellt jeder weitere Zug weg.
+     * {@code turn} ist Forges globale Zugnummer, damit sich die Kurven mehrerer Sitze und der
+     * Zeitpunkt des Ausscheidens nebeneinander legen lassen.
+     */
+    private void notePoint(Seat s, int turn) {
+        try {
+            if (s.timeline.size() >= TIMELINE_MAX) {
+                return;
+            }
+            s.timeline.add(new MatchRecord.TurnPoint(Math.max(1, turn), s.player.getLandsInPlay().size(),
+                    s.player.getCreaturesInPlay().size(), s.player.getLife(),
+                    s.player.getCardsIn(ZoneType.Hand).size()));
+        } catch (RuntimeException ex) {
+            counterFailures++;
+        }
     }
 
     /** Der Sitz, der diesen Zauber gewirkt hat: Beherrscher seiner Ursprungskarte. */
@@ -681,6 +865,21 @@ public final class MatchRecorder {
         private int tokensCreated;
         /** Verluste im laufenden Aufloesungsfenster; siehe {@link MatchRecorder#closeSweepWindow}. */
         private int lostInWindow;
+        private int attacksDeclared;
+        private int attackedTurns;
+        /** Zug des letzten eigenen Angriffs; haelt {@link #attackedTurns} bei zwei Kaempfen je Zug. */
+        private int lastAttackTurn;
+        private int attackersFaced;
+        private int blocksDeclared;
+        private int damageTakenFlying;
+        private int damageTakenTrample;
+        private int damageTakenOther;
+        private int damageTakenNonCombat;
+        private int damageDealtCombat;
+        private int damageDealtNonCombat;
+        private int commanderDamageTaken;
+        private int lifeGained;
+        private final List<MatchRecord.TurnPoint> timeline = new ArrayList<>();
         private int damageDealt;
         private int damageTaken;
         private int combatDamageTaken;
@@ -703,6 +902,10 @@ public final class MatchRecorder {
                     cardsDrawn, cardsDiscarded, cardsMilled,
                     permanentsLost, creaturesLostInCombat, creaturesLostOther,
                     biggestSweep, sweepsSuffered, tokensCreated,
+                    attacksDeclared, attackedTurns, attackersFaced, blocksDeclared,
+                    damageTakenFlying, damageTakenTrample, damageTakenOther, damageTakenNonCombat,
+                    damageDealtCombat, damageDealtNonCombat, commanderDamageTaken, lifeGained,
+                    List.copyOf(timeline),
                     commanderCasts, commanderTax(),
                     firstCommanderTurn, damageDealt, damageTaken, combatDamageTaken,
                     player.getLife(), player.getPoisonCounters());

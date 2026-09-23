@@ -114,5 +114,44 @@ class MatchRecorderAiTest {
                 "ein Fenster kann nicht mehr fassen als insgesamt verloren ging: " + s);
         assertTrue(s.sweepsSuffered() * MatchRecorder.SWEEP_MIN <= s.permanentsLost(),
                 "jede Massenentfernung kostet mindestens " + MatchRecorder.SWEEP_MIN + ": " + s);
+        pruefeKampfUndZeitachse(s);
+    }
+
+    /**
+     * Kampf, Schaden und Zeitachse aus Stueck 2 - auch hier nur, was unabhaengig von den
+     * KI-Entscheidungen gelten MUSS: die drei Kampfschaden-Toepfe ergeben zusammen den
+     * Kampfschaden, mit dem Nicht-Kampfschaden den Gesamtschaden, und ausgeteilter Schaden teilt
+     * sich genauso auf. Commander-Schaden liegt quer dazu und kann hoechstens so gross wie der
+     * Kampfschaden sein. Die Zeitachse hat je eigenem Zug einen Punkt (gedeckelt) mit streng
+     * steigenden Zugnummern.
+     */
+    private static void pruefeKampfUndZeitachse(MatchRecord.Seat s) {
+        for (int n : new int[]{s.attacksDeclared(), s.attackedTurns(), s.attackersFaced(),
+                s.blocksDeclared(), s.damageTakenFlying(), s.damageTakenTrample(), s.damageTakenOther(),
+                s.damageTakenNonCombat(), s.damageDealtCombat(), s.damageDealtNonCombat(),
+                s.commanderDamageTaken(), s.lifeGained()}) {
+            assertTrue(n >= 0, "kein Zaehler darf negativ werden: " + s);
+        }
+        assertEquals(s.combatDamageTaken(), s.damageTakenFlying() + s.damageTakenTrample() + s.damageTakenOther(),
+                "die drei Kampfschaden-Toepfe ergeben den Kampfschaden: " + s);
+        assertEquals(s.damageTaken(), s.combatDamageTaken() + s.damageTakenNonCombat(),
+                "Kampf- und Nicht-Kampfschaden ergeben den Gesamtschaden: " + s);
+        assertEquals(s.damageDealt(), s.damageDealtCombat() + s.damageDealtNonCombat(),
+                "ausgeteilter Schaden teilt sich genauso auf: " + s);
+        assertTrue(s.commanderDamageTaken() <= s.combatDamageTaken(),
+                "Commander-Schaden ist Kampfschaden, kein vierter Topf: " + s);
+        assertTrue(s.attackedTurns() <= s.attacksDeclared(),
+                "ein Angriffszug braucht mindestens einen Angreifer: " + s);
+        assertNotNull(s.timeline(), "die Zeitachse ist nie null");
+        assertTrue(s.timeline().size() <= MatchRecorder.TIMELINE_MAX,
+                "die Zeitachse ist gedeckelt: " + s.timeline().size());
+        assertEquals(Math.min(MatchRecorder.TIMELINE_MAX, s.landsByTurn().size() - 1), s.timeline().size(),
+                "je eigenem Zug ein Punkt, wie bei landsByTurn: " + s);
+        int last = 0;
+        for (MatchRecord.TurnPoint p : s.timeline()) {
+            assertTrue(p.turn() > last, "Zugnummern steigen: " + s.timeline());
+            last = p.turn();
+            assertTrue(p.lands() >= 0 && p.creatures() >= 0 && p.hand() >= 0, "kein negativer Stand: " + p);
+        }
     }
 }

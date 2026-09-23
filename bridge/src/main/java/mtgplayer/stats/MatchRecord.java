@@ -61,6 +61,22 @@ public record MatchRecord(int v, String id, String startedAt, String endedAt, lo
      * {@code biggestSweep}/{@code sweepsSuffered} zaehlen eigene Verluste je Aufloesungsfenster
      * (Fenster = bis zur naechsten Zauber-Aufloesung bzw. zum naechsten Phasenwechsel), ein Fenster
      * ab drei Verlusten gilt als Massenentfernung.
+     *
+     * <p><b>Kampf und Schaden.</b> {@code attacksDeclared} zaehlt jede Deklaration eines eigenen
+     * Angreifers (zwei Kampfphasen in einem Zug also doppelt), {@code attackedTurns} nur die Zuege
+     * mit mindestens einem Angriff. {@code attackersFaced} sind gegnerische Angreifer, die gegen
+     * diesen Sitz oder gegen einen seiner Planeswalker deklariert wurden.
+     * {@code damageTakenFlying}/{@code damageTakenTrample}/{@code damageTakenOther} teilen den
+     * Kampfschaden am Sitz nach dem Schluesselwort der Quelle auf (Fliegen vor Trampelschaden, eine
+     * Quelle ohne beides zaehlt als "other"); zusammen mit {@code damageTakenNonCombat} ergeben sie
+     * {@code damageTaken}, und {@code damageTakenFlying + damageTakenTrample + damageTakenOther}
+     * ergibt {@code combatDamageTaken}. {@code commanderDamageTaken} liegt QUER dazu: es ist ein Teil
+     * des Kampfschadens, kein vierter Topf. Ebenso ist {@code damageDealtCombat +
+     * damageDealtNonCombat == damageDealt}.
+     *
+     * <p><b>timeline</b> haelt je eigenem Zug den Stand zu Zugbeginn fest und ist auf
+     * {@code MatchRecorder.TIMELINE_MAX} Punkte gedeckelt (danach faellt jeder weitere Zug weg) -
+     * nie {@code null}, in einem v1-Datensatz oder ohne einen einzigen Zug schlicht leer.
      */
     public record Seat(String name, String deck, boolean human, Ai ai, boolean winner, String lossReason,
                        Integer eliminatedTurn, int mulligans, int lands, List<Integer> landsByTurn,
@@ -69,9 +85,35 @@ public record MatchRecord(int v, String id, String startedAt, String endedAt, lo
                        int cardsDrawn, int cardsDiscarded, int cardsMilled,
                        int permanentsLost, int creaturesLostInCombat, int creaturesLostOther,
                        int biggestSweep, int sweepsSuffered, int tokensCreated,
+                       int attacksDeclared, int attackedTurns, int attackersFaced, int blocksDeclared,
+                       int damageTakenFlying, int damageTakenTrample, int damageTakenOther,
+                       int damageTakenNonCombat, int damageDealtCombat, int damageDealtNonCombat,
+                       int commanderDamageTaken, int lifeGained, List<TurnPoint> timeline,
                        int commanderCasts, int commanderTax, Integer firstCommanderTurn,
                        int damageDealt, int damageTaken,
-                       int combatDamageTaken, int lifeEnd, int poisonEnd) { }
+                       int combatDamageTaken, int lifeEnd, int poisonEnd) {
+
+        /**
+         * {@code timeline} ist nie {@code null}: in einem v1-Datensatz fehlt das Feld ganz, und
+         * Jackson legt dann {@code null} in die Komponente. Die Auswertung soll sich darauf nicht
+         * einstellen muessen - eine leere Liste heisst hier "keine Daten", genau wie die 0 bei den
+         * uebrigen Feldern aus Runde B.
+         */
+        public Seat {
+            timeline = timeline == null ? List.of() : List.copyOf(timeline);
+        }
+    }
+
+    /**
+     * Ein Punkt der Zeitachse: Stand zu Beginn eines eigenen Zuges. {@code turn} ist Forges GLOBALE
+     * Zugnummer (wie {@code turns} und {@code eliminatedTurn}), nicht der wievielte eigene Zug es war
+     * - den gibt die Position in der Liste ohnehin her, die globale Nummer dagegen erlaubt es, die
+     * Kurven mehrerer Sitze und den Zeitpunkt des Ausscheidens nebeneinander zu legen.
+     * {@code lands}/{@code creatures} sind die eigenen Laender bzw. Kreaturen IM SPIEL (Bestand,
+     * nicht kumulierte Abgaben - dafuer gibt es {@code landsByTurn}), {@code life} das Leben und
+     * {@code hand} die Zahl der Handkarten.
+     */
+    public record TurnPoint(int turn, int lands, int creatures, int life, int hand) { }
 
     /** KI-Konfiguration eines Sitzes (mode/profile, siehe {@code mtgplayer.ai.AiConfig}). */
     public record Ai(String mode, String profile) { }
