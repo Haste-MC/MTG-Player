@@ -194,6 +194,37 @@
           "damageDealt": 9, "damageTaken": 9, "combatDamageTaken": 7, "lifeEnd": 31, "poisonEnd": 0
         }
       ]
+    },
+    {
+      "v": 1,
+      "id": "2026-09-22T11:20:00.402Z-4b1d0d",
+      "startedAt": "2026-09-22T10:40:00.000Z",
+      "endedAt": "2026-09-22T11:20:00.000Z",
+      "durationMs": 2400000,
+      "source": "sparring",
+      "turns": 40,
+      "reason": "Draw",
+      "draw": true,
+      "counted": false,
+      "excludeReason": "Zugdeckel",
+      "seats": [
+        {
+          "name": "Sparring-KI", "deck": "Krenko Goblins", "human": false, "ai": {"mode": "sim", "profile": "Default"},
+          "winner": false, "lossReason": "IntentionalDraw", "eliminatedTurn": 40,
+          "mulligans": 0, "lands": 11, "landsByTurn": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11],
+          "missedLandDrops": 9, "firstMissedLandDrop": 12,
+          "spells": 22, "spellMana": 41, "commanderCasts": 2, "commanderTax": 2, "firstCommanderTurn": 4,
+          "damageDealt": 14, "damageTaken": 9, "combatDamageTaken": 7, "lifeEnd": 31, "poisonEnd": 0
+        },
+        {
+          "name": "Sparring-Gegner", "deck": "Grix Control", "human": false, "ai": {"mode": "sim", "profile": "Default"},
+          "winner": false, "lossReason": "IntentionalDraw", "eliminatedTurn": 40,
+          "mulligans": 1, "lands": 10, "landsByTurn": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10],
+          "missedLandDrops": 10, "firstMissedLandDrop": 11,
+          "spells": 20, "spellMana": 45, "commanderCasts": 1, "commanderTax": 0, "firstCommanderTurn": 5,
+          "damageDealt": 9, "damageTaken": 14, "combatDamageTaken": 12, "lifeEnd": 26, "poisonEnd": 0
+        }
+      ]
     }
   ]
 }

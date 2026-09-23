@@ -14,6 +14,8 @@ const LOSS_LABEL: Record<string, string> = {
   Milled: "Bibliothek leer", Poisoned: "Gift", SpellEffect: "Karteneffekt", OpponentWon: "Gegner gewann",
   IntentionalDraw: "Remis vereinbart",
 };
+/** Erklaert die Kachel „Partien am Zugdeckel" (MatchRecorder.markTurnCapped) als Tooltip. */
+const TURN_CAP_HINT = "Partie wurde nach der maximalen Zugzahl abgebrochen – zählt nicht in die Bilanz.";
 /** Fehler der Bridge zu einer Partie ("Partie <id>: …"), im Log mit dem Warn-Zeichen des Stores davor. */
 const MATCH_ERROR = /^⚠ Partie /;
 
@@ -199,13 +201,19 @@ function Tiles({ s }: { s: DeckSummary }) {
       <Tile value={num(s.avgCommanderTurn)} label="Ø Zug des 1. Commanders"
         sub={`Ø Steuer ${one(s.avgCommanderTax)}`} />
       <Tile value={one(s.avgDamageDealt)} label="Ø Schaden gemacht" sub={`genommen ${one(s.avgDamageTaken)}`} />
+      {/* Nur wenn es welche gab: sonst stuende in fast jedem Deck eine 0-Kachel und die Reihe waere
+          krumm. Nenner ist alles Gespielte (gewertete + Deckel), siehe matchStats.turnCappedRate. */}
+      {s.turnCappedGames > 0 && (
+        <Tile value={pct(s.turnCappedRate)} label="Partien am Zugdeckel"
+          sub={`${s.turnCappedGames} von ${s.games + s.turnCappedGames}`} title={TURN_CAP_HINT} />
+      )}
     </div>
   );
 }
 
-function Tile({ value, label, sub }: { value: string; label: string; sub?: string }) {
+function Tile({ value, label, sub, title }: { value: string; label: string; sub?: string; title?: string }) {
   return (
-    <div className="stat-tile">
+    <div className="stat-tile" title={title}>
       <span className="stat-value">{value}</span>
       <span className="stat-label">{label}</span>
       {sub && <span className="stat-sub">{sub}</span>}

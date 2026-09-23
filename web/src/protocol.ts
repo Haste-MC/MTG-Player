@@ -175,7 +175,7 @@ export interface MatchSeat {
 }
 /** Eine gespielte Partie aus mtgplayer.stats.MatchRecord (Bridge). reason ist Forges Spielende-Grund
  * (z. B. "AllOpponentsLost"). counted/excludeReason: automatisch nicht gewertete Partien (zu kurz,
- * aufgegeben, abgebrochen, Absturz) tragen counted:false und einen Grund in excludeReason.
+ * aufgegeben, Zugdeckel, abgebrochen, Absturz) tragen counted:false und einen Grund in excludeReason.
  * v ist die Formatversion des Datensatzes (aktuell 1); die Oberflaeche wertet sie nicht aus, sie steht hier
  * nur, damit sie beim Durchreichen nicht verlorengeht - Datensaetze ohne Feld gelten der Bridge als v1. */
 export interface MatchRecord {

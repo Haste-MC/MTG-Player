@@ -40,16 +40,32 @@ export interface DeckSummary {
   avgSpells: number; avgSpellMana: number; avgCommanderTurn?: number; avgCommanderTax: number;
   avgDamageDealt: number; avgDamageTaken: number; lossReasons: Record<string, number>;
   opponents: { deck: string; games: number; wins: number }[];
+  /** Partien dieses Decks, die die Bridge am Zugdeckel abgeschnitten hat (excludeReason "Zugdeckel") -
+   * nicht gewertet, aber selbst eine Kennzahl: ein Deck ohne verlaessliche Siegbedingung laeuft dort hinein. */
+  turnCappedGames: number;
+  /** Anteil der Zugdeckel-Partien an allen gespielten: turnCappedGames / (games + turnCappedGames). */
+  turnCappedRate: number;
 }
+
+/** Ausschlussgrund der Bridge fuer eine am Zugdeckel abgeschnittene Partie (MatchRecorder.markTurnCapped). */
+const TURN_CAPPED = "Zugdeckel";
 
 /** Kennzahlen fuer `deck` ueber die gewerteten Partien, in denen ein Sitz genau diesen Deck-Namen traegt -
  * je Partie hoechstens ein Sitz (siehe pickSeat; ein Spiegel zaehlt also als eine Partie). Metriken
  * stammen vom jeweils gewaehlten Sitz, die Gegner-Tabelle von den uebrigen Sitzen derselben Partie.
- * undefined, wenn keine gewertete Partie mit diesem Deck existiert. */
+ * undefined, wenn keine gewertete Partie mit diesem Deck existiert - auch dann, wenn es Zugdeckel-Partien
+ * gibt: die sind nicht gewertet und ergeben allein keine Bilanz.
+ *
+ * Einzige Ausnahme von der "nur gewertete Partien"-Regel sind turnCappedGames/turnCappedRate: sie zaehlen
+ * genau die NICHT gewerteten Zugdeckel-Partien, nach derselben "ein Sitz je Partie"-Regel. */
 export function summarize(records: MatchRecord[], deck: string): DeckSummary | undefined {
   const entries: { record: MatchRecord; seat: MatchSeat; index: number }[] = [];
+  let turnCappedGames = 0;
   for (const r of records) {
-    if (!r.counted) continue;
+    if (!r.counted) {
+      if (r.excludeReason === TURN_CAPPED && pickSeat(r, deck)) turnCappedGames += 1;
+      continue;
+    }
     const picked = pickSeat(r, deck);
     if (picked) entries.push({ record: r, seat: picked.seat, index: picked.index });
   }
@@ -101,6 +117,10 @@ export function summarize(records: MatchRecord[], deck: string): DeckSummary | u
     avgDamageDealt: avg(entries.map((e) => e.seat.damageDealt)),
     avgDamageTaken: avg(entries.map((e) => e.seat.damageTaken)),
     lossReasons,
+    turnCappedGames,
+    // Nenner sind alle gespielten Partien (gewertete + Deckel); games ist hier immer >= 1, die 0 steht
+    // nur da, damit die Formel fuer sich genommen nicht durch 0 teilt.
+    turnCappedRate: games + turnCappedGames > 0 ? turnCappedGames / (games + turnCappedGames) : 0,
     opponents: [...opponents.entries()]
       .map(([oDeck, v]) => ({ deck: oDeck, games: v.games, wins: v.wins }))
       .sort((a, b) => b.games - a.games || a.deck.localeCompare(b.deck)),

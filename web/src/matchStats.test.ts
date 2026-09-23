@@ -168,6 +168,34 @@ const records: MatchRecord[] = [
       },
     ],
   },
+  // Zugdeckel: die Bridge hat die Sparring-Partie nach der maximalen Zugzahl abgeschnitten (AiMatch setzt
+  // dafuer alle Sitze auf intentionalDraw). Der Ausgang bleibt ein echtes Remis ohne Sieger, gewertet wird
+  // die Partie aber nicht - sie zaehlt nur in turnCappedGames/turnCappedRate.
+  {
+    v: 1, id: "2026-09-22T11:20:00.402Z-4b1d0d", startedAt: "2026-09-22T10:40:00.000Z", endedAt: "2026-09-22T11:20:00.000Z",
+    durationMs: 2400000, source: "sparring", turns: 40, reason: "Draw",
+    draw: true, counted: false, excludeReason: "Zugdeckel",
+    seats: [
+      {
+        name: "Sparring-KI", deck: "Krenko Goblins", human: false,
+        ai: { mode: "sim", profile: "Default" }, winner: false, lossReason: "IntentionalDraw", eliminatedTurn: 40,
+        mulligans: 0, lands: 11, landsByTurn: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11],
+        missedLandDrops: 9, firstMissedLandDrop: 12,
+        spells: 22, spellMana: 41, commanderCasts: 2, commanderTax: 2,
+        firstCommanderTurn: 4, damageDealt: 14, damageTaken: 9,
+        combatDamageTaken: 7, lifeEnd: 31, poisonEnd: 0,
+      },
+      {
+        name: "Sparring-Gegner", deck: "Grix Control", human: false,
+        ai: { mode: "sim", profile: "Default" }, winner: false, lossReason: "IntentionalDraw", eliminatedTurn: 40,
+        mulligans: 1, lands: 10, landsByTurn: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10],
+        missedLandDrops: 10, firstMissedLandDrop: 11,
+        spells: 20, spellMana: 45, commanderCasts: 1, commanderTax: 0,
+        firstCommanderTurn: 5, damageDealt: 9, damageTaken: 14,
+        combatDamageTaken: 12, lifeEnd: 26, poisonEnd: 0,
+      },
+    ],
+  },
 ];
 
 describe("wilson", () => {
@@ -229,6 +257,8 @@ describe("summarize", () => {
     expect(s.avgDamageDealt).toBeCloseTo(23, 6);
     expect(s.avgDamageTaken).toBeCloseTo(26, 6);
     expect(s.lossReasons).toEqual({ LifeReachedZero: 1 });
+    expect(s.turnCappedGames).toBe(0);
+    expect(s.turnCappedRate).toBe(0);
     // m2 ist eine Dreierpartie: beide Mitspieler stehen je einmal in der Gegner-Tabelle.
     expect(s.opponents).toEqual([
       { deck: "Atraxa Superfriends", games: 1, wins: 0 },
@@ -254,10 +284,83 @@ describe("summarize", () => {
     expect(s.avgLandsTurn3).toBeCloseTo(3, 6);
     expect(s.avgLandsTurn5).toBeUndefined();
     expect(s.lossReasons).toEqual({ LifeReachedZero: 1 });
+    // Die Zugdeckel-Partie zaehlt in keiner dieser Kennzahlen mit - nur in ihrer eigenen: eine von drei
+    // gespielten Partien (2 gewertete + 1 Deckel) lief in den Deckel.
+    expect(s.turnCappedGames).toBe(1);
+    expect(s.turnCappedRate).toBeCloseTo(1 / 3, 6);
     expect(s.opponents).toEqual([
       { deck: "Grix Control", games: 1, wins: 0 },
       { deck: "Meren Aristocrats", games: 1, wins: 1 },
     ]);
+  });
+
+  it("Deck nur mit Zugdeckel-Partien -> undefined (eine nicht gewertete Partie ist keine Bilanz)", () => {
+    const onlyCapped: MatchRecord[] = [
+      {
+        id: "cap-1", startedAt: "s", endedAt: "e", durationMs: 2400000, source: "sparring", turns: 40,
+        reason: "Draw", draw: true, counted: false, excludeReason: "Zugdeckel",
+        seats: [
+          {
+            name: "Sparring-KI", deck: "Deckel-Deck", human: false, winner: false, lossReason: "IntentionalDraw",
+            mulligans: 0, lands: 8, landsByTurn: [0, 1, 2, 3, 4, 5, 6, 7, 8], missedLandDrops: 0,
+            spells: 9, spellMana: 18, commanderCasts: 0, commanderTax: 0,
+            damageDealt: 0, damageTaken: 0, combatDamageTaken: 0, lifeEnd: 40, poisonEnd: 0,
+          },
+          {
+            name: "Sparring-Gegner", deck: "Gegner", human: false, winner: false, lossReason: "IntentionalDraw",
+            mulligans: 0, lands: 8, landsByTurn: [0, 1, 2, 3, 4, 5, 6, 7, 8], missedLandDrops: 0,
+            spells: 9, spellMana: 18, commanderCasts: 0, commanderTax: 0,
+            damageDealt: 0, damageTaken: 0, combatDamageTaken: 0, lifeEnd: 40, poisonEnd: 0,
+          },
+        ],
+      },
+    ];
+    expect(summarize(onlyCapped, "Deckel-Deck")).toBeUndefined();
+    expect(deckGames(onlyCapped)).toEqual([]);
+  });
+
+  it("Spiegel am Zugdeckel zaehlt einmal, und ein anderer Ausschlussgrund zaehlt gar nicht", () => {
+    const base = (id: string, excludeReason: string, deckB: string): MatchRecord => ({
+      id, startedAt: "s", endedAt: "e", durationMs: 1000, source: "sparring", turns: 40,
+      reason: "Draw", draw: true, counted: false, excludeReason,
+      seats: [
+        {
+          name: "A", deck: "Deckel-Deck", human: false, winner: false, lossReason: "IntentionalDraw",
+          mulligans: 0, lands: 4, landsByTurn: [0, 1, 2, 3, 4], missedLandDrops: 0, spells: 3, spellMana: 6,
+          commanderCasts: 0, commanderTax: 0, damageDealt: 0, damageTaken: 0, combatDamageTaken: 0,
+          lifeEnd: 40, poisonEnd: 0,
+        },
+        {
+          name: "B", deck: deckB, human: false, winner: false, lossReason: "IntentionalDraw",
+          mulligans: 0, lands: 4, landsByTurn: [0, 1, 2, 3, 4], missedLandDrops: 0, spells: 3, spellMana: 6,
+          commanderCasts: 0, commanderTax: 0, damageDealt: 0, damageTaken: 0, combatDamageTaken: 0,
+          lifeEnd: 40, poisonEnd: 0,
+        },
+      ],
+    });
+    const gewertet: MatchRecord = {
+      id: "ok-1", startedAt: "s", endedAt: "e", durationMs: 1000, source: "sparring", turns: 6,
+      reason: "AllOpponentsLost", draw: false, counted: true,
+      seats: [
+        {
+          name: "A", deck: "Deckel-Deck", human: false, winner: true, mulligans: 0, lands: 4,
+          landsByTurn: [0, 1, 2, 3, 4], missedLandDrops: 0, spells: 3, spellMana: 6, commanderCasts: 0,
+          commanderTax: 0, damageDealt: 40, damageTaken: 0, combatDamageTaken: 0, lifeEnd: 40, poisonEnd: 0,
+        },
+        {
+          name: "B", deck: "Gegner", human: false, winner: false, lossReason: "LifeReachedZero",
+          mulligans: 0, lands: 4, landsByTurn: [0, 1, 2, 3, 4], missedLandDrops: 0, spells: 3, spellMana: 6,
+          commanderCasts: 0, commanderTax: 0, damageDealt: 0, damageTaken: 40, combatDamageTaken: 40,
+          lifeEnd: 0, poisonEnd: 0,
+        },
+      ],
+    };
+    // Spiegel am Deckel: dasselbe Deck auf beiden Sitzen ist eine Partie, kein Doppelzaehler.
+    const s = summarize([gewertet, base("cap-mirror", "Zugdeckel", "Deckel-Deck"),
+      base("cap-abort", "abgebrochen", "Gegner")], "Deckel-Deck");
+    expect(s?.games).toBe(1);
+    expect(s?.turnCappedGames).toBe(1);
+    expect(s?.turnCappedRate).toBeCloseTo(0.5, 6);
   });
 
   it("Deck ohne gewertete Partien -> undefined", () => {
