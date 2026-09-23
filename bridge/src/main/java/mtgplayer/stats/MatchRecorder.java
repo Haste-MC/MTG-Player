@@ -11,6 +11,7 @@ import forge.game.GameOutcome;
 import forge.game.ability.ApiType;
 import forge.game.card.Card;
 import forge.game.card.CardView;
+import forge.game.card.CardView.CardStateView;
 import forge.game.event.GameEventAttackersDeclared;
 import forge.game.event.GameEventBlockersDeclared;
 import forge.game.event.GameEventCardChangeZone;
@@ -675,15 +676,26 @@ public final class MatchRecorder {
     }
 
     /**
-     * Der Sitz hinter einem Verteidiger: ein Spieler steht fuer sich selbst, ein Planeswalker (oder
-     * eine Battle) fuer seinen Kontrolleur - ein Angriff auf meinen Planeswalker ist ein Angriff auf
-     * mich.
+     * Der Sitz hinter einem Verteidiger: ein Spieler steht fuer sich selbst, ein Planeswalker fuer
+     * seinen Kontrolleur - ein Angriff auf meinen Planeswalker ist ein Angriff auf mich.
+     *
+     * <p>Eine <b>Battle</b> ist die Ausnahme: sie wird nicht von ihrem Kontrolleur verteidigt,
+     * sondern von ihrem Beschuetzer (CR 310.7) - in der Regel also vom GEGNER dessen, der sie
+     * kontrolliert. Forge trennt das genauso
+     * ({@code Combat.getDefenderPlayerByAttacker}: {@code def.isBattle() ? def.getProtectingPlayer()
+     * : def.getController()}); ohne diese Unterscheidung stuende ein Angriff auf eine Battle beim
+     * falschen Sitz. Ist kein Beschuetzer gesetzt, zaehlt der Angriff niemandem - lieber eine
+     * Kennzahl zu niedrig als beim falschen Sitz.</p>
      */
     private Seat seatOfDefender(GameEntityView defender) {
         if (defender instanceof PlayerView pv) {
             return seat(pv);
         }
-        return defender instanceof CardView cv ? seat(controllerOf(cv)) : null;
+        if (!(defender instanceof CardView cv)) {
+            return null;
+        }
+        CardStateView state = cv.getCurrentState();
+        return state != null && state.isBattle() ? seat(cv.getProtectingPlayer()) : seat(controllerOf(cv));
     }
 
     private static boolean hasKeyword(CardView c, Keyword kw) {

@@ -14,6 +14,7 @@ import forge.game.event.GameEventBlockersDeclared;
 import forge.game.event.GameEventPlayerDamaged;
 import forge.game.event.GameEventPlayerLivesChanged;
 import forge.game.event.GameEventTurnBegan;
+import forge.game.keyword.Keyword;
 import forge.game.phase.PhaseType;
 import forge.game.player.Player;
 import forge.game.player.PlayerView;
@@ -191,6 +192,35 @@ class MatchRecorderCombatTest {
         assertEquals(0, sa.attackersFaced());
     }
 
+    /**
+     * Eine Battle wird nicht von ihrem Kontrolleur verteidigt, sondern von ihrem BESCHUETZER
+     * (CR 310.7; Forge: {@code Combat.getDefenderPlayerByAttacker} -
+     * {@code def.isBattle() ? def.getProtectingPlayer() : def.getController()}). Hier greift A eine
+     * Battle an, die A selbst kontrolliert und die B beschuetzt - der Angriff zaehlt bei B.
+     *
+     * <p>Das Ereignis wird eingespeist statt erspielt: eine Battle im Szenen-Harness aufzustellen
+     * hiesse, Forges Einsatz-Ablauf samt Beschuetzer-Wahl nachzubauen; gebraucht wird hier nur die
+     * Kartenansicht mit gesetztem Beschuetzer, also genau das, was der Recorder sieht.</p>
+     */
+    @Test
+    @Timeout(value = 3, unit = TimeUnit.MINUTES)
+    void angriffAufEineBattleZaehltBeimBeschuetzer() {
+        Scene s = Scene.twoPlayers(AiConfig.DEFAULT, AiConfig.DEFAULT);
+        Player a = s.player(0), b = s.player(1);
+        Card battle = s.card("Invasion of Gobakhan", a, ZoneType.Battlefield);
+        battle.setProtectingPlayer(b);
+        assertTrue(battle.getView().getCurrentState().isBattle(), "die Szene stellt wirklich eine Battle auf");
+        CardView att = s.card("Hill Giant", a, ZoneType.Battlefield).getView();
+        MatchRecorder rec = new MatchRecorder(s.game(), "live", null);
+
+        s.game().fireEvent(angriff(a, battle.getView(), att));
+
+        MatchRecord r = rec.finish();
+        assertEquals(1, seat(r, "B").attackersFaced(), "die Battle verteidigt B, nicht ihr Kontrolleur A");
+        assertEquals(0, seat(r, "A").attackersFaced(), "A kontrolliert die Battle, verteidigt sie aber nicht");
+        assertEquals(1, seat(r, "A").attacksDeclared());
+    }
+
     /** Zwei Kaempfe in einem Zug (Extra-Kampfphase) sind ein Angriffszug, nicht zwei. */
     @Test
     @Timeout(value = 3, unit = TimeUnit.MINUTES)
@@ -248,6 +278,30 @@ class MatchRecorderCombatTest {
         assertEquals(12, sa.damageDealtCombat());
         assertEquals(5, sa.damageDealtNonCombat());
         assertEquals(0, sb.commanderDamageTaken());
+    }
+
+    /**
+     * Eine Quelle mit Fliegend UND Trampelschaden zaehlt als Flieger. Ohne feste Reihenfolge haenge
+     * die Zuordnung daran, welche Abfrage zufaellig zuerst steht - und "keine Antwort auf Flieger"
+     * ist die Aussage, um die es der Auswertung geht.
+     */
+    @Test
+    @Timeout(value = 3, unit = TimeUnit.MINUTES)
+    void quelleMitFliegenUndTrampelschadenZaehltAlsFlieger() {
+        Scene s = Scene.twoPlayers(AiConfig.DEFAULT, AiConfig.DEFAULT);
+        Player a = s.player(0), b = s.player(1);
+        Card akroma = s.card("Akroma, Angel of Wrath", a, ZoneType.Battlefield);   // Fliegend + Trampelschaden
+        assertTrue(akroma.getView().getCurrentState().hasKeyword(Keyword.FLYING));
+        assertTrue(akroma.getView().getCurrentState().hasKeyword(Keyword.TRAMPLE));
+        MatchRecorder rec = new MatchRecorder(s.game(), "live", null);
+
+        s.game().fireEvent(new GameEventPlayerDamaged(b.getView(), akroma.getView(), 6, true, false));
+
+        MatchRecord r = rec.finish();
+        MatchRecord.Seat sb = seat(r, "B");
+        assertEquals(6, sb.damageTakenFlying(), "Fliegen geht vor Trampelschaden");
+        assertEquals(0, sb.damageTakenTrample());
+        assertEquals(0, sb.damageTakenOther());
     }
 
     /** Commander-Schaden ist Kampfschaden UND zaehlt zusaetzlich gesondert - nicht statt. */
