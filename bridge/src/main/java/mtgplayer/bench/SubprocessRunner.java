@@ -88,6 +88,13 @@ final class SubprocessRunner implements GameRunner {
         // Explizit statt auf das geerbte Arbeitsverzeichnis zu vertrauen - ForgeBoot.assetsDir() loest
         // sonst relativ zum cwd des Kindprozesses auf.
         cmd.add("-Dmtgplayer.assets=" + ForgeBoot.assetsDir());
+        // Ein Kindprozess erbt KEINE System-Properties der Eltern-JVM (nur Umgebungsvariablen) - ohne diese
+        // Weitergabe wuerde ein abstuerzendes Bench-Spiel aus einem isolierten Testlauf (-Dmtgplayer.data)
+        // trotzdem in Kevins echtes ~/.mtg-player/logs/bridge.log schreiben (CrashLog.file() im Kindprozess).
+        String data = System.getProperty("mtgplayer.data");
+        if (data != null) {
+            cmd.add("-Dmtgplayer.data=" + data);
+        }
         // Debug-Ausgabe des Sim-Pickers (Fork-Flag, siehe docs/forge-fork.md) an den Kindprozess
         // durchreichen - sie landet dann in game-<i>.out.log.
         if (Boolean.getBoolean("forge.ai.sim.debug")) {

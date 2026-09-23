@@ -8,6 +8,7 @@ import forge.model.FModel;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
@@ -25,8 +26,16 @@ public final class ForgeBoot {
 
     private ForgeBoot() { }
 
-    /** ~/.mtg-player/ – eigene Daten der Bridge und Forges Nutzerdaten darunter. */
+    /**
+     * ~/.mtg-player/ – eigene Daten der Bridge und Forges Nutzerdaten darunter.
+     * Ueberschreibbar mit {@code -Dmtgplayer.data=<dir>}, damit Tests/Bench-Laeufe (Log, {@code matches.json},
+     * Bench-Ausgaben, Forge-Profil) nicht in die echte Ablage des Nutzers schreiben; siehe {@code bridge/pom.xml}.
+     */
     public static Path dataDir() {
+        String override = System.getProperty("mtgplayer.data");
+        if (override != null) {
+            return Paths.get(override);
+        }
         return Paths.get(System.getProperty("user.home"), ".mtg-player");
     }
 
@@ -41,12 +50,15 @@ public final class ForgeBoot {
         if (initialized) {
             return;
         }
-        Path assets = assetsDir();
-        if (!Files.isDirectory(assets.resolve("res").resolve("cardsfolder"))) {
-            throw new IllegalStateException("assets/res/cardsfolder fehlt unter " + assets
+        Path realAssets = assetsDir();
+        if (!Files.isDirectory(realAssets.resolve("res").resolve("cardsfolder"))) {
+            throw new IllegalStateException("assets/res/cardsfolder fehlt unter " + realAssets
                     + " – Symlink bridge/assets/res -> ../../forge/forge-gui/res vorhanden?"
                     + " Pfad ueberschreibbar mit -Dmtgplayer.assets=<dir>");
         }
+        // Mit -Dmtgplayer.data isoliert (Tests/Bench): eigenes assets/-Verzeichnis unter dataDir() statt in die
+        // von Kevins laufender Bridge geteilte bridge/assets/forge.profile.properties zu schreiben.
+        Path assets = System.getProperty("mtgplayer.data") != null ? isolatedAssetsDir(realAssets) : realAssets;
         writeProfile(assets);
         GuiBase.setInterface(new WebGuiBase(assets.toString() + "/"));
         FModel.initialize(null, prefs -> {
@@ -73,6 +85,27 @@ public final class ForgeBoot {
 
     public static int cardCount() {
         return StaticData.instance().getCommonCards().getUniqueCards().size();
+    }
+
+    /**
+     * Eigenes assets/-Verzeichnis unter {@code dataDir()} fuer isolierte Laeufe (siehe {@link #init()}):
+     * ein Symlink {@code res} zeigt auf das echte {@code realAssets/res} (Kartenskripte etc., unveraendert
+     * geteilt), aber {@code forge.profile.properties} landet dort statt in {@code realAssets}. Existiert der
+     * Symlink schon (z. B. vom letzten Testlauf mit demselben {@code mtgplayer.data}), bleibt er stehen.
+     */
+    private static Path isolatedAssetsDir(Path realAssets) {
+        Path isolated = dataDir().resolve("assets");
+        Path link = isolated.resolve("res");
+        if (!Files.exists(link, LinkOption.NOFOLLOW_LINKS)) {
+            try {
+                Files.createDirectories(isolated);
+                Files.createSymbolicLink(link, realAssets.resolve("res"));
+            } catch (IOException e) {
+                throw new IllegalStateException("kann isoliertes assets/res nicht als Symlink anlegen: " + link
+                        + " -> " + realAssets.resolve("res") + " (mtgplayer.data=" + dataDir() + ")", e);
+            }
+        }
+        return isolated;
     }
 
     private static void writeProfile(Path assets) {

@@ -111,6 +111,8 @@ Ports: `-Dmtgplayer.wsPort=…`, `-Dmtgplayer.httpPort=…`; Bind-Adresse `-Dmtg
 `ForgeBoot.init()` schreibt bei jedem Start `bridge/assets/forge.profile.properties` (generiert, git-ignoriert) und lenkt
 Forges Nutzerdaten damit nach `~/.mtg-player/`; `bridge/assets/res` ist ein Symlink auf `forge/forge-gui/res`.
 Der Assets-Pfad ist mit `-Dmtgplayer.assets=<dir>` überschreibbar; Maven setzt ihn für `test` und `exec:java` automatisch.
+`mvn test` schreibt Log, `matches.json`, Bench-Ausgaben und Forge-Profil aller Tests nach `bridge/target/test-data`
+statt nach `~/.mtg-player/`; `-Dmtgplayer.data=<dir>` lenkt diese Ablage auch für eigene Läufe (z. B. `--bench`) um.
 
 Protokoll (WebSocket, JSON, Feld `type`, Details in `docs/superpowers/specs/2026-09-16-mtg-player-design.md`):
 die `lobby`-Nachricht listet Precons und eigene Decks als `DeckInfo` (Name, Commander mit Bild, bei

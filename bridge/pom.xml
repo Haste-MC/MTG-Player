@@ -69,6 +69,7 @@
                     <trimStackTrace>false</trimStackTrace>
                     <systemPropertyVariables>
                         <mtgplayer.assets>${project.basedir}/assets</mtgplayer.assets>
+                        <mtgplayer.data>${project.build.directory}/test-data</mtgplayer.data>
                     </systemPropertyVariables>
                 </configuration>
             </plugin>
