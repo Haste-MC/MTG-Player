@@ -45,13 +45,13 @@ public final class DeckSource {
             Archidekt.Result r = archidekt.fetch(id);
             String name = node.hasNonNull("deckName") && !node.get("deckName").asText().isBlank()
                     ? node.get("deckName").asText().trim() : r.name();
-            return resolveText(r.text(), name, id, r.updatedAt());
+            return resolveText(r.text(), name, id, r.updatedAt(), r.bracket());
         }
         if (node.hasNonNull("text")) {
             String text = node.get("text").asText();
             String name = node.hasNonNull("deckName") && !node.get("deckName").asText().isBlank()
                     ? node.get("deckName").asText().trim() : null;
-            return resolveText(text, name, null, null);
+            return resolveText(text, name, null, null, null);
         }
         throw new IllegalArgumentException("Deck braucht 'precon', 'saved', 'text' oder 'archidekt'");
     }
@@ -77,7 +77,7 @@ public final class DeckSource {
             return resync(existing);
         }
         Archidekt.Result r = archidekt.fetch(String.valueOf(id));
-        return resolveText(r.text(), targetName(r.name(), id), String.valueOf(id), r.updatedAt());
+        return resolveText(r.text(), targetName(r.name(), id), String.valueOf(id), r.updatedAt(), r.bracket());
     }
 
     /**
@@ -96,7 +96,9 @@ public final class DeckSource {
 
     /**
      * Holt ein gespeichertes Archidekt-Deck erneut von Archidekt (Id aus dem Tag
-     * {@link DeckStore#ARCHIDEKT_TAG}); {@code save()} ueberschreibt es unter demselben Namen.
+     * {@link DeckStore#ARCHIDEKT_TAG}); {@code save()} ueberschreibt es unter demselben Namen. Liefert
+     * Archidekt kein {@code edhBracket} (Feld fehlt oder leer), bleibt ein von Hand gesetzter Bracket
+     * erhalten statt geloescht zu werden - deshalb hier VOR dem Ueberschreiben gelesen.
      *
      * @throws IllegalArgumentException "Resync &lt;name&gt;: …" – kein Archidekt-Deck, Fetch- oder Import-Fehler
      */
@@ -105,9 +107,11 @@ public final class DeckSource {
         if (id == null) {
             throw new IllegalArgumentException("Resync " + name + ": kein Archidekt-Deck");
         }
+        Integer keepBracket = store.bracket(name);
         try {
             Archidekt.Result r = archidekt.fetch(id);
-            return resolveText(r.text(), name, id, r.updatedAt());
+            Integer bracket = r.bracket() != null ? r.bracket() : keepBracket;
+            return resolveText(r.text(), name, id, r.updatedAt(), bracket);
         } catch (IllegalArgumentException e) {
             throw new IllegalArgumentException("Resync " + name + ": " + e.getMessage(), e);
         }
@@ -117,8 +121,10 @@ public final class DeckSource {
      * Gemeinsame Textlisten-Verarbeitung fuer {@code text} und {@code archidekt}: parse → Probleme →
      * Resolved mit Save. {@code archidektId} (oder null) und {@code updatedAt} (oder null) werden als
      * Tags ins Deck geschrieben; vorhandene Archidekt-Tags werden vorher entfernt (kein Duplikat).
+     * {@code bracket} (oder null) wird als {@link DeckStore#BRACKET_TAG} geschrieben - das frisch
+     * geparste Deck traegt noch keinen, ein Entfernen vorab ist daher nicht noetig.
      */
-    private Resolved resolveText(String text, String deckNameOrNull, String archidektId, String updatedAt) {
+    private Resolved resolveText(String text, String deckNameOrNull, String archidektId, String updatedAt, Integer bracket) {
         DeckImport.Result r = DeckImport.parse(text);
         if (!r.problems().isEmpty()) {
             throw new IllegalArgumentException("Deck-Import:\n" + String.join("\n", r.problems()));
@@ -129,6 +135,9 @@ public final class DeckSource {
             if (updatedAt != null && !updatedAt.isBlank()) {
                 r.deck().getTags().add(DeckStore.ARCHIDEKT_UPDATED_TAG + updatedAt);
             }
+        }
+        if (bracket != null) {
+            r.deck().getTags().add(DeckStore.BRACKET_TAG + bracket);
         }
         String name = deckNameOrNull != null ? deckNameOrNull : DeckImport.suggestName(text, r.deck());
         return new Resolved(r.deck(), () -> store.save(name, r.deck()));

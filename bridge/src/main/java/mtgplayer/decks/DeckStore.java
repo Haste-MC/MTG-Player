@@ -29,6 +29,8 @@ public final class DeckStore {
     public static final String ARCHIDEKT_TAG = "archidekt:";
     /** Deck-Tag mit Archidekts {@code updatedAt} (ISO-String) zum Zeitpunkt des Imports/Resyncs. */
     public static final String ARCHIDEKT_UPDATED_TAG = "archidekt-updated:";
+    /** Deck-Tag mit dem Commander-Bracket (1-5), von Archidekt oder von Hand gesetzt. */
+    public static final String BRACKET_TAG = "bracket:";
 
     private static final String NAME_PREFIX = "Name=";
 
@@ -67,7 +69,7 @@ public final class DeckStore {
         for (String name : names()) {
             try {
                 Deck d = load(name);
-                out.add(Precons.info(name, d, archidektId(d), archidektUpdated(d)));
+                out.add(Precons.info(name, d, archidektId(d), archidektUpdated(d), bracketValue(d)));
             } catch (RuntimeException e) {
                 System.err.println("DeckStore: ueberspringe " + fileName(name) + ": " + e);
             }
@@ -98,12 +100,54 @@ public final class DeckStore {
         return null;
     }
 
+    /**
+     * @return Commander-Bracket (1-5) aus dem Tag {@link #BRACKET_TAG}, oder null (unbekanntes Deck,
+     *         kein Tag, oder ein Tag-Wert ausserhalb 1..5)
+     */
+    public Integer bracket(String name) {
+        try {
+            return bracketValue(load(name));
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+    }
+
+    /**
+     * Setzt (oder entfernt) den Commander-Bracket eines gespeicherten Decks.
+     *
+     * @param bracket 1..5, oder null zum Entfernen des Tags
+     * @throws IllegalArgumentException unbekanntes Deck ("unbekanntes Deck: &lt;name&gt;"), oder ein
+     *         Bracket ausserhalb 1..5
+     */
+    public void setBracket(String name, Integer bracket) {
+        if (bracket != null && (bracket < 1 || bracket > 5)) {
+            throw new IllegalArgumentException("Bracket muss zwischen 1 und 5 liegen: " + bracket);
+        }
+        Deck d = load(name);
+        d.getTags().removeIf(t -> t.startsWith(BRACKET_TAG));
+        if (bracket != null) {
+            d.getTags().add(BRACKET_TAG + bracket);
+        }
+        save(name, d);
+    }
+
     private static String archidektId(Deck deck) {
         return tagValue(deck, ARCHIDEKT_TAG);
     }
 
     private static String archidektUpdated(Deck deck) {
         return tagValue(deck, ARCHIDEKT_UPDATED_TAG);
+    }
+
+    private static Integer bracketValue(Deck deck) {
+        String v = tagValue(deck, BRACKET_TAG);
+        if (v == null) return null;
+        try {
+            int b = Integer.parseInt(v);
+            return (b >= 1 && b <= 5) ? b : null;
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     private static String tagValue(Deck deck, String prefix) {

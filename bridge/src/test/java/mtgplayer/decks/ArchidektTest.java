@@ -2,6 +2,7 @@ package mtgplayer.decks;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -43,6 +44,7 @@ class ArchidektTest {
         assertTrue(lines.contains("Main"));
         assertTrue(lines.stream().anyMatch(l -> l.startsWith("1 Westvale Abbey // Ormendahl, Profane Prince (")));
         assertEquals(17, lines.stream().filter(l -> Character.isDigit(l.charAt(0))).mapToInt(l -> Integer.parseInt(l.split(" ")[0])).sum());
+        assertEquals(3, r.bracket());
     }
 
     @Test
@@ -64,6 +66,7 @@ class ArchidektTest {
         assertFalse(t.contains("B"));
         assertTrue(t.contains("Sideboard\n3 C (xyz) 3"));
         assertTrue(t.contains("Main\n4 D\n") || t.contains("Main\n4 D"));
+        assertNull(r.bracket(), "kein edhBracket-Feld -> null");
     }
 
     @Test
@@ -110,6 +113,15 @@ class ArchidektTest {
     void fetchLiefertUpdatedAt() throws IOException {
         String body = Files.readString(Path.of("src/test/resources/archidekt-1.json"));
         assertEquals("2018-03-12T05:12:58Z", new Archidekt(url -> body).fetch("1").updatedAt());
+    }
+
+    @Test
+    void fetchLiefertBracket() throws IOException {
+        String body = Files.readString(Path.of("src/test/resources/archidekt-1.json"));
+        assertEquals(3, new Archidekt(url -> body).fetch("1").bracket());
+
+        String ohneBracket = body.replaceFirst("\"edhBracket\":3", "\"edhBracket\":null");
+        assertNull(new Archidekt(url -> ohneBracket).fetch("1").bracket());
     }
 
     @Test

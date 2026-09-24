@@ -17,9 +17,11 @@ public final class Messages {
     /**
      * archidekt: Archidekt-Deck-Id, null wenn das Deck kein Archidekt-Import ist. archidektUpdated:
      * Archidekts {@code updatedAt} zum Zeitpunkt des Imports (null ohne Tag) – der Client vergleicht es
-     * mit dem Stand aus {@link ArchidektDecks}.
+     * mit dem Stand aus {@link ArchidektDecks}. bracket: Commander-Bracket (1-5), null wenn unbekannt
+     * (Precons und Decks ohne gesetzten Bracket).
      */
-    public record DeckInfo(String name, List<Commander> commanders, String archidekt, String archidektUpdated) { }
+    public record DeckInfo(String name, List<Commander> commanders, String archidekt, String archidektUpdated,
+                           Integer bracket) { }
 
     /** Eintrag der Konto-Deckliste von Archidekt (nur Commander-Decks); art: Bild-URL oder null. */
     public record ArchidektEntry(long id, String name, String updatedAt, String art) { }

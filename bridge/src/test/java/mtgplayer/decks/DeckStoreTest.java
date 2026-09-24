@@ -74,7 +74,7 @@ class DeckStoreTest {
         store.save("Mein Abzan", Precons.load("Abzan Armor [TDC] [2025]"));
         Files.writeString(dir.resolve("kaputt.dck"), "[metadata]\nName=Kaputt\n[Main]\n99999999999999 Sol Ring\n");
         assertEquals(List.of("Kaputt", "Mein Abzan"), store.names(), "names() liest nur die Name-Zeile");
-        assertThrows(RuntimeException.class, () -> Precons.info("Kaputt", store.load("Kaputt"), null, null),
+        assertThrows(RuntimeException.class, () -> Precons.info("Kaputt", store.load("Kaputt"), null, null, null),
             "Vorbedingung: die Datei laesst sich nicht zu einer DeckInfo laden");
         List<Messages.DeckInfo> infos = store.infos();
         assertEquals(List.of("Mein Abzan"), infos.stream().map(Messages.DeckInfo::name).toList());
@@ -112,5 +112,42 @@ class DeckStoreTest {
         // bleibt, wenn oben mal etwas am Abzan-Deck haengen bleibt)
         store.save("Ohne", Precons.load("Adaptive Enchantment [C18] [2018]"));
         assertNull(store.infos().stream().filter(i -> i.name().equals("Ohne")).findFirst().orElseThrow().archidektUpdated());
+    }
+
+    @Test
+    void bracketWirdGesetztGelesenUndEntfernt(@TempDir Path dir) {
+        DeckStore store = new DeckStore(dir);
+        store.save("Mein Deck", Precons.load("Abzan Armor [TDC] [2025]"));
+        assertNull(store.bracket("Mein Deck"), "kein Tag -> unbekannt");
+        store.setBracket("Mein Deck", 3);
+        assertEquals(3, store.bracket("Mein Deck"));
+        store.setBracket("Mein Deck", null);
+        assertNull(store.bracket("Mein Deck"), "null entfernt das Tag");
+    }
+
+    @Test
+    void bracketAusserhalbDesBereichsWirft(@TempDir Path dir) {
+        DeckStore store = new DeckStore(dir);
+        store.save("Mein Deck", Precons.load("Abzan Armor [TDC] [2025]"));
+        assertThrows(IllegalArgumentException.class, () -> store.setBracket("Mein Deck", 0));
+        assertThrows(IllegalArgumentException.class, () -> store.setBracket("Mein Deck", 6));
+        assertNull(store.bracket("Mein Deck"), "fehlgeschlagenes setBracket aendert nichts");
+    }
+
+    @Test
+    void bracketUnbekanntesDeckLiefertNullSetBracketWirft(@TempDir Path dir) {
+        DeckStore store = new DeckStore(dir);
+        assertNull(store.bracket("gibt es nicht"));
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> store.setBracket("gibt es nicht", 3));
+        assertTrue(e.getMessage().contains("gibt es nicht"));
+    }
+
+    @Test
+    void infosTragenBracket(@TempDir Path dir) {
+        DeckStore store = new DeckStore(dir);
+        Deck d = Precons.load("Abzan Armor [TDC] [2025]");
+        d.getTags().add(DeckStore.BRACKET_TAG + "2");
+        store.save("Mein Deck", d);
+        assertEquals(2, store.infos().get(0).bracket());
     }
 }

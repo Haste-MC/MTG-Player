@@ -29,8 +29,11 @@ public final class Archidekt {
         String get(String url) throws IOException;
     }
 
-    /** updatedAt: ISO-Stand aus dem Deck-Detail (null, wenn die Antwort keins traegt). */
-    public record Result(String name, String text, String updatedAt) { }
+    /**
+     * updatedAt: ISO-Stand aus dem Deck-Detail (null, wenn die Antwort keins traegt).
+     * bracket: Commander-Bracket (1-5) aus {@code edhBracket}, null wenn das Feld fehlt oder leer ist.
+     */
+    public record Result(String name, String text, String updatedAt, Integer bracket) { }
 
     /** Eintrag der Konto-Deckliste; art: Bild-URL (customFeatured, sonst featured; null wenn beides leer). */
     public record Entry(long id, String name, String updatedAt, String art) { }
@@ -172,7 +175,9 @@ public final class Archidekt {
         if (!commander.isEmpty()) { sb.append("Commander\n"); commander.forEach(l -> sb.append(l).append('\n')); }
         sb.append("Main\n"); main.forEach(l -> sb.append(l).append('\n'));
         if (!side.isEmpty()) { sb.append("Sideboard\n"); side.forEach(l -> sb.append(l).append('\n')); }
-        return new Result(deck.path("name").asText("Archidekt"), sb.toString(), deck.path("updatedAt").asText(null));
+        JsonNode bracket = deck.path("edhBracket");
+        return new Result(deck.path("name").asText("Archidekt"), sb.toString(), deck.path("updatedAt").asText(null),
+                bracket.isIntegralNumber() ? bracket.asInt() : null);
     }
 
     private static String line(JsonNode c) {

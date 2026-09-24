@@ -187,6 +187,28 @@ class DeckSourceTest {
     }
 
     @Test
+    void archidektImportSchreibtBracket(@TempDir Path dir) throws Exception {
+        String body = java.nio.file.Files.readString(Path.of("src/test/resources/archidekt-1.json"));
+        DeckStore store = new DeckStore(dir);
+        DeckSource src = new DeckSource(store, new Archidekt(url -> body));
+        src.importArchidekt(1).save().run();
+        assertEquals(3, store.bracket("Fun With Fungus"));
+    }
+
+    @Test
+    void resyncBehaeltVonHandGesetztenBracketWennArchidektKeinenLiefert(@TempDir Path dir) throws Exception {
+        String body = java.nio.file.Files.readString(Path.of("src/test/resources/archidekt-1.json"));
+        String bodyOhneBracket = body.replaceFirst("\"edhBracket\":3", "\"edhBracket\":null");
+        DeckStore store = new DeckStore(dir);
+        new DeckSource(store, new Archidekt(url -> body)).importArchidekt(1).save().run();
+        assertEquals(3, store.bracket("Fun With Fungus"), "Vorbedingung: Bracket aus Archidekt gesetzt");
+
+        store.setBracket("Fun With Fungus", 4); // von Hand ueberschrieben
+        new DeckSource(store, new Archidekt(url -> bodyOhneBracket)).resync("Fun With Fungus").save().run();
+        assertEquals(4, store.bracket("Fun With Fungus"), "Resync ohne Archidekt-Bracket behaelt den von Hand gesetzten");
+    }
+
+    @Test
     void archidektFehlerWirdGemeldet(@TempDir Path dir) {
         DeckSource src = new DeckSource(new DeckStore(dir), new Archidekt(url -> { throw new java.io.IOException("HTTP 500"); }));
         IllegalArgumentException e = assertThrows(IllegalArgumentException.class,

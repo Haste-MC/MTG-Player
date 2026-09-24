@@ -178,6 +178,21 @@ public final class Bridge {
                     }
                 });
             }
+            case "setDeckBracket" -> {
+                String name = msg.path("name").asText();
+                Integer bracket = msg.hasNonNull("bracket") ? msg.path("bracket").asInt() : null;
+                GuiBase.getInterface().runBackgroundTask("set-deck-bracket", () -> {
+                    try {
+                        store.setBracket(name, bracket);
+                        ws.send(new Messages.Lobby(Precons.infos(), store.infos()));
+                    } catch (RuntimeException e) {
+                        // wie bei "concede": sonst stirbt der Fehler still auf dem Hintergrund-Thread
+                        e.printStackTrace();
+                        ws.send(new Messages.ErrorMsg("Bracket " + name + ": "
+                                + (e instanceof IllegalArgumentException ? e.getMessage() : e.toString())));
+                    }
+                });
+            }
             case "analyzeDeck" -> analyzeDeck(msg.path("deck").asText());
             case "archidektList" -> archidektList(msg.path("username").asText(""));
             case "archidektImport" -> archidektImport(msg.path("ids"));

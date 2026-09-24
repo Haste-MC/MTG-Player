@@ -434,4 +434,14 @@ class BridgeEndToEndTest {
         JsonNode err = await("error", n -> n.path("text").asText().startsWith("Partie gibt es nicht:"), 10);
         assertEquals("Partie gibt es nicht: unbekannte Partie", err.path("text").asText());
     }
+
+    /** setDeckBracket mit unbekanntem Deck: "error" (Text aus DeckStore.setBracket) statt still zu bleiben. */
+    @Test
+    @Order(12)
+    @Timeout(value = 1, unit = TimeUnit.MINUTES)
+    void setDeckBracketUnbekanntesDeckLiefertError() throws Exception {
+        send("{\"type\":\"setDeckBracket\",\"name\":\"gibt es nicht\",\"bracket\":3}");
+        JsonNode err = await("error", n -> n.path("text").asText().startsWith("Bracket gibt es nicht:"), 10);
+        assertTrue(err.path("text").asText().contains("gibt es nicht"), err.toString());
+    }
 }

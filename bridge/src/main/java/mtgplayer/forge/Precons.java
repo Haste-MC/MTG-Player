@@ -49,7 +49,7 @@ public final class Precons {
         if (out == null) {
             List<Messages.DeckInfo> infos = new ArrayList<>();
             for (String n : names()) {
-                infos.add(info(n, load(n), null, null));
+                infos.add(info(n, load(n), null, null, null));
             }
             out = List.copyOf(infos);
             cached = out;
@@ -60,12 +60,13 @@ public final class Precons {
     /**
      * Commander aus {@code deck.getCommanders()}: Name und Bildschluessel ({@code getImageKey(false)}).
      * archidekt/archidektUpdated: Werte der beiden Deck-Tags (null bei Precons und Text-Imports).
+     * bracket: Commander-Bracket (1-5, null bei Precons und unbekanntem Bracket).
      */
-    public static Messages.DeckInfo info(String name, Deck deck, String archidekt, String archidektUpdated) {
+    public static Messages.DeckInfo info(String name, Deck deck, String archidekt, String archidektUpdated, Integer bracket) {
         List<Messages.Commander> commanders = new ArrayList<>();
         for (PaperCard pc : deck.getCommanders()) {
             commanders.add(new Messages.Commander(pc.getName(), pc.getImageKey(false)));
         }
-        return new Messages.DeckInfo(name, List.copyOf(commanders), archidekt, archidektUpdated);
+        return new Messages.DeckInfo(name, List.copyOf(commanders), archidekt, archidektUpdated, bracket);
     }
 }
