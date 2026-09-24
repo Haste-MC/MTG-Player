@@ -240,9 +240,12 @@ dann, dass nichts geladen wurde, statt ewig „wird geladen …" zu zeigen.
 
 Sparring spielt ein gespeichertes Deck **im Hintergrund** gegen deine eigenen anderen Decks, damit die Statistik
 nicht erst nach Wochen etwas zu sagen hat: im Statistik-Board über den Kacheln 5, 10, 20 oder 50 Partien wählen
-und „Sparring starten". Jede Partie ist ein **1 vs 1** (Pod kommt später), die KI spielt beide Seiten im
-Standard-Modus, und jede beendete Partie landet sofort als Datensatz mit der Quelle **„Sparring"** in der Liste –
-das Board rechnet sich also während des Laufs weiter.
+und „Sparring starten". Jede Partie ist ein **1 vs 1** (Pod kommt später), und jede beendete Partie landet sofort
+als Datensatz mit der Quelle **„Sparring"** in der Liste – das Board rechnet sich also während des Laufs weiter.
+
+Gespielt wird **immer mit der Standard-KI**, ohne Auswahl: sie ist schnell und konsistent, und gemessen werden
+soll das Deck, nicht die KI. Ein Simulations-Sitz braucht je Entscheidung bis zur vollen Bedenkzeit und macht aus
+einem Lauf über 20 Partien Stunden statt Minuten. Als Option kann er später kommen.
 
 Die **Gegner** kommen zufällig (mit Zurücklegen) aus demselben **Bracket**: so werden über viele Partien auch
 seltene Paarungen getestet. Sind im eigenen Bracket weniger als drei andere Decks, wird auf Bracket ±1
@@ -267,7 +270,7 @@ noch".
 
 Partien, die in den **Zugdeckel** laufen (Voreinstellung 60 Züge), zählen wie überall als „Zugdeckel" und fließen
 **nicht** in die Bilanz – sie stehen mit dem Grund in der Liste (siehe „Statistik"). Ausgabe der Kindprozesse:
-`~/.mtg-player/sparring/<Zeitpunkt>-<Nr>-<Gegner>.log` (stderr) bzw. `.out.log` (Forges Spielprotokoll).
+`~/.mtg-player/sparring/sparring-<Zeitpunkt>-<Nr>-<Gegner>.log` (stderr) bzw. `.out.log` (Forges Spielprotokoll).
 
 Protokoll: `sparringStart` (`deck`, `games`, optional `ai`, `timeout`, `maxTurns`) startet den Lauf,
 `sparringCancel` bricht ihn ab. Die Bridge meldet `sparringProgress` (`done`, `total`, `current`, `errors`,

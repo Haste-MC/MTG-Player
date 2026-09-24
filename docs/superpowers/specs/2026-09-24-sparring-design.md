@@ -45,9 +45,11 @@ Hat D keinen Bracket, zählen alle Decks ohne Bracket als Kandidaten (und die Me
 - Abbruch: `{ "type": "sparringCancel" }` – laufendes Kind wird beendet, der Lauf endet mit `running: false`.
 - Zugdeckel: Partien am Deckel zählen wie gehabt als „Zugdeckel" und fließen nicht in die Bilanz (Runde „Zugdeckel").
 
-Voreinstellung KI: **Standard** (schnell, konsistent) – gemessen wird das Deck, nicht die KI-Stärke. Simulation ist
-wählbar, die Oberfläche warnt dann vor der Laufzeit (in einer 4er-Runde 15+ Minuten je Partie, siehe Messung vom
-23.09.).
+KI: **immer Standard** (schnell, konsistent) – gemessen wird das Deck, nicht die KI-Stärke. Der ursprünglich
+vorgesehene Schalter auf Simulation (mit Laufzeit-Warnung: in einer 4er-Runde 15+ Minuten je Partie, siehe
+Messung vom 23.09.) ist **bewusst nicht gebaut** worden und steht unter „Nicht in diesem Stück"; das Protokoll
+nimmt `ai` weiterhin entgegen, die Oberfläche lässt das Feld weg und bekommt damit `AiConfig.DEFAULT`
+(Standard / Profil „Default").
 
 ## 4. Oberfläche
 
@@ -74,3 +76,7 @@ Die Lobby bekommt keinen zweiten Einstieg – Sparring gehört zur Statistik.
 ## Nicht in diesem Stück
 
 Pod-Sparring (3–4 Sitze), Gauntlet aus festen Gegnern, paralleles Rechnen mehrerer Partien, Sparring aus der Lobby.
+
+Dazu die **Wahl des KI-Modus** aus Abschnitt 3: das Sparring läuft immer mit der Standard-KI. Ein Schalter auf
+Simulation würde einen Lauf über 20 Partien von Minuten auf Stunden ziehen, ohne die Frage zu beantworten, die
+das Sparring stellt (taugt das Deck?) – er misst die KI mit. Kommt später, wenn es dafür einen Anlass gibt.
