@@ -1,6 +1,7 @@
 package mtgplayer.protocol;
 
 import mtgplayer.ai.AiConfig;
+import mtgplayer.decks.DeckAnalysis;
 import mtgplayer.stats.MatchRecord;
 
 import java.util.List;
@@ -110,6 +111,15 @@ public final class Messages {
 
     /** Phasen, in denen angehalten wird (Namen der PhaseType-Konstanten), je eigener/gegnerischer Zug. */
     public record StopsMsg(List<String> own, List<String> opp) { }
+
+    /**
+     * Antwort auf {@code {"type":"analyzeDeck","deck":"&lt;Name&gt;"}}: was in dem Deck steckt, rein aus
+     * der Kartendatenbank (siehe {@link DeckAnalysis} - Textmustererkennung, keine Semantik).
+     * deck: der angefragte Name (gespeichertes Deck oder Precon).
+     */
+    public record DeckAnalysisMsg(String type, String deck, DeckAnalysis analysis) {
+        public DeckAnalysisMsg(String deck, DeckAnalysis analysis) { this("deckAnalysis", deck, analysis); }
+    }
 
     /** Bei Verbindung (nach {@link Lobby}) und nach jeder Aenderung (siehe {@link mtgplayer.server.Bridge}): die ganze Liste. */
     public record Matches(String type, List<MatchRecord> matches) {

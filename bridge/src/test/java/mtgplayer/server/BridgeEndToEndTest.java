@@ -383,4 +383,33 @@ class BridgeEndToEndTest {
         JsonNode err = await("error", n -> n.path("text").asText().startsWith("Partie gibt es nicht:"), 10);
         assertTrue(err.path("text").asText().startsWith("Partie gibt es nicht:"), err.toString());
     }
+
+    /** analyzeDeck fuer ein Precon: "deckAnalysis" mit plausiblen Zahlen (siehe DeckAnalysisTest). */
+    @Test
+    @Order(9)
+    @Timeout(value = 1, unit = TimeUnit.MINUTES)
+    void analyzeDeckLiefertDieDeckanalyse() throws Exception {
+        send("{\"type\":\"analyzeDeck\",\"deck\":\"Abzan Armor [TDC] [2025]\"}");
+        JsonNode msg = await("deckAnalysis", n -> true, 20);
+        assertEquals("Abzan Armor [TDC] [2025]", msg.get("deck").asText());
+        JsonNode a = msg.get("analysis");
+        assertEquals(100, a.get("cards").asInt(), a.toString());
+        assertTrue(a.get("lands").asInt() > 30, a.toString());
+        assertTrue(a.get("avgCmc").asDouble() > 0, a.toString());
+        assertTrue(a.get("curve").get("7+").isInt(), a.toString());
+        assertTrue(a.get("sources").has("any"), a.toString());
+        assertTrue(a.get("categories").get("ramp").asInt() > 0, a.toString());
+        assertTrue(a.get("unclassified").asInt() > 0, a.toString());
+        assertEquals("[\"W\",\"B\",\"G\"]", a.get("identity").toString(), a.toString());
+    }
+
+    /** analyzeDeck mit unbekanntem Namen: "error" statt still zu bleiben. */
+    @Test
+    @Order(10)
+    @Timeout(value = 1, unit = TimeUnit.MINUTES)
+    void analyzeDeckUnbekanntesDeckLiefertError() throws Exception {
+        send("{\"type\":\"analyzeDeck\",\"deck\":\"gibt es nicht\"}");
+        JsonNode err = await("error", n -> n.path("text").asText().startsWith("Deckanalyse gibt es nicht:"), 10);
+        assertEquals("Deckanalyse gibt es nicht: unbekanntes Deck", err.path("text").asText());
+    }
 }

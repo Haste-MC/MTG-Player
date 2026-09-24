@@ -5,6 +5,7 @@ import forge.deck.Deck;
 import forge.gui.GuiBase;
 import mtgplayer.ai.AiConfig;
 import mtgplayer.decks.Archidekt;
+import mtgplayer.decks.DeckAnalysis;
 import mtgplayer.decks.DeckSource;
 import mtgplayer.decks.DeckStore;
 import mtgplayer.forge.CrashLog;
@@ -175,12 +176,51 @@ public final class Bridge {
                     }
                 });
             }
+            case "analyzeDeck" -> analyzeDeck(msg.path("deck").asText());
             case "archidektList" -> archidektList(msg.path("username").asText(""));
             case "archidektImport" -> archidektImport(msg.path("ids"));
             case "deleteMatch" -> deleteMatch(msg.path("id").asText());
             case "setMatchCounted" -> setMatchCounted(msg.path("id").asText(), msg.path("counted").asBoolean());
             case "requestState" -> onClientConnected();
             default -> ws.send(new Messages.ErrorMsg("unbekannter Nachrichtentyp: " + type));
+        }
+    }
+
+    /**
+     * {"type":"analyzeDeck","deck":"&lt;Name&gt;"} → {@link Messages.DeckAnalysisMsg} oder error
+     * "Deckanalyse &lt;name&gt;: unbekanntes Deck". Der Name meint erst ein gespeichertes Deck, dann ein
+     * Precon (gleiche Reihenfolge wie in der Lobby-Liste). Hintergrund-Task: die Analyse liest ~100
+     * Kartenregeln, das hat auf dem UI-Thread nichts verloren.
+     */
+    private void analyzeDeck(String name) {
+        GuiBase.getInterface().runBackgroundTask("analyze-deck", () -> {
+            try {
+                Deck deck = forAnalysis(name);
+                if (deck == null) {
+                    ws.send(new Messages.ErrorMsg("Deckanalyse " + name + ": unbekanntes Deck"));
+                    return;
+                }
+                ws.send(new Messages.DeckAnalysisMsg(name, DeckAnalysis.of(deck)));
+            } catch (RuntimeException e) {
+                // wie bei "concede": sonst stirbt der Fehler still auf dem Hintergrund-Thread
+                e.printStackTrace();
+                ws.send(new Messages.ErrorMsg("Deckanalyse " + name + ": "
+                        + (e instanceof IllegalArgumentException ? e.getMessage() : e.toString())));
+            }
+        });
+    }
+
+    /** Gespeichertes Deck, sonst Precon, sonst null (beide werfen bei unbekanntem Namen). */
+    private Deck forAnalysis(String name) {
+        try {
+            return store.load(name);
+        } catch (IllegalArgumentException ignored) {
+            // kein gespeichertes Deck dieses Namens - dann eben ein Precon
+        }
+        try {
+            return Precons.load(name);
+        } catch (IllegalArgumentException ignored) {
+            return null;
         }
     }
 
