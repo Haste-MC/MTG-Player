@@ -74,6 +74,56 @@ describe("combatGroups", () => {
   it("ist leer, wenn kein Kampf laeuft", () => {
     expect(combatGroups(snap(undefined, []))).toEqual([]);
   });
+
+  it("sortiert Gruppen nach Sitzreihenfolge, unabhaengig von der Eingabereihenfolge", () => {
+    // Forges HashSet liefert die Angreifer in wechselnder Reihenfolge - hier absichtlich verkehrt herum
+    // eingegeben (KI 1 vor Du, Kartenziel zuletzt), das Ergebnis muss trotzdem der Sitzreihenfolge folgen:
+    // Du (Sitz 0), KI 1 (Sitz 1), dann das Kartenziel bei KI 1, "none" ganz zuletzt.
+    const players = [{ id: 1, name: "Du" }, { id: 2, name: "KI 1" }];
+    const combat: Snapshot["combat"] = [
+      { attacker: 12 },
+      { attacker: 13, defenderCard: 20 },
+      { attacker: 11, defenderPlayer: 2 },
+      { attacker: 10, defenderPlayer: 1 },
+    ];
+    const cards = [card(10, "Krenko"), card(11, "Goblin"), card(13, "Baer"), card(20, "Teferi", { controller: 2 }), card(12, "Ork")];
+    const forward = combatGroups(snap(combat, cards, players));
+    const backward = combatGroups(snap([...combat].reverse(), cards, players));
+    const keys = ["p:1", "p:2", "c:20", "none"];
+    expect(forward.map((g) => g.key)).toEqual(keys);
+    expect(backward.map((g) => g.key)).toEqual(keys);
+  });
+
+  it("sortiert Angreifer je Gruppe stabil nach ihrer Feldposition, unabhaengig von der Eingabereihenfolge", () => {
+    const players = [
+      { id: 1, name: "Du" },
+    ];
+    const cards = [
+      card(10, "Krenko", { controller: 1 }),
+      card(11, "Goblin", { controller: 1 }),
+      card(12, "Baer", { controller: 1 }),
+    ];
+    const s = (combat: Snapshot["combat"]): Snapshot => {
+      const base = snap(combat, cards, players);
+      base.players[0].battlefield = [10, 11, 12];
+      return base;
+    };
+    const forward = combatGroups(s([{ attacker: 10, defenderPlayer: 99 }, { attacker: 11, defenderPlayer: 99 }, { attacker: 12, defenderPlayer: 99 }]));
+    const backward = combatGroups(s([{ attacker: 12, defenderPlayer: 99 }, { attacker: 11, defenderPlayer: 99 }, { attacker: 10, defenderPlayer: 99 }]));
+    const order = ["Krenko", "Goblin", "Baer"];
+    expect(forward[0].attackers.map((a) => a.card.name)).toEqual(order);
+    expect(backward[0].attackers.map((a) => a.card.name)).toEqual(order);
+  });
+
+  it("stellt Angreifer ohne auffindbare Feldposition ans Ende der Gruppe", () => {
+    const s = snap(
+      [{ attacker: 10, defenderPlayer: 1 }, { attacker: 11, defenderPlayer: 1 }],
+      [card(10, "Krenko", { controller: 1 }), card(11, "Ausserhalb", { controller: 1 })],
+    );
+    // Krenko steht im battlefield, "Ausserhalb" nicht (z. B. Snapshot-Luecke) - er landet trotzdem, nur hinten.
+    s.players[0].battlefield = [10];
+    expect(combatGroups(s)[0].attackers.map((a) => a.card.name)).toEqual(["Krenko", "Ausserhalb"]);
+  });
 });
 
 describe("combatTag", () => {
@@ -110,5 +160,12 @@ describe("combatTag", () => {
     const s = snap([{ attacker: 10, defenderPlayer: 1 }], [card(10, "Krenko"), card(40, "Wald")]);
     expect(combatTag(s, 40)).toBeUndefined();
     expect(combatTag(snap(undefined, []), 10)).toBeUndefined();
+  });
+
+  it("faellt bei verdecktem, namenlosem Angreifer auf eine schlichte Block-Marke zurueck", () => {
+    // Verdeckter Angreifer (Morph/Manifest): faceDown ohne name, real erreichbar - siehe Combat.tsx.
+    const s = snap([{ attacker: 10, defenderPlayer: 1, blockers: [30] }],
+      [{ id: 10, faceDown: true }, card(30, "Mauer")]);
+    expect(combatTag(s, 30)).toEqual({ kind: "blk", label: "Block", title: "blockt" });
   });
 });
