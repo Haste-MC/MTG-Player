@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatSeries, nextSeriesStep, recordResult, seriesKey, seriesWinner, startSeries } from "./series";
+import { formatSeries, nextSeriesStep, recordResult, seriesKey, seriesWinner, shouldArmCountdown, startSeries } from "./series";
 import type { StartGame } from "./protocol";
 
 const msg: StartGame = { type: "startGame", humanDeck: { precon: "A" }, opponents: [{ precon: "B", name: "KI 1" }] };
@@ -51,6 +51,35 @@ describe("series", () => {
       s = recordResult(s, "Du");
       expect(nextSeriesStep(s, 3, true)).toEqual({ kind: "decided", winner: "Du" });
       expect(nextSeriesStep(s, 3, false)).toEqual({ kind: "decided", winner: "Du" });
+    });
+  });
+
+  describe("shouldArmCountdown", () => {
+    const countdown = { kind: "countdown" as const };
+    const base = { dialogOpen: true, expectNewMatch: false, autoStarted: false, seriesCountdown: undefined };
+
+    it("ja bei offenem dialog, countdown-schritt, ohne laufenden versuch oder countdown", () => {
+      expect(shouldArmCountdown(countdown, base)).toBe(true);
+    });
+    it("nein ohne offenen dialog", () => {
+      expect(shouldArmCountdown(countdown, { ...base, dialogOpen: false })).toBe(false);
+    });
+    it("nein bei kind decided/none", () => {
+      expect(shouldArmCountdown({ kind: "decided", winner: "Du" }, base)).toBe(false);
+      expect(shouldArmCountdown({ kind: "none" }, base)).toBe(false);
+    });
+    it("nein waehrend ein start schon unterwegs ist (expectNewMatch)", () => {
+      expect(shouldArmCountdown(countdown, { ...base, expectNewMatch: true })).toBe(false);
+    });
+    it("nein wenn schon ein countdown laeuft", () => {
+      expect(shouldArmCountdown(countdown, { ...base, seriesCountdown: 3 })).toBe(false);
+    });
+    it("nein nach einem automatischen versuch - auch wenn expectNewMatch durch einen error wieder false wurde", () => {
+      // Das ist der Review-Fall: die Bridge lehnt den automatischen Start mit "error" ab, expectNewMatch
+      // faellt zurueck auf false - ohne autoStarted wuerde das einen zweiten Countdown anstossen und der
+      // fehlgeschlagene Start wiederholte sich endlos.
+      expect(shouldArmCountdown(countdown, { ...base, autoStarted: true })).toBe(false);
+      expect(shouldArmCountdown(countdown, { ...base, autoStarted: true, expectNewMatch: false })).toBe(false);
     });
   });
 });

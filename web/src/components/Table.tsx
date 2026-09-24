@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
-import { useStore } from "../store";
+import { useEffect, useRef, useState } from "react";
+import { useStore, type LogEntry } from "../store";
 import { send } from "../ws";
-import { formatSeries, nextSeriesStep } from "../series";
+import { formatSeries, nextSeriesStep, shouldArmCountdown } from "../series";
 import PlayerZone from "./PlayerZone";
 import Hand from "./Hand";
 import Prompt from "./Prompt";
@@ -14,6 +14,16 @@ import CardImage from "./CardImage";
 /** Sekunden, die der Auto-Start-Countdown im Spielende-Dialog laeuft (Spec §1). */
 const COUNTDOWN_SECONDS = 5;
 
+/** Markierung "Stand des Logs beim Start-Versuch" (wie DeckPicker.tsx: markOf/lastWarnSince) - nur
+ * Warnungen, die NACH einem Start ("Jetzt starten" oder der automatische Ablauf) ins Log kamen, gehoeren
+ * zu diesem Versuch; ein alter Fehler aus einer frueheren Partie darf nicht als Antwort darauf gelten. */
+type LogMark = { last: LogEntry | null };
+const markOf = (log: LogEntry[]): LogMark => ({ last: log[log.length - 1] ?? null });
+const lastWarnSince = (log: LogEntry[], mark: LogMark): string | undefined => {
+  const from = mark.last ? log.lastIndexOf(mark.last) + 1 : 0;
+  return log.slice(from).filter((l) => l.warn).pop()?.text;
+};
+
 export default function Table() {
   const state = useStore((s) => s.state);
   const winner = useStore((s) => s.winner);
@@ -25,6 +35,7 @@ export default function Table() {
   const resetSeries = useStore((s) => s.resetSeries);
   const expectNewMatch = useStore((s) => s.expectNewMatch);
   const matches = useStore((s) => s.matches);
+  const log = useStore((s) => s.log);
   const seriesCountdown = useStore((s) => s.seriesCountdown);
   const startSeriesCountdown = useStore((s) => s.startSeriesCountdown);
   const tickSeriesCountdown = useStore((s) => s.tickSeriesCountdown);
@@ -32,25 +43,40 @@ export default function Table() {
   // "Serie beenden" wurde fuer DIESEN Spielende-Dialog geklickt - haelt die Serie an, ohne den Stand zu
   // verwerfen (anders als resetSeries/"Neue Serie"). Setzt sich zurueck, sobald der Dialog neu aufgeht.
   const [cancelled, setCancelled] = useState(false);
+  // Genau EIN automatischer Start je Spielende-Dialog (Review zu bbef779): ohne diese Sperre wuerde ein
+  // von der Bruecke abgelehnter Auto-Start (error statt Snapshot, expectNewMatch faellt zurueck auf
+  // false) den Countdown endlos neu aufziehen - siehe shouldArmCountdown in series.ts.
+  const [autoStarted, setAutoStarted] = useState(false);
+  // Fehlertext eines abgelehnten Start-Versuchs (automatisch oder "Jetzt starten") - siehe startMarkRef/
+  // lastWarnSince unten. Ein manueller Retry-Klick setzt ihn wieder zurueck.
+  const [startError, setStartError] = useState<string>();
+  const startMarkRef = useRef<LogMark>();
   const dialogOpen = winner !== undefined || !!state?.gameOver;
   useEffect(() => {
-    if (dialogOpen) setCancelled(false);
+    if (dialogOpen) { setCancelled(false); setAutoStarted(false); setStartError(undefined); startMarkRef.current = undefined; }
   }, [dialogOpen]);
+  // Kommt nach einem markierten Start-Versuch eine neue Warn-Zeile ins Log (die Bridge lehnt startGame
+  // z. B. wegen eines Deckfehlers mit "error" ab), ist das die Antwort auf genau diesen Versuch.
+  useEffect(() => {
+    if (startMarkRef.current === undefined) return;
+    const warn = lastWarnSince(log, startMarkRef.current);
+    if (!warn) return;
+    startMarkRef.current = undefined;
+    setStartError(warn);
+  }, [log]);
   // Der Datensatz der zuletzt beendeten Partie ist erst mit der naechsten "matches"-Nachricht da (siehe
   // Aufgabenstellung) - bis dahin wird sie optimistisch als gewertet behandelt; kommt kurz danach
   // counted: false nach, faengt der Aufraeum-Effekt unten einen bereits gestarteten Countdown wieder ab.
   const lastMatch = matches[matches.length - 1];
   const lastMatchCounted = lastMatch ? lastMatch.counted : true;
   const step = cancelled ? { kind: "none" as const } : nextSeriesStep(series, bestOf, lastMatchCounted);
-  // Countdown anstossen, sobald der Dialog mit kind "countdown" aufgeht. !expectNewMatch verhindert, dass
-  // der Countdown sich nach dem Ablauf selbst neu aufzieht: noteStart()/send() sind zu diesem Zeitpunkt
-  // schon raus (Doppelklick-Schutz siehe again()), der Dialog schliesst sich erst mit dem naechsten
-  // Snapshot - ohne diese Bedingung wuerde hier sonst endlos wieder "startet in 5 …" von vorn beginnen.
+  // Countdown anstossen, sobald der Dialog mit kind "countdown" aufgeht - siehe shouldArmCountdown fuer
+  // die Bedingungen (insbesondere !autoStarted gegen die Endlosschleife aus dem Review).
   useEffect(() => {
-    if (dialogOpen && step.kind === "countdown" && !expectNewMatch && seriesCountdown === undefined) {
+    if (shouldArmCountdown(step, { dialogOpen, expectNewMatch, autoStarted, seriesCountdown })) {
       startSeriesCountdown(COUNTDOWN_SECONDS);
     }
-  }, [dialogOpen, step.kind, expectNewMatch, seriesCountdown, startSeriesCountdown]);
+  }, [dialogOpen, step.kind, expectNewMatch, autoStarted, seriesCountdown, startSeriesCountdown]);
   // Aufraeumen: Dialog zu, kein countdown-Schritt (mehr) oder entschieden - ein laufender Timer-Stand
   // darf nicht stehen bleiben (z. B. wenn die "matches"-Nachricht nachtraeglich counted: false bringt).
   useEffect(() => {
@@ -67,7 +93,12 @@ export default function Table() {
       if (current <= 1) {
         tickSeriesCountdown(); // -> undefined, laesst nie eine "0" stehen
         const { lastStart: latestStart, expectNewMatch: already } = useStore.getState();
-        if (latestStart && !already) { noteStart(latestStart); send(latestStart); }
+        if (latestStart && !already) {
+          setAutoStarted(true); // sperrt shouldArmCountdown dauerhaft fuer diesen Dialog
+          startMarkRef.current = markOf(useStore.getState().log);
+          noteStart(latestStart);
+          send(latestStart);
+        }
       } else {
         tickSeriesCountdown();
       }
@@ -86,6 +117,8 @@ export default function Table() {
     send(lastStart);
   };
   const startNow = () => {
+    setStartError(undefined);
+    startMarkRef.current = markOf(useStore.getState().log);
     cancelSeriesCountdown();
     again();
   };
@@ -160,8 +193,12 @@ export default function Table() {
                 {step.kind === "decided" && <b> – {step.winner} gewinnt die Serie</b>}</p>
             )}
             {step.kind === "countdown" && (
-              <p className="series-countdown">
-                {seriesCountdown !== undefined
+              <p className={"series-countdown" + (startError ? " warn" : "")} aria-live="polite">
+                {startError
+                  // Der automatische (oder manuelle) Start ist gescheitert (die Bridge hat mit "error"
+                  // geantwortet) - der Text ersetzt den Countdown, kein neuer Versuch von selbst.
+                  ? startError
+                  : seriesCountdown !== undefined
                   ? `Spiel ${series!.games + 1} von ${bestOf} startet in ${seriesCountdown} …`
                   // Countdown ist schon abgelaufen (expectNewMatch), das naechste Spiel wurde bereits
                   // angefordert - hier nur noch auf den Snapshot warten, kein neuer Countdown von vorn.
@@ -171,7 +208,12 @@ export default function Table() {
             <div className="buttons">
               {step.kind === "countdown" ? (
                 <>
-                  <button className="quiet" onClick={endSeries}>Serie beenden</button>
+                  {/* Nach einem Fehler bleibt bewusst nur "Jetzt starten"/"Zur Lobby" stehen (Review zu
+                      bbef779): "Serie beenden" wuerde ein Abbrechen versprechen, das nichts mehr abbricht -
+                      der fehlgeschlagene Start ist ja schon beantwortet. Waehrend ein Start unterwegs ist
+                      (expectNewMatch), sind beide Knoepfe gesperrt statt nur "Jetzt starten" - "Serie
+                      beenden" koennte den laufenden Auto-Start sonst nicht mehr zuruecknehmen. */}
+                  {!startError && <button className="quiet" disabled={expectNewMatch} onClick={endSeries}>Serie beenden</button>}
                   <button className="primary" disabled={expectNewMatch} onClick={startNow}>Jetzt starten</button>
                 </>
               ) : (

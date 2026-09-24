@@ -36,20 +36,32 @@ export function formatSeries(s: Series, names: string[]): string {
   return names.map((n) => `${n} ${s.wins[n] ?? 0}`).join(" · ");
 }
 
+export type SeriesStep = { kind: "countdown" } | { kind: "decided"; winner: string } | { kind: "none" };
+
 /** Was der Spielende-Dialog nach dem letzten Spiel als Naechstes tun soll (Spec §1):
  *  - "decided", sobald ein Name die Serie fuer sich entschieden hat (seriesWinner) - egal ob die
  *    zuletzt gespielte Partie gewertet wurde, das Ergebnis steht ja schon fest.
  *  - "countdown" nur bei einer laufenden, noch offenen Serie (bestOf > 0) UND einer gewerteten letzten
  *    Partie - eine abgebrochene Partie (lastMatchCounted: false) darf nichts automatisch starten.
  *  - sonst "none": keine Serie (series fehlt), bestOf 0 oder eben eine abgebrochene letzte Partie. */
-export function nextSeriesStep(
-  series: Series | undefined,
-  bestOf: number,
-  lastMatchCounted: boolean,
-): { kind: "countdown" } | { kind: "decided"; winner: string } | { kind: "none" } {
+export function nextSeriesStep(series: Series | undefined, bestOf: number, lastMatchCounted: boolean): SeriesStep {
   if (!series || bestOf <= 0) return { kind: "none" };
   const winner = seriesWinner(series, bestOf);
   if (winner) return { kind: "decided", winner };
   if (!lastMatchCounted) return { kind: "none" };
   return { kind: "countdown" };
+}
+
+/** Ob Table.tsx jetzt einen NEUEN automatischen Countdown anstossen darf (Review zu bbef779): ohne
+ *  autoStarted wuerde ein abgelehnter Auto-Start (die Bridge antwortet mit "error" statt einem Snapshot,
+ *  was expectNewMatch zurueck auf false setzt) den Countdown endlos neu aufziehen und denselben Start
+ *  immer wieder senden. autoStarted erlaubt darum genau EINEN automatischen Versuch je Spielende-Dialog;
+ *  ein manueller Klick auf "Jetzt starten" nach einem Fehler laeuft daran vorbei (eigener Aufruf, kein
+ *  neuer automatischer Countdown). */
+export function shouldArmCountdown(
+  step: SeriesStep,
+  opts: { dialogOpen: boolean; expectNewMatch: boolean; autoStarted: boolean; seriesCountdown: number | undefined },
+): boolean {
+  return opts.dialogOpen && step.kind === "countdown" && !opts.expectNewMatch && !opts.autoStarted
+    && opts.seriesCountdown === undefined;
 }
