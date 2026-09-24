@@ -72,6 +72,15 @@ export interface StackSnap {
   targetPlayers: number[];
 }
 
+/** Ein Angreifer mit Ziel und Blockern (Bridge: Snapshot.AttackSnap). Genau eines von defenderPlayer und
+ *  defenderCard ist gesetzt; fehlt beides, ist das Ziel nicht aufloesbar. */
+export interface AttackSnap {
+  attacker: number;
+  defenderPlayer?: number;
+  defenderCard?: number;
+  blockers?: number[];
+}
+
 export interface Snapshot {
   type: "state";
   turn: number;
@@ -88,6 +97,8 @@ export interface Snapshot {
   prompt: PromptSnap;
   /** true nur im KI-only-Zuschauer-Sitz (kein "me", alle Haende sichtbar); sonst fehlt das Feld. */
   spectator?: boolean;
+  /** Zeilen je Angreifer, solange ein Kampf laeuft; sonst fehlt das Feld. */
+  combat?: AttackSnap[];
 }
 
 export interface Option {
