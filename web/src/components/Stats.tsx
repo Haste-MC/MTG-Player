@@ -82,9 +82,11 @@ export default function Stats() {
 
   // Commander-Bilder kommen aus der Lobby-Liste (Precons + eigene Decks), nicht aus dem Datensatz: eine
   // Partie speichert nur den Decknamen. Ein Deck, das es nicht mehr gibt, bleibt ohne Bild.
-  // Schluessel ist deckKey, nicht der Name: ein Datensatz traegt Forges sanitisierten Namen
-  // ("… __ Commander"), die Lobby den rohen ("… // Commander") - sonst faende KEIN Deck mit Schraegstrich
-  // im Namen sein Bild.
+  // Schluessel ist deckKey, nicht der Name: die Bridge zeichnet den Decknamen inzwischen roh auf
+  // (mtgplayer.stats.MatchRecorder bekommt ihn vom Aufrufer, bevor Forges RegisteredPlayer.getDeck()
+  // ihn sanitiert), aeltere Datensaetze auf der Platte tragen aber noch Forges sanitisierten Namen
+  // ("… __ Commander") statt des rohen aus der Lobby ("… // Commander") - deckKey normalisiert beide
+  // Seiten, damit auch diese alten Datensaetze ihr Deck weiter finden.
   const deckInfo = useMemo(() => {
     const map = new Map<string, DeckInfo>();
     for (const d of [...precons, ...savedDecks]) map.set(deckKey(d.name), d);
