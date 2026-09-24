@@ -79,4 +79,55 @@ class ControlDonationSceneTest {
         assertEquals(1, b.getCardsIn(ZoneType.Battlefield).size(), "nichts verschenkt\n" + s.state());
         assertEquals(0, s.count(a, ZoneType.Battlefield, "Ally Token"), s.state());
     }
+
+    /** Szene C: drei Spieler. Ein Permanent, das den eigenen Controller sperrt, ist eine Waffe -
+     *  es gehoert an den staerksten Gegner (B mit Laendern und Kreaturen), nicht an den schwaechsten. */
+    @Test
+    @Timeout(value = 5, unit = TimeUnit.MINUTES)
+    void sperrPermanentGehtAnDenStaerkstenGegner() {
+        Scene s = Scene.threePlayers(AiConfig.DEFAULT, AiConfig.DEFAULT, AiConfig.DEFAULT);
+        Player a = s.player(0), b = s.player(1), c = s.player(2);
+
+        s.card("Iroh, Tea Master", a, ZoneType.Battlefield);
+        Card golem = s.card("Steel Golem", a, ZoneType.Battlefield);
+        s.cards("Forest", 4, a, ZoneType.Battlefield);
+        staerkerAls(s, b, c);
+
+        s.setPhase(PhaseType.MAIN1, a);
+        s.loopUntil(PhaseType.MAIN2, a);
+
+        assertSame(b, golem.getController(), "Sperre gehoert an den staerksten Gegner\n" + s.state());
+        assertEquals(1, s.count(a, ZoneType.Battlefield, "Ally Token"), s.state());
+    }
+
+    /** Szene D: dieselben drei Spieler, aber das verschenkte Permanent ist blosse Donate-Ware ohne
+     *  Sperre - ein Geschenk gehoert an den schwaechsten Gegner, der am wenigsten damit anfangen kann. */
+    @Test
+    @Timeout(value = 5, unit = TimeUnit.MINUTES)
+    void geschenkGehtAnDenSchwaechstenGegner() {
+        Scene s = Scene.threePlayers(AiConfig.DEFAULT, AiConfig.DEFAULT, AiConfig.DEFAULT);
+        Player a = s.player(0), b = s.player(1), c = s.player(2);
+
+        s.card("Iroh, Tea Master", a, ZoneType.Battlefield);
+        Card gift = s.card("Master of the Feast", a, ZoneType.Battlefield);
+        s.cards("Forest", 4, a, ZoneType.Battlefield);
+        staerkerAls(s, b, c);
+
+        s.setPhase(PhaseType.MAIN1, a);
+        s.loopUntil(PhaseType.MAIN2, a);
+
+        assertSame(c, gift.getController(), "Geschenk gehoert an den schwaechsten Gegner\n" + s.state());
+        assertEquals(1, s.count(a, ZoneType.Battlefield, "Ally Token"), s.state());
+    }
+
+    /** Gibt {@code stark} ein deutlich besseres Brett als {@code schwach} (Bewertung ueber
+     *  {@code ComputerUtil.evaluateBoardPosition}: Laender, Kreaturen, Bibliotheksgroesse). */
+    private static void staerkerAls(Scene s, Player stark, Player schwach) {
+        s.cards("Island", 5, stark, ZoneType.Battlefield);
+        s.cards("Grizzly Bears", 2, stark, ZoneType.Battlefield);
+        s.card("Island", schwach, ZoneType.Battlefield);
+        s.cards("Forest", 10, s.player(0), ZoneType.Library);
+        s.cards("Island", 10, stark, ZoneType.Library);
+        s.cards("Island", 10, schwach, ZoneType.Library);
+    }
 }
