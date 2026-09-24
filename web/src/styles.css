@@ -503,7 +503,10 @@ input[type="checkbox"] { accent-color: var(--accent); width: 14px; height: 14px;
 .tag.pt { right: 3px; bottom: 3px; }
 .tag.pt.hurt { color: #ff9b9e; }
 .tag.counters { left: 3px; bottom: 3px; color: var(--green); }
-.tag.combat-tag { left: 3px; top: 3px; letter-spacing: 0.04em; text-transform: uppercase; }
+/* Breite kommt von der Karte, nicht von der Zeichenzahl in combat.ts: kurze Namen werden dort schon
+   gekuerzt, aber lange Zielnamen ("Managorger Hy…") sprengen trotzdem eine 81px-Karte und schieben sich
+   in die Nachbarkarte - besonders eng in der kompakten Gegnerzeile, wo sich zwei Marken sonst ueberlappen. */
+.tag.combat-tag { left: 3px; top: 3px; max-width: calc(100% - 6px); overflow: hidden; text-overflow: ellipsis; letter-spacing: 0.04em; text-transform: uppercase; }
 .tag.combat-tag.atk { color: #fff; background: var(--red); border-color: var(--red); }
 .tag.combat-tag.blk { color: #08131a; background: var(--blue); border-color: var(--blue); }
 .tag.commander-tag { right: 3px; top: 3px; letter-spacing: 0.06em; color: var(--gold); border-color: rgba(242, 193, 78, 0.55); background: rgba(24, 19, 6, 0.9); }
@@ -997,7 +1000,9 @@ button.match-toggle .icon { display: block; transition: transform .12s ease; }
 .combat-card.blk .stack-thumb { width: 21px; height: 30px; }
 .combat-card .pile-name { display: block; font-size: 8px; line-height: 1.1; padding: 2px; }
 .combat-body { min-width: 0; display: flex; align-items: baseline; gap: 6px; }
-.combat-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* min-width: 0 noetig, sonst ignoriert das Flex-Kind seine Breite und ellipsis greift nie (z. B. bei
+   "Kozilek, the Great Distortion" drueckt der Name sonst das P/T aus der Zeile). */
+.combat-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .combat-blockers { display: flex; flex-direction: column; gap: 3px; margin-left: 14px; }
 .combat-unblocked { margin-left: 14px; font-size: 10px; font-weight: 600; letter-spacing: 0.04em;
   text-transform: uppercase; color: var(--red); }
