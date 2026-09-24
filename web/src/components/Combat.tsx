@@ -15,15 +15,18 @@ function CombatCard({ card, kind }: { card: CardSnap; kind: "atk" | "blk" }) {
     e.preventDefault();
     send({ type: "selectCard", id: card.id, alt: e.button === 2, seq });
   };
+  // Verdeckter Kaempfer (Morph/Manifest) hat weder Name noch Bild noch P/T im Snapshot - ohne diesen
+  // Zweig blieb hier ein leerer Kasten, CardBox.tsx faengt denselben Fall schon ueber card.faceDown ab.
   return (
     <div className={"combat-card " + kind} title={card.text ?? ""} onClick={click} onContextMenu={click}
       onMouseEnter={() => setHover(card.id)} onMouseLeave={() => setHover(undefined)}>
       <div className="stack-thumb">
-        {card.imageKey ? <CardImage key={card.imageKey} imageKey={card.imageKey} className="art" />
+        {card.faceDown ? <div className="card back" />
+          : card.imageKey ? <CardImage key={card.imageKey} imageKey={card.imageKey} className="art" />
           : <span className="pile-name">{card.name}</span>}
       </div>
       <div className="combat-body">
-        <div className="combat-name">{card.name}</div>
+        <div className="combat-name">{card.faceDown ? "Verdeckt" : card.name}</div>
         {card.power !== undefined && <div className="muted">{card.power}/{card.toughness}</div>}
       </div>
     </div>

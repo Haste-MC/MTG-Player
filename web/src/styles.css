@@ -999,6 +999,9 @@ button.match-toggle .icon { display: block; transition: transform .12s ease; }
 .combat-card .stack-thumb { width: 26px; height: 37px; }
 .combat-card.blk .stack-thumb { width: 21px; height: 30px; }
 .combat-card .pile-name { display: block; font-size: 8px; line-height: 1.1; padding: 2px; }
+/* Verdeckter Kaempfer (Morph/Manifest): Kartenrueck aus CardBox.tsx, aber auf die Miniaturgroesse
+   gezwungen - .card.back kommt sonst mit der grossen Feld-Kartenbreite (--card-w). */
+.combat-card .stack-thumb .card.back { width: 100%; height: 100%; }
 .combat-body { min-width: 0; display: flex; align-items: baseline; gap: 6px; }
 /* min-width: 0 noetig, sonst ignoriert das Flex-Kind seine Breite und ellipsis greift nie (z. B. bei
    "Kozilek, the Great Distortion" drueckt der Name sonst das P/T aus der Zeile). */
