@@ -165,25 +165,78 @@ export interface Thinking { type: "thinking"; player?: number | null; seconds: n
 export interface GameOver { type: "gameOver"; winner?: string; }
 export interface ErrorMsg { type: "error"; text: string; }
 
+/** Ein Punkt der Zeitachse eines Sitzes (MatchRecord.TurnPoint, ab v2): Stand zu Beginn eines EIGENEN
+ * Zuges. `turn` ist Forges globale Zugnummer (wie MatchRecord.turns/eliminatedTurn), nicht der wievielte
+ * eigene Zug es war. lands/creatures sind die eigenen Bleibenden IM SPIEL (Bestand, nicht kumulierte
+ * Abgaben - dafuer gibt es landsByTurn), life das Leben, hand die Handkarten.
+ *
+ * `spells` faellt aus der Reihe: die anderen vier sind ein Stand ZU Zugbeginn, spells ist die Zahl der
+ * Zauber, die der Sitz in dem Zug-ABSCHNITT gewirkt hat, den dieser Punkt eroeffnet (bis zum Beginn
+ * seines naechsten eigenen Zuges). Die Summe ueber alle Punkte kann kleiner sein als seat.spells:
+ * Zauber vor dem ersten eigenen Zug haben keinen Punkt, und hinter dem Deckel der Bridge
+ * (MatchRecorder.TIMELINE_MAX) faellt jeder weitere Zug weg. */
+export interface TurnPoint { turn: number; lands: number; creatures: number; life: number; hand: number; spells: number }
+
 /** Ein Sitz aus mtgplayer.stats.MatchRecord.Seat (Bridge). ai fehlt/null bei einem menschlichen Sitz.
  * eliminatedTurn/firstMissedLandDrop/firstCommanderTurn fehlen/null, wenn das Ereignis nicht eintrat.
  * landsByTurn zaehlt die EIGENEN Zuege des Sitzes und hat genau ownTurns+1 Eintraege (Index 0 = vor dem
  * ersten eigenen Zug, kumulativ) - fragt eine Kennzahl nach einem spaeteren Zug, gehoert diese Partie nicht
- * in den Mittelwert (auslassen, nicht klemmen; siehe matchStats.landsTurn). */
+ * in den Mittelwert (auslassen, nicht klemmen; siehe matchStats.landsTurn).
+ *
+ * ACHTUNG, Formatversion: alle Felder ab `spellsCountered` sind die Vorfall-Kennzahlen aus Runde B und
+ * gibt es erst ab MatchRecord.v >= 2. In einem v1-Datensatz wurden sie NIE gezaehlt - die Bridge schickt
+ * sie dort trotzdem als 0 mit (Jackson serialisiert die int-Felder des Records). Eine 0 in einem
+ * v1-Datensatz heisst also "keine Daten", nicht "null Vorfaelle"; wer sie liest, prueft vorher v >= 2
+ * (siehe matchStats.isV2). Optional sind sie hier nur, damit Fixtures und Tests einen v1-Sitz ohne 27
+ * Nullen hinschreiben koennen. */
 export interface MatchSeat {
   name: string; deck: string; human: boolean; ai?: { mode: string; profile: string } | null;
   winner: boolean; lossReason?: string | null; eliminatedTurn?: number | null; mulligans: number; lands: number;
   landsByTurn: number[]; missedLandDrops: number; firstMissedLandDrop?: number | null; spells: number; spellMana: number;
   commanderCasts: number; commanderTax: number; firstCommanderTurn?: number | null; damageDealt: number;
   damageTaken: number; combatDamageTaken: number; lifeEnd: number; poisonEnd: number;
+  // --- ab v2 (Runde B), siehe oben: in einem v1-Datensatz bedeutungslos.
+  /** Eigene Zauber, die gekontert wurden bzw. mangels Ziel verpufften. */
+  spellsCountered?: number; spellsFizzled?: number;
+  /** Eigene Counterspells und eigene Entfernungszauber (Naeherung, siehe MatchRecorder.classifyCast). */
+  counterspellsCast?: number; removalCast?: number;
+  cardsDrawn?: number;
+  /** JEDER Weg Hand -> Friedhof, nicht nur das Abwerfen im Wortsinn (auch Kosten). */
+  cardsDiscarded?: number;
+  cardsMilled?: number;
+  /** Laender in der nach allen Mulligans behaltenen Starthand. */
+  openingLands?: number;
+  /** Handkarten beim Ausscheiden (bzw. am Partieende, wenn der Sitz ueberlebt hat). */
+  handEnd?: number;
+  /** Verlorene eigene Bleibende; creaturesLostInCombat/-Other sind Teilmengen davon (nur Kreaturen). */
+  permanentsLost?: number; creaturesLostInCombat?: number; creaturesLostOther?: number;
+  /** Groesster eigener Verlust in einem Aufloesungsfenster und Zahl der Fenster ab drei Verlusten
+   * (= erlittene Massenentfernung). */
+  biggestSweep?: number; sweepsSuffered?: number;
+  tokensCreated?: number;
+  /** Jede Deklaration eines eigenen Angreifers (zwei Kampfphasen zaehlen doppelt) bzw. nur die Zuege mit
+   * mindestens einem Angriff; attackersFaced sind gegnerische Angreifer gegen diesen Sitz. */
+  attacksDeclared?: number; attackedTurns?: number; attackersFaced?: number; blocksDeclared?: number;
+  /** Aufteilung des Kampfschadens am Sitz nach Schluesselwort der Quelle (Fliegen vor Trampelschaden);
+   * die drei ergeben zusammen combatDamageTaken, mit damageTakenNonCombat zusammen damageTaken. */
+  damageTakenFlying?: number; damageTakenTrample?: number; damageTakenOther?: number; damageTakenNonCombat?: number;
+  /** Zusammen damageDealt. */
+  damageDealtCombat?: number; damageDealtNonCombat?: number;
+  /** Summe ueber ALLE gegnerischen Commander zusammen - die 21-Punkte-Regel laesst sich daraus nicht ableiten. */
+  commanderDamageTaken?: number;
+  lifeGained?: number;
+  /** Zeitachse (ab v2). Das Feld FEHLT in der matches-Liste (die Bridge laesst es weg, siehe
+   * MatchRecord.withoutTimeline) und kommt erst mit matchDetail - "fehlt" heisst also "nicht geladen",
+   * eine leere Liste dagegen "geladen, aber keine Punkte". */
+  timeline?: TurnPoint[];
 }
 /** Eine gespielte Partie aus mtgplayer.stats.MatchRecord (Bridge). reason ist Forges Spielende-Grund
  * (z. B. "AllOpponentsLost"). counted/excludeReason: automatisch nicht gewertete Partien (zu kurz,
  * aufgegeben, Zugdeckel, abgebrochen, Absturz) tragen counted:false und einen Grund in excludeReason.
  * v ist die Formatversion des Datensatzes (aktuell 2). Ab v2 traegt jeder Sitz die Vorfall-Kennzahlen aus
- * Runde B (gekonterte Zauber, Verluste, Kampf und Schaden, Zeitachse; hier noch nicht getippt - das kommt mit
- * der Anzeige in Runde A). v < 2 heisst fuer die: KEINE DATEN, nicht "0" - dort wurde nie gezaehlt, und eine
- * Quote daraus waere erfunden. Datensaetze ganz ohne Feld gelten der Bridge als v1. */
+ * Runde B (gekonterte Zauber, Verluste, Kampf und Schaden, Zeitachse - siehe MatchSeat). v < 2 heisst fuer
+ * die: KEINE DATEN, nicht "0" - dort wurde nie gezaehlt, und eine Quote daraus waere erfunden.
+ * Datensaetze ganz ohne Feld gelten der Bridge als v1. */
 export interface MatchRecord {
   v?: number; id: string; startedAt: string; endedAt: string; durationMs: number;
   source: "live" | "spectate" | "sparring";
@@ -192,10 +245,40 @@ export interface MatchRecord {
   turns: number; reason: string; draw: boolean; counted: boolean;
   excludeReason?: string | null; seats: MatchSeat[];
 }
-/** Bei Verbindung und nach jeder Aenderung: die ganze Partienliste (neueste zuletzt), siehe MatchStore. */
-export interface Matches { type: "matches"; matches: MatchRecord[] }
+/** Bei Verbindung und nach jeder Aenderung: die Partienliste (neueste zuletzt), siehe MatchStore. Die
+ * Bridge schickt hoechstens die letzten 300 Datensaetze und JEDEN davon OHNE Zeitachse (siehe
+ * MatchSeat.timeline); total ist die Gesamtzahl gespeicherter Partien - ist total groesser als
+ * matches.length, sind aeltere Partien nicht mitgeschickt worden. total fehlt bei einer Bridge vor
+ * Runde A. */
+export interface Matches { type: "matches"; matches: MatchRecord[]; total?: number }
+/** Antwort auf matchDetail: EIN vollstaendiger Datensatz, inklusive Zeitachse je Sitz. */
+export interface MatchMsg { type: "match"; match: MatchRecord }
 
-export type Inbound = Snapshot | Choice | Lobby | LogLine | Thinking | GameOver | ErrorMsg | ArchidektDecks | ArchidektProgress | Matches;
+/** Was in einem Deck steckt - Antwort der Bridge auf analyzeDeck (mtgplayer.decks.DeckAnalysis). Rein aus
+ * Forges Kartendatenbank (Typen, Manakosten, Orakeltext), ohne eine einzige gespielte Partie.
+ *
+ * Die Einordnung in categories ist Textmustererkennung, keine Semantik: die Zahlen sind
+ * Groessenordnungen, keine Wahrheit (eine Karte darf mehrere Kategorien treffen, "draw cards equal to …"
+ * wird nicht erkannt, jede Manaquelle gilt als ramp). Das Board schreibt diese Einschraenkung dazu.
+ *
+ * cards/lands/basics: Karten in Haupt- und Kommandeursektion. avgCmc: Ø Manabetrag der Nicht-Laender.
+ * curve: Nicht-Laender je Manabetrag, Schluessel "0".."6" und "7+". sources: Farbquellen je Farbe
+ * ("W","U","B","R","G") plus "any". identity: Farbidentitaet der Kommandeure. unclassified: Nicht-Laender
+ * ohne jede Kategorie. */
+export interface DeckAnalysis {
+  cards: number; lands: number; basics: number; avgCmc: number;
+  curve: Record<string, number>; sources: Record<string, number>;
+  identity: string[];
+  categories: {
+    ramp: number; draw: number; removal: number; wipes: number; counters: number;
+    flyerDefense: number; wipeProtection: number; recursion: number; tutors: number;
+  };
+  unclassified: number;
+}
+/** Antwort auf analyzeDeck; deck ist der angefragte Deckname (Precon- oder Speichername). */
+export interface DeckAnalysisMsg { type: "deckAnalysis"; deck: string; analysis: DeckAnalysis }
+
+export type Inbound = Snapshot | Choice | Lobby | LogLine | Thinking | GameOver | ErrorMsg | ArchidektDecks | ArchidektProgress | Matches | MatchMsg | DeckAnalysisMsg;
 
 export type Outbound =
   // humanDeck fehlt bei spectate:true (KI-only-Modus, kein eigener Sitz - siehe lobbyPayload.ts)
@@ -220,7 +303,12 @@ export type Outbound =
   // Partie loeschen bzw. gewertet/nicht gewertet umschalten; die Bridge antwortet mit einer frischen
   // matches-Nachricht oder error ("Partie <id>: ...").
   | { type: "deleteMatch"; id: string }
-  | { type: "setMatchCounted"; id: string; counted: boolean };
+  | { type: "setMatchCounted"; id: string; counted: boolean }
+  // Eine einzelne Partie vollstaendig (inkl. Zeitachse) nachladen; die Bridge antwortet mit "match"
+  // oder error ("Partie <id>: unbekannte Partie").
+  | { type: "matchDetail"; id: string }
+  // Deckanalyse anfordern (Precon- oder Speichername); die Bridge antwortet mit deckAnalysis oder error.
+  | { type: "analyzeDeck"; deck: string };
 
 export type StartGame = Extract<Outbound, { type: "startGame" }>;
 

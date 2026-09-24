@@ -295,6 +295,154 @@
           "damageDealt": 5, "damageTaken": 2, "combatDamageTaken": 0, "lifeEnd": 38, "poisonEnd": 0
         }
       ]
+    },
+    {
+      "v": 2,
+      "id": "2026-09-23T21:05:00.700Z-4b1d10",
+      "startedAt": "2026-09-23T20:25:00.000Z",
+      "endedAt": "2026-09-23T21:05:00.000Z",
+      "durationMs": 2400000,
+      "source": "live",
+      "aiTimeout": 5,
+      "turns": 14,
+      "reason": "AllOpponentsLost",
+      "draw": false,
+      "counted": true,
+      "excludeReason": null,
+      "seats": [
+        {
+          "name": "Du", "deck": "Ojutai Flyers", "human": true, "ai": null,
+          "winner": false, "lossReason": "LifeReachedZero", "eliminatedTurn": 14,
+          "mulligans": 1, "lands": 7, "landsByTurn": [0, 1, 2, 3, 4, 5, 6, 7],
+          "missedLandDrops": 0, "firstMissedLandDrop": null,
+          "spells": 11, "spellMana": 24, "commanderCasts": 1, "commanderTax": 0, "firstCommanderTurn": 4,
+          "damageDealt": 25, "damageTaken": 43, "combatDamageTaken": 36, "lifeEnd": 0, "poisonEnd": 0,
+          "spellsCountered": 2, "spellsFizzled": 1, "counterspellsCast": 1, "removalCast": 3,
+          "cardsDrawn": 12, "cardsDiscarded": 3, "cardsMilled": 0, "openingLands": 3, "handEnd": 4,
+          "permanentsLost": 6, "creaturesLostInCombat": 3, "creaturesLostOther": 2,
+          "biggestSweep": 3, "sweepsSuffered": 1, "tokensCreated": 2,
+          "attacksDeclared": 5, "attackedTurns": 3, "attackersFaced": 12, "blocksDeclared": 4,
+          "damageTakenFlying": 18, "damageTakenTrample": 6, "damageTakenOther": 12, "damageTakenNonCombat": 7,
+          "damageDealtCombat": 20, "damageDealtNonCombat": 5, "commanderDamageTaken": 9, "lifeGained": 3,
+          "timeline": [
+            {"turn": 1, "lands": 1, "creatures": 0, "life": 40, "hand": 4, "spells": 1},
+            {"turn": 3, "lands": 2, "creatures": 1, "life": 40, "hand": 4, "spells": 1},
+            {"turn": 5, "lands": 3, "creatures": 1, "life": 38, "hand": 3, "spells": 2},
+            {"turn": 7, "lands": 4, "creatures": 2, "life": 33, "hand": 3, "spells": 2},
+            {"turn": 9, "lands": 5, "creatures": 3, "life": 25, "hand": 4, "spells": 2},
+            {"turn": 11, "lands": 6, "creatures": 1, "life": 16, "hand": 3, "spells": 2},
+            {"turn": 13, "lands": 7, "creatures": 1, "life": 7, "hand": 4, "spells": 1}
+          ]
+        },
+        {
+          "name": "KI 1", "deck": "Grix Control", "human": false, "ai": {"mode": "sim", "profile": "Default"},
+          "winner": true, "lossReason": null, "eliminatedTurn": null,
+          "mulligans": 0, "lands": 7, "landsByTurn": [0, 1, 2, 3, 4, 5, 6, 7],
+          "missedLandDrops": 0, "firstMissedLandDrop": null,
+          "spells": 13, "spellMana": 30, "commanderCasts": 1, "commanderTax": 0, "firstCommanderTurn": 5,
+          "damageDealt": 43, "damageTaken": 25, "combatDamageTaken": 20, "lifeEnd": 15, "poisonEnd": 0,
+          "spellsCountered": 0, "spellsFizzled": 0, "counterspellsCast": 3, "removalCast": 5,
+          "cardsDrawn": 16, "cardsDiscarded": 2, "cardsMilled": 0, "openingLands": 4, "handEnd": 5,
+          "permanentsLost": 2, "creaturesLostInCombat": 1, "creaturesLostOther": 1,
+          "biggestSweep": 0, "sweepsSuffered": 0, "tokensCreated": 0,
+          "attacksDeclared": 12, "attackedTurns": 5, "attackersFaced": 5, "blocksDeclared": 2,
+          "damageTakenFlying": 9, "damageTakenTrample": 0, "damageTakenOther": 11, "damageTakenNonCombat": 5,
+          "damageDealtCombat": 36, "damageDealtNonCombat": 7, "commanderDamageTaken": 0, "lifeGained": 0,
+          "timeline": [
+            {"turn": 2, "lands": 1, "creatures": 0, "life": 40, "hand": 6, "spells": 1},
+            {"turn": 4, "lands": 2, "creatures": 0, "life": 40, "hand": 6, "spells": 2},
+            {"turn": 6, "lands": 3, "creatures": 1, "life": 38, "hand": 6, "spells": 2},
+            {"turn": 8, "lands": 4, "creatures": 2, "life": 33, "hand": 5, "spells": 2},
+            {"turn": 10, "lands": 5, "creatures": 3, "life": 28, "hand": 5, "spells": 2},
+            {"turn": 12, "lands": 6, "creatures": 3, "life": 20, "hand": 5, "spells": 2},
+            {"turn": 14, "lands": 7, "creatures": 4, "life": 15, "hand": 5, "spells": 2}
+          ]
+        }
+      ]
+    },
+    {
+      "v": 2,
+      "id": "2026-09-24T12:40:00.910Z-4b1d11",
+      "startedAt": "2026-09-24T11:50:00.000Z",
+      "endedAt": "2026-09-24T12:40:00.000Z",
+      "durationMs": 3000000,
+      "source": "live",
+      "aiTimeout": 5,
+      "turns": 18,
+      "reason": "AllOpponentsLost",
+      "draw": false,
+      "counted": true,
+      "excludeReason": null,
+      "seats": [
+        {
+          "name": "Du", "deck": "Atraxa Superfriends", "human": true, "ai": null,
+          "winner": false, "lossReason": "LifeReachedZero", "eliminatedTurn": 12,
+          "mulligans": 0, "lands": 4, "landsByTurn": [0, 1, 2, 3, 4],
+          "missedLandDrops": 0, "firstMissedLandDrop": null,
+          "spells": 7, "spellMana": 16, "commanderCasts": 1, "commanderTax": 0, "firstCommanderTurn": 4,
+          "damageDealt": 10, "damageTaken": 40, "combatDamageTaken": 32, "lifeEnd": 0, "poisonEnd": 0,
+          "spellsCountered": 1, "spellsFizzled": 0, "counterspellsCast": 0, "removalCast": 2,
+          "cardsDrawn": 8, "cardsDiscarded": 2, "cardsMilled": 0, "openingLands": 2, "handEnd": 5,
+          "permanentsLost": 7, "creaturesLostInCombat": 2, "creaturesLostOther": 4,
+          "biggestSweep": 4, "sweepsSuffered": 2, "tokensCreated": 3,
+          "attacksDeclared": 2, "attackedTurns": 1, "attackersFaced": 7, "blocksDeclared": 3,
+          "damageTakenFlying": 6, "damageTakenTrample": 14, "damageTakenOther": 12, "damageTakenNonCombat": 8,
+          "damageDealtCombat": 6, "damageDealtNonCombat": 4, "commanderDamageTaken": 14, "lifeGained": 0,
+          "timeline": [
+            {"turn": 1, "lands": 1, "creatures": 0, "life": 40, "hand": 6, "spells": 1},
+            {"turn": 4, "lands": 2, "creatures": 1, "life": 40, "hand": 5, "spells": 2},
+            {"turn": 7, "lands": 3, "creatures": 2, "life": 31, "hand": 5, "spells": 2},
+            {"turn": 10, "lands": 4, "creatures": 2, "life": 14, "hand": 5, "spells": 2}
+          ]
+        },
+        {
+          "name": "KI 1", "deck": "Muldrotha Reanimator", "human": false, "ai": {"mode": "sim", "profile": "Default"},
+          "winner": true, "lossReason": null, "eliminatedTurn": null,
+          "mulligans": 0, "lands": 6, "landsByTurn": [0, 1, 2, 3, 4, 5, 6],
+          "missedLandDrops": 0, "firstMissedLandDrop": null,
+          "spells": 15, "spellMana": 34, "commanderCasts": 2, "commanderTax": 2, "firstCommanderTurn": 5,
+          "damageDealt": 64, "damageTaken": 19, "combatDamageTaken": 13, "lifeEnd": 26, "poisonEnd": 0,
+          "spellsCountered": 0, "spellsFizzled": 1, "counterspellsCast": 0, "removalCast": 4,
+          "cardsDrawn": 19, "cardsDiscarded": 4, "cardsMilled": 6, "openingLands": 3, "handEnd": 3,
+          "permanentsLost": 5, "creaturesLostInCombat": 3, "creaturesLostOther": 2,
+          "biggestSweep": 2, "sweepsSuffered": 0, "tokensCreated": 1,
+          "attacksDeclared": 14, "attackedTurns": 5, "attackersFaced": 4, "blocksDeclared": 3,
+          "damageTakenFlying": 4, "damageTakenTrample": 0, "damageTakenOther": 9, "damageTakenNonCombat": 6,
+          "damageDealtCombat": 55, "damageDealtNonCombat": 9, "commanderDamageTaken": 0, "lifeGained": 5,
+          "timeline": [
+            {"turn": 2, "lands": 1, "creatures": 0, "life": 40, "hand": 6, "spells": 1},
+            {"turn": 5, "lands": 2, "creatures": 1, "life": 40, "hand": 6, "spells": 2},
+            {"turn": 8, "lands": 3, "creatures": 2, "life": 36, "hand": 5, "spells": 3},
+            {"turn": 11, "lands": 4, "creatures": 4, "life": 32, "hand": 4, "spells": 3},
+            {"turn": 14, "lands": 5, "creatures": 5, "life": 28, "hand": 3, "spells": 3},
+            {"turn": 17, "lands": 6, "creatures": 5, "life": 26, "hand": 3, "spells": 3}
+          ]
+        },
+        {
+          "name": "KI 2", "deck": "Golgari Midrange", "human": false, "ai": {"mode": "sim", "profile": "Default"},
+          "winner": false, "lossReason": "LifeReachedZero", "eliminatedTurn": 18,
+          "mulligans": 1, "lands": 5, "landsByTurn": [0, 1, 2, 3, 4, 5, 5],
+          "missedLandDrops": 1, "firstMissedLandDrop": 18,
+          "spells": 12, "spellMana": 27, "commanderCasts": 1, "commanderTax": 0, "firstCommanderTurn": 6,
+          "damageDealt": 17, "damageTaken": 42, "combatDamageTaken": 36, "lifeEnd": 0, "poisonEnd": 0,
+          "spellsCountered": 0, "spellsFizzled": 0, "counterspellsCast": 0, "removalCast": 3,
+          "cardsDrawn": 14, "cardsDiscarded": 3, "cardsMilled": 0, "openingLands": 3, "handEnd": 2,
+          "permanentsLost": 6, "creaturesLostInCombat": 4, "creaturesLostOther": 2,
+          "biggestSweep": 3, "sweepsSuffered": 1, "tokensCreated": 0,
+          "attacksDeclared": 9, "attackedTurns": 4, "attackersFaced": 14, "blocksDeclared": 5,
+          "damageTakenFlying": 10, "damageTakenTrample": 8, "damageTakenOther": 18, "damageTakenNonCombat": 6,
+          "damageDealtCombat": 13, "damageDealtNonCombat": 4, "commanderDamageTaken": 16, "lifeGained": 2,
+          "timeline": [
+            {"turn": 3, "lands": 1, "creatures": 0, "life": 40, "hand": 5, "spells": 1},
+            {"turn": 6, "lands": 2, "creatures": 1, "life": 40, "hand": 5, "spells": 2},
+            {"turn": 9, "lands": 3, "creatures": 2, "life": 34, "hand": 4, "spells": 2},
+            {"turn": 12, "lands": 4, "creatures": 3, "life": 26, "hand": 4, "spells": 3},
+            {"turn": 15, "lands": 5, "creatures": 3, "life": 12, "hand": 3, "spells": 2},
+            {"turn": 18, "lands": 5, "creatures": 2, "life": 4, "hand": 2, "spells": 2}
+          ]
+        }
+      ]
     }
-  ]
+  ],
+  "total": 11
 }

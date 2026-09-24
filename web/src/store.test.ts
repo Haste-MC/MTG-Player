@@ -380,6 +380,16 @@ describe("store: matches", () => {
     expect(second.matches.map((m) => m.id)).toEqual(["m2"]);
   });
 
+  it("matchesTotal haelt fest, wie viele Partien die Bridge insgesamt hat (die Liste ist gedeckelt)", () => {
+    const s = reduce(initialState, { type: "matches", matches: [matchRecord({ id: "m1" })], total: 412 });
+    expect(s.matchesTotal).toBe(412);
+  });
+
+  it("ohne total (Bridge vor Runde A) ist matchesTotal die Laenge der Liste, nicht 0", () => {
+    const s = reduce(initialState, { type: "matches", matches: [matchRecord({ id: "m1" }), matchRecord({ id: "m2" })] });
+    expect(s.matchesTotal).toBe(2);
+  });
+
   it("openStats oeffnet den Screen, backToLobby schliesst ihn wieder", () => {
     useStore.getState().openStats();
     expect(useStore.getState().screen).toBe("stats");

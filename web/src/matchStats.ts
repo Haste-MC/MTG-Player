@@ -8,21 +8,63 @@ import type { MatchRecord, MatchSeat } from "./protocol";
 /** Ausschlussgrund der Bridge fuer eine am Zugdeckel abgeschnittene Partie (MatchRecorder.markTurnCapped). */
 const TURN_CAPPED = "Zugdeckel";
 
+/** Die Auswertung trennt 1 vs 1 und Gruppe: dieselben Zahlen bedeuten in beiden Formaten Verschiedenes
+ * (im Pod verliert man ueberwiegend, Schaden verteilt sich auf drei Gegner). "all" rechnet ueber beide -
+ * fuer die Bilanz brauchbar, fuer alles Formatabhaengige mit Vorsicht zu geniessen. */
+export type Format = "all" | "duel" | "pod";
+
+/** Das Format einer Partie steckt allein in der Sitzzahl: genau zwei Sitze sind ein Duell, alles andere
+ * ein Pod. Ein einziger Sitz (theoretisch moeglich) ist damit ausdruecklich KEIN Duell. */
+export function formatOf(record: MatchRecord): "duel" | "pod" {
+  return record.seats.length === 2 ? "duel" : "pod";
+}
+
+function inFormat(record: MatchRecord, format: Format): boolean {
+  return format === "all" || formatOf(record) === format;
+}
+
+/** Ab dieser Formatversion traegt ein Datensatz die Vorfall-Kennzahlen aus Runde B. */
+const V2 = 2;
+
+/** Traegt dieser Datensatz die Vorfall-Kennzahlen? Ein v1-Datensatz kommt mit denselben Feldern auf 0 an
+ * (Jackson serialisiert die int-Felder), dort wurde aber NIE gezaehlt - eine Quote daraus waere erfunden.
+ * Ein fehlendes v gilt wie in der Bridge als 1. */
+function isV2(record: MatchRecord): boolean {
+  return (record.v ?? 1) >= V2;
+}
+
+// --- Definitionen der beiden Startkennzahlen. Sie stehen hier und nicht in findings.ts: das sind keine
+// Regel-Schwellen, sondern die Messvorschrift selbst (was heisst "Screw", was heisst "Flut").
+/** Gemessen wird im 3. EIGENEN Zug des Sitzes (Index in landsByTurn). */
+export const MANA_SCREW_TURN = 3;
+/** So viele Laender (oder weniger) im 3. eigenen Zug gelten als Mana-Screw. */
+export const MANA_SCREW_LANDS = 2;
+/** Ab so vielen abgelegten Laendern kann eine Partie als geflutet gelten ... */
+export const FLOOD_LANDS = 6;
+/** ... und nur, wenn der Sitz hoechstens so viele Zauber JE abgelegtem Land gewirkt hat. In einer
+ * normalen Partie stehen den Landabgaben deutlich mehr Zauber gegenueber; kippt das Verhaeltnis, lag
+ * die Hand voll Land. (Die Spec nennt "≥ 6 Laender, ≤ 2 Zauber" - das ist die Zug-fuer-Zug-Sicht der
+ * Zeitachse, und die schickt die Bridge in der Partienliste nicht mit; siehe MatchSeat.timeline. Diese
+ * Fassung kommt mit den Feldern aus, die jede Partie der Liste traegt.) */
+export const FLOOD_SPELLS_PER_LAND = 1;
+
 /** Ein Deck mit mindestens einer gewerteten oder einer Zugdeckel-Partie, fuer die Deckliste des
  * Statistik-Screens. `games` sind die gewerteten, `capped` die am Zugdeckel abgeschnittenen. */
 export interface DeckGames { deck: string; games: number; capped: number }
 
 /** Decks aus den gewerteten UND den Zugdeckel-Partien (ueber alle Sitze, nicht nur den eigenen), je mit
  * ihrer Partienzahl, absteigend sortiert nach `games + capped`, dann Name. Ein Deck auf zwei Sitzen
- * derselben Partie (Spiegel) zaehlt fuer diese Partie nur einmal.
+ * derselben Partie (Spiegel) zaehlt fuer diese Partie nur einmal. `format` beschraenkt auf Duelle bzw.
+ * Pods (siehe formatOf); "all" zaehlt beide zusammen.
  *
  * Die Zugdeckel-Partien stehen hier mit drin, obwohl sie nicht gewertet sind: ein Deck, das AUSSCHLIESSLICH
  * am Deckel endet, hat keine Bilanz (summarize liefert undefined) und waere sonst im ganzen Screen nicht
  * auffindbar - ausgerechnet der Fall, den die Kennzahl zeigen soll. Alle anderen Ausschlussgruende
  * (Absturz, Abbruch, Aufgabe, zu kurz) bleiben aussen vor; sie sagen nichts ueber das Deck aus. */
-export function deckGames(records: MatchRecord[]): DeckGames[] {
+export function deckGames(records: MatchRecord[], format: Format = "all"): DeckGames[] {
   const counts = new Map<string, { games: number; capped: number }>();
   for (const r of records) {
+    if (!inFormat(r, format)) continue;
     const counted = r.counted;
     if (!counted && r.excludeReason !== TURN_CAPPED) continue;
     const decks = new Set(r.seats.map((seat) => seat.deck));
@@ -60,7 +102,52 @@ export interface DeckSummary {
   turnCappedGames: number;
   /** Anteil der Zugdeckel-Partien an allen gespielten: turnCappedGames / (games + turnCappedGames). */
   turnCappedRate: number;
+
+  // --- Kennzahlen aus Runde B. Sie haben eine EIGENE Stichprobe: v2Games, die Teilmenge der oben
+  // gezaehlten Partien mit v >= 2. Ist v2Games 0, fehlt jede einzelne von ihnen (nicht 0 - in einem
+  // v1-Datensatz wurde nie gezaehlt). Sind beide Sorten dabei, rechnen sie NUR ueber die v2-Partien;
+  // die Anzeige nennt darum v2Games neben games. Drei von ihnen (manaScrewRate, spellsPerTurn,
+  // avgEliminationShare) koennte man technisch auch aus v1-Feldern rechnen - sie teilen sich hier
+  // bewusst die eine Stichprobe des Vorfall-Blocks, damit alle Kacheln dieses Blocks dasselbe "n"
+  // meinen und untereinander vergleichbar bleiben.
+  /** Partien der Auswahl mit v >= 2 - die Grundlage aller folgenden Kennzahlen. */
+  v2Games: number;
+  /** Anteil der Partien mit hoechstens MANA_SCREW_LANDS Laendern im eigenen Zug MANA_SCREW_TURN; Nenner
+   * sind nur die Partien, in denen der Sitz so viele eigene Zuege hatte (sonst ist nichts zu beurteilen). */
+  manaScrewRate?: number;
+  /** Anteil der Partien mit FLOOD_LANDS+ Laendern und hoechstens FLOOD_SPELLS_PER_LAND Zaubern je Land. */
+  floodRate?: number;
+  /** Ø Laender in der nach allen Mulligans behaltenen Starthand. */
+  avgOpeningLands?: number;
+  /** Zauber je eigenem Zug, gepoolt: alle Zauber geteilt durch alle eigenen Zuege. */
+  spellsPerTurn?: number;
+  /** Anteil der eigenen Zauber, die gekontert wurden (gepoolt ueber alle Partien). */
+  counteredRate?: number;
+  /** ANZAHL der Partien, in denen der Sitz mindestens eine Massenentfernung abbekommen hat (nicht Quote -
+   * die Anzeige bildet sie bei Bedarf mit v2Games). */
+  sweepGames?: number;
+  /** Ø groesster Verlust in einem Aufloesungsfenster; eine Partie ohne Massenentfernung geht mit 0 ein
+   * (eine gemessene 0, kein fehlender Wert). */
+  avgBiggestSweep?: number;
+  /** Anteil des erlittenen KAMPFschadens, der von Fliegern bzw. von Trampelschaden kam; fehlt, wenn der
+   * Sitz in keiner v2-Partie Kampfschaden genommen hat (0 von 0 ist keine Quote). */
+  flyingShare?: number;
+  tramplingShare?: number;
+  /** Ø eigene Angriffsdeklarationen je Partie bzw. Ø gegnerische Angreifer gegen diesen Sitz. */
+  avgAttacks?: number;
+  avgAttackersFaced?: number;
+  /** Ø Handkarten beim Ausscheiden (bzw. am Partieende, wenn der Sitz ueberlebte). */
+  avgHandEnd?: number;
+  /** Ø eigene Entfernungs- bzw. Konterzauber je Partie. */
+  avgRemovalCast?: number;
+  avgCounterspellsCast?: number;
+  /** Ø eliminatedTurn / turns - wie weit in die Partie hinein der Sitz durchgehalten hat (1 = bis zum
+   * Schluss). Nur ueber die Partien, in denen der Sitz ausgeschieden ist; fehlt, wenn er immer ueberlebte. */
+  avgEliminationShare?: number;
 }
+
+/** Ein Sitz mit seiner Partie - die Arbeitseinheit von summarize (je Partie hoechstens einer, siehe pickSeat). */
+interface Entry { record: MatchRecord; seat: MatchSeat; index: number }
 
 /** Kennzahlen fuer `deck` ueber die gewerteten Partien, in denen ein Sitz genau diesen Deck-Namen traegt -
  * je Partie hoechstens ein Sitz (siehe pickSeat; ein Spiegel zaehlt also als eine Partie). Metriken
@@ -69,11 +156,16 @@ export interface DeckSummary {
  * gibt: die sind nicht gewertet und ergeben allein keine Bilanz.
  *
  * Einzige Ausnahme von der "nur gewertete Partien"-Regel sind turnCappedGames/turnCappedRate: sie zaehlen
- * genau die NICHT gewerteten Zugdeckel-Partien, nach derselben "ein Sitz je Partie"-Regel. */
-export function summarize(records: MatchRecord[], deck: string): DeckSummary | undefined {
-  const entries: { record: MatchRecord; seat: MatchSeat; index: number }[] = [];
+ * genau die NICHT gewerteten Zugdeckel-Partien, nach derselben "ein Sitz je Partie"-Regel.
+ *
+ * `format` beschraenkt die Auswahl auf Duelle bzw. Pods (siehe formatOf) - und zwar fuer ALLE Zahlen
+ * einschliesslich der Zugdeckel-Partien und der Gegner-Tabelle. Die Kennzahlen aus Runde B rechnen
+ * innerhalb dieser Auswahl noch einmal nur ueber die Partien mit v >= 2 (siehe v2Metrics). */
+export function summarize(records: MatchRecord[], deck: string, format: Format = "all"): DeckSummary | undefined {
+  const entries: Entry[] = [];
   let turnCappedGames = 0;
   for (const r of records) {
+    if (!inFormat(r, format)) continue;
     if (!r.counted) {
       if (r.excludeReason === TURN_CAPPED && pickSeat(r, deck)) turnCappedGames += 1;
       continue;
@@ -129,6 +221,7 @@ export function summarize(records: MatchRecord[], deck: string): DeckSummary | u
     avgDamageDealt: avg(entries.map((e) => e.seat.damageDealt)),
     avgDamageTaken: avg(entries.map((e) => e.seat.damageTaken)),
     lossReasons,
+    ...v2Metrics(entries.filter((e) => isV2(e.record))),
     turnCappedGames,
     // Nenner sind alle gespielten Partien (gewertete + Deckel); games ist hier immer >= 1, die 0 steht
     // nur da, damit die Formel fuer sich genommen nicht durch 0 teilt.
@@ -137,6 +230,61 @@ export function summarize(records: MatchRecord[], deck: string): DeckSummary | u
       .map(([oDeck, v]) => ({ deck: oDeck, games: v.games, wins: v.wins }))
       .sort((a, b) => b.games - a.games || a.deck.localeCompare(b.deck)),
   };
+}
+
+/** Die Vorfall-Kennzahlen aus Runde B ueber `v2` - die Partien der Auswahl mit v >= 2. Ist die Liste
+ * leer, kommt nur v2Games: 0 zurueck und JEDER andere Schluessel fehlt: in einem v1-Datensatz wurde nie
+ * gezaehlt, eine 0 waere eine Behauptung ueber Daten, die es nicht gibt (die Kachel zeigt dann "–").
+ *
+ * Quoten sind gepoolt (Summe durch Summe), nicht als Mittel der Einzelquoten: sonst wiegt eine Partie
+ * mit zwei Zaubern so schwer wie eine mit zwanzig. Wo der Nenner 0 ist (kein Zauber gewirkt, keinen
+ * Kampfschaden genommen, nie ausgeschieden), fehlt die Quote ebenfalls - 0 von 0 ist keine Quote. */
+function v2Metrics(v2: Entry[]): Partial<DeckSummary> & { v2Games: number } {
+  if (v2.length === 0) return { v2Games: 0 };
+  const seats = v2.map((e) => e.seat);
+  /** Summe eines Vorfall-Feldes; ein fehlendes Feld zaehlt als 0 (ein v2-Sitz traegt sie alle). */
+  const sum = (pick: (seat: MatchSeat) => number | undefined) => seats.reduce((a, seat) => a + (pick(seat) ?? 0), 0);
+  const mean = (pick: (seat: MatchSeat) => number | undefined) => sum(pick) / seats.length;
+  /** Quote mit Nennerpruefung: ohne Grundlage lieber nichts sagen. */
+  const share = (part: number, whole: number) => (whole > 0 ? part / whole : undefined);
+
+  // Mana-Screw: nur Partien, in denen der Sitz den Messzug ueberhaupt erlebt hat (landsByTurn hat genau
+  // ownTurns+1 Eintraege) - wer vorher ausschied, ist kein Beleg fuer "zu wenig Land".
+  const judgeable = seats.filter((seat) => seat.landsByTurn.length > MANA_SCREW_TURN);
+  const screwed = judgeable.filter((seat) => seat.landsByTurn[MANA_SCREW_TURN] <= MANA_SCREW_LANDS);
+  // Eigene Zuege insgesamt - Nenner fuer "Zauber je Zug".
+  const ownTurns = seats.reduce((a, seat) => a + Math.max(0, seat.landsByTurn.length - 1), 0);
+  const combatTaken = sum((seat) =>
+    (seat.damageTakenFlying ?? 0) + (seat.damageTakenTrample ?? 0) + (seat.damageTakenOther ?? 0));
+  const eliminated = v2.filter((e) => e.seat.eliminatedTurn != null && e.record.turns > 0);
+
+  return {
+    v2Games: v2.length,
+    ...opt("manaScrewRate", share(screwed.length, judgeable.length)),
+    floodRate: seats.filter((seat) =>
+      seat.lands >= FLOOD_LANDS && seat.spells <= seat.lands * FLOOD_SPELLS_PER_LAND).length / seats.length,
+    avgOpeningLands: mean((seat) => seat.openingLands),
+    ...opt("spellsPerTurn", share(sum((seat) => seat.spells), ownTurns)),
+    ...opt("counteredRate", share(sum((seat) => seat.spellsCountered), sum((seat) => seat.spells))),
+    sweepGames: seats.filter((seat) => (seat.sweepsSuffered ?? 0) >= 1).length,
+    avgBiggestSweep: mean((seat) => seat.biggestSweep),
+    ...opt("flyingShare", share(sum((seat) => seat.damageTakenFlying), combatTaken)),
+    ...opt("tramplingShare", share(sum((seat) => seat.damageTakenTrample), combatTaken)),
+    avgAttacks: mean((seat) => seat.attacksDeclared),
+    avgAttackersFaced: mean((seat) => seat.attackersFaced),
+    avgHandEnd: mean((seat) => seat.handEnd),
+    avgRemovalCast: mean((seat) => seat.removalCast),
+    avgCounterspellsCast: mean((seat) => seat.counterspellsCast),
+    ...opt("avgEliminationShare", eliminated.length > 0
+      ? avg(eliminated.map((e) => (e.seat.eliminatedTurn as number) / e.record.turns))
+      : undefined),
+  };
+}
+
+/** { key: value } fuer einen vorhandenen Wert, sonst ein leeres Objekt - so FEHLT der Schluessel im
+ * Ergebnis, statt auf undefined zu stehen (siehe landsTurn). */
+function opt<K extends string>(key: K, value: number | undefined): Partial<Record<K, number>> {
+  return value === undefined ? {} : ({ [key]: value } as Record<K, number>);
 }
 
 /** Mittelwert der Laender bis zum EIGENEN Zug `turn`, nur ueber die Partien, in denen der Sitz so viele

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { deckGames, summarize, wilson } from "./matchStats";
-import type { MatchRecord } from "./protocol";
+import { deckGames, formatOf, summarize, wilson } from "./matchStats";
+import type { MatchRecord, MatchSeat } from "./protocol";
 
 // Gleicher Inhalt wie fixtures/matches.json (Statistik-Screen/Screenshots, siehe scripts/shot.mjs) - hier als
 // getypte Konstante, damit kein resolveJsonModule noetig ist (kein anderer Test im Repo importiert JSON).
@@ -8,6 +8,15 @@ import type { MatchRecord } from "./protocol";
 // faellt bei keinem Build/Test automatisch auf. Die Daten sind bewusst plausibel gehalten: landsByTurn hat
 // genau ownTurns+1 Eintraege (eigene Zuege, nicht Partiezuege), eliminatedTurn steht ueberall dort, wo ein
 // lossReason steht, und die Schadenssummen gehen auf.
+//
+// Die ersten neun Partien sind v1 (Vorfall-Kennzahlen und Zeitachse gab es da noch nicht - weglassen
+// statt Nullen hinschreiben, siehe MatchSeat), die letzten beiden v2: eine Duell- und eine Pod-Partie mit
+// gefuellten Vorfall-Feldern. Dort gehen auch die v2-Summen auf: damageTakenFlying + ...Trample +
+// ...Other == combatDamageTaken, plus damageTakenNonCombat == damageTaken, damageDealtCombat +
+// damageDealtNonCombat == damageDealt, 40 + lifeGained - damageTaken == lifeEnd, die Zeitachse hat genau
+// einen Punkt je eigenem Zug, ihre spells summieren sich auf seat.spells und ihr letztes hand ist handEnd.
+// (Die echte matches-Nachricht schickt die Zeitachse NICHT mit - die Fixture traegt sie, damit die
+// Screenshots die Kurve ohne matchDetail-Runde zeigen koennen.)
 const records: MatchRecord[] = [
   {
     v: 1, id: "2026-09-10T18:44:33.118Z-4b1d07", startedAt: "2026-09-10T18:02:11.000Z", endedAt: "2026-09-10T18:44:33.000Z",
@@ -248,6 +257,140 @@ const records: MatchRecord[] = [
       },
     ],
   },
+  {
+    v: 2, id: "2026-09-23T21:05:00.700Z-4b1d10", startedAt: "2026-09-23T20:25:00.000Z", endedAt: "2026-09-23T21:05:00.000Z",
+    durationMs: 2400000, source: "live", aiTimeout: 5, turns: 14, reason: "AllOpponentsLost",
+    draw: false, counted: true, excludeReason: null,
+    seats: [
+      {
+        name: "Du", deck: "Ojutai Flyers", human: true,
+        ai: null, winner: false, lossReason: "LifeReachedZero", eliminatedTurn: 14,
+        mulligans: 1, lands: 7, landsByTurn: [0, 1, 2, 3, 4, 5, 6, 7],
+        missedLandDrops: 0, firstMissedLandDrop: null,
+        spells: 11, spellMana: 24, commanderCasts: 1, commanderTax: 0,
+        firstCommanderTurn: 4, damageDealt: 25, damageTaken: 43,
+        combatDamageTaken: 36, lifeEnd: 0, poisonEnd: 0,
+        spellsCountered: 2, spellsFizzled: 1, counterspellsCast: 1, removalCast: 3,
+        cardsDrawn: 12, cardsDiscarded: 3, cardsMilled: 0, openingLands: 3, handEnd: 4,
+        permanentsLost: 6, creaturesLostInCombat: 3, creaturesLostOther: 2,
+        biggestSweep: 3, sweepsSuffered: 1, tokensCreated: 2,
+        attacksDeclared: 5, attackedTurns: 3, attackersFaced: 12, blocksDeclared: 4,
+        damageTakenFlying: 18, damageTakenTrample: 6, damageTakenOther: 12, damageTakenNonCombat: 7,
+        damageDealtCombat: 20, damageDealtNonCombat: 5, commanderDamageTaken: 9, lifeGained: 3,
+        timeline: [
+          { turn: 1, lands: 1, creatures: 0, life: 40, hand: 4, spells: 1 },
+          { turn: 3, lands: 2, creatures: 1, life: 40, hand: 4, spells: 1 },
+          { turn: 5, lands: 3, creatures: 1, life: 38, hand: 3, spells: 2 },
+          { turn: 7, lands: 4, creatures: 2, life: 33, hand: 3, spells: 2 },
+          { turn: 9, lands: 5, creatures: 3, life: 25, hand: 4, spells: 2 },
+          { turn: 11, lands: 6, creatures: 1, life: 16, hand: 3, spells: 2 },
+          { turn: 13, lands: 7, creatures: 1, life: 7, hand: 4, spells: 1 },
+        ],
+      },
+      {
+        name: "KI 1", deck: "Grix Control", human: false,
+        ai: { mode: "sim", profile: "Default" }, winner: true, lossReason: null, eliminatedTurn: null,
+        mulligans: 0, lands: 7, landsByTurn: [0, 1, 2, 3, 4, 5, 6, 7],
+        missedLandDrops: 0, firstMissedLandDrop: null,
+        spells: 13, spellMana: 30, commanderCasts: 1, commanderTax: 0,
+        firstCommanderTurn: 5, damageDealt: 43, damageTaken: 25,
+        combatDamageTaken: 20, lifeEnd: 15, poisonEnd: 0,
+        spellsCountered: 0, spellsFizzled: 0, counterspellsCast: 3, removalCast: 5,
+        cardsDrawn: 16, cardsDiscarded: 2, cardsMilled: 0, openingLands: 4, handEnd: 5,
+        permanentsLost: 2, creaturesLostInCombat: 1, creaturesLostOther: 1,
+        biggestSweep: 0, sweepsSuffered: 0, tokensCreated: 0,
+        attacksDeclared: 12, attackedTurns: 5, attackersFaced: 5, blocksDeclared: 2,
+        damageTakenFlying: 9, damageTakenTrample: 0, damageTakenOther: 11, damageTakenNonCombat: 5,
+        damageDealtCombat: 36, damageDealtNonCombat: 7, commanderDamageTaken: 0, lifeGained: 0,
+        timeline: [
+          { turn: 2, lands: 1, creatures: 0, life: 40, hand: 6, spells: 1 },
+          { turn: 4, lands: 2, creatures: 0, life: 40, hand: 6, spells: 2 },
+          { turn: 6, lands: 3, creatures: 1, life: 38, hand: 6, spells: 2 },
+          { turn: 8, lands: 4, creatures: 2, life: 33, hand: 5, spells: 2 },
+          { turn: 10, lands: 5, creatures: 3, life: 28, hand: 5, spells: 2 },
+          { turn: 12, lands: 6, creatures: 3, life: 20, hand: 5, spells: 2 },
+          { turn: 14, lands: 7, creatures: 4, life: 15, hand: 5, spells: 2 },
+        ],
+      },
+    ],
+  },
+  {
+    v: 2, id: "2026-09-24T12:40:00.910Z-4b1d11", startedAt: "2026-09-24T11:50:00.000Z", endedAt: "2026-09-24T12:40:00.000Z",
+    durationMs: 3000000, source: "live", aiTimeout: 5, turns: 18, reason: "AllOpponentsLost",
+    draw: false, counted: true, excludeReason: null,
+    seats: [
+      {
+        name: "Du", deck: "Atraxa Superfriends", human: true,
+        ai: null, winner: false, lossReason: "LifeReachedZero", eliminatedTurn: 12,
+        mulligans: 0, lands: 4, landsByTurn: [0, 1, 2, 3, 4],
+        missedLandDrops: 0, firstMissedLandDrop: null,
+        spells: 7, spellMana: 16, commanderCasts: 1, commanderTax: 0,
+        firstCommanderTurn: 4, damageDealt: 10, damageTaken: 40,
+        combatDamageTaken: 32, lifeEnd: 0, poisonEnd: 0,
+        spellsCountered: 1, spellsFizzled: 0, counterspellsCast: 0, removalCast: 2,
+        cardsDrawn: 8, cardsDiscarded: 2, cardsMilled: 0, openingLands: 2, handEnd: 5,
+        permanentsLost: 7, creaturesLostInCombat: 2, creaturesLostOther: 4,
+        biggestSweep: 4, sweepsSuffered: 2, tokensCreated: 3,
+        attacksDeclared: 2, attackedTurns: 1, attackersFaced: 7, blocksDeclared: 3,
+        damageTakenFlying: 6, damageTakenTrample: 14, damageTakenOther: 12, damageTakenNonCombat: 8,
+        damageDealtCombat: 6, damageDealtNonCombat: 4, commanderDamageTaken: 14, lifeGained: 0,
+        timeline: [
+          { turn: 1, lands: 1, creatures: 0, life: 40, hand: 6, spells: 1 },
+          { turn: 4, lands: 2, creatures: 1, life: 40, hand: 5, spells: 2 },
+          { turn: 7, lands: 3, creatures: 2, life: 31, hand: 5, spells: 2 },
+          { turn: 10, lands: 4, creatures: 2, life: 14, hand: 5, spells: 2 },
+        ],
+      },
+      {
+        name: "KI 1", deck: "Muldrotha Reanimator", human: false,
+        ai: { mode: "sim", profile: "Default" }, winner: true, lossReason: null, eliminatedTurn: null,
+        mulligans: 0, lands: 6, landsByTurn: [0, 1, 2, 3, 4, 5, 6],
+        missedLandDrops: 0, firstMissedLandDrop: null,
+        spells: 15, spellMana: 34, commanderCasts: 2, commanderTax: 2,
+        firstCommanderTurn: 5, damageDealt: 64, damageTaken: 19,
+        combatDamageTaken: 13, lifeEnd: 26, poisonEnd: 0,
+        spellsCountered: 0, spellsFizzled: 1, counterspellsCast: 0, removalCast: 4,
+        cardsDrawn: 19, cardsDiscarded: 4, cardsMilled: 6, openingLands: 3, handEnd: 3,
+        permanentsLost: 5, creaturesLostInCombat: 3, creaturesLostOther: 2,
+        biggestSweep: 2, sweepsSuffered: 0, tokensCreated: 1,
+        attacksDeclared: 14, attackedTurns: 5, attackersFaced: 4, blocksDeclared: 3,
+        damageTakenFlying: 4, damageTakenTrample: 0, damageTakenOther: 9, damageTakenNonCombat: 6,
+        damageDealtCombat: 55, damageDealtNonCombat: 9, commanderDamageTaken: 0, lifeGained: 5,
+        timeline: [
+          { turn: 2, lands: 1, creatures: 0, life: 40, hand: 6, spells: 1 },
+          { turn: 5, lands: 2, creatures: 1, life: 40, hand: 6, spells: 2 },
+          { turn: 8, lands: 3, creatures: 2, life: 36, hand: 5, spells: 3 },
+          { turn: 11, lands: 4, creatures: 4, life: 32, hand: 4, spells: 3 },
+          { turn: 14, lands: 5, creatures: 5, life: 28, hand: 3, spells: 3 },
+          { turn: 17, lands: 6, creatures: 5, life: 26, hand: 3, spells: 3 },
+        ],
+      },
+      {
+        name: "KI 2", deck: "Golgari Midrange", human: false,
+        ai: { mode: "sim", profile: "Default" }, winner: false, lossReason: "LifeReachedZero", eliminatedTurn: 18,
+        mulligans: 1, lands: 5, landsByTurn: [0, 1, 2, 3, 4, 5, 5],
+        missedLandDrops: 1, firstMissedLandDrop: 18,
+        spells: 12, spellMana: 27, commanderCasts: 1, commanderTax: 0,
+        firstCommanderTurn: 6, damageDealt: 17, damageTaken: 42,
+        combatDamageTaken: 36, lifeEnd: 0, poisonEnd: 0,
+        spellsCountered: 0, spellsFizzled: 0, counterspellsCast: 0, removalCast: 3,
+        cardsDrawn: 14, cardsDiscarded: 3, cardsMilled: 0, openingLands: 3, handEnd: 2,
+        permanentsLost: 6, creaturesLostInCombat: 4, creaturesLostOther: 2,
+        biggestSweep: 3, sweepsSuffered: 1, tokensCreated: 0,
+        attacksDeclared: 9, attackedTurns: 4, attackersFaced: 14, blocksDeclared: 5,
+        damageTakenFlying: 10, damageTakenTrample: 8, damageTakenOther: 18, damageTakenNonCombat: 6,
+        damageDealtCombat: 13, damageDealtNonCombat: 4, commanderDamageTaken: 16, lifeGained: 2,
+        timeline: [
+          { turn: 3, lands: 1, creatures: 0, life: 40, hand: 5, spells: 1 },
+          { turn: 6, lands: 2, creatures: 1, life: 40, hand: 5, spells: 2 },
+          { turn: 9, lands: 3, creatures: 2, life: 34, hand: 4, spells: 2 },
+          { turn: 12, lands: 4, creatures: 3, life: 26, hand: 4, spells: 3 },
+          { turn: 15, lands: 5, creatures: 3, life: 12, hand: 3, spells: 2 },
+          { turn: 18, lands: 5, creatures: 2, life: 4, hand: 2, spells: 2 },
+        ],
+      },
+    ],
+  },
 ];
 
 describe("wilson", () => {
@@ -267,15 +410,15 @@ describe("deckGames", () => {
     // Sortierschluessel ist games + capped: "Lantern Stax" hat keine einzige gewertete Partie, steht aber
     // mit seinen zwei Deckel-Partien gleichauf mit einem Deck, das zweimal gewertet gespielt hat.
     expect(deckGames(records)).toEqual([
+      { deck: "Atraxa Superfriends", games: 2, capped: 1 },
+      { deck: "Grix Control", games: 2, capped: 1 },
       { deck: "Krenko Goblins", games: 2, capped: 1 },
-      { deck: "Atraxa Superfriends", games: 1, capped: 1 },
-      { deck: "Grix Control", games: 1, capped: 1 },
+      { deck: "Ojutai Flyers", games: 2, capped: 1 },
+      { deck: "Golgari Midrange", games: 2, capped: 0 },
       { deck: "Lantern Stax", games: 0, capped: 2 },
       { deck: "Meren Aristocrats", games: 2, capped: 0 },
-      { deck: "Ojutai Flyers", games: 1, capped: 1 },
+      { deck: "Muldrotha Reanimator", games: 2, capped: 0 },
       { deck: "Titania, Gaea Incarnate", games: 2, capped: 0 },
-      { deck: "Golgari Midrange", games: 1, capped: 0 },
-      { deck: "Muldrotha Reanimator", games: 1, capped: 0 },
     ]);
   });
 
@@ -630,5 +773,232 @@ describe("summarize", () => {
     ];
     const s = summarize(zweiGleiche, "Eigenes Deck");
     expect(s?.opponents).toEqual([{ deck: "Gegner-Deck", games: 1, wins: 1 }]);
+  });
+});
+
+// ---------------------------------------------------------------- Format: Duell und Pod getrennt
+
+describe("formatOf", () => {
+  it("zwei Sitze sind ein Duell, drei und mehr ein Pod", () => {
+    expect(formatOf(records[0])).toBe("duel");
+    expect(formatOf(records[1])).toBe("pod");
+  });
+
+  it("ein einzelner Sitz ist kein Duell (Duell heisst genau zwei Sitze)", () => {
+    const solo: MatchRecord = { ...records[0], seats: [records[0].seats[0]] };
+    expect(formatOf(solo)).toBe("pod");
+  });
+});
+
+describe("Formatfilter", () => {
+  it("deckGames zaehlt im Pod nur die Pod-Partien", () => {
+    // Nur m2 (v1, drei Sitze) und die neue v2-Pod-Partie.
+    expect(deckGames(records, "pod")).toEqual([
+      { deck: "Atraxa Superfriends", games: 2, capped: 0 },
+      { deck: "Muldrotha Reanimator", games: 2, capped: 0 },
+      { deck: "Golgari Midrange", games: 1, capped: 0 },
+      { deck: "Titania, Gaea Incarnate", games: 1, capped: 0 },
+    ]);
+  });
+
+  it("deckGames zaehlt im Duell nur die Duell-Partien, Zugdeckel wie gehabt getrennt", () => {
+    expect(deckGames(records, "duel")).toEqual([
+      { deck: "Grix Control", games: 2, capped: 1 },
+      { deck: "Krenko Goblins", games: 2, capped: 1 },
+      { deck: "Ojutai Flyers", games: 2, capped: 1 },
+      { deck: "Lantern Stax", games: 0, capped: 2 },
+      { deck: "Meren Aristocrats", games: 2, capped: 0 },
+      { deck: "Atraxa Superfriends", games: 0, capped: 1 },
+      { deck: "Golgari Midrange", games: 1, capped: 0 },
+      { deck: "Titania, Gaea Incarnate", games: 1, capped: 0 },
+    ]);
+  });
+
+  it("summarize trennt dieselbe Deck-Bilanz nach Format", () => {
+    // Titania hat genau eine Duell- (Sieg) und eine Pod-Partie (Niederlage) - ohne Filter 1:1.
+    const alle = summarize(records, "Titania, Gaea Incarnate");
+    expect(alle?.games).toBe(2);
+    const duell = summarize(records, "Titania, Gaea Incarnate", "duel");
+    expect(duell?.games).toBe(1);
+    expect(duell?.wins).toBe(1);
+    expect(duell?.opponents).toEqual([{ deck: "Meren Aristocrats", games: 1, wins: 1 }]);
+    const pod = summarize(records, "Titania, Gaea Incarnate", "pod");
+    expect(pod?.games).toBe(1);
+    expect(pod?.wins).toBe(0);
+    expect(pod?.opponents).toEqual([
+      { deck: "Atraxa Superfriends", games: 1, wins: 0 },
+      { deck: "Muldrotha Reanimator", games: 1, wins: 0 },
+    ]);
+  });
+
+  it("summarize: Format ohne gewertete Partie -> undefined, auch wenn es dort Zugdeckel-Partien gibt", () => {
+    // Atraxa hat im Duell nur die Zugdeckel-Partie m8 - das ist keine Bilanz.
+    expect(summarize(records, "Atraxa Superfriends", "duel")).toBeUndefined();
+    expect(summarize(records, "Atraxa Superfriends", "pod")?.games).toBe(2);
+  });
+
+  it("der Zugdeckel-Anteil rechnet nur mit Partien des gewaehlten Formats", () => {
+    // Krenko: zwei gewertete Duelle und ein Duell am Deckel - im Duell wie ohne Filter 1/3.
+    expect(summarize(records, "Krenko Goblins", "duel")?.turnCappedRate).toBeCloseTo(1 / 3, 6);
+    // Ojutai: im Duell zwei gewertete (m6, v2-Partie) und die Deckel-Partie m9.
+    expect(summarize(records, "Ojutai Flyers", "duel")?.turnCappedGames).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------- Kennzahlen aus Runde B (v >= 2)
+
+/** Ein v2-Datensatz mit "Testdeck" auf Sitz 1 - alle Vorfall-Felder auf 0, ausser den ueberschriebenen.
+ * pod: ein dritter Sitz, sonst ein Duell. */
+function v2Record(id: string, seat: Partial<MatchSeat>, opts: { turns?: number; pod?: boolean; v?: number } = {}): MatchRecord {
+  const filler: MatchSeat = {
+    name: "Gegner", deck: "Gegner-Deck", human: false, winner: true, mulligans: 0, lands: 5,
+    landsByTurn: [0, 1, 2, 3, 4, 5], missedLandDrops: 0, spells: 8, spellMana: 16, commanderCasts: 1,
+    commanderTax: 0, damageDealt: 40, damageTaken: 10, combatDamageTaken: 10, lifeEnd: 30, poisonEnd: 0,
+    spellsCountered: 0, spellsFizzled: 0, counterspellsCast: 0, removalCast: 0, cardsDrawn: 10,
+    cardsDiscarded: 0, cardsMilled: 0, openingLands: 3, handEnd: 3, permanentsLost: 0,
+    creaturesLostInCombat: 0, creaturesLostOther: 0, biggestSweep: 0, sweepsSuffered: 0, tokensCreated: 0,
+    attacksDeclared: 6, attackedTurns: 3, attackersFaced: 2, blocksDeclared: 1, damageTakenFlying: 4,
+    damageTakenTrample: 0, damageTakenOther: 6, damageTakenNonCombat: 0, damageDealtCombat: 36,
+    damageDealtNonCombat: 4, commanderDamageTaken: 0, lifeGained: 0,
+  };
+  const own: MatchSeat = {
+    ...filler, name: "Du", deck: "Testdeck", human: true, winner: false, lossReason: "LifeReachedZero",
+    eliminatedTurn: opts.turns ?? 10, damageDealt: 10, damageTaken: 40, combatDamageTaken: 36, lifeEnd: 0,
+    damageTakenFlying: 12, damageTakenTrample: 12, damageTakenOther: 12, damageTakenNonCombat: 4,
+    damageDealtCombat: 8, damageDealtNonCombat: 2, attackersFaced: 6, ...seat,
+  };
+  return {
+    v: opts.v ?? 2, id, startedAt: "s", endedAt: "e", durationMs: 600000, source: "live",
+    turns: opts.turns ?? 10, reason: "AllOpponentsLost", draw: false, counted: true,
+    seats: opts.pod ? [own, filler, { ...filler, name: "Gegner 2", deck: "Zweiter Gegner" }] : [own, filler],
+  };
+}
+
+describe("v2-Kennzahlen", () => {
+  it("ohne eine einzige v2-Partie fehlt jede Vorfall-Kennzahl (v1 zaehlte sie nie - 0 waere erfunden)", () => {
+    // Titania hat nur v1-Partien; die Bridge schickt die Felder dort als 0 mit.
+    const s = summarize(records, "Titania, Gaea Incarnate");
+    expect(s).toBeDefined();
+    if (!s) return;
+    expect(s.games).toBe(2);
+    expect(s.v2Games).toBe(0);
+    expect(s.manaScrewRate).toBeUndefined();
+    expect(s.floodRate).toBeUndefined();
+    expect(s.avgOpeningLands).toBeUndefined();
+    expect(s.spellsPerTurn).toBeUndefined();
+    expect(s.counteredRate).toBeUndefined();
+    expect(s.sweepGames).toBeUndefined();
+    expect(s.avgBiggestSweep).toBeUndefined();
+    expect(s.flyingShare).toBeUndefined();
+    expect(s.tramplingShare).toBeUndefined();
+    expect(s.avgAttacks).toBeUndefined();
+    expect(s.avgAttackersFaced).toBeUndefined();
+    expect(s.avgHandEnd).toBeUndefined();
+    expect(s.avgRemovalCast).toBeUndefined();
+    expect(s.avgCounterspellsCast).toBeUndefined();
+    expect(s.avgEliminationShare).toBeUndefined();
+  });
+
+  it("eine v1-Partie mit ausgefuellten Feldern bleibt trotzdem 'keine Daten'", () => {
+    // Genau der Fall, gegen den die Versionspruefung schuetzt: der Datensatz traegt die Felder, aber v: 1.
+    const s = summarize([v2Record("alt", { sweepsSuffered: 3, openingLands: 1 }, { v: 1 })], "Testdeck");
+    expect(s?.games).toBe(1);
+    expect(s?.v2Games).toBe(0);
+    expect(s?.sweepGames).toBeUndefined();
+    expect(s?.avgOpeningLands).toBeUndefined();
+  });
+
+  it("Mischung: die Vorfall-Kennzahlen rechnen nur ueber die v2-Partien", () => {
+    // Ojutai Flyers: m6 (v1, Unentschieden) und die v2-Duell-Partie. Bilanz ueber beide, Vorfaelle ueber eine.
+    const s = summarize(records, "Ojutai Flyers");
+    expect(s).toBeDefined();
+    if (!s) return;
+    expect(s.games).toBe(2);
+    expect(s.draws).toBe(1);
+    expect(s.v2Games).toBe(1);
+    expect(s.avgOpeningLands).toBeCloseTo(3, 6);
+    expect(s.avgHandEnd).toBeCloseTo(4, 6);
+    expect(s.avgRemovalCast).toBeCloseTo(3, 6);
+    expect(s.avgCounterspellsCast).toBeCloseTo(1, 6);
+    expect(s.avgAttacks).toBeCloseTo(5, 6);
+    expect(s.avgAttackersFaced).toBeCloseTo(12, 6);
+    expect(s.sweepGames).toBe(1);
+    expect(s.avgBiggestSweep).toBeCloseTo(3, 6);
+    // 2 von 11 eigenen Zaubern gekontert, 11 Zauber in 7 eigenen Zuegen.
+    expect(s.counteredRate).toBeCloseTo(2 / 11, 6);
+    expect(s.spellsPerTurn).toBeCloseTo(11 / 7, 6);
+    // 18 von 36 Punkten Kampfschaden kamen von Fliegern, 6 von Trampelschaden.
+    expect(s.flyingShare).toBeCloseTo(0.5, 6);
+    expect(s.tramplingShare).toBeCloseTo(6 / 36, 6);
+    // Der Sitz hielt bis zum letzten Zug durch: 14/14.
+    expect(s.avgEliminationShare).toBeCloseTo(1, 6);
+    // Kein Screw (3 Laender im 3. eigenen Zug), keine Flut (7 Laender, aber 11 Zauber).
+    expect(s.manaScrewRate).toBe(0);
+    expect(s.floodRate).toBe(0);
+  });
+
+  it("Pod: der Ausscheide-Anteil rechnet nur die v2-Partie, nicht die v1-Partie mit", () => {
+    // Atraxa: m2 (v1, schied im letzten Zug aus -> 1,0) und die v2-Pod-Partie (Zug 12 von 18).
+    const s = summarize(records, "Atraxa Superfriends", "pod");
+    expect(s?.games).toBe(2);
+    expect(s?.v2Games).toBe(1);
+    expect(s?.avgEliminationShare).toBeCloseTo(12 / 18, 6);
+    expect(s?.tramplingShare).toBeCloseTo(14 / 32, 6);
+  });
+
+  it("Mana-Screw: <= 2 Laender im 3. eigenen Zug, ueber die Partien mit so vielen eigenen Zuegen", () => {
+    const s = summarize([
+      v2Record("screw", { landsByTurn: [0, 1, 2, 2, 3], lands: 3 }),
+      v2Record("ok", { landsByTurn: [0, 1, 2, 3, 4], lands: 4 }),
+    ], "Testdeck");
+    expect(s?.v2Games).toBe(2);
+    expect(s?.manaScrewRate).toBeCloseTo(0.5, 6);
+  });
+
+  it("Mana-Screw fehlt, wenn keine v2-Partie ueberhaupt drei eigene Zuege hatte", () => {
+    const s = summarize([v2Record("kurz", { landsByTurn: [0, 1, 2], lands: 2 })], "Testdeck");
+    expect(s?.v2Games).toBe(1);
+    expect(s?.manaScrewRate).toBeUndefined();
+    // Die uebrigen Kennzahlen stehen trotzdem - sie brauchen keine drei eigenen Zuege.
+    expect(s?.avgOpeningLands).toBeCloseTo(3, 6);
+  });
+
+  it("Flut: ab 6 abgelegten Laendern und hoechstens einem Zauber je Land", () => {
+    const s = summarize([
+      v2Record("flut", { landsByTurn: [0, 1, 2, 3, 4, 5, 6], lands: 6, spells: 5 }),
+      v2Record("normal", { landsByTurn: [0, 1, 2, 3, 4, 5, 6], lands: 6, spells: 12 }),
+      // 5 Laender: zu wenig fuer eine Flut, egal wie wenig gezaubert wurde.
+      v2Record("wenig-land", { landsByTurn: [0, 1, 2, 3, 4, 5], lands: 5, spells: 2 }),
+    ], "Testdeck");
+    expect(s?.v2Games).toBe(3);
+    expect(s?.floodRate).toBeCloseTo(1 / 3, 6);
+  });
+
+  it("Quoten ohne Grundlage fehlen, statt 0 zu behaupten", () => {
+    // Kein Kampfschaden erlitten -> Flieger-/Trampel-Anteil haben keinen Nenner; kein Zauber gewirkt ->
+    // keine Konter-Quote; ueberlebt -> kein Ausscheide-Anteil.
+    const s = summarize([v2Record("nichts", {
+      winner: true, lossReason: undefined, eliminatedTurn: null, spells: 0,
+      damageTakenFlying: 0, damageTakenTrample: 0, damageTakenOther: 0, damageTakenNonCombat: 3,
+      damageTaken: 3, combatDamageTaken: 0, lifeEnd: 37,
+    })], "Testdeck");
+    expect(s?.v2Games).toBe(1);
+    expect(s?.flyingShare).toBeUndefined();
+    expect(s?.tramplingShare).toBeUndefined();
+    expect(s?.counteredRate).toBeUndefined();
+    expect(s?.avgEliminationShare).toBeUndefined();
+    // Mittelwerte ueber gezaehlte Felder bleiben: eine gemessene 0 ist eine Aussage.
+    expect(s?.sweepGames).toBe(0);
+    expect(s?.avgBiggestSweep).toBe(0);
+  });
+
+  it("gepoolte Quoten: gekonterte Zauber ueber alle v2-Partien zusammen, nicht als Mittel der Quoten", () => {
+    const s = summarize([
+      v2Record("viel", { spells: 20, spellsCountered: 2 }),
+      v2Record("wenig", { spells: 2, spellsCountered: 1 }),
+    ], "Testdeck");
+    // 3 von 22 Zaubern (13,6 %) - das Mittel der Einzelquoten waere 30 % und liesse die 2-Zauber-Partie
+    // so schwer wiegen wie die 20-Zauber-Partie.
+    expect(s?.counteredRate).toBeCloseTo(3 / 22, 6);
   });
 });

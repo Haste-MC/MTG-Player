@@ -49,15 +49,20 @@ export interface AppState {
    *  schickt seconds: 0, sobald wieder etwas passiert; dann faellt das Feld weg. Auch jeder Snapshot
    *  loescht es: ein neuer Zustand ist sichtbare Aktivitaet, die Anzeige waere sonst kurz falsch. */
   thinking?: { player?: number | null; seconds: number };
-  /** Ganze Partienliste der Bridge (siehe matches-Nachricht) - bei Verbindung und nach jeder Aenderung
-   *  komplett ersetzt, nie zusammengefuehrt. Grundlage fuer matchStats.ts. */
+  /** Partienliste der Bridge (siehe matches-Nachricht) - bei Verbindung und nach jeder Aenderung
+   *  komplett ersetzt, nie zusammengefuehrt. Grundlage fuer matchStats.ts. Die Bridge schickt hoechstens
+   *  die letzten 300 Datensaetze und laesst die Zeitachse weg (sie kommt einzeln per matchDetail). */
   matches: MatchRecord[];
+  /** Gespeicherte Partien insgesamt (matches-Nachricht, Feld total). Ist der Wert groesser als
+   *  matches.length, zeigt der Statistik-Screen nur den juengeren Teil. Eine Bridge vor Runde A schickt
+   *  kein total - dann ist es die Laenge der Liste, denn mehr weiss der Client nicht. */
+  matchesTotal: number;
 }
 
 export const initialState: AppState = {
   screen: "lobby", precons: [], decks: [], choices: [], log: [], hiddenKinds: ["MANA", "PHASE"], lastLogId: 0,
   aiModes: ["standard", "hybrid", "sim"], aiProfiles: ["Default"], aiTimeout: 5, bestOf: 0, expectNewMatch: false,
-  archidekt: { loading: false }, matches: [],
+  archidekt: { loading: false }, matches: [], matchesTotal: 0,
 };
 
 const LOG_MAX = 500;
@@ -136,7 +141,7 @@ export function reduce(s: AppState, m: Inbound): AppState {
     case "archidektProgress":
       return { ...s, archidekt: { ...s.archidekt, progress: m } };
     case "matches":
-      return { ...s, matches: m.matches };
+      return { ...s, matches: m.matches, matchesTotal: m.total ?? m.matches.length };
     default:
       return s;
   }
