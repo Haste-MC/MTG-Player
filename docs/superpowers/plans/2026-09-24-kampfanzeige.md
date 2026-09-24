@@ -509,9 +509,10 @@ export interface CombatTag { kind: "atk" | "blk"; label: string; title: string }
 
 const MAX_NAME = 14;
 
-/** Lange Kartennamen passen nicht in die Marke; der Tooltip traegt immer den vollen Namen. */
+/** Lange Kartennamen passen nicht in die Marke; der Tooltip traegt immer den vollen Namen.
+ *  trimEnd, damit bei einem Schnitt hinter einem Leerzeichen kein "Teferi, Hero …" entsteht. */
 function short(name: string): string {
-  return name.length > MAX_NAME ? name.slice(0, 13) + "…" : name;
+  return name.length > MAX_NAME ? name.slice(0, 13).trimEnd() + "…" : name;
 }
 
 const cardOf = (state: Snapshot, id: number | undefined): CardSnap | undefined =>
