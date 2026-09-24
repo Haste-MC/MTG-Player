@@ -124,11 +124,11 @@ public final class Messages {
     /**
      * Bei Verbindung (nach {@link Lobby}) und nach jeder Aenderung (siehe {@link mtgplayer.server.Bridge}):
      * die neuesten 300 Partien, aelteste zuerst, je Datensatz OHNE {@code timeline}
-     * (siehe {@link MatchRecord#withoutTimeline()} - {@code Json.MAPPER} laesst das dadurch
-     * {@code null}e Feld beim Serialisieren komplett weg statt einer leeren Liste, der Client erkennt
-     * daran "nicht geladen"). {@code total}: die tatsaechliche Gesamtzahl gespeicherter Partien, auch
-     * wenn mehr als 300 vorliegen. Die volle Zeitachse einer Partie liefert erst {@link MatchMsg} auf
-     * {@code matchDetail}.
+     * (siehe {@link MatchRecord#withoutTimeline()} - das Feld wird dabei {@code null}, und
+     * {@code Json.MAPPER} laesst ein {@code null}-Feld beim Serialisieren komplett weg statt einer
+     * leeren Liste, der Client erkennt daran "nicht geladen"). {@code total}: die tatsaechliche
+     * Gesamtzahl gespeicherter Partien, auch wenn mehr als 300 vorliegen. Die volle Zeitachse einer
+     * Partie liefert erst {@link MatchMsg} auf {@code matchDetail}.
      */
     public record Matches(String type, List<MatchRecord> matches, int total) {
         public Matches(List<MatchRecord> matches, int total) { this("matches", matches, total); }
