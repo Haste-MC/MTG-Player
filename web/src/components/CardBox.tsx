@@ -4,6 +4,7 @@ import type { CardSnap } from "../protocol";
 import { useStore } from "../store";
 import { send } from "../ws";
 import CardImage from "./CardImage";
+import { combatTag } from "../combat";
 
 /** Stapel-Angaben, wenn diese Karte fuer mehrere gleichnamige steht (siehe groups.ts). */
 export interface StackInfo { count: number; tapped: number }
@@ -20,6 +21,10 @@ export interface StackInfo { count: number; tapped: number }
 export default function CardBox({ card, stack, attached }: { card: CardSnap; stack?: StackInfo; attached?: CardSnap[] }) {
   const seq = useStore((s) => s.state?.prompt.seq);
   const setHover = useStore((s) => s.setHover);
+  // Kampf-Marke aus den Kampfdaten des Snapshots (combat.ts). Fehlt "combat" (aeltere Bruecke, Fixture
+  // ohne Kampfdaten), bleibt es beim bisherigen Text - die Marke verschwindet nie.
+  const state = useStore((s) => s.state);
+  const tag = state ? combatTag(state, card.id) : undefined;
   // failedKey statt eines simplen bool: eine fehlgeschlagene Karte in diesem Slot darf nicht fuer
   // IMMER auf Text-Fallback haengen bleiben, wenn hier spaeter eine andere Karte (anderer
   // imageKey) angezeigt wird - z. B. wenn React den Card-Slot fuer eine neue Karte wiederverwendet.
@@ -103,8 +108,11 @@ export default function CardBox({ card, stack, attached }: { card: CardSnap; sta
             </div>
           )}
         </div>
-        {(card.attacking || card.blocking) && (
-          <div className={"tag combat-tag " + (card.attacking ? "atk" : "blk")}>{card.attacking ? "Angriff" : "Block"}</div>
+        {(tag || card.attacking || card.blocking) && (
+          <div className={"tag combat-tag " + (tag ? tag.kind : card.attacking ? "atk" : "blk")}
+            title={tag ? tag.title : undefined}>
+            {tag ? tag.label : card.attacking ? "Angriff" : "Block"}
+          </div>
         )}
         {card.emblem && <div className="tag emblem-tag" title="Emblem">Emblem</div>}
         {stacked && <div className="tag stack-count" title={`${stack.count} × ${card.name}`}>×{stack.count}</div>}
