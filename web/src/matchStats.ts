@@ -85,6 +85,50 @@ export function deckGames(records: MatchRecord[], format: Format = "all"): DeckG
     .sort((a, b) => b.games + b.capped - (a.games + a.capped) || a.deck.localeCompare(b.deck));
 }
 
+/**
+ * Schluessel, unter dem zwei Schreibweisen desselben Decks zusammenfinden: Forges
+ * {@code DeckBase(String)} ersetzt in einem Decknamen jeden "/" durch "_" (Decks werden intern als
+ * "verzeichnis/name" referenziert). Der DeckStore stellt den rohen Namen fuer die Lobby wieder her, ein
+ * MatchRecord traegt dagegen den sanitisierten - Kevins Decks heissen darin
+ * `"Titel" __ Commander` statt `"Titel" // Commander`. Ohne diese Normalisierung findet das Board zu
+ * keiner seiner Partien das gespeicherte Deck: kein Commander-Bild, keine Deckanalyse, kein Sparring.
+ */
+export const deckKey = (name: string) => name.replace(/\//g, "_");
+
+/** Eine Zeile der Deckliste im Statistik-Board: ein Deck mit seinen Partien und der Angabe, ob es uns
+ * gehoert (`own`: es steht in der Lobby-Liste der gespeicherten Decks). Ein Deck, das wir nur als Gegner
+ * gesehen haben, hat `own: false` - es bekommt keinen Sparring-Knopf, denn wir koennen es nicht spielen. */
+export interface BoardDeck extends DeckGames {
+  own: boolean;
+  /** Name, unter dem die **Bridge** das Deck kennt (DeckStore), falls es eines von uns ist - nur damit
+   *  darf man `sparringStart`/`analyzeDeck` schicken. `deck` ist dagegen der Name aus den Partien und
+   *  bleibt der Schluessel fuer alles, was ueber `matches` rechnet (siehe deckKey). */
+  savedName?: string;
+}
+
+/**
+ * Die Deckliste des Boards: alle **gespeicherten** Decks plus alle Decks mit gewerteten oder
+ * Zugdeckel-Partien (siehe {@link deckGames}). Die gespeicherten sind der Grund fuer diese zweite
+ * Funktion: ein frisch importiertes Deck hat noch keine Partie, ist aber genau das Deck, mit dem man ein
+ * Sparring starten will - ohne diese Zeile waere es im Board nicht auswaehlbar.
+ *
+ * Reihenfolge: erst die Decks mit Partien (wie in {@link deckGames}: nach Partienzahl absteigend, bei
+ * Gleichstand nach Name), danach die uebrigen gespeicherten Decks alphabetisch.
+ *
+ * @param saved Namen der gespeicherten Decks (Store: `decks`), in beliebiger Reihenfolge
+ */
+export function boardDecks(records: MatchRecord[], saved: string[], format: Format = "all"): BoardDeck[] {
+  const byKey = new Map(saved.map((name) => [deckKey(name), name]));
+  const played = deckGames(records, format).map((d) => {
+    const savedName = byKey.get(deckKey(d.deck));
+    return savedName === undefined ? { ...d, own: false } : { ...d, own: true, savedName };
+  });
+  const seen = new Set(played.map((d) => deckKey(d.deck)));
+  const rest = saved.filter((name) => !seen.has(deckKey(name))).sort((a, b) => a.localeCompare(b))
+    .map((deck) => ({ deck, games: 0, capped: 0, own: true, savedName: deck }));
+  return [...played, ...rest];
+}
+
 /** Waehlt fuer `deck` innerhalb einer Partie hoechstens einen Sitz: bevorzugt den menschlichen, sonst
  * den ersten passenden (Reihenfolge von `record.seats`). undefined, wenn kein Sitz dieses Deck spielt. */
 function pickSeat(record: MatchRecord, deck: string): { seat: MatchSeat; index: number } | undefined {

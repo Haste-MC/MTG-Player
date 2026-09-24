@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { deckGames, formatOf, summarize, wilson } from "./matchStats";
+import { boardDecks, deckGames, deckKey, formatOf, summarize, wilson } from "./matchStats";
 import type { MatchRecord, MatchSeat } from "./protocol";
 
 // Gleicher Inhalt wie fixtures/matches.json (Statistik-Screen/Screenshots, siehe scripts/shot.mjs) - hier als
@@ -430,6 +430,72 @@ describe("deckGames", () => {
 
   it("leere Eingabe -> leere Liste", () => {
     expect(deckGames([])).toEqual([]);
+  });
+});
+
+describe("boardDecks", () => {
+  it("haengt gespeicherte Decks ohne Partie alphabetisch hinten an", () => {
+    const rows = boardDecks(records, ["Krenko Goblins", "Zurgo Helmsmasher", "Adrix & Nev"]);
+    expect(rows[0]).toEqual({ deck: "Atraxa Superfriends", games: 2, capped: 1, own: false });
+    expect(rows.find((d) => d.deck === "Krenko Goblins"))
+      .toEqual({ deck: "Krenko Goblins", games: 2, capped: 1, own: true, savedName: "Krenko Goblins" });
+    // Die beiden ohne Partie stehen hinten, untereinander alphabetisch.
+    expect(rows.slice(-2)).toEqual([
+      { deck: "Adrix & Nev", games: 0, capped: 0, own: true, savedName: "Adrix & Nev" },
+      { deck: "Zurgo Helmsmasher", games: 0, capped: 0, own: true, savedName: "Zurgo Helmsmasher" },
+    ]);
+  });
+
+  it("ein Deck, das nur als Gegner vorkommt, bleibt in der Liste - aber ohne own", () => {
+    const rows = boardDecks(records, []);
+    expect(rows.every((d) => !d.own)).toBe(true);
+    expect(rows.map((d) => d.deck)).toEqual(deckGames(records).map((d) => d.deck));
+  });
+
+  it("ohne Partien bleiben nur die gespeicherten Decks, alphabetisch", () => {
+    expect(boardDecks([], ["Koma Ramp", "Adrix & Nev"])).toEqual([
+      { deck: "Adrix & Nev", games: 0, capped: 0, own: true, savedName: "Adrix & Nev" },
+      { deck: "Koma Ramp", games: 0, capped: 0, own: true, savedName: "Koma Ramp" },
+    ]);
+  });
+
+  it("der Format-Schalter gilt auch hier - ein Deck ohne Partie IN DIESEM Format rutscht nach hinten", () => {
+    // Lantern Stax hat nur Duell-Partien (zwei am Zugdeckel): im Pod-Schalter steht es deshalb hinten
+    // bei den Decks ohne Partie, im Duell-Schalter vorn bei seinen zwei Deckel-Partien.
+    const pod = boardDecks(records, ["Lantern Stax"], "pod");
+    const lantern = pod.find((d) => d.deck === "Lantern Stax");
+    expect(lantern).toEqual({ deck: "Lantern Stax", games: 0, capped: 0, own: true, savedName: "Lantern Stax" });
+    expect(pod.indexOf(lantern!)).toBe(pod.length - 1);
+    expect(boardDecks(records, ["Lantern Stax"], "duel").find((d) => d.deck === "Lantern Stax"))
+      .toEqual({ deck: "Lantern Stax", games: 0, capped: 2, own: true, savedName: "Lantern Stax" });
+  });
+
+  it("leere Eingabe -> leere Liste", () => {
+    expect(boardDecks([], [])).toEqual([]);
+  });
+
+  // Der Fall aus dem Probelauf: Kevins Decks heissen im Datensatz `… __ Commander`, in der Lobby
+  // `… // Commander` (Forge ersetzt "/" durch "_"). Ohne deckKey stuenden sie doppelt in der Liste -
+  // einmal mit Partien und "fremd", einmal als eigenes Deck ohne Partien.
+  it("erkennt dasselbe Deck trotz Forges Schraegstrich-Ersetzung und merkt sich den Speichernamen", () => {
+    const recordName = '"POV: You forgot to touch grass" __ Titania, Gaea Incarnate';
+    const savedName = '"POV: You forgot to touch grass" // Titania, Gaea Incarnate';
+    const seat = (deck: string, winner: boolean): MatchSeat => ({
+      name: deck, deck, human: false, winner, lossReason: winner ? null : "LifeReachedZero",
+      mulligans: 0, lands: 7, landsByTurn: [0, 1, 2, 3, 4, 5, 6, 7], missedLandDrops: 0,
+      spells: 9, spellMana: 18, commanderCasts: 1, commanderTax: 0,
+      damageDealt: 40, damageTaken: 12, combatDamageTaken: 12, lifeEnd: winner ? 28 : 0, poisonEnd: 0,
+    });
+    const played: MatchRecord[] = [{
+      id: "x-1", startedAt: "s", endedAt: "e", durationMs: 300000, source: "sparring", turns: 20,
+      reason: "AllOpponentsLost", draw: false, counted: true, excludeReason: null,
+      seats: [seat(recordName, true), seat("Krenko Goblins", false)],
+    }];
+    const rows = boardDecks(played, [savedName]);
+    expect(rows).toHaveLength(2);
+    const mine = rows.find((d) => d.own);
+    expect(mine).toEqual({ deck: recordName, games: 1, capped: 0, own: true, savedName });
+    expect(deckKey(recordName)).toBe(deckKey(savedName));
   });
 });
 

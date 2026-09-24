@@ -185,7 +185,12 @@ drei Format-Schalter – **Alle / 1 vs 1 / Pod (3+)**, je mit der Zahl der gewer
 **„Erklärungen"** (an): er blendet unter jedem Block und jeder Kachel den Satz ein, der sagt, was die Zahl
 bedeutet und worüber sie gerechnet ist. Das Format trennt die Auswertung durchgehend, denn dieselbe Zahl
 bedeutet im Pod etwas anderes als im Duell (dort verliert man überwiegend, Schaden verteilt sich auf drei
-Gegner). Links die Decks mit Commander-Bild, Bilanz und – falls vorhanden – ihren Zugdeckel-Partien.
+Gegner). Links die Decks mit Commander-Bild, Bilanz und – falls vorhanden – ihren Zugdeckel-Partien:
+**alle eigenen (gespeicherten) Decks** und dazu jedes Deck, zu dem es gewertete oder Zugdeckel-Partien gibt.
+Erst die Decks mit Partien (nach Partienzahl), dann die übrigen eigenen alphabetisch – ein frisch importiertes
+Deck steht also ohne eine einzige Partie in der Liste, und genau dort startet man sein erstes Sparring. Ein Deck,
+das nur als **Gegner** vorkam (kein eigenes, z. B. ein Precon), bleibt mit seinen Partien in der Liste, sagt das
+im Tooltip und bekommt keinen Sparring-Knopf.
 
 Rechts, für das gewählte Deck im gewählten Format:
 
@@ -245,13 +250,17 @@ erweitert; gibt es dann immer noch keinen Gegner, lehnt die Bridge den Start ab 
 Bracket setzen oder Decks importieren"). Ein Deck ohne Bracket spielt gegen die Decks ohne Bracket. Unter dem
 Knopf steht, woraus gezogen wird („zufällig aus Bracket 3: 7 Decks").
 
+Ein Deck **ohne** gespielte Partie lässt sich genauso sparren: es steht unten in der Deckliste, rechts steht
+statt der Kacheln „Noch keine Partie", und der Knopf darüber tut seine Arbeit.
+
 Der **Bracket** (Commander-Bracket 1–5) kommt beim Import aus Archidekt (`edhBracket`) und lässt sich von Hand
 ändern: im Deck-Panel unter „Eigene Decks" trägt jede Kachel oben links eine kleine Marke („B3", „B ?"), ein
 Klick öffnet die Auswahl 1–5 / „unbekannt". Precons haben keinen Bracket.
 
 Während des Laufs steht statt der Auswahl eine Fortschrittszeile („3/20 · gegen Koma, World-Eater …") mit
 **„Abbrechen"**; ein Abbruch beendet die laufende Partie sofort (ihr Kindprozess wird abgeschossen) und lässt
-keine weitere mehr antreten. Gescheiterte Partien stehen rot darunter, zählen mit und **beenden den Lauf nicht** –
+keine weitere mehr antreten. Gescheiterte Partien stehen rot darunter (mit der Zeile aus stderr, die nach der Ursache aussieht – der
+letzten Ausnahme, nicht dem letzten Stacktrace-Rahmen), zählen mit und **beenden den Lauf nicht** –
 jede Partie läuft in einem **eigenen JVM-Kindprozess**, damit ein Forge-Absturz weder den Lauf noch deine
 nebenher laufende Bridge mitnimmt. Es läuft immer nur **ein** Sparring; ein zweiter Start meldet „Sparring läuft
 noch".

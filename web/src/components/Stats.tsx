@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { deckGames, formatOf, summarize, type DeckSummary, type Format } from "../matchStats";
+import { boardDecks, deckKey, formatOf, summarize, type DeckSummary, type Format } from "../matchStats";
 import { findings } from "../findings";
 import type { DeckInfo, MatchRecord, MatchSeat } from "../protocol";
 import { sparringOpponents, useStore, type LogEntry, type SparringState } from "../store";
@@ -27,6 +27,8 @@ const MATCH_ERROR = /^⚠ Partie /;
 const SPARRING_ERROR = /^⚠ Sparring/;
 /** Partienzahlen im Sparring-Block (Spec §4). */
 const SPARRING_GAMES = [5, 10, 20, 50];
+/** Titel der Deck-Kachel eines Decks, das wir nur als Gegner gesehen haben (nicht in `decks`). */
+const FOREIGN_DECK_HINT = "nur als Gegner gesehen – kein eigenes Deck, also kein Sparring";
 /** Die drei Format-Schalter im Kopf. "all" rechnet ueber beide - fuer die Bilanz brauchbar, fuer alles
  * Formatabhaengige mit Vorsicht (im Pod verliert man ueberwiegend, Schaden verteilt sich auf drei Gegner). */
 const FORMATS: { id: Format; label: string }[] = [
@@ -80,9 +82,12 @@ export default function Stats() {
 
   // Commander-Bilder kommen aus der Lobby-Liste (Precons + eigene Decks), nicht aus dem Datensatz: eine
   // Partie speichert nur den Decknamen. Ein Deck, das es nicht mehr gibt, bleibt ohne Bild.
+  // Schluessel ist deckKey, nicht der Name: ein Datensatz traegt Forges sanitisierten Namen
+  // ("… __ Commander"), die Lobby den rohen ("… // Commander") - sonst faende KEIN Deck mit Schraegstrich
+  // im Namen sein Bild.
   const deckInfo = useMemo(() => {
     const map = new Map<string, DeckInfo>();
-    for (const d of [...precons, ...savedDecks]) map.set(d.name, d);
+    for (const d of [...precons, ...savedDecks]) map.set(deckKey(d.name), d);
     return map;
   }, [precons, savedDecks]);
 
@@ -96,7 +101,12 @@ export default function Stats() {
     return { all: duel + pod, duel, pod };
   }, [matches]);
 
-  const decks = useMemo(() => deckGames(matches, format), [matches, format]);
+  // Deckliste links: die gespeicherten Decks UND alles, was Partien hat (siehe boardDecks). Ein frisch
+  // importiertes Deck hat noch keine Partie - waere es hier nicht, koennte man ausgerechnet dafuer kein
+  // Sparring starten. Decks, die nur als Gegner vorkamen, bleiben drin (own: false), bekommen aber
+  // keinen Sparring-Knopf.
+  const savedNames = useMemo(() => savedDecks.map((d) => d.name), [savedDecks]);
+  const decks = useMemo(() => boardDecks(matches, savedNames, format), [matches, savedNames, format]);
   // Kein eigener Effekt fuer die Vorauswahl: faellt das gewaehlte Deck aus der Liste (letzte Partie
   // geloescht, nicht mehr gewertet oder anderes Format), greift wieder die erste Zeile.
   const deck = pick && decks.some((d) => d.deck === pick) ? pick : decks[0]?.deck;
@@ -111,7 +121,14 @@ export default function Stats() {
     return map;
   }, [decks, matches, format]);
   const picked = decks.find((d) => d.deck === deck);
-  const analysis = deck ? deckAnalyses[deck] : undefined;
+  // sparringStart braucht den Namen des DeckStore - mit dem sanitisierten Namen aus dem Datensatz
+  // antwortet die Bridge "unbekanntes Deck". Fuer ein fremdes Deck (nur als Gegner gesehen) gibt es
+  // keinen, dann geht kein Sparring.
+  const bridgeName = picked?.savedName;
+  // analyzeDeck kennt auch Precons (Bridge: erst DeckStore, dann Precons) - hier darf der Name aus dem
+  // Datensatz einspringen. Nur ein laengst geloeschtes Deck laeuft dann in die ehrliche Fehlermeldung.
+  const analysisName = bridgeName ?? deck;
+  const analysis = analysisName ? deckAnalyses[analysisName] : undefined;
   const found = useMemo(() => findings(summary, analysis, format), [summary, analysis, format]);
   // Neueste zuerst; die Liste zeigt bewusst alle Decks, nicht nur das gewaehlte: eine nicht gewertete
   // Partie taucht in der Deckliste gar nicht auf und waere sonst nicht mehr erreichbar. Der
@@ -123,7 +140,7 @@ export default function Stats() {
   );
 
   // Deckwechsel (oder erster Aufbau): Deckanalyse anfordern - der Store fragt jedes Deck nur einmal.
-  useEffect(() => { if (deck) requestDeckAnalysis(deck); }, [deck, requestDeckAnalysis]);
+  useEffect(() => { if (analysisName) requestDeckAnalysis(analysisName); }, [analysisName, requestDeckAnalysis]);
   // Aufgeklappte Partie: Zeitachse nachladen (die Liste traegt sie nicht). Bewusst im Klick und nicht
   // in einem Effekt: so steht pendingMatch schon im selben Commit, in dem die Zeile aufgeht - sonst
   // zeigte sie fuer einen Frame die Fehlermeldung ("nicht geladen"), bevor die Anfrage ueberhaupt raus ist.
@@ -194,10 +211,10 @@ export default function Stats() {
         </div>
       </header>
 
-      {matches.length === 0 ? (
+      {decks.length === 0 ? (
         <p className="muted empty-stats">
-          Noch keine Partien – spiele eine Runde. Danach füllt das Sparring die Statistik (der Knopf steht
-          oben neben dem gewählten Deck).
+          Noch keine Partien und keine eigenen Decks – importiere in der Lobby ein Deck, dann füllt das
+          Sparring die Statistik.
         </p>
       ) : (
         <>
@@ -210,17 +227,19 @@ export default function Stats() {
                 </p>
               )}
               {decks.map((d) => {
-                const info = deckInfo.get(d.deck);
+                const info = deckInfo.get(deckKey(d.deck));
                 const s = deckSummaries.get(d.deck);
                 const commanders = info?.commanders.map((c) => c.name).join(" & ");
                 return (
-                  <button key={d.deck} className={"sb-deck" + (d.deck === deck ? " on" : "")} onClick={() => setPick(d.deck)}>
+                  <button key={d.deck} className={"sb-deck" + (d.deck === deck ? " on" : "")} onClick={() => setPick(d.deck)}
+                    title={d.own ? undefined : FOREIGN_DECK_HINT}>
                     <Art commanders={info?.commanders ?? []} />
                     <span className="sb-deck-text">
-                      <span className="sb-deck-name">{commanders || d.deck}</span>
-                      {commanders && <span className="sb-deck-sub">{d.deck}</span>}
+                      <span className="sb-deck-name">{commanders || d.savedName || d.deck}</span>
+                      {commanders && <span className="sb-deck-sub">{d.savedName ?? d.deck}</span>}
                       <span className="sb-deck-record">
-                        {s ? `${s.wins} S · ${s.losses} N${s.draws > 0 ? ` · ${s.draws} R` : ""}` : "keine Bilanz"}
+                        {s ? `${s.wins} S · ${s.losses} N${s.draws > 0 ? ` · ${s.draws} R` : ""}`
+                          : d.games + d.capped === 0 ? "noch keine Partie" : "keine Bilanz"}
                         {d.capped > 0 && <span className="sb-deck-capped" title={TURN_CAP_HINT}> · {d.capped} Deckel</span>}
                       </span>
                     </span>
@@ -231,18 +250,21 @@ export default function Stats() {
             </aside>
 
             <main className="sb-panels">
-              <Sparring deck={deck} decks={savedDecks} run={sparring} games={games} onGames={setGames}
-                onStart={() => deck && startSparring(deck, games)} onCancel={cancelSparring} error={sparringStatus} />
+              <Sparring deck={bridgeName ?? deck} decks={savedDecks} run={sparring} games={games} onGames={setGames}
+                onStart={() => bridgeName && startSparring(bridgeName, games)} onCancel={cancelSparring}
+                error={sparringStatus} />
               {summary && deck ? (
                 <>
                   <Findings findings={found} analyzed={analysis !== undefined} />
                   <StatBlocks s={summary} format={format} explain={explain} />
-                  <DeckAnalysisPanel deck={deck} analysis={analysis} explain={explain}
-                    pending={pendingAnalysis.includes(deck)} />
+                  <DeckAnalysisPanel deck={analysisName ?? deck} analysis={analysis} explain={explain}
+                    pending={analysisName !== undefined && pendingAnalysis.includes(analysisName)} />
                   <Opponents s={summary} deckInfo={deckInfo} explain={explain} />
                 </>
               ) : picked && picked.capped > 0 ? (
                 <OnlyCapped capped={picked.capped} />
+              ) : picked ? (
+                <NoGames own={picked.own} />
               ) : (
                 <p className="muted">Kein Deck ausgewählt.</p>
               )}
@@ -331,7 +353,7 @@ function Sparring(
           <span className="spar-bar"><span className="spar-fill" style={{ width: pct + "%" }} /></span>
           <button className="ghost small" onClick={onCancel}>Abbrechen</button>
         </div>
-      ) : (
+      ) : opp.saved ? (
         <div className="spar-start">
           <div className="sb-chips" role="group" aria-label="Partien">
             {SPARRING_GAMES.map((g) => (
@@ -342,6 +364,10 @@ function Sparring(
           <button className="primary" disabled={!canStart} onClick={onStart}>Sparring starten</button>
           <span className={"spar-hint" + (canStart ? "" : " warn")}>{hint}</span>
         </div>
+      ) : (
+        // Fremdes Deck (nur als Gegner gesehen) oder gar keine Auswahl: kein Knopf, nur der Grund -
+        // ein abgeblendeter Startknopf wuerde eine Moeglichkeit vortaeuschen, die es nicht gibt.
+        <p className="spar-hint warn">{hint}</p>
       )}
       {run && !run.running && run.done > 0 && (
         <p className="spar-done">
@@ -436,6 +462,22 @@ function OnlyCapped({ capped }: { capped: number }) {
   );
 }
 
+/** Statt der Bloecke fuer ein Deck ohne jede Partie: entweder ein frisch importiertes eigenes Deck (dann
+ * ist der Sparring-Block darueber der Weg zu Zahlen) oder ein Deck, das wir nur als Gegner gesehen haben
+ * (dann gibt es hier nie Zahlen - es ist nicht unseres). */
+function NoGames({ own }: { own: boolean }) {
+  return (
+    <section className="sb-block">
+      <div className="sb-block-head"><h2>Noch keine Partie</h2></div>
+      <p className="muted">
+        {own
+          ? "Mit diesem Deck wurde noch nichts gespielt – starte oben ein Sparring, dann stehen die Kennzahlen in ein paar Minuten hier."
+          : "Dieses Deck kennen wir nur als Gegner: es ist keines deiner gespeicherten Decks, darum gibt es dafür keine eigene Bilanz und kein Sparring."}
+      </p>
+    </section>
+  );
+}
+
 /** Block 7 (Gegner, mit Commander-Bild) und die Todesursachen daneben - beides Listen statt Kacheln. */
 function Opponents({ s, deckInfo, explain }: { s: DeckSummary; deckInfo: Map<string, DeckInfo>; explain: boolean }) {
   const losses = Object.entries(s.lossReasons).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
@@ -449,7 +491,7 @@ function Opponents({ s, deckInfo, explain }: { s: DeckSummary; deckInfo: Map<str
         <div className="opp-list">
           {s.opponents.length === 0 && <p className="muted">keine Gegner erfasst</p>}
           {s.opponents.map((o) => {
-            const info = deckInfo.get(o.deck);
+            const info = deckInfo.get(deckKey(o.deck));
             return (
               <div key={o.deck} className="opp">
                 <Art commanders={info?.commanders ?? []} />
