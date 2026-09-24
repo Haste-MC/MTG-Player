@@ -88,7 +88,9 @@ public record Snapshot(
 
     /** Ein Angreifer mit seinem Ziel und seinen Blockern. Genau eines von {@code defenderPlayer} und
      *  {@code defenderCard} ist gesetzt (Forges Verteidiger ist ein Spieler ODER eine Karte - Planeswalker,
-     *  Battle); liefert Forge kein Ziel, bleiben beide null und die Zeile bleibt trotzdem erhalten. */
+     *  Battle) - beide null kommt hier praktisch nicht vor: {@code CombatView.addAttackingBand} kehrt bei
+     *  {@code defender == null} sofort zurueck, der Angreifer steht dann gar nicht erst in der View. Die
+     *  Sammelgruppe "none" im Web-UI (combat.ts) ist damit heute ein toter Verteidigungspfad. */
     public record AttackSnap(
             int attacker,
             Integer defenderPlayer,

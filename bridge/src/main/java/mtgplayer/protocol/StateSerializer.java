@@ -173,8 +173,10 @@ public final class StateSerializer {
     }
 
     /** Forges CombatView in Zeilen je Angreifer uebersetzen. Null (nicht leere Liste), wenn kein Kampf
-     *  laeuft - das UI prueft nur "da oder nicht". Karten, die noch nicht in der Kartentabelle stehen,
-     *  werden dabei nachgetragen. */
+     *  laeuft - das UI prueft nur "da oder nicht". Angreifer und Kartenziel stehen mit heutigem Forge
+     *  immer in einer Battlefield-Zone und sind darueber schon in der Kartentabelle (player() laeuft vor
+     *  combat() und traegt jedes Battlefield ein) - die computeIfAbsent-Nachtraege hier sind nur eine
+     *  Absicherung gegen kuenftige Zonen, kein heute aktiv genutzter Pfad. */
     private static List<Snapshot.AttackSnap> combat(GameView gv, ViewContext ctx,
                                                     Map<Integer, Snapshot.CardSnap> cards) {
         CombatView cv = gv.getCombat();
@@ -199,7 +201,9 @@ public final class StateSerializer {
     }
 
     /** Blocker eines Angreifers. Solange das Band nicht als geblockt markiert ist (der Mensch teilt noch
-     *  zu), fuehrt Forge die Zuordnung nur als geplante Blocker - dann zaehlen die. */
+     *  zu), fuehrt Forge die Zuordnung nur als geplante Blocker - dann zaehlen die. Wie beim Angreifer in
+     *  {@link #combat}: Blocker stehen im Battlefield und sind schon eingetragen, der Nachtrag unten ist
+     *  nur Absicherung gegen kuenftige Zonen. */
     private static List<Integer> blockers(CombatView cv, CardView attacker, ViewContext ctx,
                                           Map<Integer, Snapshot.CardSnap> cards) {
         FCollection<CardView> blockers = cv.getBlockers(attacker);

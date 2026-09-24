@@ -3,7 +3,6 @@ package mtgplayer.protocol;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import forge.game.card.Card;
 import forge.game.combat.Combat;
@@ -81,7 +80,6 @@ class CombatSnapshotTest {
         assertEquals(s.player(1).getId(), a.defenderPlayer());
         assertNull(a.defenderCard());
         assertNull(a.blockers());
-        assertTrue(snapshotOf(s).cards().containsKey(bear.getId()), "Angreifer fehlt in der Kartentabelle");
     }
 
     @Test
@@ -101,8 +99,7 @@ class CombatSnapshotTest {
     }
 
     /** Greift der Baer statt eines Spielers einen Planeswalker an (in Commander alltaeglich), traegt die
-     *  Zeile {@code defenderCard} statt {@code defenderPlayer} - und der Planeswalker landet trotzdem in
-     *  der Kartentabelle, obwohl {@link #attackScene()} ihn nicht kennt. */
+     *  Zeile {@code defenderCard} statt {@code defenderPlayer}. */
     @Test
     void angreiferGegenPlaneswalkerTraegtDieKarteAlsZiel() {
         Scene s = attackScene();
@@ -117,7 +114,6 @@ class CombatSnapshotTest {
         Snapshot.AttackSnap a = snap.combat().get(0);
         assertEquals(walker.getId(), a.defenderCard());
         assertNull(a.defenderPlayer());
-        assertTrue(snap.cards().containsKey(walker.getId()), "Planeswalker fehlt in der Kartentabelle");
     }
 
     /** Solange der Mensch noch zuteilt, ist das Band nicht als "geblockt" markiert: Forge fuehrt die
