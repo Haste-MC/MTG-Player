@@ -8,7 +8,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import forge.game.card.Card;
 import forge.game.combat.Combat;
 import forge.game.phase.PhaseType;
-import forge.game.player.Player;
 import forge.game.zone.ZoneType;
 import mtgplayer.ai.AiConfig;
 import mtgplayer.forge.ForgeBoot;
@@ -28,6 +27,7 @@ import java.util.concurrent.TimeUnit;
 class CombatSnapshotTest {
     private static final String BEAR = "Grizzly Bears";
     private static final String WALL = "Wall of Wood";
+    private static final String WALKER = "Jace Beleren";
 
     @BeforeAll
     static void boot() {
@@ -98,6 +98,26 @@ class CombatSnapshotTest {
 
         Snapshot.AttackSnap a = snapshotOf(s).combat().get(0);
         assertEquals(List.of(wall.getId()), a.blockers());
+    }
+
+    /** Greift der Baer statt eines Spielers einen Planeswalker an (in Commander alltaeglich), traegt die
+     *  Zeile {@code defenderCard} statt {@code defenderPlayer} - und der Planeswalker landet trotzdem in
+     *  der Kartentabelle, obwohl {@link #attackScene()} ihn nicht kennt. */
+    @Test
+    void angreiferGegenPlaneswalkerTraegtDieKarteAlsZiel() {
+        Scene s = attackScene();
+        Card bear = only(s, 0, BEAR);
+        Card walker = s.card(WALKER, s.player(1), ZoneType.Battlefield);
+        Combat combat = new Combat(s.player(0));
+        combat.addAttacker(bear, walker);
+        s.game().getPhaseHandler().setCombat(combat);
+        s.game().updateCombatForView();
+
+        Snapshot snap = snapshotOf(s);
+        Snapshot.AttackSnap a = snap.combat().get(0);
+        assertEquals(walker.getId(), a.defenderCard());
+        assertNull(a.defenderPlayer());
+        assertTrue(snap.cards().containsKey(walker.getId()), "Planeswalker fehlt in der Kartentabelle");
     }
 
     /** Solange der Mensch noch zuteilt, ist das Band nicht als "geblockt" markiert: Forge fuehrt die
