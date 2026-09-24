@@ -76,10 +76,17 @@ class BridgeSparringTest {
                 (args, opponent, seed) -> {
                     games.incrementAndGet();
                     inGame.countDown();
+                    // Endet die Wartezeit anders als durch die Freigabe des Tests (Frist abgelaufen
+                    // oder Unterbrechung), darf die Attrappe KEINEN Datensatz liefern: der Lauf waere
+                    // dann still fertig, ein zweiter Start ginge durch, und der Test scheiterte
+                    // zehn Sekunden spaeter an der falschen Stelle ("keine Nachricht 'error'").
                     try {
-                        assertTrue(release.await(30, TimeUnit.SECONDS), "Freigabe der Attrappe");
+                        if (!release.await(60, TimeUnit.SECONDS)) {
+                            throw new IllegalStateException("Attrappe: Freigabe blieb aus");
+                        }
                     } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();
+                        throw new IllegalStateException("Attrappe: unterbrochen", e);
                     }
                     return record(opponent);
                 });
@@ -117,6 +124,9 @@ class BridgeSparringTest {
         while (System.currentTimeMillis() < end) {
             JsonNode n = inbox.poll(Math.max(1, end - System.currentTimeMillis()), TimeUnit.MILLISECONDS);
             if (n == null) break;
+            // Mitschnitt fuer die Nachschau, wenn dieser Test einmal ueber die Zeit laeuft.
+            String seen = n.toString();
+            System.out.println("[inbox] " + (seen.length() > 200 ? seen.substring(0, 200) + "…" : seen));
             if ("matches".equals(n.path("type").asText())) {
                 seenMatches.add(n);
             }
@@ -156,7 +166,8 @@ class BridgeSparringTest {
         assertTrue(inGame.await(30, TimeUnit.SECONDS), "die erste Partie laeuft");
         send("{\"type\":\"sparringStart\",\"deck\":\"Mein Deck\",\"games\":3}");
         JsonNode err = await("error", n -> true, 10);
-        assertTrue(err.path("text").asText().contains("Sparring läuft noch"), err.toString());
+        assertTrue(err.path("text").asText().contains("Sparring läuft noch"),
+                err + " (games=" + games.get() + ")");
 
         send("{\"type\":\"sparringCancel\"}");
         release.countDown();

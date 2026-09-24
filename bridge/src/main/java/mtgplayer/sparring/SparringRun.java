@@ -22,8 +22,10 @@ import mtgplayer.stats.MatchStore;
  *
  * <p>Genau ein Lauf zur Zeit; ein zweiter {@link #start} wirft {@link IllegalStateException}
  * ("Sparring läuft noch"). Eine gescheiterte Partie (der Runner wirft oder liefert nichts) zaehlt mit,
- * landet als Zeile in {@code errors} und beendet den Lauf nicht. {@link #cancel()} stoppt nach der
- * gerade laufenden Partie - deren Datensatz wird noch gespeichert.</p>
+ * landet als Zeile in {@code errors} und beendet den Lauf nicht. {@link #cancel()} beendet die gerade
+ * laufende Partie ueber {@link GameRunner#cancel()} (beim Kindprozess-Runner: abschiessen); sie zaehlt
+ * dann als Fehler "abgebrochen". Kommt sie trotzdem noch zu einem Ergebnis, wird das gespeichert - in
+ * jedem Fall tritt danach keine weitere mehr an und der Lauf endet mit {@code running == false}.</p>
  *
  * <p>{@code out} bekommt zweierlei: jedes {@link Messages.SparringProgress} (einmal zu Beginn und nach
  * jedem Spielende, das letzte mit {@code running == false}) und - unmittelbar davor - jeden soeben
@@ -83,9 +85,20 @@ public final class SparringRun {
         }
     }
 
-    /** Beendet den Lauf nach der gerade laufenden Partie; ohne laufenden Lauf ohne Wirkung. */
+    /**
+     * Bricht den Lauf ab: die gerade laufende Partie wird ueber {@link GameRunner#cancel()} beendet
+     * (Kindprozess abschiessen), danach tritt keine weitere mehr an. Ohne laufenden Lauf ohne Wirkung.
+     * Blockiert nicht - der Aufrufer ist der WebSocket-Thread.
+     */
     public void cancel() {
         cancelled = true;
+        try {
+            runner.cancel();
+        } catch (RuntimeException e) {
+            // Ein Runner, der sich nicht abschiessen laesst, darf den Abbruch nicht zum Fehler des
+            // Aufrufers machen - das Flag oben greift spaetestens vor der naechsten Partie.
+            e.printStackTrace();
+        }
     }
 
     private void loop(SparringArgs args, List<String> opponents) {
@@ -95,7 +108,12 @@ public final class SparringRun {
         try {
             out.accept(progress(0, total, opponents.get(0), errors, true));
             for (String opponent : opponents) {
-                if (cancelled) {
+                // Unterbrechung wie ein Abbruch behandeln: wird dieser Thread von aussen unterbrochen
+                // (Abriss beim Herunterfahren), soll der Lauf stehen bleiben und nicht die restlichen
+                // Partien im Eiltempo durchfallen lassen - eine unterbrochene Wartezeit im Runner kehrt
+                // sofort zurueck, und das tut sie dann fuer jede folgende Partie wieder.
+                if (cancelled || Thread.currentThread().isInterrupted()) {
+                    cancelled = true;
                     break;
                 }
                 try {
@@ -107,8 +125,11 @@ public final class SparringRun {
                     out.accept(r);
                 } catch (RuntimeException e) {
                     // Eine Partie darf den Lauf nicht beenden (Spec §3) - Grund vermerken, weiter.
+                    // Nach einem Abbruch ist der Grund immer derselbe (das Kind wurde abgeschossen);
+                    // "Kindprozess: exit=143, letzte stderr-Zeile: ..." waere fuer Kevin nur Rauschen.
                     e.printStackTrace();
-                    errors.add(opponent + ": " + (e.getMessage() == null ? e.toString() : e.getMessage()));
+                    errors.add(opponent + ": " + (cancelled ? "abgebrochen"
+                            : e.getMessage() == null ? e.toString() : e.getMessage()));
                 }
                 done++;
                 boolean more = done < total && !cancelled;

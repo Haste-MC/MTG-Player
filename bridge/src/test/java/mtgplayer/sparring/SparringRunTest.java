@@ -30,8 +30,8 @@ import org.junit.jupiter.api.io.TempDir;
 /**
  * Der Hintergrundlauf mit einem Attrappen-{@link GameRunner} - kein echtes Spiel, kein Kindprozess:
  * gelieferte Datensaetze landen im {@link MatchStore}, der Fortschritt kommt in der richtigen
- * Reihenfolge, ein scheiternder Runner beendet den Lauf nicht, {@code cancel()} stoppt nach der
- * laufenden Partie und ein zweiter {@code start()} wirft.
+ * Reihenfolge, ein scheiternder Runner beendet den Lauf nicht, {@code cancel()} beendet die LAUFENDE
+ * Partie (ueber {@link GameRunner#cancel()}) und ein zweiter {@code start()} wirft.
  */
 class SparringRunTest {
 
@@ -142,9 +142,11 @@ class SparringRunTest {
         assertTrue(last.errors().get(0).contains("Kindprozess: exit=1"), last.errors().toString());
     }
 
+    /** Eine Partie, die trotz {@code cancel()} noch zu Ende kommt, behaelt ihren Datensatz - danach
+     *  tritt keine weitere mehr an. */
     @Test
     @Timeout(value = 1, unit = TimeUnit.MINUTES)
-    void cancelBeendetNachDerLaufendenPartie(@TempDir Path dir) throws Exception {
+    void cancelVerhindertWeiterePartien(@TempDir Path dir) throws Exception {
         DeckStore decks = storeWith(dir.resolve("decks"), "Mein Deck", "Gegner A", "Gegner B");
         MatchStore matches = new MatchStore(dir.resolve("matches.json"));
         List<Object> out = Collections.synchronizedList(new ArrayList<>());
@@ -169,6 +171,75 @@ class SparringRunTest {
         assertNull(last.current());
     }
 
+    /**
+     * Attrappe eines Kindprozess-Runners: bleibt in der Partie haengen, bis {@link #cancel()} kommt,
+     * und scheitert dann so, wie ein getoetetes Kind scheitert (Exit 143 statt Ergebnis).
+     */
+    private static final class BlockingRunner implements GameRunner {
+
+        private final CountDownLatch inGame = new CountDownLatch(1);
+        private final CountDownLatch released = new CountDownLatch(1);
+        private final AtomicInteger calls = new AtomicInteger();
+        private volatile boolean cancelled;
+
+        @Override
+        public MatchRecord play(SparringArgs args, String opponent, long seed) {
+            calls.incrementAndGet();
+            inGame.countDown();
+            try {
+                if (!released.await(AWAIT_SECONDS, TimeUnit.SECONDS)) {
+                    throw new IllegalStateException("Attrappe: Partie wurde nie freigegeben");
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException("Attrappe: unterbrochen", e);
+            }
+            if (cancelled) {
+                throw new IllegalStateException("Kindprozess: exit=143, letzte stderr-Zeile: (leer)");
+            }
+            return record(opponent);
+        }
+
+        @Override
+        public void cancel() {
+            cancelled = true;
+            released.countDown();
+        }
+
+        void awaitInGame() throws InterruptedException {
+            assertTrue(inGame.await(AWAIT_SECONDS, TimeUnit.SECONDS), "erste Partie laeuft");
+        }
+    }
+
+    /** Spec, Abschnitt 3: "Abbruch: laufendes Kind wird beendet" - der Knopf darf nicht erst die naechste
+     *  Partie verhindern, eine laufende dauert Minuten. Die abgebrochene Partie zaehlt als Fehler. */
+    @Test
+    @Timeout(value = 1, unit = TimeUnit.MINUTES)
+    void cancelBeendetDieLaufendePartie(@TempDir Path dir) throws Exception {
+        DeckStore decks = storeWith(dir.resolve("decks"), "Mein Deck", "Gegner A", "Gegner B");
+        MatchStore matches = new MatchStore(dir.resolve("matches.json"));
+        List<Object> out = Collections.synchronizedList(new ArrayList<>());
+        BlockingRunner runner = new BlockingRunner();
+        SparringRun run = new SparringRun(decks, matches, runner, out::add);
+
+        run.start(args(3));
+        runner.awaitInGame();
+        run.cancel();
+        awaitDone(run);
+
+        assertEquals(1, runner.calls.get(), "keine weitere Partie nach dem Abbruch");
+        assertEquals(0, matches.all().size(), "die abgebrochene Partie liefert keinen Datensatz");
+        List<Messages.SparringProgress> ps = progress(out);
+        Messages.SparringProgress last = ps.get(ps.size() - 1);
+        assertEquals(1, last.done(), "die abgebrochene Partie zaehlt mit");
+        assertEquals(3, last.total());
+        assertFalse(last.running());
+        assertNull(last.current());
+        assertEquals(1, last.errors().size(), last.errors().toString());
+        assertTrue(last.errors().get(0).endsWith(": abgebrochen"),
+                "Fehlertext nennt den Gegner und 'abgebrochen': " + last.errors());
+    }
+
     @Test
     @Timeout(value = 1, unit = TimeUnit.MINUTES)
     void zweiterStartWirftSolangeEinLaufAktivIst(@TempDir Path dir) throws Exception {
@@ -178,10 +249,15 @@ class SparringRunTest {
         CountDownLatch release = new CountDownLatch(1);
         SparringRun run = new SparringRun(decks, matches, (a, opponent, seed) -> {
             inGame.countDown();
+            // Kein Datensatz, wenn die Wartezeit anders endet als durch die Freigabe - sonst waere der
+            // Lauf still fertig und der zweite start() truege zu Unrecht durch.
             try {
-                assertTrue(release.await(AWAIT_SECONDS, TimeUnit.SECONDS), "Freigabe");
+                if (!release.await(AWAIT_SECONDS, TimeUnit.SECONDS)) {
+                    throw new IllegalStateException("Attrappe: Freigabe blieb aus");
+                }
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
+                throw new IllegalStateException("Attrappe: unterbrochen", e);
             }
             return record(opponent);
         }, o -> { });
