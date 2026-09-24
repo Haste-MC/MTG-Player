@@ -62,7 +62,8 @@ class DeckAnalysisTest {
         assertEquals(DeckAnalysis.rules().stream().map(DeckAnalysis.Rule::name).toList(),
                 List.copyOf(a.categories().keySet()), "jede Regel hat einen Eintrag");
         assertTrue(a.unclassified() > 0, "ein 100-Karten-Deck trifft nie jede Karte: " + a.unclassified());
-        assertTrue(a.unclassified() < a.cards(), "unclassified: " + a.unclassified());
+        assertTrue(a.unclassified() <= a.cards() - a.lands(),
+                "unclassified zaehlt nur Nicht-Laender: " + a.unclassified() + " von " + (a.cards() - a.lands()));
         assertEquals(List.of("W", "B", "G"), a.identity(), "Abzan = WBG, in WUBRG-Reihenfolge");
     }
 
@@ -108,6 +109,44 @@ class DeckAnalysisTest {
         assertEquals(1, a.curve().get("4"));
     }
 
+    /**
+     * Laender sind nicht "nicht eingeordnet" - sie haben mit lands/basics/sources ihren eigenen Ausweis.
+     * Ein reines Landdeck hat deshalb unclassified == 0, obwohl keine Karte eine Kategorie trifft.
+     */
+    @Test
+    void laenderZaehlenNichtAlsUnclassified() {
+        Deck deck = new Deck("Nur Laender");
+        deck.getOrCreate(DeckSection.Main).add(card("Island"), 3);
+        DeckAnalysis a = DeckAnalysis.of(deck);
+        assertEquals(3, a.cards());
+        assertEquals(3, a.lands());
+        assertEquals(0, a.unclassified());
+    }
+
+    /**
+     * Modal-DFC mit Land-Rueckseite: Kevin spielt Agadeem's Awakening als Land, also zaehlt es hier als
+     * Land (und nicht in der Kurve) - anders als Forges AiDeckStatistics, das nur die Vorderseite kennt.
+     * Die Rueckseite liefert ausserdem ihre Farbquelle; die Vorderseite bleibt fuer die Kategorien gueltig.
+     */
+    @Test
+    void modalesLandZaehltAlsLandNichtAlsZauber() {
+        Deck deck = new Deck("MDFC-Test");
+        deck.getOrCreate(DeckSection.Main).add(card("Agadeem's Awakening"), 1);
+        deck.getOrCreate(DeckSection.Main).add(card("Island"), 1);
+        DeckAnalysis a = DeckAnalysis.of(deck);
+        assertEquals(2, a.cards());
+        assertEquals(2, a.lands(), "die Rueckseite ist ein Land");
+        assertEquals(1, a.basics(), "nur die Insel ist ein Standardland");
+        assertEquals(0, a.curve().values().stream().mapToInt(Integer::intValue).sum(), "nicht in der Kurve");
+        assertEquals(0.0, a.avgCmc());
+        assertEquals(1, a.sources().get("B"), "{T}: Add {B} auf der Rueckseite");
+        assertEquals(1, a.sources().get("U"));
+        assertTrue(cats("Agadeem's Awakening").contains("recursion"), "Text der Vorderseite zaehlt weiter");
+        assertFalse(cats("Agadeem's Awakening").contains("ramp"), "ein Land ist kein Ramp");
+        assertTrue(AiDeckStatistics.fromDeck(deck).numLands < a.lands(),
+                "bewusster Unterschied zu Forge: dort ist die Vorderseite ein Zauber");
+    }
+
     @Test
     void deckOhneKommandeurHatLeereIdentitaet() {
         Deck deck = new Deck("Nur Hauptdeck");
@@ -136,6 +175,17 @@ class DeckAnalysisTest {
         assertFalse(cats("Temple Bell").contains("draw"), "\"Each player draws a card\" ist kein eigener Zug");
     }
 
+    /**
+     * Erinnerungstext zaehlt nicht: Deceptive Landscape hat kein Ziehen im Regeltext, nur den
+     * Klammertext von Cycling ("... Discard this card: Draw a card.") - sonst waere jede Karte mit
+     * Cycling ein Kartenzieher.
+     */
+    @Test
+    void cyclingAlleinIstKeinDraw() {
+        assertFalse(cats("Deceptive Landscape").contains("draw"), cats("Deceptive Landscape").toString());
+        assertTrue(cats("Deceptive Landscape").contains("tutors"), "die Landsuche bleibt");
+    }
+
     @Test
     void murderIstRemoval() {
         assertTrue(cats("Murder").contains("removal"));
@@ -147,6 +197,8 @@ class DeckAnalysisTest {
     void dayOfJudgmentIstWipe() {
         assertTrue(cats("Day of Judgment").contains("wipes"));
         assertTrue(cats("Slaughter the Strong").contains("wipes"), "\"sacrifices all other creatures\"");
+        assertTrue(cats("Blasphemous Act").contains("wipes"), "\"deals 13 damage to each creature\"");
+        assertFalse(cats("Fog").contains("wipes"), "\"prevent all combat damage\" raeumt nichts ab");
         assertFalse(cats("Murder").contains("wipes"), "eine einzelne Entfernung ist kein Wipe");
         assertFalse(cats("Bojuka Bog").contains("wipes"),
                 "\"exile all cards from target player's graveyard\" raeumt keinen Tisch ab");

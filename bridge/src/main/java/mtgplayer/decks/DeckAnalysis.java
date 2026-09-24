@@ -1,6 +1,7 @@
 package mtgplayer.decks;
 
 import forge.card.CardRules;
+import forge.card.CardSplitType;
 import forge.card.CardType;
 import forge.card.ICardFace;
 import forge.card.MagicColor;
@@ -30,20 +31,28 @@ import java.util.regex.Pattern;
  * Groessenordnungen, keine Wahrheit. Bekannte Schwaechen:</p>
  * <ul>
  *   <li>Umschreibungen werden nicht erkannt: "draw cards equal to ..." zaehlt nicht als {@code draw},
- *       "Blasphemous Act" (Schaden auf jede Kreatur) nicht als {@code wipes}.</li>
+ *       "creatures you control gain reach" nicht als {@code flyerDefense}.</li>
  *   <li>Wer Mana erzeugt, ist {@code ramp} - auch ein Ritual oder eine Karte, die dem Gegner Mana gibt.</li>
  *   <li>Wer die Bibliothek durchsucht, ist {@code tutors} - auch Landsuche. Deshalb zaehlt Cultivate
  *       absichtlich doppelt ({@code ramp} und {@code tutors}).</li>
- *   <li>Fliegende Kreaturen zaehlen als {@code flyerDefense}, obwohl sie nur blocken <em>koennen</em>.</li>
- *   <li>Nur die vorderen Seiten zaehlen mit, soweit Forge sie liefert: bei zweiseitigen Karten kommt
- *       {@link CardRules#getAllFaces()} zum Einsatz, die Manakosten/Typen stammen aber von der Vorderseite
- *       (ein Modal-DFC-Land zaehlt damit als Zauber, nicht als Land).</li>
+ *   <li>Fliegende Kreaturen zaehlen als {@code flyerDefense}, obwohl sie nur blocken <em>koennen</em> -
+ *       so gewollt: sie koennen es.</li>
+ *   <li>Zweiseitige Karten: der Orakeltext <em>aller</em> Seiten wird gelesen
+ *       ({@link CardRules#getAllFaces()}), Manakosten und Kurve stammen aber von der Vorderseite. Ein
+ *       Modal-DFC mit Land-Rueckseite (Agadeem's Awakening) zaehlt als <em>Land</em> - siehe
+ *       {@code landType} - und taucht deshalb nicht in der Kurve auf; ein Pathway-Land liefert die
+ *       Farben <em>beider</em> Seiten als Quellen, obwohl es nur eine davon sein kann.</li>
  *   <li>Farbquellen: nur Laender mit Grundlandtyp oder "Add"-Text. Fetchlands (Evolving Wilds) und
- *       Mana-Artefakte (Sol Ring, Signets) sind <em>keine</em> Farbquellen in dieser Zaehlung.</li>
+ *       Mana-Artefakte (Sol Ring, Signets) sind <em>keine</em> Farbquellen in dieser Zaehlung - die
+ *       stecken in {@code ramp}.</li>
  * </ul>
  *
+ * <p>Erinnerungstext (der Klammertext hinter Schluesselwoertern) wird vor der Musterpruefung
+ * <em>weggeschnitten</em>, siehe {@link #text}: sonst waere jede Karte mit Cycling
+ * ("Cycling {2} (..., Discard this card: Draw a card.)") ein Kartenzieher.</p>
+ *
  * @param cards       Karten in Haupt- und Kommandeursektion (Commander-Deck: 100)
- * @param lands       davon Laender
+ * @param lands       davon Laender (inklusive Modal-DFC mit Land-Rueckseite)
  * @param basics      davon Standardlaender
  * @param avgCmc      Ø Manabetrag der Nicht-Laender, auf eine Nachkommastelle gerundet (wie
  *                    {@link forge.ai.AiDeckStatistics#averageCMC})
@@ -51,7 +60,10 @@ import java.util.regex.Pattern;
  * @param sources     Farbquellen je Farbe ("W","U","B","R","G") plus "any"; ein Land kann mehrfach zaehlen
  * @param identity    Farbidentitaet der Kommandeure in WUBRG-Reihenfolge (leer ohne Kommandeur)
  * @param categories  Treffer je Regel aus {@link #rules()}, in deren Reihenfolge (immer alle vorhanden)
- * @param unclassified Karten, die keine einzige Regel getroffen haben
+ * @param unclassified <em>Nicht-Laender</em>, die keine einzige Regel getroffen haben. Laender haben mit
+ *                    {@code lands}/{@code basics}/{@code sources} ihren eigenen Ausweis; zaehlte man sie
+ *                    hier mit, bestuende die Zahl bei einem Commander-Deck zur Haelfte aus Laendern und
+ *                    saegte nichts mehr aus
  */
 public record DeckAnalysis(int cards, int lands, int basics, double avgCmc,
                            Map<String, Integer> curve, Map<String, Integer> sources,
@@ -86,12 +98,19 @@ public record DeckAnalysis(int cards, int lands, int basics, double avgCmc,
             "(destroy|exile) all [^.\\n]*\\b(creature|permanent|artifact|enchantment|planeswalker|battle|land|token)s?\\b");
     /** "sacrifices all other creatures they control" (Slaughter the Strong). */
     private static final Pattern SACRIFICE_ALL = Pattern.compile("sacrifices? all");
+    /**
+     * "deals 13 damage to each creature" (Blasphemous Act), auch "... to each creature and each
+     * planeswalker". Fog ("prevent all combat damage") faellt raus: kein Schaden auf jede Kreatur.
+     */
+    private static final Pattern DAMAGE_EACH = Pattern.compile("damage to each (creature|other creature)");
     private static final Pattern COUNTER_SPELL = Pattern.compile("counter target [^.\\n]*spell");
     private static final Pattern RETURN_TO_PLAY = Pattern.compile(
             "return [^.\\n]*from (your|a|all|their|target player's) [^.\\n]*graveyards? to the battlefield");
     private static final Pattern FROM_GRAVEYARD = Pattern.compile(
             "from (your|a|all|their|target player's|each player's) [^.\\n]*graveyards?");
     private static final Pattern RECURSION_VERB = Pattern.compile("\\b(return|returns|put|puts|cast|casts|play)\\b");
+    /** Erinnerungstext: alles in runden Klammern (nicht geschachtelt, so schreibt Forge es). */
+    private static final Pattern REMINDER = Pattern.compile("\\([^()]*\\)");
 
     /**
      * Die Regeln in der Reihenfolge, in der sie im Board erscheinen. Jede Regel steht fuer sich und ist
@@ -99,7 +118,7 @@ public record DeckAnalysis(int cards, int lands, int basics, double avgCmc,
      */
     private static final List<Rule> RULES = List.of(
             // Nicht-Land, das Mana erzeugt oder ein Land aus der Bibliothek holt.
-            new Rule("ramp", c -> !c.getType().isLand()
+            new Rule("ramp", c -> landType(c) == null
                     && (PRODUCES_MANA.matcher(text(c)).find() || LAND_SEARCH.matcher(text(c)).find())),
             // Kartenzug fuer den Beherrscher - "each opponent draws a card" faellt durch die Verbform raus.
             new Rule("draw", c -> DRAW.matcher(text(c)).find()),
@@ -110,6 +129,7 @@ public record DeckAnalysis(int cards, int lands, int basics, double avgCmc,
             // Satz 1 und "sacrifice ..." in Satz 3 (z. B. Felothar the Steadfast) als Wipe.
             new Rule("wipes", c -> anySentence(c, s -> DESTROY_ALL.matcher(s).find()
                     || SACRIFICE_ALL.matcher(s).find()
+                    || DAMAGE_EACH.matcher(s).find()
                     || (s.contains("each creature") && (s.contains("destroy") || s.contains("sacrific"))))),
             new Rule("counters", c -> COUNTER_SPELL.matcher(text(c)).find()),
             // Eigene Karten, die Flieger aufhalten koennen.
@@ -172,13 +192,13 @@ public record DeckAnalysis(int cards, int lands, int basics, double avgCmc,
                 continue;   // Forge kennt die Karte nicht (unsupported) - nicht mitzaehlen statt abstuerzen
             }
             cards += n;
-            CardType type = rules.getType();
-            if (type.isLand()) {
+            CardType land = landType(rules);
+            if (land != null) {
                 lands += n;
-                if (type.isBasicLand()) {
+                if (land.isBasicLand()) {
                     basics += n;
                 }
-                for (String color : colorSources(rules)) {
+                for (String color : colorSources(rules, land)) {
                     sources.merge(color, n, Integer::sum);
                 }
             } else {
@@ -188,8 +208,8 @@ public record DeckAnalysis(int cards, int lands, int basics, double avgCmc,
                 curve.merge(cmc >= 7 ? "7+" : String.valueOf(cmc), n, Integer::sum);
             }
             List<String> hits = categoriesOf(rules);
-            if (hits.isEmpty()) {
-                unclassified += n;
+            if (hits.isEmpty() && land == null) {
+                unclassified += n;   // Laender haben ihren eigenen Ausweis, siehe Record-Javadoc
             }
             for (String hit : hits) {
                 categories.merge(hit, n, Integer::sum);
@@ -237,19 +257,40 @@ public record DeckAnalysis(int cards, int lands, int basics, double avgCmc,
     }
 
     /**
-     * Farben, die dieses Land liefert: Grundlandtyp (Plains, ...) oder ein Manasymbol hinter "add" im
-     * selben Satz ("{T}: Add {U} or {R}" zaehlt beide). "any color"/"any one color" wird zu "any".
-     * Ein Land zaehlt je Farbe nur einmal, auch wenn Typ und Text dasselbe sagen.
+     * Die Landseite dieser Karte, sonst null: die Vorderseite, wenn sie ein Land ist, sonst die
+     * Rueckseite eines Modal-DFC ("Agadeem's Awakening // Agadeem, the Undercrypt"). So eine Karte wird
+     * als Land gespielt, also zaehlt sie hier als Land - und taucht dafuer nicht in der Kurve auf.
+     * Damit weicht {@code lands()} bewusst von {@link forge.ai.AiDeckStatistics#numLands} ab, das nur
+     * die Vorderseite kennt.
      */
-    private static Set<String> colorSources(CardRules rules) {
+    private static CardType landType(CardRules rules) {
+        if (rules.getType().isLand()) {
+            return rules.getType();
+        }
+        if (rules.getSplitType() == CardSplitType.Modal) {
+            ICardFace back = rules.getOtherPart();
+            if (back != null && back.getType() != null && back.getType().isLand()) {
+                return back.getType();
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Farben, die dieses Land liefert: Grundlandtyp (Plains, ...) der Landseite oder ein Manasymbol
+     * hinter "add" im selben Satz ("{T}: Add {U} or {R}" zaehlt beide). "any color"/"any one color"
+     * wird zu "any". Ein Land zaehlt je Farbe nur einmal, auch wenn Typ und Text dasselbe sagen.
+     * Hier zaehlt der <em>rohe</em> Orakeltext: bei einem Grundland steht die Manafaehigkeit komplett
+     * im Klammertext ("({T}: Add {U}.)"), den {@link #text} wegschneidet.
+     */
+    private static Set<String> colorSources(CardRules rules, CardType type) {
         Set<String> out = new LinkedHashSet<>();
-        CardType type = rules.getType();
         for (int i = 0; i < COLORS.length; i++) {
             if (type.hasSubtype(BASIC_TYPES[i])) {
                 out.add(COLORS[i]);
             }
         }
-        for (String sentence : sentences(text(rules))) {
+        for (String sentence : sentences(rawText(rules))) {
             int at = sentence.indexOf("add ");
             if (at < 0) {
                 continue;
@@ -301,11 +342,25 @@ public record DeckAnalysis(int cards, int lands, int basics, double avgCmc,
     }
 
     /**
+     * Orakeltext fuer die Regeln: wie {@link #rawText}, aber <b>ohne Klammerausdruecke</b>. Forge schreibt
+     * Erinnerungstext (die Erklaerung eines Schluesselworts) genau so - "Cycling {2} ({2}, Discard this
+     * card: Draw a card.)" waere sonst Kartenzug, "Reach (This creature can block creatures with flying.)"
+     * doppelt gezaehlt. Geschnitten werden <em>alle</em> Klammern, nicht nur die hinter Schluesselwoertern:
+     * Forge markiert Erinnerungstext nicht eigens, und was in Klammern steht, ist im Regeltext immer nur
+     * eine Wiederholung dessen, was das Schluesselwort ohnehin sagt. Was dabei verloren geht - die
+     * Manafaehigkeit eines Grundlands steht komplett in Klammern ("({T}: Add {U}.)") - holt die
+     * Farbquellenzaehlung ueber {@link #rawText} und den Grundlandtyp wieder herein.
+     */
+    private static String text(CardRules rules) {
+        return REMINDER.matcher(rawText(rules)).replaceAll(" ");
+    }
+
+    /**
      * Orakeltext aller Seiten, kleingeschrieben und mit echten Zeilenumbruechen (Forge speichert "\n"
      * als zwei Zeichen im Kartenskript). Wird je Regel neu gebaut - bei 100 Karten mal 9 Regeln ist das
      * nicht der Rede wert und erspart einen Cache mit Lebensdauerfragen.
      */
-    private static String text(CardRules rules) {
+    private static String rawText(CardRules rules) {
         StringBuilder sb = new StringBuilder();
         for (ICardFace face : rules.getAllFaces()) {
             if (face == null || face.getOracleText() == null) {
