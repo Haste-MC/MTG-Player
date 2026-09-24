@@ -883,7 +883,6 @@ describe("v2-Kennzahlen", () => {
     expect(s.games).toBe(2);
     expect(s.v2Games).toBe(0);
     expect(s.manaScrewRate).toBeUndefined();
-    expect(s.floodRate).toBeUndefined();
     expect(s.avgOpeningLands).toBeUndefined();
     expect(s.spellsPerTurn).toBeUndefined();
     expect(s.counteredRate).toBeUndefined();
@@ -897,6 +896,8 @@ describe("v2-Kennzahlen", () => {
     expect(s.avgRemovalCast).toBeUndefined();
     expect(s.avgCounterspellsCast).toBeUndefined();
     expect(s.avgEliminationShare).toBeUndefined();
+    // Die Flut-Quote steht trotzdem: lands/spells zaehlt die Bridge seit v1 (Titania war nie geflutet).
+    expect(s.floodRate).toBe(0);
   });
 
   it("eine v1-Partie mit ausgefuellten Feldern bleibt trotzdem 'keine Daten'", () => {
@@ -932,7 +933,7 @@ describe("v2-Kennzahlen", () => {
     expect(s.tramplingShare).toBeCloseTo(6 / 36, 6);
     // Der Sitz hielt bis zum letzten Zug durch: 14/14.
     expect(s.avgEliminationShare).toBeCloseTo(1, 6);
-    // Kein Screw (3 Laender im 3. eigenen Zug), keine Flut (7 Laender, aber 11 Zauber).
+    // Kein Screw (3 Laender im 3. eigenen Zug), keine Flut (7 Laender, aber 11 Zauber statt hoechstens 2).
     expect(s.manaScrewRate).toBe(0);
     expect(s.floodRate).toBe(0);
   });
@@ -963,15 +964,27 @@ describe("v2-Kennzahlen", () => {
     expect(s?.avgOpeningLands).toBeCloseTo(3, 6);
   });
 
-  it("Flut: ab 6 abgelegten Laendern und hoechstens einem Zauber je Land", () => {
+  it("Flut: mindestens 6 Laender UND hoechstens 2 Zauber (Definition wie im Bench-ActivityCounter)", () => {
     const s = summarize([
-      v2Record("flut", { landsByTurn: [0, 1, 2, 3, 4, 5, 6], lands: 6, spells: 5 }),
-      v2Record("normal", { landsByTurn: [0, 1, 2, 3, 4, 5, 6], lands: 6, spells: 12 }),
+      v2Record("flut", { landsByTurn: [0, 1, 2, 3, 4, 5, 6], lands: 6, spells: 2 }),
+      // 3 Zauber: einer zu viel fuer eine Flut.
+      v2Record("gezaubert", { landsByTurn: [0, 1, 2, 3, 4, 5, 6], lands: 6, spells: 3 }),
       // 5 Laender: zu wenig fuer eine Flut, egal wie wenig gezaubert wurde.
-      v2Record("wenig-land", { landsByTurn: [0, 1, 2, 3, 4, 5], lands: 5, spells: 2 }),
+      v2Record("wenig-land", { landsByTurn: [0, 1, 2, 3, 4, 5], lands: 5, spells: 1 }),
     ], "Testdeck");
     expect(s?.v2Games).toBe(3);
     expect(s?.floodRate).toBeCloseTo(1 / 3, 6);
+  });
+
+  it("die Flut-Quote rechnet auch v1-Partien mit - lands und spells gab es dort schon", () => {
+    const s = summarize([
+      v2Record("alt-flut", { landsByTurn: [0, 1, 2, 3, 4, 5, 6, 7], lands: 7, spells: 1 }, { v: 1 }),
+      v2Record("alt-normal", { landsByTurn: [0, 1, 2, 3, 4, 5, 6], lands: 6, spells: 9 }, { v: 1 }),
+    ], "Testdeck");
+    expect(s?.games).toBe(2);
+    // Keine einzige Partie mit Vorfall-Daten - die Flut-Quote steht trotzdem.
+    expect(s?.v2Games).toBe(0);
+    expect(s?.floodRate).toBeCloseTo(0.5, 6);
   });
 
   it("Quoten ohne Grundlage fehlen, statt 0 zu behaupten", () => {

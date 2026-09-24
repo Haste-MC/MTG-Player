@@ -78,8 +78,10 @@ describe("Mindeststichprobe", () => {
 
   it("ohne v2-Partien melden sich die Vorfall-Regeln gar nicht", () => {
     const s = summary({
-      v2Games: 0, manaScrewRate: undefined, floodRate: undefined, counteredRate: undefined,
+      v2Games: 0, manaScrewRate: undefined, counteredRate: undefined,
       sweepGames: undefined, flyingShare: undefined, avgEliminationShare: undefined,
+      // floodRate steht auch ohne v2-Partien (siehe unten) - hier unauffaellig.
+      floodRate: 0.1,
     });
     expect(titles(s, analysis({ wipeProtection: 0, counters: 0, flyerDefense: 0 }), "all"))
       .toEqual(["Nichts Auffälliges"]);
@@ -107,13 +109,20 @@ describe("Regel: Mana-Screw", () => {
 });
 
 describe("Regel: Landflut", () => {
-  it("ueber der Schwelle -> warn", () => {
+  it("ueber der Schwelle -> warn, mit Laenderzahl und Ø CMC aus der Deckanalyse", () => {
     const f = findings(summary({ floodRate: FLOOD_MAX + 0.01 }), analysis(), "all").find((x) => x.title === "Landflut");
     expect(f?.level).toBe("warn");
+    expect(f?.needs).toContain("36");
   });
 
   it("unter der Schwelle -> kein Befund", () => {
     expect(titles(summary({ floodRate: FLOOD_MAX }), analysis(), "all")).not.toContain("Landflut");
+  });
+
+  it("meldet auch ohne eine einzige v2-Partie (lands/spells gibt es seit v1)", () => {
+    // Die Flut-Quote haengt als einzige Zahl dieses Blocks NICHT an der v2-Stichprobe.
+    const s = summary({ floodRate: 0.6, v2Games: 0, manaScrewRate: undefined, avgOpeningLands: undefined });
+    expect(titles(s, analysis(), "all")).toContain("Landflut");
   });
 });
 

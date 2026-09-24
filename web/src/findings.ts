@@ -1,4 +1,4 @@
-import type { DeckSummary, Format } from "./matchStats";
+import { FLOOD_LANDS, FLOOD_MAX_SPELLS, type DeckSummary, type Format } from "./matchStats";
 import type { DeckAnalysis } from "./protocol";
 
 // Auffaelligkeiten: aus den Kennzahlen eines Decks (in einem Format) und - wo vorhanden - dem Deckinhalt
@@ -19,7 +19,8 @@ export const MIN_GAMES = 5;
 
 /** Mana-Screw-Quote (hoechstens 2 Laender im 3. eigenen Zug), ab der es der Rede wert ist. */
 export const MANA_SCREW_MAX = 0.3;
-/** Flut-Quote (viele Laender, wenig Zauber), ab der es der Rede wert ist. */
+/** Flut-Quote (mindestens FLOOD_LANDS Laender, hoechstens FLOOD_MAX_SPELLS Zauber - die Definition
+ * steht in matchStats.ts), ab der es der Rede wert ist. */
 export const FLOOD_MAX = 0.25;
 /** Mulligan-Quote, ab der die Starthaende das Problem sind und nicht der Zufall. */
 export const MULLIGAN_MAX = 0.4;
@@ -66,13 +67,14 @@ const manaScrew: Rule = ({ s, deck, incident }) => {
   };
 };
 
-/** Landflut: das Gegenstueck - viele Laender, wenig Gezaubertes. */
-const flood: Rule = ({ s, deck, incident }) => {
-  const rate = incident(s.floodRate);
-  if (rate === undefined || rate <= FLOOD_MAX) return undefined;
+/** Landflut: das Gegenstueck zum Screw - reichlich Land gespielt, fast nichts gewirkt. Braucht KEINE
+ * Vorfall-Daten (lands/spells zaehlt die Bridge seit v1), haengt also nicht an `incident`. */
+const flood: Rule = ({ s, deck }) => {
+  if (s.floodRate <= FLOOD_MAX) return undefined;
   return {
     level: "warn", title: "Landflut",
-    text: `In ${pct(rate)} der ${s.v2Games} Partien mit Vorfall-Daten kamen viele Länder und wenig Zauber.`,
+    text: `In ${pct(s.floodRate)} der ${s.games} gewerteten Partien lagen ${FLOOD_LANDS} Länder oder mehr`
+      + ` und es kamen höchstens ${FLOOD_MAX_SPELLS} Zauber dazu.`,
     needs: deck && `Das Deck hat ${deck.lands} Länder bei Ø CMC ${num(deck.avgCmc)}.`,
   };
 };

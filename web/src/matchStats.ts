@@ -39,14 +39,19 @@ function isV2(record: MatchRecord): boolean {
 export const MANA_SCREW_TURN = 3;
 /** So viele Laender (oder weniger) im 3. eigenen Zug gelten als Mana-Screw. */
 export const MANA_SCREW_LANDS = 2;
-/** Ab so vielen abgelegten Laendern kann eine Partie als geflutet gelten ... */
+/** Flut, Teil 1: so viele Laender (oder mehr) hat der Sitz gespielt ... */
 export const FLOOD_LANDS = 6;
-/** ... und nur, wenn der Sitz hoechstens so viele Zauber JE abgelegtem Land gewirkt hat. In einer
- * normalen Partie stehen den Landabgaben deutlich mehr Zauber gegenueber; kippt das Verhaeltnis, lag
- * die Hand voll Land. (Die Spec nennt "≥ 6 Laender, ≤ 2 Zauber" - das ist die Zug-fuer-Zug-Sicht der
- * Zeitachse, und die schickt die Bridge in der Partienliste nicht mit; siehe MatchSeat.timeline. Diese
- * Fassung kommt mit den Feldern aus, die jede Partie der Liste traegt.) */
-export const FLOOD_SPELLS_PER_LAND = 1;
+/** ... Teil 2: und dabei hoechstens so viele Zauber gewirkt. Reichlich Land lag, gewirkt wurde fast
+ * nichts - Farb- oder Kurvenmangel.
+ *
+ * Dieselbe Regel benutzt die Bench seit Stufe 2 fuer "Nichtstun"
+ * (mtgplayer.bench.ActivityCounter, MIN_LANDS = 5 / MAX_SPELLS = 2, siehe
+ * docs/bench/2026-09-20-stufe-2-nichtstun.md); hier stehen die Zahlen der Spec (6/2). Wer die Kennzahl
+ * anfasst: KEINE dritte Definition erfinden, sondern beide Stellen zusammen bewegen.
+ *
+ * lands und spells gibt es seit v1 - die Flut-Quote haengt deshalb ausdruecklich NICHT an der
+ * v2-Stichprobe, sondern rechnet ueber alle gewerteten Partien der Auswahl. */
+export const FLOOD_MAX_SPELLS = 2;
 
 /** Ein Deck mit mindestens einer gewerteten oder einer Zugdeckel-Partie, fuer die Deckliste des
  * Statistik-Screens. `games` sind die gewerteten, `capped` die am Zugdeckel abgeschnittenen. */
@@ -102,10 +107,14 @@ export interface DeckSummary {
   turnCappedGames: number;
   /** Anteil der Zugdeckel-Partien an allen gespielten: turnCappedGames / (games + turnCappedGames). */
   turnCappedRate: number;
+  /** Anteil der gewerteten Partien mit FLOOD_LANDS+ Laendern und hoechstens FLOOD_MAX_SPELLS Zaubern.
+   * Steht bewusst HIER und nicht im Vorfall-Block: lands/spells zaehlt die Bridge seit v1, die Quote
+   * gilt also auch fuer alte Partien. */
+  floodRate: number;
 
-  // --- Kennzahlen aus Runde B. Sie haben eine EIGENE Stichprobe: v2Games, die Teilmenge der oben
-  // gezaehlten Partien mit v >= 2. Ist v2Games 0, fehlt jede einzelne von ihnen (nicht 0 - in einem
-  // v1-Datensatz wurde nie gezaehlt). Sind beide Sorten dabei, rechnen sie NUR ueber die v2-Partien;
+  // --- Kennzahlen aus Runde B (die Flut-Quote oben gehoert NICHT dazu). Sie haben eine EIGENE
+  // Stichprobe: v2Games, die Teilmenge der oben gezaehlten Partien mit v >= 2. Ist v2Games 0, fehlt
+  // jede einzelne von ihnen (nicht 0 - in einem v1-Datensatz wurde nie gezaehlt). Sind beide Sorten dabei, rechnen sie NUR ueber die v2-Partien;
   // die Anzeige nennt darum v2Games neben games. Drei von ihnen (manaScrewRate, spellsPerTurn,
   // avgEliminationShare) koennte man technisch auch aus v1-Feldern rechnen - sie teilen sich hier
   // bewusst die eine Stichprobe des Vorfall-Blocks, damit alle Kacheln dieses Blocks dasselbe "n"
@@ -115,8 +124,6 @@ export interface DeckSummary {
   /** Anteil der Partien mit hoechstens MANA_SCREW_LANDS Laendern im eigenen Zug MANA_SCREW_TURN; Nenner
    * sind nur die Partien, in denen der Sitz so viele eigene Zuege hatte (sonst ist nichts zu beurteilen). */
   manaScrewRate?: number;
-  /** Anteil der Partien mit FLOOD_LANDS+ Laendern und hoechstens FLOOD_SPELLS_PER_LAND Zaubern je Land. */
-  floodRate?: number;
   /** Ø Laender in der nach allen Mulligans behaltenen Starthand. */
   avgOpeningLands?: number;
   /** Zauber je eigenem Zug, gepoolt: alle Zauber geteilt durch alle eigenen Zuege. */
@@ -209,6 +216,9 @@ export function summarize(records: MatchRecord[], deck: string, format: Format =
     avgTurns: avg(entries.map((e) => e.record.turns)),
     avgDurationMs: avg(entries.map((e) => e.record.durationMs)),
     mulliganRate: entries.filter((e) => e.seat.mulligans >= 1).length / games,
+    // Flut: reichlich Land gespielt, fast nichts gewirkt - ueber ALLE gewerteten Partien der Auswahl,
+    // denn lands/spells gibt es seit v1 (siehe FLOOD_MAX_SPELLS).
+    floodRate: entries.filter((e) => e.seat.lands >= FLOOD_LANDS && e.seat.spells <= FLOOD_MAX_SPELLS).length / games,
     avgMulligans: avg(entries.map((e) => e.seat.mulligans)),
     ...landsTurn("avgLandsTurn3", entries, 3),
     ...landsTurn("avgLandsTurn5", entries, 5),
@@ -261,8 +271,6 @@ function v2Metrics(v2: Entry[]): Partial<DeckSummary> & { v2Games: number } {
   return {
     v2Games: v2.length,
     ...opt("manaScrewRate", share(screwed.length, judgeable.length)),
-    floodRate: seats.filter((seat) =>
-      seat.lands >= FLOOD_LANDS && seat.spells <= seat.lands * FLOOD_SPELLS_PER_LAND).length / seats.length,
     avgOpeningLands: mean((seat) => seat.openingLands),
     ...opt("spellsPerTurn", share(sum((seat) => seat.spells), ownTurns)),
     ...opt("counteredRate", share(sum((seat) => seat.spellsCountered), sum((seat) => seat.spells))),
