@@ -5,7 +5,10 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import forge.deck.CardPool;
 import forge.deck.Deck;
+import forge.deck.DeckSection;
+import forge.item.PaperCard;
 import mtgplayer.forge.ForgeBoot;
 import mtgplayer.forge.Precons;
 import mtgplayer.protocol.Messages;
@@ -17,6 +20,8 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 
 class DeckStoreTest {
 
@@ -140,6 +145,56 @@ class DeckStoreTest {
         assertNull(store.bracket("gibt es nicht"));
         IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> store.setBracket("gibt es nicht", 3));
         assertTrue(e.getMessage().contains("gibt es nicht"));
+    }
+
+    /**
+     * Der Bracket-Knopf im Deck-Panel geht ueber {@code load} + {@code save} - er schreibt also jede
+     * .dck-Datei neu, die Kevin anfasst (bei 46 Decks: 46-mal). Dieser Test haelt fest, was dabei
+     * unangetastet bleiben muss: Kartenzahl je Abschnitt, die AUSGEWAEHLTEN Drucke (Edition und
+     * Art-Index - sonst taeuscht das Deck-Panel andere Bilder vor, und ein Resync haelt das Deck fuer
+     * geaendert) und die vorhandenen Tags {@code archidekt:}/{@code archidekt-updated:}, an denen der
+     * Archidekt-Abgleich das Deck wiedererkennt.
+     */
+    @Test
+    void setBracketErhaeltKartenDruckeUndArchidektTags(@TempDir Path dir) {
+        DeckStore store = new DeckStore(dir);
+        Deck d = Precons.load("Abzan Armor [TDC] [2025]");
+        d.getTags().add(DeckStore.ARCHIDEKT_TAG + "12345");
+        d.getTags().add(DeckStore.ARCHIDEKT_UPDATED_TAG + "2026-09-21T18:41:17.869883Z");
+        store.save("Mein Deck", d);
+        Map<String, Integer> before = printings(store.load("Mein Deck"));
+        assertTrue(before.size() > 50, "die Vergleichsgrundlage ist nicht leer: " + before.size());
+
+        store.setBracket("Mein Deck", 4);
+
+        Deck after = store.load("Mein Deck");
+        assertEquals(4, store.bracket("Mein Deck"));
+        assertEquals(before, printings(after), "Karten, Anzahl und gewaehlte Drucke bleiben");
+        assertEquals("12345", store.archidektId("Mein Deck"), "archidekt:-Tag bleibt");
+        assertEquals("2026-09-21T18:41:17.869883Z", store.infos().get(0).archidektUpdated(),
+                "archidekt-updated:-Tag bleibt");
+        // Und auch der zweite Klick (Bracket wieder entfernen) laesst alles stehen.
+        store.setBracket("Mein Deck", null);
+        assertNull(store.bracket("Mein Deck"));
+        assertEquals(before, printings(store.load("Mein Deck")));
+        assertEquals("12345", store.archidektId("Mein Deck"));
+    }
+
+    /**
+     * Jede Karte des Decks als "Abschnitt|Name|Edition|ArtIndex" -> Anzahl. Der Schluessel traegt
+     * Edition und Art-Index mit, damit der Vergleich auch einen stillen Wechsel des Drucks bemerkt und
+     * nicht nur eine veraenderte Kartenzahl.
+     */
+    private static Map<String, Integer> printings(Deck deck) {
+        Map<String, Integer> out = new TreeMap<>();
+        for (Map.Entry<DeckSection, CardPool> section : deck) {
+            for (Map.Entry<PaperCard, Integer> card : section.getValue()) {
+                PaperCard c = card.getKey();
+                out.merge(section.getKey() + "|" + c.getName() + "|" + c.getEdition() + "|" + c.getArtIndex(),
+                        card.getValue(), Integer::sum);
+            }
+        }
+        return out;
     }
 
     @Test
