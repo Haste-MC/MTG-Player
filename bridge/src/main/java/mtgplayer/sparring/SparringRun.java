@@ -126,7 +126,7 @@ public final class SparringRun {
                 } catch (RuntimeException e) {
                     // Eine Partie darf den Lauf nicht beenden (Spec §3) - Grund vermerken, weiter.
                     // Nach einem Abbruch ist der Grund immer derselbe (das Kind wurde abgeschossen);
-                    // "Kindprozess: exit=143, letzte stderr-Zeile: ..." waere fuer Kevin nur Rauschen.
+                    // "Kindprozess: exit=143, stderr: ..." waere fuer Kevin nur Rauschen.
                     e.printStackTrace();
                     errors.add(opponent + ": " + (cancelled ? "abgebrochen"
                             : e.getMessage() == null ? e.toString() : e.getMessage()));

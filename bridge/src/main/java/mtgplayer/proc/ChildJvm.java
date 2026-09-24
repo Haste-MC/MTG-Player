@@ -12,6 +12,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
 import java.util.function.Consumer;
 import mtgplayer.forge.ForgeBoot;
 
@@ -178,16 +179,44 @@ public final class ChildJvm {
         return new Result(timedOut, exitOf(p), value[0], System.currentTimeMillis() - t0);
     }
 
-    /** Letzte nicht-leere Zeile einer Datei (stderr des Kindes) fuer die Fehlermeldung. */
-    public static String lastLine(Path file) {
+    /**
+     * Eine Zeile Ausnahme: {@code java.lang.IllegalArgumentException: count cannot be negative} oder
+     * {@code main > java.util.concurrent.TimeoutException}. Der Klassenname muss mit einem Grossbuchstaben
+     * anfangen und auf {@code Exception}/{@code Error} enden - ein blosses "ERROR:" aus einem Logger ist
+     * damit draussen.
+     */
+    private static final Pattern THROWABLE = Pattern.compile("(?:^|[^\\w.$])(?:[\\w$]+\\.)*[A-Z][\\w$]*(?:Exception|Error)\\b");
+
+    /**
+     * Die aussagekraeftigste Zeile aus stderr des Kindes fuer die Fehlermeldung: die LETZTE Zeile, die
+     * nach einer Ausnahme aussieht (Klassenname samt Meldung, nicht eingerueckt) - sonst wie frueher die
+     * letzte nicht-leere Zeile.
+     *
+     * <p>Warum die letzte und nicht die erste: ein abgestuerztes Kind hat oft schon vorher Ausnahmen
+     * gedruckt, die es ueberlebt hat (im Sparring-Probelauf am 24.09. drei
+     * {@code TimeoutException} aus dem {@code AiController}, bevor eine
+     * {@code IllegalArgumentException} die JVM beendete) - toedlich ist die letzte. In einer Kette mit
+     * {@code Caused by:} ist die letzte zugleich die tiefste Ursache, also ebenfalls die interessante.</p>
+     *
+     * <p>Warum ueberhaupt gesucht wird: die wirklich letzte Zeile eines Stacktrace ist ein Rahmen
+     * ({@code at mtgplayer.Main.main(Main.java:71)}) und sagt ueber den Grund nichts.</p>
+     */
+    public static String failureLine(Path file) {
         if (file == null) {
             return "(kein Log)";
         }
         try {
             List<String> lines = Files.readAllLines(file, StandardCharsets.UTF_8);
             for (int j = lines.size() - 1; j >= 0; j--) {
+                String line = lines.get(j);
+                // Eingerueckt heisst Stacktrace-Rahmen ("\tat forge...", "\t... 12 more") - nie die Ursache.
+                if (!line.isBlank() && !Character.isWhitespace(line.charAt(0)) && THROWABLE.matcher(line).find()) {
+                    return line.strip();
+                }
+            }
+            for (int j = lines.size() - 1; j >= 0; j--) {
                 if (!lines.get(j).isBlank()) {
-                    return lines.get(j);
+                    return lines.get(j).strip();
                 }
             }
             return "(leer)";

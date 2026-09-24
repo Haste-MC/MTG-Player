@@ -195,7 +195,7 @@ class SparringRunTest {
                 throw new IllegalStateException("Attrappe: unterbrochen", e);
             }
             if (cancelled) {
-                throw new IllegalStateException("Kindprozess: exit=143, letzte stderr-Zeile: (leer)");
+                throw new IllegalStateException("Kindprozess: exit=143, stderr: (leer)");
             }
             return record(opponent);
         }

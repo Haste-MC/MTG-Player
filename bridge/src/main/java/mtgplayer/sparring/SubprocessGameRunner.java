@@ -109,7 +109,7 @@ public final class SubprocessGameRunner implements GameRunner {
         }
         String detail = result.timedOut() ? "Zeitlimit nach " + timeoutMinutes + " min, " : "";
         throw new IllegalStateException("Kindprozess: " + detail + "exit=" + result.exit()
-                + ", letzte stderr-Zeile: " + ChildJvm.lastLine(errLog));
+                + ", stderr: " + ChildJvm.failureLine(errLog));
     }
 
     /** Schiesst das Kind der laufenden Partie ab; {@code play} scheitert daraufhin mit Exit ≠ 0. */

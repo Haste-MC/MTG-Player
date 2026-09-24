@@ -89,7 +89,7 @@ final class SubprocessRunner implements GameRunner {
         }
         String detail = result.timedOut() ? "Timeout nach " + gameTimeoutMinutes + " min, " : "";
         RuntimeException cause = new RuntimeException("Kindprozess: " + detail + "exit=" + result.exit()
-                + ", letzte stderr-Zeile: " + ChildJvm.lastLine(logFile));
+                + ", stderr: " + ChildJvm.failureLine(logFile));
         return GameRecord.crash(i, seed, "?", cause, result.millis());
     }
 
