@@ -68,6 +68,13 @@ Konstellation direkt neu, ohne den Umweg über die Lobby. Läuft eine Serie (Lob
 der Dialog den Stand (z. B. „Du 2 · KI 1 1") und der Knopf wird zu „Neue Serie", sobald jemand die nötigen
 Siege hat.
 
+Steht in der Serie noch ein Spiel aus, startet es **von selbst**: der Dialog zählt „Spiel 3 von 5 startet in
+5 …" herunter und schickt dann dasselbe `startGame` wie „Nochmal spielen". Solange der Countdown läuft, stehen
+statt „Nochmal spielen" zwei Knöpfe: **„Jetzt starten"** (überspringt den Rest des Countdowns) und **„Serie
+beenden"** (hält den Auto-Start an, ohne den Stand zu verwerfen – danach bleibt nur noch „Zur Lobby" stehen).
+Lehnt die Bridge den Start ab, ersetzt ihre Fehlermeldung den Countdown und es wird nichts von selbst noch
+einmal versucht. Eine nicht gewertete Partie (Abbruch, Absturz) zieht kein neues Spiel nach.
+
 Kartenbilder kommen von Scryfall und werden unter `~/.mtg-player/cache/images/` gecacht (erstes Spiel mit
 neuen Karten lädt ein paar Sekunden nach; ohne Internet bleiben es Textboxen). Spielsteine holen ihr Bild aus
 Scryfalls Token-Set der Edition (z. B. `tc21`); Token ohne Editionseintrag bleiben Textboxen.
@@ -171,24 +178,58 @@ Technisch ist das ein Remis, fachlich hat sich aber niemand darauf geeinigt – 
 deshalb zählt sie nicht. Der echte Ausgang (Remis, kein Sieger) bleibt trotzdem im Datensatz stehen. Wie oft ein
 Deck dort hineinläuft, ist selbst eine Kennzahl und steht als eigene Kachel „Partien am Zugdeckel" (Anteil an den
 gewerteten plus den Zugdeckel-Partien dieses Decks, darunter „n von m"): ein Deck, das regelmäßig in den Deckel läuft, hat keine
-verlässliche Siegbedingung. Der Knopf „Statistik" in der Lobby öffnet den Screen:
-links die Decks mit ihrer Partienzahl, rechts die Kennzahlen des gewählten Decks (Bilanz und Siegquote mit
-95-%-Wilson-Intervall, Ø Züge und Dauer, Mulligans, Länder bis zum eigenen Zug 3/5 – nur über Partien, die so
-lange liefen, sonst „–" –, verpasste Landabgaben, Zauber und Mana,
-Commander-Zug und -Steuer, Schaden, Todesursachen, Gegner-Tabelle), darunter alle Partien. Je Zeile setzt die
-Checkbox „gewertet" eine Partie wieder hinein oder heraus, der Papierkorb löscht sie (zwei Klicks, wie beim
-Deck-Löschen); der Filter „nur gewertete" steht standardmäßig an. Ausgewertet wird **deckbezogen**: wer das Deck
-gespielt hat – du oder eine KI – spielt keine Rolle, damit die kommenden Sparring-Partien (KI spielt dein Deck)
-mitzählen; je Partie zählt höchstens ein Sitz je Deck, ein Spiegel bleibt also eine Partie.
+verlässliche Siegbedingung.
+
+Der Knopf „Statistik" in der Lobby öffnet das **Statistik-Board** über die volle Fensterbreite. Im Kopf stehen
+drei Format-Schalter – **Alle / 1 vs 1 / Pod (3+)**, je mit der Zahl der gewerteten Partien – und der Schalter
+**„Erklärungen"** (an): er blendet unter jedem Block und jeder Kachel den Satz ein, der sagt, was die Zahl
+bedeutet und worüber sie gerechnet ist. Das Format trennt die Auswertung durchgehend, denn dieselbe Zahl
+bedeutet im Pod etwas anderes als im Duell (dort verliert man überwiegend, Schaden verteilt sich auf drei
+Gegner). Links die Decks mit Commander-Bild, Bilanz und – falls vorhanden – ihren Zugdeckel-Partien.
+
+Rechts, für das gewählte Deck im gewählten Format:
+
+* **Auffälligkeiten** – die Kacheln in Sätze übersetzt: Mana-Screw, Landflut, Mulligans, erlittene
+  Massenentfernung, Flieger, gekonterte Zauber, Zugdeckel und (nur im Pod) „früh raus". Jede Regel nennt Zahl
+  **und Stichprobe**, hält eine Mindeststichprobe ein und meldet sich erst **über** ihrer Schwelle. Regeln, die
+  den Deckinhalt brauchen („und du hast nichts dagegen"), schweigen ohne Deckanalyse. Kartenvorschläge sind
+  noch nicht dabei – sie kommen im nächsten Stück.
+* **Fünf Kennzahlen-Blöcke** – Bilanz, Mana & Start, Tempo & Commander, Kampf & Überleben, Interaktion &
+  Verluste. Kacheln ohne Grundlage zeigen „–" statt einer 0 und sagen im Erklärtext, warum (z. B. „keine Partie
+  lief so lange"). Kacheln aus den Vorfall-Daten nennen ihre eigene Stichprobe: „gerechnet über 7 von 12
+  Partien der Auswahl" – und wo noch enger gerechnet wird (Mana-Screw zählt nur Partien mit einem 3. eigenen
+  Zug), steht genau diese Zahl da.
+* **Deck** – die Deckanalyse aus der Kartendatenbank, ohne Partien: Karten, Länder (davon Standardländer),
+  Ø Manabetrag, Farbidentität, Manakurve, Farbquellen und „Karten je Aufgabe" (Ramp, Kartenziehen, Entfernung,
+  Massenentfernung, Konter, Fliegerabwehr, Schutz vor Massenentfernung, Rückholer, Tutoren). Die Einordnung
+  liest Kartentexte mit Mustern – Größenordnungen, keine Wahrheit.
+* **Gegner** – gegen welche Decks wie oft gespielt und gewonnen wurde.
+
+Darunter die Partienliste. Je Zeile setzt die Checkbox „gewertet" eine Partie wieder hinein oder heraus, der
+Papierkorb löscht sie (zwei Klicks, wie beim Deck-Löschen); der Filter „nur gewertete" steht standardmäßig an,
+der Format-Schalter gilt auch hier. Der Pfeil links klappt die Partie auf und lädt ihre **Zeitachse** nach
+(zwei kleine Kurven je Sitz: Leben oben, Länder und Kreaturen unten, je eigenem Zug) – die Liste selbst trägt
+sie nicht.
+
+Ausgewertet wird **deckbezogen**: wer das Deck gespielt hat – du oder eine KI – spielt keine Rolle, damit die
+kommenden Sparring-Partien (KI spielt dein Deck) mitzählen; je Partie zählt höchstens ein Sitz je Deck, ein
+Spiegel bleibt also eine Partie.
 
 Je Partie hält der Datensatz auch die eingestellte KI-Bedenkzeit (`aiTimeout`, Sekunden je Entscheidung); in
 der Partienliste steht sie als kleines Feld „<n> s" neben der Quelle. Sie gehört zum Vergleich von Dauern dazu –
 eine lange Partie kann an der hohen Bedenkzeit liegen und nicht am Deck. Ältere Datensätze kennen den Wert
 nicht, dort fehlt das Feld.
 
-Protokoll: die Bridge schickt bei Verbindung, nach jeder Änderung und nach jedem Spielende
-`matches` (die ganze Liste); der Client schickt `deleteMatch` (`id`) und `setMatchCounted` (`id`, `counted`),
-Fehler kommen als `error` („Partie <id>: …") und stehen im Screen über der Liste.
+Protokoll: die Bridge schickt bei Verbindung, nach jeder Änderung und nach jedem Spielende `matches` – die
+**letzten 300** Datensätze (älteste zuerst), je **ohne Zeitachse**, dazu `total` mit der tatsächlich
+gespeicherten Partienzahl; liegen mehr Partien vor als geschickt, sagt das der Kopf des Boards. Der Client
+schickt `deleteMatch` (`id`) und `setMatchCounted` (`id`, `counted`) – beide antworten mit einer frischen
+`matches`-Liste – sowie zwei Nachfragen: `matchDetail` (`id`) holt **eine** Partie vollständig samt Zeitachse
+zurück (Antwort `match`), `analyzeDeck` (`deck`) die Deckanalyse aus der Kartendatenbank (Antwort
+`deckAnalysis`). Beide werden erst bei Bedarf gestellt (aufgeklappte Zeile, gewähltes Deck) und nicht noch
+einmal, solange die Antwort schon vorliegt oder unterwegs ist. Fehler kommen als `error` („Partie <id>: …",
+„Deckanalyse <name>: …") und stehen im Screen über der Liste; die aufgeklappte Zeile bzw. das Deck-Panel sagen
+dann, dass nichts geladen wurde, statt ewig „wird geladen …" zu zeigen.
 
 Als Nächstes: Sparring (die KI spielt dein Deck gegen sich selbst, füllt die Statistik schnell) und daraus eine
 Schwächen-Analyse mit Kartenvorschlägen.
