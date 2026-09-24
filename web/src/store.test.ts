@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { INCORRECT_ACTION_TEXT, reduce, initialState, useStore } from "./store";
+import { INCORRECT_ACTION_TEXT, reduce, initialState, sparringOpponents, useStore } from "./store";
 import type { ArchidektDecks, ArchidektProgress, Choice, DeckInfo, MatchRecord, Snapshot, StartGame } from "./protocol";
 import { send } from "./ws";
 
@@ -535,5 +535,84 @@ describe("store: Deckanalyse und Partie-Detail", () => {
     // Nach dem Fehler darf erneut gefragt werden (die Bridge kann inzwischen wieder koennen).
     useStore.getState().requestMatchDetail("weg");
     expect(send).toHaveBeenCalledTimes(3);
+  });
+});
+
+describe("store: sparring", () => {
+  beforeEach(() => {
+    useStore.setState({ ...initialState, sparring: undefined });
+    vi.mocked(send).mockClear();
+  });
+
+  it("sparringProgress uebernimmt den Stand der Bridge", () => {
+    const s = reduce(initialState, {
+      type: "sparringProgress", done: 3, total: 5, current: "Koma Ramp", errors: [], running: true,
+    });
+    expect(s.sparring).toEqual({ running: true, done: 3, total: 5, current: "Koma Ramp", errors: [] });
+  });
+
+  it("fehlendes current wird null, Fehler und das Ende des Laufs kommen mit", () => {
+    const s = reduce(initialState, {
+      type: "sparringProgress", done: 5, total: 5, errors: ["Koma Ramp: Kindprozess: exit=1"], running: false,
+    });
+    expect(s.sparring).toEqual({
+      running: false, done: 5, total: 5, current: null, errors: ["Koma Ramp: Kindprozess: exit=1"],
+    });
+  });
+
+  it("startSparring schickt sparringStart und zeigt sofort einen laufenden Lauf", () => {
+    useStore.getState().startSparring("World-Eater", 20);
+    expect(send).toHaveBeenCalledWith({ type: "sparringStart", deck: "World-Eater", games: 20 });
+    expect(useStore.getState().sparring).toEqual({
+      running: true, done: 0, total: 20, current: null, errors: [], starting: true,
+    });
+    // Die erste Meldung der Bridge ersetzt den Startzustand samt "starting".
+    useStore.getState().apply({ type: "sparringProgress", done: 0, total: 20, current: "Koma Ramp", errors: [], running: true });
+    expect(useStore.getState().sparring?.starting).toBeUndefined();
+  });
+
+  it("ein Fehler vor der ersten Meldung raeumt den Startzustand weg", () => {
+    useStore.getState().startSparring("World-Eater", 5);
+    useStore.getState().apply({ type: "error", text: "Sparring: keine Gegner im Bracket 3: Bracket setzen oder Decks importieren" });
+    expect(useStore.getState().sparring).toBeUndefined();
+  });
+
+  it("ein Fehler waehrend eines laufenden Laufs laesst den Fortschritt stehen", () => {
+    useStore.getState().apply({ type: "sparringProgress", done: 2, total: 5, current: "Koma Ramp", errors: [], running: true });
+    useStore.getState().apply({ type: "error", text: "Partie weg: unbekannte Partie" });
+    expect(useStore.getState().sparring?.done).toBe(2);
+  });
+
+  it("cancelSparring schickt sparringCancel", () => {
+    useStore.getState().cancelSparring();
+    expect(send).toHaveBeenCalledWith({ type: "sparringCancel" });
+  });
+});
+
+describe("sparringOpponents", () => {
+  const d = (name: string, bracket: number | null): DeckInfo => ({ name, commanders: [], bracket });
+  const three = [d("A", 3), d("B", 3), d("C", 3), d("D", 3), d("E", 5)];
+
+  it("zieht aus demselben Bracket, ohne das eigene Deck", () => {
+    expect(sparringOpponents(three, "A")).toEqual({ saved: true, bracket: 3, names: ["B", "C", "D"], widened: false });
+  });
+
+  it("weniger als drei im eigenen Bracket -> Bracket ±1", () => {
+    const decks = [d("A", 3), d("B", 3), d("C", 2), d("D", 4), d("E", 1)];
+    expect(sparringOpponents(decks, "A")).toEqual({ saved: true, bracket: 3, names: ["B", "C", "D"], widened: true });
+  });
+
+  it("kein Gegner im Bracket -> leere Liste (die Bridge lehnt den Start ab)", () => {
+    expect(sparringOpponents([d("A", 3), d("B", 1)], "A")).toEqual({ saved: true, bracket: 3, names: [], widened: true });
+  });
+
+  it("Deck ohne Bracket spielt gegen die Decks ohne Bracket, ohne Erweiterung", () => {
+    const decks = [d("A", null), d("B", null), d("C", 3)];
+    expect(sparringOpponents(decks, "A")).toEqual({ saved: true, bracket: null, names: ["B"], widened: false });
+  });
+
+  it("ein nicht gespeichertes Deck (Precon, geloescht) kann kein Sparring", () => {
+    expect(sparringOpponents(three, "Precon XY")).toEqual({ saved: false, bracket: null, names: [], widened: false });
+    expect(sparringOpponents(three, undefined)).toEqual({ saved: false, bracket: null, names: [], widened: false });
   });
 });

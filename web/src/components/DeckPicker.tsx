@@ -16,9 +16,14 @@ const SRC_LABEL: Record<Pick["kind"], string> = { precon: "Precon", saved: "Eige
 /** CSS-Klasse je Zustandsmarke (ASCII, damit kein Umlaut im Selektor steht). */
 const STATE_CLASS: Record<EntryState, string> = { neu: "neu", aktuell: "aktuell", "geändert": "geaendert", "übernehmen": "uebernehmen" };
 const STATE_TITLE: Partial<Record<EntryState, string>> = { "übernehmen": "ersetzt das gleichnamige lokale Deck" };
-/** Laufender Vorgang auf einem eigenen Deck (Reiter "Eigene Decks"): Resync oder Loeschen, mit dem Deckname. */
-type DeckOp = { kind: "resync" | "delete"; name: string };
-const OP_DONE: Record<DeckOp["kind"], string> = { resync: "Deck aktualisiert.", delete: "Deck gelöscht." };
+/** Laufender Vorgang auf einem eigenen Deck (Reiter "Eigene Decks"): Resync, Loeschen oder Bracket setzen,
+ * mit dem Deckname. Alle drei antworten mit einer frischen lobby-Nachricht (oder einem error). */
+type DeckOp = { kind: "resync" | "delete" | "bracket"; name: string };
+const OP_DONE: Record<DeckOp["kind"], string> = {
+  resync: "Deck aktualisiert.", delete: "Deck gelöscht.", bracket: "Bracket gesetzt.",
+};
+/** Waehlbare Brackets auf der Deck-Kachel (Commander-Bracket 1-5, null = unbekannt). */
+const BRACKETS = [1, 2, 3, 4, 5];
 /** Zwei-Klick-Bestaetigung des Loesch-Knopfs: so lange bleibt "Wirklich löschen?" stehen, wenn nichts anderes passiert. */
 const CONFIRM_MS = 4000;
 /** Markierung "Stand des Logs beim Klick": die damals letzte Zeile (null bei leerem Log). */
@@ -47,6 +52,7 @@ export default function DeckPicker({ pick, onChange, label }: { pick: Pick; onCh
   const [draft, setDraft] = useState<Pick>(draftOf(pick)); // Import-Formulare
   const [op, setOp] = useState<DeckOp>();                    // laufender Resync/Loeschvorgang (ein Deck)
   const [confirmDelete, setConfirmDelete] = useState<string>(); // Deckname, dessen Loesch-Knopf "Wirklich löschen?" zeigt
+  const [bracketFor, setBracketFor] = useState<string>();       // Deckname, dessen Bracket-Auswahl offen ist
   const [status, setStatus] = useState<{ text: string; warn: boolean }>(); // Ergebnis des letzten Resync/Loeschens (Reiter "Eigene Decks")
   const [adStatus, setAdStatus] = useState<{ text: string; warn: boolean }>(); // Fehler des letzten Ladens/Imports (Reiter "Archidekt")
   const searchRef = useRef<HTMLInputElement>(null);
@@ -72,11 +78,12 @@ export default function DeckPicker({ pick, onChange, label }: { pick: Pick; onCh
     setDraft(draftOf(pick));
     setOp(undefined);
     setConfirmDelete(undefined);
+    setBracketFor(undefined);
     setStatus(undefined);
     setAdStatus(undefined);
     searchRef.current?.focus();
   }, [open]);
-  useEffect(() => { setConfirmDelete(undefined); setStatus(undefined); setAdStatus(undefined); }, [tab]);
+  useEffect(() => { setConfirmDelete(undefined); setBracketFor(undefined); setStatus(undefined); setAdStatus(undefined); }, [tab]);
   // "synchronisiert …"/"löscht …" endet mit der naechsten lobby-Nachricht (decks) oder einem Fehler der Bridge (letzte
   // Log-Zeile mit warn - ein fehlgeschlagener Resync/Loeschversuch schickt nur "error", decks bleibt gleich). Das
   // Ergebnis steht danach als Statuszeile unter dem Raster, damit man es nicht im Log suchen muss.
@@ -102,6 +109,16 @@ export default function DeckPicker({ pick, onChange, label }: { pick: Pick; onCh
     document.addEventListener("mousedown", onDown);
     return () => { clearTimeout(timer); document.removeEventListener("mousedown", onDown); };
   }, [confirmDelete]);
+  // Die Bracket-Auswahl schliesst beim naechsten Klick ausserhalb ihrer selbst (ihre eigenen Knoepfe
+  // schliessen sie ohnehin, sobald sie gesendet haben).
+  useEffect(() => {
+    if (bracketFor === undefined) return;
+    const onDown = (e: MouseEvent) => {
+      if (!(e.target instanceof Element) || !e.target.closest(".bracket-menu, button.bracket-badge")) setBracketFor(undefined);
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [bracketFor]);
   const progress = ad.progress;
   const importing = starting || (progress != null && progress.current != null);   // laufender archidektImport
   // Ein "error" der Bridge beendet ad.loading, ohne eine Liste zu liefern (Reducer setzt loading=false und haengt die
@@ -136,12 +153,17 @@ export default function DeckPicker({ pick, onChange, label }: { pick: Pick; onCh
     if (ad.username) setUsername(ad.username);
     setAdStatus(undefined);
   }, [ad.decks]);
+  // Escape schliesst erst die offene Bracket-Auswahl, dann das Panel - sonst waere die Auswahl eine
+  // Falle: ein Escape daraus wuerde gleich das ganze Panel mitnehmen.
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (bracketFor !== undefined) setBracketFor(undefined); else setOpen(false);
+    };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open]);
+  }, [open, bracketFor]);
   const list = useMemo(() => filterDecks(tab === "precons" ? precons : decks, query), [tab, precons, decks, query]);
   const chosenIds = useMemo(() => (ad.decks ?? []).filter((e) => selected.has(e.id)).map((e) => e.id), [ad.decks, selected]);
   const updateIds = useMemo(() => updateAllIds(ad.decks ?? [], decks), [ad.decks, decks]);
@@ -167,11 +189,14 @@ export default function DeckPicker({ pick, onChange, label }: { pick: Pick; onCh
   });
   const listKind: Pick["kind"] = tab === "precons" ? "precon" : "saved";
   const choose = (d: DeckInfo) => { onChange({ kind: listKind, value: d.name, name: "" }); setOpen(false); };
-  const startOp = (kind: DeckOp["kind"], name: string) => {
+  const startOp = (kind: DeckOp["kind"], name: string, bracket: number | null = null) => {
     setConfirmDelete(undefined);
+    setBracketFor(undefined);
     setStatus(undefined);
     setOp({ kind, name });
-    send({ type: kind === "resync" ? "resyncDeck" : "deleteDeck", name });
+    send(kind === "resync" ? { type: "resyncDeck", name }
+      : kind === "delete" ? { type: "deleteDeck", name }
+      : { type: "setDeckBracket", name, bracket });
   };
   // Erster Klick fragt nach, der zweite (im Bestaetigungszustand) loescht.
   const clickDelete = (name: string) => {
@@ -223,6 +248,25 @@ export default function DeckPicker({ pick, onChange, label }: { pick: Pick; onCh
                       <span className="deck-card-name">{d.name}</span>
                       <span className="deck-card-cmd">{d.commanders.map((c) => c.name).join(" / ")}</span>
                     </button>
+                    {tab === "saved" && (
+                      <button type="button" className={"bracket-badge" + (d.bracket == null ? " unknown" : "") + (bracketFor === d.name ? " on" : "")}
+                        title="Commander-Bracket (1–5) – klicken zum Ändern. Das Sparring zieht die Gegner aus demselben Bracket."
+                        aria-label={"Bracket von " + d.name + ": " + (d.bracket ?? "unbekannt")} aria-expanded={bracketFor === d.name}
+                        disabled={op?.name === d.name}
+                        onClick={() => setBracketFor((cur) => (cur === d.name ? undefined : d.name))}>
+                        {op?.kind === "bracket" && op.name === d.name ? "…" : d.bracket != null ? "B" + d.bracket : "B ?"}
+                      </button>
+                    )}
+                    {tab === "saved" && bracketFor === d.name && (
+                      <div className="bracket-menu" role="group" aria-label={"Bracket für " + d.name}>
+                        {BRACKETS.map((b) => (
+                          <button key={b} type="button" className={"bracket-pick" + (d.bracket === b ? " on" : "")}
+                            onClick={() => startOp("bracket", d.name, b)}>{b}</button>
+                        ))}
+                        <button type="button" className={"bracket-pick wide" + (d.bracket == null ? " on" : "")}
+                          onClick={() => startOp("bracket", d.name, null)}>unbekannt</button>
+                      </div>
+                    )}
                     {tab === "saved" && d.archidekt && (
                       <button type="button" className="resync" title={"Neu von Archidekt laden (" + d.archidekt + ")"} disabled={op?.name === d.name}
                         onClick={() => startOp("resync", d.name)}>

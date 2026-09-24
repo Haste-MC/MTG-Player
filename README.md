@@ -139,7 +139,7 @@ ist kein Rechnen.
 
 ## Statistik
 
-Jede beendete Partie (eigenes Spiel und Zuschauer-Modus, später auch das Sparring) wird mitgeschrieben: je Sitz
+Jede beendete Partie (eigenes Spiel, Zuschauer-Modus und Sparring) wird mitgeschrieben: je Sitz
 Deckname, Sieger bzw. Verlustgrund, Mulligans, Länder je Zug und verpasste Landabgaben, Zauber und Mana-Summe,
 Commander-Casts samt Steuer und Zug des ersten Commanders, Schaden gemacht/genommen sowie Leben und Gift am
 Ende; dazu Dauer, Züge und Quelle der Partie. Die Datensätze liegen als JSON-Array in
@@ -212,7 +212,7 @@ der Format-Schalter gilt auch hier. Der Pfeil links klappt die Partie auf und l�
 sie nicht.
 
 Ausgewertet wird **deckbezogen**: wer das Deck gespielt hat – du oder eine KI – spielt keine Rolle, damit die
-kommenden Sparring-Partien (KI spielt dein Deck) mitzählen; je Partie zählt höchstens ein Sitz je Deck, ein
+Sparring-Partien (KI spielt dein Deck) mitzählen; je Partie zählt höchstens ein Sitz je Deck, ein
 Spiegel bleibt also eine Partie.
 
 Je Partie hält der Datensatz auch die eingestellte KI-Bedenkzeit (`aiTimeout`, Sekunden je Entscheidung); in
@@ -231,8 +231,42 @@ einmal, solange die Antwort schon vorliegt oder unterwegs ist. Fehler kommen als
 „Deckanalyse <name>: …") und stehen im Screen über der Liste; die aufgeklappte Zeile bzw. das Deck-Panel sagen
 dann, dass nichts geladen wurde, statt ewig „wird geladen …" zu zeigen.
 
-Als Nächstes: Sparring (die KI spielt dein Deck gegen sich selbst, füllt die Statistik schnell) und daraus eine
-Schwächen-Analyse mit Kartenvorschlägen.
+## Sparring
+
+Sparring spielt ein gespeichertes Deck **im Hintergrund** gegen deine eigenen anderen Decks, damit die Statistik
+nicht erst nach Wochen etwas zu sagen hat: im Statistik-Board über den Kacheln 5, 10, 20 oder 50 Partien wählen
+und „Sparring starten". Jede Partie ist ein **1 vs 1** (Pod kommt später), die KI spielt beide Seiten im
+Standard-Modus, und jede beendete Partie landet sofort als Datensatz mit der Quelle **„Sparring"** in der Liste –
+das Board rechnet sich also während des Laufs weiter.
+
+Die **Gegner** kommen zufällig (mit Zurücklegen) aus demselben **Bracket**: so werden über viele Partien auch
+seltene Paarungen getestet. Sind im eigenen Bracket weniger als drei andere Decks, wird auf Bracket ±1
+erweitert; gibt es dann immer noch keinen Gegner, lehnt die Bridge den Start ab („keine Gegner im Bracket 3:
+Bracket setzen oder Decks importieren"). Ein Deck ohne Bracket spielt gegen die Decks ohne Bracket. Unter dem
+Knopf steht, woraus gezogen wird („zufällig aus Bracket 3: 7 Decks").
+
+Der **Bracket** (Commander-Bracket 1–5) kommt beim Import aus Archidekt (`edhBracket`) und lässt sich von Hand
+ändern: im Deck-Panel unter „Eigene Decks" trägt jede Kachel oben links eine kleine Marke („B3", „B ?"), ein
+Klick öffnet die Auswahl 1–5 / „unbekannt". Precons haben keinen Bracket.
+
+Während des Laufs steht statt der Auswahl eine Fortschrittszeile („3/20 · gegen Koma, World-Eater …") mit
+**„Abbrechen"**; ein Abbruch beendet die laufende Partie sofort (ihr Kindprozess wird abgeschossen) und lässt
+keine weitere mehr antreten. Gescheiterte Partien stehen rot darunter, zählen mit und **beenden den Lauf nicht** –
+jede Partie läuft in einem **eigenen JVM-Kindprozess**, damit ein Forge-Absturz weder den Lauf noch deine
+nebenher laufende Bridge mitnimmt. Es läuft immer nur **ein** Sparring; ein zweiter Start meldet „Sparring läuft
+noch".
+
+Partien, die in den **Zugdeckel** laufen (Voreinstellung 60 Züge), zählen wie überall als „Zugdeckel" und fließen
+**nicht** in die Bilanz – sie stehen mit dem Grund in der Liste (siehe „Statistik"). Ausgabe der Kindprozesse:
+`~/.mtg-player/sparring/<Zeitpunkt>-<Nr>-<Gegner>.log` (stderr) bzw. `.out.log` (Forges Spielprotokoll).
+
+Protokoll: `sparringStart` (`deck`, `games`, optional `ai`, `timeout`, `maxTurns`) startet den Lauf,
+`sparringCancel` bricht ihn ab. Die Bridge meldet `sparringProgress` (`done`, `total`, `current`, `errors`,
+`running`) einmal zu Beginn und nach jedem Spielende – die letzte Meldung eines Laufs trägt `running: false`.
+Den Bracket setzt `setDeckBracket` (`name`, `bracket` 1–5 oder `null`); die Antwort ist eine frische
+`lobby`-Nachricht.
+
+Als Nächstes: aus den so gefüllten Kennzahlen eine Schwächen-Analyse mit Kartenvorschlägen.
 
 ## Wenn der Tisch einfriert
 

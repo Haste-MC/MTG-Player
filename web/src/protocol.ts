@@ -121,12 +121,17 @@ export interface Choice {
 /** Ein Deck im Lobby-Angebot (Bridge: Messages.DeckInfo). imageKey ist Forges Bildschluessel
  * ("c:Name|SET|art"); archidekt ist die Archidekt-Deck-Id eines importierten Decks, null/fehlend sonst;
  * archidektUpdated ist der beim Import/Resync gespeicherte Archidekt-Stand (ISO-String), null/fehlend
- * ohne archidekt-Tag. */
+ * ohne archidekt-Tag.
+ *
+ * bracket ist das Commander-Bracket 1-5 (aus Archidekt oder von Hand gesetzt, siehe setDeckBracket).
+ * Es FEHLT bzw. ist null, wenn es unbekannt ist - Precons haben nie eines. Die Gegnerwahl des Sparrings
+ * haengt daran (Spec Stueck 3 §2): "unbekannt" ist ein eigener Topf, kein Bracket 0. */
 export interface DeckInfo {
   name: string;
   commanders: { name: string; imageKey?: string }[];
   archidekt?: string | null;
   archidektUpdated?: string | null;
+  bracket?: number | null;
 }
 
 /** Ein Deck-Eintrag aus Archidekt.listDecks (Bridge). art ist die Vorschau-URL (customFeatured/featured),
@@ -251,6 +256,15 @@ export interface MatchRecord {
  * matches.length, sind aeltere Partien nicht mitgeschickt worden. total fehlt bei einer Bridge vor
  * Runde A. */
 export interface Matches { type: "matches"; matches: MatchRecord[]; total?: number }
+
+/** Fortschritt eines Sparring-Laufs (Bridge: Messages.SparringProgress, Spec Stueck 3 §3): einmal zu
+ * Beginn mit done: 0 und danach nach jedem Spielende. current ist der Gegner der gerade laufenden
+ * Partie - er FEHLT (Jackson laesst null weg), sobald keine Partie mehr folgt. errors traegt je
+ * gescheiterter Partie "<Gegner>: <Grund>"; eine gescheiterte Partie zaehlt trotzdem in done mit.
+ * running ist genau in der letzten Nachricht eines Laufs false, auch nach einem Abbruch. */
+export interface SparringProgress {
+  type: "sparringProgress"; done: number; total: number; current?: string | null; errors: string[]; running: boolean;
+}
 /** Antwort auf matchDetail: EIN vollstaendiger Datensatz, inklusive Zeitachse je Sitz. */
 export interface MatchMsg { type: "match"; match: MatchRecord }
 
@@ -278,7 +292,7 @@ export interface DeckAnalysis {
 /** Antwort auf analyzeDeck; deck ist der angefragte Deckname (Precon- oder Speichername). */
 export interface DeckAnalysisMsg { type: "deckAnalysis"; deck: string; analysis: DeckAnalysis }
 
-export type Inbound = Snapshot | Choice | Lobby | LogLine | Thinking | GameOver | ErrorMsg | ArchidektDecks | ArchidektProgress | Matches | MatchMsg | DeckAnalysisMsg;
+export type Inbound = Snapshot | Choice | Lobby | LogLine | Thinking | GameOver | ErrorMsg | ArchidektDecks | ArchidektProgress | Matches | MatchMsg | DeckAnalysisMsg | SparringProgress;
 
 export type Outbound =
   // humanDeck fehlt bei spectate:true (KI-only-Modus, kein eigener Sitz - siehe lobbyPayload.ts)
@@ -308,7 +322,17 @@ export type Outbound =
   // oder error ("Partie <id>: unbekannte Partie").
   | { type: "matchDetail"; id: string }
   // Deckanalyse anfordern (Precon- oder Speichername); die Bridge antwortet mit deckAnalysis oder error.
-  | { type: "analyzeDeck"; deck: string };
+  | { type: "analyzeDeck"; deck: string }
+  // Bracket eines gespeicherten Decks setzen (null = unbekannt); die Bridge antwortet mit einer frischen
+  // lobby-Nachricht oder error ("Bracket <name>: ...").
+  | { type: "setDeckBracket"; name: string; bracket: number | null }
+  // Sparring starten (Spec Stueck 3 §3): games 1vs1-Partien des gespeicherten Decks gegen zufaellige
+  // Gegner aus seinem Bracket. ai/timeout/maxTurns sind optional (Bridge: standard/Default, 5 s, 60
+  // Zuege). Die Bridge antwortet mit sparringProgress und nach jeder Partie mit matches - oder mit
+  // error ("Sparring: keine Gegner im Bracket 3: ...", "Sparring läuft noch").
+  | { type: "sparringStart"; deck: string; games: number; ai?: AiPick; timeout?: number; maxTurns?: number }
+  // Laufendes Sparring abbrechen; die laufende Partie wird abgeschossen, der Lauf endet mit running: false.
+  | { type: "sparringCancel" };
 
 export type StartGame = Extract<Outbound, { type: "startGame" }>;
 

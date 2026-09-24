@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { deckGames, formatOf, summarize, type DeckSummary, type Format } from "../matchStats";
 import { findings } from "../findings";
 import type { DeckInfo, MatchRecord, MatchSeat } from "../protocol";
-import { useStore, type LogEntry } from "../store";
+import { sparringOpponents, useStore, type LogEntry, type SparringState } from "../store";
 import { send } from "../ws";
 import { Art, TrashIcon } from "./DeckPicker";
 import StatBlocks, { mmss } from "./StatTiles";
@@ -23,6 +23,10 @@ const LOSS_LABEL: Record<string, string> = {
 const TURN_CAP_HINT = "Partie wurde nach der maximalen Zugzahl abgebrochen – zählt nicht in die Bilanz.";
 /** Fehler der Bridge zu einer Partie ("Partie <id>: …"), im Log mit dem Warn-Zeichen des Stores davor. */
 const MATCH_ERROR = /^⚠ Partie /;
+/** Fehler der Bridge zum Sparring ("Sparring: keine Gegner …", "Sparring läuft noch"), ebenso aus dem Log. */
+const SPARRING_ERROR = /^⚠ Sparring/;
+/** Partienzahlen im Sparring-Block (Spec §4). */
+const SPARRING_GAMES = [5, 10, 20, 50];
 /** Die drei Format-Schalter im Kopf. "all" rechnet ueber beide - fuer die Bilanz brauchbar, fuer alles
  * Formatabhaengige mit Vorsicht (im Pod verliert man ueberwiegend, Schaden verteilt sich auf drei Gegner). */
 const FORMATS: { id: Format; label: string }[] = [
@@ -68,6 +72,11 @@ export default function Stats() {
   const [open, setOpen] = useState<string>();                     // aufgeklappte Partie (Id)
   const [confirmDelete, setConfirmDelete] = useState<string>();   // Partie-Id, deren Knopf nachfragt
   const [status, setStatus] = useState<string>();                 // Fehler der Bridge zur letzten Aktion
+  const sparring = useStore((s) => s.sparring);
+  const startSparring = useStore((s) => s.startSparring);
+  const cancelSparring = useStore((s) => s.cancelSparring);
+  const [games, setGames] = useState(SPARRING_GAMES[0]);
+  const [sparringStatus, setSparringStatus] = useState<string>();  // abgelehnter Start ("keine Gegner …")
 
   // Commander-Bilder kommen aus der Lobby-Liste (Precons + eigene Decks), nicht aus dem Datensatz: eine
   // Partie speichert nur den Decknamen. Ein Deck, das es nicht mehr gibt, bleibt ohne Bild.
@@ -143,6 +152,13 @@ export default function Stats() {
     if (last?.warn && MATCH_ERROR.test(last.text)) setStatus(last.text);
   }, [log]);
   useEffect(() => { setStatus(undefined); }, [matches]);
+  // Ein abgelehnter Sparring-Start steht im Sparring-Block statt in der Partienliste - er hat mit den
+  // Partien nichts zu tun. Jede Fortschrittsmeldung raeumt ihn weg: dann laeuft ja etwas.
+  useEffect(() => {
+    const last: LogEntry | undefined = log[log.length - 1];
+    if (last?.warn && SPARRING_ERROR.test(last.text)) setSparringStatus(last.text);
+  }, [log]);
+  useEffect(() => { if (sparring) setSparringStatus(undefined); }, [sparring]);
 
   const clickDelete = (id: string) => {
     if (confirmDelete === id) {
@@ -179,7 +195,10 @@ export default function Stats() {
       </header>
 
       {matches.length === 0 ? (
-        <p className="muted empty-stats">Noch keine Partien – spiele eine Runde oder nutze später das Sparring.</p>
+        <p className="muted empty-stats">
+          Noch keine Partien – spiele eine Runde. Danach füllt das Sparring die Statistik (der Knopf steht
+          oben neben dem gewählten Deck).
+        </p>
       ) : (
         <>
           <div className="sb-body">
@@ -212,6 +231,8 @@ export default function Stats() {
             </aside>
 
             <main className="sb-panels">
+              <Sparring deck={deck} decks={savedDecks} run={sparring} games={games} onGames={setGames}
+                onStart={() => deck && startSparring(deck, games)} onCancel={cancelSparring} error={sparringStatus} />
               {summary && deck ? (
                 <>
                   <Findings findings={found} analyzed={analysis !== undefined} />
@@ -261,6 +282,76 @@ export default function Stats() {
         </>
       )}
     </div>
+  );
+}
+
+/** Sparring-Block (Spec §4), ueber den Kacheln neben dem gewaehlten Deck: Partienzahl, Startknopf und
+ * ein Hinweis, aus welchem Bracket die Gegner gezogen werden. Laeuft ein Lauf, steht hier stattdessen
+ * die Fortschrittszeile mit „Abbrechen“; gescheiterte Partien stehen rot darunter.
+ *
+ * Ein Lauf gehoert der Bridge, nicht dem gewaehlten Deck: waehlt man waehrend des Laufs ein anderes Deck,
+ * bleibt die Fortschrittszeile stehen (es gibt nur einen Lauf, und die Fortschrittsmeldung nennt das Deck
+ * nicht). Der Startknopf ist deshalb waehrend eines Laufs gar nicht erst da. */
+function Sparring(
+  { deck, decks, run, games, onGames, onStart, onCancel, error }:
+  {
+    deck?: string; decks: DeckInfo[]; run?: SparringState; games: number; onGames: (n: number) => void;
+    onStart: () => void; onCancel: () => void; error?: string;
+  },
+) {
+  const opp = sparringOpponents(decks, deck);
+  const n = opp.names.length;
+  const hint = !deck ? "Kein Deck ausgewählt."
+    : !opp.saved ? `„${deck}“ ist kein gespeichertes Deck – Sparring geht nur mit eigenen Decks.`
+    : opp.bracket === null
+      ? (n === 0 ? "Kein Gegner ohne Bracket – setze im Deck-Panel („Eigene Decks“) einen Bracket."
+        : `zufällig aus den Decks ohne Bracket: ${n} ${n === 1 ? "Deck" : "Decks"}`)
+    : n === 0 ? `Keine Gegner im Bracket ${opp.bracket} – Bracket setzen oder Decks importieren.`
+    : opp.widened
+      ? `zufällig aus Bracket ${opp.bracket - 1}–${opp.bracket + 1}: ${n} ${n === 1 ? "Deck" : "Decks"} (im Bracket ${opp.bracket} sind es weniger als drei)`
+      : `zufällig aus Bracket ${opp.bracket}: ${n} ${n === 1 ? "Deck" : "Decks"}`;
+  const canStart = opp.saved && n > 0;
+  const running = run?.running === true;
+  const pct = run && run.total > 0 ? Math.round((run.done / run.total) * 100) : 0;
+  return (
+    <section className="sb-block sparring">
+      <div className="sb-block-head">
+        <h2>Sparring</h2>
+        <p className="sb-block-note">
+          1 vs 1 gegen zufällige eigene Decks aus demselben Bracket, im Hintergrund – jede Partie landet
+          als Quelle „Sparring“ in der Liste unten. Partien am Zugdeckel zählen nicht in die Bilanz.
+        </p>
+      </div>
+      {running ? (
+        <div className="spar-run">
+          <span className="spar-line" aria-live="polite">
+            <b>{run!.done}/{run!.total}</b>
+            {run!.current ? ` · gegen ${run!.current} …` : " · startet …"}
+          </span>
+          <span className="spar-bar"><span className="spar-fill" style={{ width: pct + "%" }} /></span>
+          <button className="ghost small" onClick={onCancel}>Abbrechen</button>
+        </div>
+      ) : (
+        <div className="spar-start">
+          <div className="sb-chips" role="group" aria-label="Partien">
+            {SPARRING_GAMES.map((g) => (
+              <button key={g} className={"sb-chip" + (g === games ? " on" : "")} aria-pressed={g === games}
+                onClick={() => onGames(g)}>{g}</button>
+            ))}
+          </div>
+          <button className="primary" disabled={!canStart} onClick={onStart}>Sparring starten</button>
+          <span className={"spar-hint" + (canStart ? "" : " warn")}>{hint}</span>
+        </div>
+      )}
+      {run && !run.running && run.done > 0 && (
+        <p className="spar-done">
+          Lauf beendet: {run.done} von {run.total} Partien
+          {run.errors.length > 0 ? `, ${run.errors.length} davon fehlgeschlagen.` : "."}
+        </p>
+      )}
+      {run && run.errors.length > 0 && <div className="deck-status warn">{run.errors.join("\n")}</div>}
+      {error && <div className="deck-status warn" aria-live="polite">{error}</div>}
+    </section>
   );
 }
 

@@ -5,6 +5,41 @@ import { send } from "./ws";
 
 export interface LogEntry { text: string; kind?: string; card?: number; warn?: boolean; id?: number }
 
+/** Stand eines Sparring-Laufs im Board (siehe SparringProgress). `starting` ist der Zustand zwischen dem
+ *  Klick auf „Sparring starten“ und der ersten Fortschrittsmeldung der Bridge: Zahlen sind dann nur die
+ *  eigene Annahme (done 0, total = gewaehlte Partienzahl), damit der Knopf nicht erst nach dem Laden von
+ *  Forge im Kindprozess reagiert. */
+export interface SparringState {
+  running: boolean; done: number; total: number; current?: string | null; errors: string[]; starting?: boolean;
+}
+
+/** Ab so vielen Gegnern im eigenen Bracket wird nicht auf ±1 erweitert (Bridge: SparringOpponents.MIN_SAME_BRACKET). */
+export const MIN_SAME_BRACKET = 3;
+
+/** Wen das Sparring fuer `deck` ziehen wuerde - dieselbe Regel wie SparringOpponents auf der Bridge
+ *  (Spec Stueck 3 §2), hier nur fuer den Hinweis unter dem Knopf. Die Wahrheit bleibt die Bridge: sie
+ *  liest die Deckdateien, dieser Nachbau die lobby-Liste.
+ *
+ *  `saved` ist false, wenn `deck` gar kein gespeichertes Deck ist (ein Precon oder ein geloeschtes Deck
+ *  aus einer alten Partie) - dann geht kein Sparring. `widened` heisst: im eigenen Bracket sind es
+ *  weniger als MIN_SAME_BRACKET, gezogen wird darum aus Bracket ±1. Ein Deck ohne Bracket spielt gegen
+ *  die Decks ohne Bracket, ohne jede Erweiterung. */
+export interface SparringOpponents { saved: boolean; bracket: number | null; names: string[]; widened: boolean }
+
+export function sparringOpponents(decks: DeckInfo[], deck?: string): SparringOpponents {
+  const own = decks.find((d) => d.name === deck);
+  if (!own) return { saved: false, bracket: null, names: [], widened: false };
+  const bracket = own.bracket ?? null;
+  const pick = (min: number, max: number) =>
+    decks.filter((d) => d.name !== deck && d.bracket != null && d.bracket >= min && d.bracket <= max).map((d) => d.name);
+  if (bracket === null) {
+    return { saved: true, bracket: null, widened: false, names: decks.filter((d) => d.name !== deck && d.bracket == null).map((d) => d.name) };
+  }
+  const same = pick(bracket, bracket);
+  if (same.length >= MIN_SAME_BRACKET) return { saved: true, bracket, names: same, widened: false };
+  return { saved: true, bracket, names: pick(bracket - 1, bracket + 1), widened: true };
+}
+
 export interface AppState {
   screen: "lobby" | "table" | "stats";
   precons: DeckInfo[];
@@ -70,6 +105,10 @@ export interface AppState {
    *  fehlschlug, sagt die Fehlermeldung nicht) - der naechste Versuch darf sonst nie mehr fragen. */
   pendingMatch: string[];
   pendingAnalysis: string[];
+  /** Laufendes bzw. zuletzt gelaufenes Sparring (Statistik-Board). undefined, solange in dieser Sitzung
+   *  keines gestartet wurde und keine Fortschrittsmeldung kam; nach dem Lauf bleibt der letzte Stand mit
+   *  running: false stehen (Partienzahl und Fehlerliste sind dann das Ergebnis). */
+  sparring?: SparringState;
 }
 
 export const initialState: AppState = {
@@ -150,13 +189,22 @@ export function reduce(s: AppState, m: Inbound): AppState {
       // Offene matchDetail-/analyzeDeck-Anfragen gelten nach einem Fehler als erledigt: die Meldung sagt
       // nicht, welche gemeint war, und eine haengende Anfrage wuerde jeden weiteren Versuch blockieren.
       const pending = { pendingMatch: [], pendingAnalysis: [] };
-      if (m.text === INCORRECT_ACTION_TEXT) return { ...s, toast: { text: m.text, n: (s.toast?.n ?? 0) + 1 }, expectNewMatch: false, archidekt, ...pending };
-      return { ...s, log: [...s.log, { text: "⚠ " + m.text, warn: true }].slice(-LOG_MAX), expectNewMatch: false, archidekt, ...pending };
+      // Ein Fehler zwischen Klick und erster Fortschrittsmeldung ("keine Gegner im Bracket 3",
+      // "Sparring läuft noch") beendet den Startzustand - sonst stuende die Fortschrittszeile fuer
+      // immer bei 0. Laeuft anderswo wirklich ein Lauf, stellt ihn die naechste Fortschrittsmeldung
+      // wieder her. Einen laufenden Lauf ruehrt ein Fehler nicht an: er meldet sein Ende selbst.
+      const sparring = s.sparring?.starting ? undefined : s.sparring;
+      if (m.text === INCORRECT_ACTION_TEXT) return { ...s, toast: { text: m.text, n: (s.toast?.n ?? 0) + 1 }, expectNewMatch: false, archidekt, sparring, ...pending };
+      return { ...s, log: [...s.log, { text: "⚠ " + m.text, warn: true }].slice(-LOG_MAX), expectNewMatch: false, archidekt, sparring, ...pending };
     }
     case "archidektDecks":
       return { ...s, archidekt: { username: m.username, decks: m.decks, loading: false } };
     case "archidektProgress":
       return { ...s, archidekt: { ...s.archidekt, progress: m } };
+    case "sparringProgress":
+      // Die Bridge ist die Wahrheit ueber den Lauf: ihre Zahlen ersetzen den Startzustand komplett
+      // (auch total - ein Lauf kann mit weniger Partien gestartet worden sein, als der Knopf schickte).
+      return { ...s, sparring: { running: m.running, done: m.done, total: m.total, current: m.current ?? null, errors: m.errors } };
     case "matches": {
       // Geloeschte Partien auch aus den gemerkten Details werfen - sonst zeigt ein spaeterer Datensatz
       // mit derselben Id (theoretisch) die alte Zeitachse, und der Speicher waechst ohne Grund.
@@ -210,6 +258,11 @@ interface Store extends AppState {
   requestMatchDetail: (id: string) => void;
   /** Fordert die Deckanalyse an (analyzeDeck), wenn sie nicht schon vorliegt oder unterwegs ist. */
   requestDeckAnalysis: (deck: string) => void;
+  /** Startet ein Sparring (sparringStart) und setzt den Startzustand - die Bridge uebernimmt mit ihrer
+   *  ersten Fortschrittsmeldung. KI, Bedenkzeit und Zugdeckel bleiben die Voreinstellung der Bridge. */
+  startSparring: (deck: string, games: number) => void;
+  /** Bricht den laufenden Lauf ab (sparringCancel); die Bridge meldet das Ende mit running: false. */
+  cancelSparring: () => void;
 }
 
 export const useStore = create<Store>((set, get) => ({
@@ -249,4 +302,10 @@ export const useStore = create<Store>((set, get) => ({
     set({ pendingAnalysis: [...s.pendingAnalysis, deck] });
     send({ type: "analyzeDeck", deck });
   },
+  startSparring: (deck, games) => {
+    // Fehlerliste bewusst leer: der neue Lauf faengt bei null an, die Fehler des vorigen sind erledigt.
+    set({ sparring: { running: true, done: 0, total: games, current: null, errors: [], starting: true } });
+    send({ type: "sparringStart", deck, games });
+  },
+  cancelSparring: () => send({ type: "sparringCancel" }),
 }));
