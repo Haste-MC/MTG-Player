@@ -53,8 +53,50 @@ export const FLOOD_LANDS = 6;
  * v2-Stichprobe, sondern rechnet ueber alle gewerteten Partien der Auswahl. */
 export const FLOOD_MAX_SPELLS = 2;
 
+/**
+ * Schluessel, unter dem zwei Schreibweisen desselben Decks zusammenfinden: Forges
+ * {@code DeckBase(String)} ersetzt in einem Decknamen jeden "/" durch "_" (Decks werden intern als
+ * "verzeichnis/name" referenziert). Der DeckStore stellt den rohen Namen fuer die Lobby wieder her, ein
+ * MatchRecord traegt dagegen den sanitisierten - Kevins Decks heissen darin
+ * `"Titel" __ Commander` statt `"Titel" // Commander`. Seit die Bridge den Namen vom Aufrufer bekommt
+ * (MatchRecorder), schreibt sie ihn roh; aeltere Datensaetze auf der Platte tragen aber weiter Forges
+ * Schreibweise.
+ *
+ * Deshalb gruppiert JEDE Auswertung hier nach deckKey und nicht nach dem rohen Namen: sonst stuende
+ * ein Deck, das vor und nach dieser Umstellung gespielt wurde, zweimal im Board - zwei Siegquoten,
+ * zwei Kachel-Saetze, zwei Auffaelligkeiten - und dieselbe Spaltung noch einmal in der Gegner-Tabelle.
+ * Angezeigt wird trotzdem ein lesbarer Name - der aus dem juengsten Datensatz (siehe bump); in
+ * der Deckliste sticht ihn zusaetzlich der Speichername, wenn es ein eigenes Deck ist (BoardDeck).
+ */
+export const deckKey = (name: string) => name.replace(/\//g, "_");
+
+/** Die Decks eines Datensatzes als deckKey -> anzuzeigender Name; ein Deck auf zwei Sitzen kommt nur
+ * einmal vor. `skip` laesst einen Sitzindex aus (fuer die Gegner-Tabelle: der eigene Sitz). */
+function seatDecks(record: MatchRecord, skip?: number): Map<string, string> {
+  const decks = new Map<string, string>();
+  record.seats.forEach((seat, index) => {
+    if (index === skip) return;
+    decks.set(deckKey(seat.deck), seat.deck);
+  });
+  return decks;
+}
+
+/** Sammelt Zaehler je deckKey und merkt sich dabei den Anzeigenamen des ZULETZT gesehenen Datensatzes.
+ * Die Partienliste kommt von der Bridge aelteste zuerst (MatchStore haengt neue Datensaetze hinten an),
+ * die neueste Schreibweise gewinnt also - und das ist die rohe aus der Lobby, nicht Forges alte. */
+function bump<T extends object>(into: Map<string, { deck: string } & T>, key: string, deck: string,
+  fresh: () => T): { deck: string } & T {
+  const cur = into.get(key) ?? { deck, ...fresh() };
+  cur.deck = deck;
+  into.set(key, cur);
+  return cur;
+}
+
 /** Ein Deck mit mindestens einer gewerteten oder einer Zugdeckel-Partie, fuer die Deckliste des
- * Statistik-Screens. `games` sind die gewerteten, `capped` die am Zugdeckel abgeschnittenen. */
+ * Statistik-Screens. `games` sind die gewerteten, `capped` die am Zugdeckel abgeschnittenen.
+ *
+ * `deck` ist ein ANZEIGENAME, kein Schluessel: zusammengefasst wurde nach {@link deckKey}, und zwei
+ * Schreibweisen desselben Decks stehen hier als eine Zeile mit dem Namen des juengsten Datensatzes. */
 export interface DeckGames { deck: string; games: number; capped: number }
 
 /** Decks aus den gewerteten UND den Zugdeckel-Partien (ueber alle Sitze, nicht nur den eigenen), je mit
@@ -62,38 +104,29 @@ export interface DeckGames { deck: string; games: number; capped: number }
  * derselben Partie (Spiegel) zaehlt fuer diese Partie nur einmal. `format` beschraenkt auf Duelle bzw.
  * Pods (siehe formatOf); "all" zaehlt beide zusammen.
  *
+ * Gruppiert wird nach {@link deckKey}: ein Deck, das mit beiden Schreibweisen in den Datensaetzen
+ * steht, ist EIN Eintrag mit der Summe seiner Partien.
+ *
  * Die Zugdeckel-Partien stehen hier mit drin, obwohl sie nicht gewertet sind: ein Deck, das AUSSCHLIESSLICH
  * am Deckel endet, hat keine Bilanz (summarize liefert undefined) und waere sonst im ganzen Screen nicht
  * auffindbar - ausgerechnet der Fall, den die Kennzahl zeigen soll. Alle anderen Ausschlussgruende
  * (Absturz, Abbruch, Aufgabe, zu kurz) bleiben aussen vor; sie sagen nichts ueber das Deck aus. */
 export function deckGames(records: MatchRecord[], format: Format = "all"): DeckGames[] {
-  const counts = new Map<string, { games: number; capped: number }>();
+  const counts = new Map<string, { deck: string; games: number; capped: number }>();
   for (const r of records) {
     if (!inFormat(r, format)) continue;
     const counted = r.counted;
     if (!counted && r.excludeReason !== TURN_CAPPED) continue;
-    const decks = new Set(r.seats.map((seat) => seat.deck));
-    for (const deck of decks) {
-      const cur = counts.get(deck) ?? { games: 0, capped: 0 };
+    for (const [key, deck] of seatDecks(r)) {
+      const cur = bump(counts, key, deck, () => ({ games: 0, capped: 0 }));
       if (counted) cur.games += 1;
       else cur.capped += 1;
-      counts.set(deck, cur);
     }
   }
-  return [...counts.entries()]
-    .map(([deck, v]) => ({ deck, games: v.games, capped: v.capped }))
+  return [...counts.values()]
+    .map((v) => ({ deck: v.deck, games: v.games, capped: v.capped }))
     .sort((a, b) => b.games + b.capped - (a.games + a.capped) || a.deck.localeCompare(b.deck));
 }
-
-/**
- * Schluessel, unter dem zwei Schreibweisen desselben Decks zusammenfinden: Forges
- * {@code DeckBase(String)} ersetzt in einem Decknamen jeden "/" durch "_" (Decks werden intern als
- * "verzeichnis/name" referenziert). Der DeckStore stellt den rohen Namen fuer die Lobby wieder her, ein
- * MatchRecord traegt dagegen den sanitisierten - Kevins Decks heissen darin
- * `"Titel" __ Commander` statt `"Titel" // Commander`. Ohne diese Normalisierung findet das Board zu
- * keiner seiner Partien das gespeicherte Deck: kein Commander-Bild, keine Deckanalyse, kein Sparring.
- */
-export const deckKey = (name: string) => name.replace(/\//g, "_");
 
 /** Eine Zeile der Deckliste im Statistik-Board: ein Deck mit seinen Partien und der Angabe, ob es uns
  * gehoert (`own`: es steht in der Lobby-Liste der gespeicherten Decks). Ein Deck, das wir nur als Gegner
@@ -132,9 +165,10 @@ export function boardDecks(records: MatchRecord[], saved: string[], format: Form
 /** Waehlt fuer `deck` innerhalb einer Partie hoechstens einen Sitz: bevorzugt den menschlichen, sonst
  * den ersten passenden (Reihenfolge von `record.seats`). undefined, wenn kein Sitz dieses Deck spielt. */
 function pickSeat(record: MatchRecord, deck: string): { seat: MatchSeat; index: number } | undefined {
+  const key = deckKey(deck);
   const matching = record.seats
     .map((seat, index) => ({ seat, index }))
-    .filter((e) => e.seat.deck === deck);
+    .filter((e) => deckKey(e.seat.deck) === key);
   if (matching.length === 0) return undefined;
   return matching.find((e) => e.seat.human) ?? matching[0];
 }
@@ -241,11 +275,15 @@ function placeOf(record: MatchRecord, index: number): number {
 /** Ein Sitz mit seiner Partie - die Arbeitseinheit von summarize (je Partie hoechstens einer, siehe pickSeat). */
 interface Entry { record: MatchRecord; seat: MatchSeat; index: number }
 
-/** Kennzahlen fuer `deck` ueber die gewerteten Partien, in denen ein Sitz genau diesen Deck-Namen traegt -
+/** Kennzahlen fuer `deck` ueber die gewerteten Partien, in denen ein Sitz dieses Deck traegt (verglichen
+ * wird ueber {@link deckKey}, `deck` darf also in jeder der beiden Schreibweisen hereinkommen) -
  * je Partie hoechstens ein Sitz (siehe pickSeat; ein Spiegel zaehlt also als eine Partie). Metriken
  * stammen vom jeweils gewaehlten Sitz, die Gegner-Tabelle von den uebrigen Sitzen derselben Partie.
  * undefined, wenn keine gewertete Partie mit diesem Deck existiert - auch dann, wenn es Zugdeckel-Partien
  * gibt: die sind nicht gewertet und ergeben allein keine Bilanz.
+ *
+ * Auch die Gegner-Tabelle fasst nach {@link deckKey} zusammen und zeigt den Namen des juengsten
+ * Datensatzes - sonst stuende derselbe Gegner dort zweimal mit halber Partienzahl.
  *
  * Einzige Ausnahme von der "nur gewertete Partien"-Regel sind turnCappedGames/turnCappedRate: sie zaehlen
  * genau die NICHT gewerteten Zugdeckel-Partien, nach derselben "ein Sitz je Partie"-Regel.
@@ -281,14 +319,12 @@ export function summarize(records: MatchRecord[], deck: string, format: Format =
 
   // Je Partie zaehlt auch auf der Gegenseite jedes Deck nur einmal (dieselbe Regel wie pickSeat und
   // deckGames): zwei Sitze mit demselben Gegner-Deck sind eine Partie gegen dieses Deck, kein Doppel.
-  const opponents = new Map<string, { games: number; wins: number }>();
+  const opponents = new Map<string, { deck: string; games: number; wins: number }>();
   for (const e of entries) {
-    const decks = new Set(e.record.seats.filter((_, j) => j !== e.index).map((other) => other.deck));
-    for (const other of decks) {
-      const cur = opponents.get(other) ?? { games: 0, wins: 0 };
+    for (const [key, other] of seatDecks(e.record, e.index)) {
+      const cur = bump(opponents, key, other, () => ({ games: 0, wins: 0 }));
       cur.games += 1;
       if (e.seat.winner) cur.wins += 1;
-      opponents.set(other, cur);
     }
   }
 
@@ -327,8 +363,8 @@ export function summarize(records: MatchRecord[], deck: string, format: Format =
     // Nenner sind alle gespielten Partien (gewertete + Deckel); games ist hier immer >= 1, die 0 steht
     // nur da, damit die Formel fuer sich genommen nicht durch 0 teilt.
     turnCappedRate: games + turnCappedGames > 0 ? turnCappedGames / (games + turnCappedGames) : 0,
-    opponents: [...opponents.entries()]
-      .map(([oDeck, v]) => ({ deck: oDeck, games: v.games, wins: v.wins }))
+    opponents: [...opponents.values()]
+      .map((v) => ({ deck: v.deck, games: v.games, wins: v.wins }))
       .sort((a, b) => b.games - a.games || a.deck.localeCompare(b.deck)),
   };
 }

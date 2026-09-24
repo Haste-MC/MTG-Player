@@ -1174,3 +1174,69 @@ describe("Platz, Ausscheide-Zug, Leben und Verluste", () => {
     expect(neu?.avgPermanentsLost).toBe(6);
   });
 });
+
+// Der Fall, der das Board vor dieser Runde in zwei Haelften zerlegt hat: Datensaetze VOR der Umstellung
+// (MatchRecorder bekommt den Decknamen vom Aufrufer) tragen Forges sanitisierten Namen
+// `… __ Commander`, Datensaetze danach den rohen `… // Commander`. Ohne Normalisierung stand dasselbe
+// Deck zweimal im Board - zwei Siegquoten, zwei Kachel-Saetze, zwei Auffaelligkeiten - und dieselbe
+// Spaltung noch einmal in der Gegner-Tabelle.
+describe("alte und neue Schreibweise desselben Decks", () => {
+  const OLD = '"POV: You forgot to touch grass" __ Titania, Gaea Incarnate';
+  const NEW = '"POV: You forgot to touch grass" // Titania, Gaea Incarnate';
+  const OLD_OPP = '"Nur ein Deck" __ Koma, World-Eater';
+  const NEW_OPP = '"Nur ein Deck" // Koma, World-Eater';
+
+  const seat = (deck: string, winner: boolean): MatchSeat => ({
+    name: deck, deck, human: false, winner, lossReason: winner ? null : "LifeReachedZero",
+    eliminatedTurn: winner ? null : 14,
+    mulligans: 0, lands: 7, landsByTurn: [0, 1, 2, 3, 4, 5, 6, 7], missedLandDrops: 0,
+    spells: 9, spellMana: 18, commanderCasts: 1, commanderTax: 0,
+    damageDealt: 40, damageTaken: 12, combatDamageTaken: 12, lifeEnd: winner ? 28 : 0, poisonEnd: 0,
+  });
+  /** Eine gewertete Sparring-Partie `mine` gegen `opp`; `mine` gewinnt, wenn `win`. */
+  const match = (id: string, mine: string, opp: string, win: boolean): MatchRecord => ({
+    id, startedAt: "s", endedAt: "e", durationMs: 300000, source: "sparring", turns: 20,
+    reason: "AllOpponentsLost", draw: false, counted: true, excludeReason: null,
+    seats: [seat(mine, win), seat(opp, !win)],
+  });
+  // Aeltester Datensatz zuerst - so schickt die Bridge die Liste (MatchStore haengt hinten an).
+  const mixed = [match("m-1", OLD, OLD_OPP, true), match("m-2", NEW, NEW_OPP, false)];
+
+  it("deckGames zaehlt EIN Deck mit zwei Partien und zeigt die juengste Schreibweise", () => {
+    // Gleichstand bei den Partien -> alphabetisch, "Nur ein Deck" vor "POV: …".
+    expect(deckGames(mixed)).toEqual([
+      { deck: NEW_OPP, games: 2, capped: 0 },
+      { deck: NEW, games: 2, capped: 0 },
+    ]);
+  });
+
+  it("boardDecks erkennt das gespeicherte Deck und zeigt dessen Schreibweise", () => {
+    const rows = boardDecks(mixed, [NEW]);
+    expect(rows).toHaveLength(2);
+    expect(rows.find((d) => d.own)).toEqual({ deck: NEW, games: 2, capped: 0, own: true, savedName: NEW });
+    expect(rows.filter((d) => d.own)).toHaveLength(1);
+  });
+
+  it("summarize rechnet ueber beide Partien - egal, in welcher Schreibweise man fragt", () => {
+    const viaNew = summarize(mixed, NEW);
+    const viaOld = summarize(mixed, OLD);
+    expect(viaNew).toEqual(viaOld);
+    expect(viaNew?.games).toBe(2);
+    expect(viaNew?.wins).toBe(1);
+    expect(viaNew?.losses).toBe(1);
+    expect(viaNew?.winRate).toBeCloseTo(0.5, 6);
+  });
+
+  it("die Gegner-Tabelle faellt genauso zusammen - eine Zeile, zwei Partien", () => {
+    expect(summarize(mixed, NEW)?.opponents).toEqual([{ deck: NEW_OPP, games: 2, wins: 1 }]);
+  });
+
+  it("Zugdeckel-Partien beider Schreibweisen landen in derselben Zeile", () => {
+    const capped = (id: string, mine: string): MatchRecord => ({
+      ...match(id, mine, "Krenko Goblins", true), counted: false, excludeReason: "Zugdeckel",
+    });
+    expect(deckGames([capped("c-1", OLD), capped("c-2", NEW)])[0])
+      .toEqual({ deck: NEW, games: 0, capped: 2 });
+    expect(summarize([...mixed, capped("c-1", OLD)], NEW)?.turnCappedGames).toBe(1);
+  });
+});

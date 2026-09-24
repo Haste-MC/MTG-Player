@@ -41,9 +41,14 @@ const stamp = (iso: string) => new Date(iso).toLocaleString("de-DE", { dateStyle
 
 /** Sicht einer Listenzeile: der Sitz mit dem ausgewaehlten Deck (bevorzugt der menschliche, wie in
  * matchStats.pickSeat), sonst der menschliche Sitz, sonst der erste. Ergebnis und "Gegner" der Zeile
- * beziehen sich auf diesen Sitz. undefined nur bei einer Partie ganz ohne Sitze. */
+ * beziehen sich auf diesen Sitz. undefined nur bei einer Partie ganz ohne Sitze.
+ *
+ * Verglichen wird ueber deckKey und nicht ueber den rohen Namen - genau wie in matchStats: sonst
+ * faende eine Zeile aus einem alten Datensatz ("… __ Commander") den Sitz des oben gewaehlten Decks
+ * nicht und zeigte das Ergebnis eines fremden Sitzes. */
 function viewSeat(record: MatchRecord, deck?: string): MatchSeat | undefined {
-  const forDeck = record.seats.filter((s) => s.deck === deck);
+  const key = deck === undefined ? undefined : deckKey(deck);
+  const forDeck = key === undefined ? [] : record.seats.filter((s) => deckKey(s.deck) === key);
   return forDeck.find((s) => s.human) ?? forDeck[0] ?? record.seats.find((s) => s.human) ?? record.seats[0];
 }
 
