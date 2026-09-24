@@ -102,6 +102,19 @@ public final class Scene {
         return place(Card.fromPaperCard(paper, owner), owner, zone, sick);
     }
 
+    /** Karte als Commander in der Kommandozone anlegen: {@code Player.addCommander} setzt das
+     *  Commander-Flag und legt den Commander-Effekt an (Ersatzeffekt + "darf aus der Kommandozone
+     *  gewirkt werden"). Der Commander-Aufschlag zaehlt ueber {@code Player.incCommanderCast}. */
+    public Card commander(String name, Player owner) {
+        Card c = card(name, owner, ZoneType.Command);
+        owner.addCommander(c);
+        // Der Commander-Effekt bringt das "darf aus der Kommandozone gewirkt werden" als statische
+        // Faehigkeit mit; ohne einen Durchlauf der statischen Faehigkeiten haelt die Karte ihre
+        // Zonenbeschraenkung und waere gar nicht wirkbar.
+        game.getAction().checkStaticAbilities();
+        return c;
+    }
+
     public List<Card> cards(String name, int n, Player owner, ZoneType zone) {
         List<Card> out = new ArrayList<>();
         for (int i = 0; i < n; i++) {
