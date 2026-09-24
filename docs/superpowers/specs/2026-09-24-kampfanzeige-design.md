@@ -93,7 +93,8 @@ Panel in der bestehenden `.side`-Spalte **über** dem Stack, in Tisch- und Zusch
 (`Table.tsx` rendert `.side` in beiden Zweigen). Sichtbar nur, wenn `combatGroups` nicht leer ist.
 
 - Titel „Kampf" mit Zähler = Anzahl Angreifer, im Stil des bestehenden `.panel-title` mit `.count`.
-- Je Gruppe eine Überschrift: bei Spielerzielen „Angriff auf **Tom**", bei Karten „**Teferi** · bei Tom".
+- Je Gruppe eine Überschrift: „Angriff auf **Tom**" bzw. bei Karten „Angriff auf **Teferi** · bei Tom" –
+  dieselbe Form für beide Zielarten, damit die Überschriften untereinander gleich anfangen.
 - Je Angreifer eine Zeile: Miniaturbild (`CardImage`, wie `.stack-thumb`), Name, P/T. Darunter eingerückt
   die Blocker in derselben Form, kleiner; ohne Blocker steht dort die Marke „ungeblockt".
 - Hover setzt `setHover(card.id)` wie auf dem Brett (Detail-Panel), Verlassen `setHover(undefined)`.
