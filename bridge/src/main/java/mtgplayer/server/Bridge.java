@@ -259,18 +259,26 @@ public final class Bridge {
 
     /**
      * {"type":"matchDetail","id":"..."} → {@link Messages.MatchMsg} mit dem vollstaendigen Datensatz
-     * (inkl. Zeitachse), oder error "Partie <id>: unbekannte Partie". Hintergrund-Task wie bei
+     * (inkl. Zeitachse), oder error "Partie <id>: ..." (unbekannte Partie oder Lesefehler). Hintergrund-Task wie bei
      * deleteMatch/setMatchCounted: {@link MatchStore#all()} liest die Datei, das hat auf dem UI-Thread
      * nichts verloren.
      */
     private void matchDetail(String id) {
         GuiBase.getInterface().runBackgroundTask("match-detail", () -> {
-            MatchRecord r = matches.all().stream().filter(m -> m.id().equals(id)).findFirst().orElse(null);
-            if (r == null) {
-                ws.send(new Messages.ErrorMsg("Partie " + id + ": unbekannte Partie"));
-                return;
+            try {
+                MatchRecord r = matches.all().stream().filter(m -> m.id().equals(id)).findFirst().orElse(null);
+                if (r == null) {
+                    ws.send(new Messages.ErrorMsg("Partie " + id + ": unbekannte Partie"));
+                    return;
+                }
+                ws.send(new Messages.MatchMsg(r));
+            } catch (RuntimeException e) {
+                // wie bei "concede": sonst stirbt der Fehler still auf dem Hintergrund-Thread - und der
+                // Client wartet ewig auf die Zeitachse, die nie kommt
+                e.printStackTrace();
+                ws.send(new Messages.ErrorMsg("Partie " + id + ": "
+                        + (e instanceof IllegalArgumentException ? e.getMessage() : e.toString())));
             }
-            ws.send(new Messages.MatchMsg(r));
         });
     }
 

@@ -73,7 +73,10 @@ public record MatchRecord(int v, String id, String startedAt, String endedAt, lo
      * {@code permanentsLost} (nur Kreaturen), ihre Summe ist also hoechstens so gross.
      * {@code biggestSweep}/{@code sweepsSuffered} zaehlen eigene Verluste je Aufloesungsfenster
      * (Fenster = bis zur naechsten Zauber-Aufloesung bzw. zum naechsten Phasenwechsel), ein Fenster
-     * ab drei Verlusten gilt als Massenentfernung.
+     * ab drei Verlusten gilt als Massenentfernung. Verluste im Kampfschadenschritt stehen
+     * ausdruecklich NICHT im Fenster: drei Blocker, die in einem Kampf sterben, sind kein
+     * Brettfeger (siehe {@code MatchRecorder.closeSweepWindow}). {@code biggestSweep} ist damit
+     * hoechstens so gross wie {@code permanentsLost} minus den im Kampf verlorenen Kreaturen.
      *
      * <p><b>Kampf und Schaden.</b> {@code attacksDeclared} zaehlt jede Deklaration eines eigenen
      * Angreifers (zwei Kampfphasen in einem Zug also doppelt), {@code attackedTurns} nur die Zuege

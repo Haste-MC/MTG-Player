@@ -132,7 +132,10 @@ public final class MatchRecorder {
     /** Weniger Zuege als das zaehlen nicht als Partie (Spec: "zu kurz"). */
     public static final int MIN_TURNS = 3;
 
-    /** Ab so vielen eigenen bleibenden Karten in EINEM Fenster heisst der Verlust Massenentfernung. */
+    /**
+     * Ab so vielen eigenen bleibenden Karten in EINEM Fenster heisst der Verlust Massenentfernung.
+     * Kampfschaden zaehlt dafuer nicht mit (siehe {@link #closeSweepWindow}).
+     */
     public static final int SWEEP_MIN = 3;
 
     /**
@@ -303,7 +306,8 @@ public final class MatchRecorder {
      * Ein Zauber hat aufgeloest. Das Ereignis erfuellt hier zwei Aufgaben: es haelt die Ansicht in
      * {@link #justResolved} fest (damit das gleich folgende
      * {@code GameEventSpellRemovedFromStack} nicht als Konter durchgeht) und es schliesst das
-     * Aufloesungsfenster fuer {@code biggestSweep}. Forge feuert es NACH den Zonenwechseln der
+     * Aufloesungsfenster fuer {@code biggestSweep} (siehe {@link #closeSweepWindow}; Verluste im
+     * Kampfschadenschritt stehen gar nicht erst darin). Forge feuert es NACH den Zonenwechseln der
      * Aufloesung ({@code MagicStack.resolveStack}), die Toten einer Massenentfernung liegen also
      * noch im gerade geschlossenen Fenster.
      */
@@ -355,7 +359,8 @@ public final class MatchRecorder {
         }
     }
 
-    /** Phasenwechsel beendet ebenfalls ein Aufloesungsfenster (Kampfschaden hat keinen Zauber). */
+    /** Phasenwechsel beendet ebenfalls ein Aufloesungsfenster (ein Effekt ohne Zauber auf dem Stapel,
+     *  etwa eine aktivierte Faehigkeit, schliesst sonst nie ab). */
     @Subscribe
     public synchronized void onTurnPhase(GameEventTurnPhase e) {
         if (finished != null) {
@@ -410,9 +415,15 @@ public final class MatchRecorder {
                 s.cardsMilled++;
             } else if (from.zoneType() == ZoneType.Battlefield && gone) {
                 s.permanentsLost++;
-                s.lostInWindow++;
+                boolean inCombat = inCombatDamage();
+                // Ins Aufloesungsfenster zaehlt NUR, was ausserhalb des Kampfschadenschritts verloren
+                // geht: drei Blocker, die in einem Kampf sterben, sind keine Massenentfernung
+                // (siehe closeSweepWindow).
+                if (!inCombat) {
+                    s.lostInWindow++;
+                }
                 if (card.getCurrentState() != null && card.getCurrentState().isCreature()) {
-                    if (inCombatDamage()) {
+                    if (inCombat) {
                         s.creaturesLostInCombat++;
                     } else {
                         s.creaturesLostOther++;
@@ -984,6 +995,13 @@ public final class MatchRecorder {
      * hat, gilt als EIN Vorgang. Das ist die Naeherung aus Spec Paragraph 2 - zustandsbasierte
      * Aktionen aus mehreren Quellen landen im selben Fenster -, aber sie kommt ohne Eingriff in
      * Forge aus.
+     *
+     * <p>Im Fenster stehen nur Verluste AUSSERHALB des Kampfschadenschritts (siehe
+     * {@link #inCombatDamage} und die Zaehlung in {@code onCardChangeZone}). Das Fenster endet
+     * zwar auch an jedem Phasenwechsel, ein ganzer Kampf liegt aber in EINER Phase: ohne diese
+     * Bedingung waeren drei Blocker, die in einem Kampf sterben, eine "Massenentfernung" - und
+     * das Statistik-Board empfaehle daraufhin Schutz gegen Brettfeger, wo schlicht schlecht
+     * geblockt wurde.</p>
      */
     private void closeSweepWindow() {
         for (Seat s : seats) {
@@ -1081,7 +1099,8 @@ public final class MatchRecorder {
         private int biggestSweep;
         private int sweepsSuffered;
         private int tokensCreated;
-        /** Verluste im laufenden Aufloesungsfenster; siehe {@link MatchRecorder#closeSweepWindow}. */
+        /** Verluste im laufenden Aufloesungsfenster, ohne die im Kampfschadenschritt; siehe
+         *  {@link MatchRecorder#closeSweepWindow}. */
         private int lostInWindow;
         private int attacksDeclared;
         private int attackedTurns;

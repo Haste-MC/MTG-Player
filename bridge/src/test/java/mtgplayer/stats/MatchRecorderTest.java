@@ -448,6 +448,54 @@ class MatchRecorderTest {
         assertEquals(0, sa2.sweepsSuffered());
     }
 
+    /**
+     * Gegenprobe zur Massenentfernung: drei Blocker, die in EINEM Kampf sterben, sind kein
+     * Brettfeger - im Kampfschadenschritt verlorene bleibende Karten stehen gar nicht erst im
+     * Aufloesungsfenster (siehe {@code MatchRecorder.closeSweepWindow}). Dieselbe Szene zeigt
+     * direkt danach, dass ein echter Brettfeger (Day of Judgment auf drei Kreaturen) weiterhin
+     * zaehlt.
+     */
+    @Test
+    @Timeout(value = 3, unit = TimeUnit.MINUTES)
+    void kampfverlusteSindKeineMassenentfernung() {
+        Scene s = Scene.twoPlayers(AiConfig.DEFAULT, AiConfig.DEFAULT);
+        Player a = s.player(0), b = s.player(1);
+        s.cards("Forest", 5, a, ZoneType.Library);
+        s.cards("Forest", 5, b, ZoneType.Library);
+        s.cards("Grizzly Bears", 3, a, ZoneType.Battlefield);  // 2/2, nicht einsatzverzoegert
+        s.cards("Memnite", 3, b, ZoneType.Battlefield);        // 1/1 - stirbt an jedem Blocken
+        b.setLife(1, null);                                    // jeder Durchkommende ist toedlich -> B blockt alles
+        s.setPhase(PhaseType.MAIN1, a);
+        MatchRecorder rec = new MatchRecorder(s.game(), "live", null);
+
+        s.loopUntil(PhaseType.END_OF_TURN, a);
+
+        MatchRecord mid = rec.finish();
+        MatchRecord.Seat sbCombat = seat(mid, "B");
+        assertEquals(3, sbCombat.creaturesLostInCombat(), "B chump-blockt mit allen dreien:\n" + s.log(25));
+        assertEquals(3, sbCombat.permanentsLost(), "die drei Blocker sind weg");
+        assertEquals(0, sbCombat.biggestSweep(), "Kampfschaden ist keine Massenentfernung:\n" + s.log(25));
+        assertEquals(0, sbCombat.sweepsSuffered());
+
+        // Derselbe Sitz, drei frische Kreaturen, ein echter Brettfeger: der zaehlt.
+        Scene s2 = Scene.twoPlayers(AiConfig.DEFAULT, AiConfig.DEFAULT);
+        Player a2 = s2.player(0), b2 = s2.player(1);
+        s2.cards("Grizzly Bears", 3, b2, ZoneType.Battlefield);
+        Card doj = s2.card("Day of Judgment", a2, ZoneType.Hand);
+        SpellAbility dojSa = doj.getFirstSpellAbility();
+        dojSa.setActivatingPlayer(a2);
+        MatchRecorder rec2 = new MatchRecorder(s2.game(), "live", null);
+
+        s2.game().getAction().moveToStack(doj, dojSa);
+        s2.game().getStack().add(dojSa);
+        s2.game().getStack().resolveStack();
+
+        MatchRecord.Seat sbWipe = seat(rec2.finish(), "B");
+        assertEquals(3, sbWipe.creaturesLostOther(), "gestorben ausserhalb des Kampfes:\n" + s2.state());
+        assertEquals(3, sbWipe.biggestSweep(), "alle drei in einem Fenster");
+        assertEquals(1, sbWipe.sweepsSuffered(), "genau ab SWEEP_MIN Verlusten");
+    }
+
     /** Spielsteine kommen ohne eigenes Ereignis ins Spiel ({@code GameEventTokenCreated} hat keine
      *  Nutzlast) - gezaehlt wird der Zonenwechsel nach Battlefield mit {@code CardView.isToken}. */
     @Test
