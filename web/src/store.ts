@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { ArchidektEntry, ArchidektProgress, Choice, DeckInfo, Inbound, MatchRecord, Snapshot, StartGame } from "./protocol";
+import type { ArchidektEntry, ArchidektProgress, Choice, DeckAnalysis, DeckInfo, Inbound, MatchRecord, Snapshot, StartGame } from "./protocol";
 import { recordResult, type Series, startSeries } from "./series";
 import { send } from "./ws";
 
@@ -57,12 +57,26 @@ export interface AppState {
    *  matches.length, zeigt der Statistik-Screen nur den juengeren Teil. Eine Bridge vor Runde A schickt
    *  kein total - dann ist es die Laenge der Liste, denn mehr weiss der Client nicht. */
   matchesTotal: number;
+  /** Vollstaendige Partien (mit Zeitachse) je Id, einzeln per matchDetail nachgeladen - die Liste in
+   *  `matches` traegt die Zeitachse nicht. Was einmal da ist, bleibt gemerkt: die Zeitachse einer
+   *  beendeten Partie aendert sich nicht mehr, ein zweites Aufklappen muss also nicht erneut fragen.
+   *  Eine geloeschte Partie faellt mit der naechsten matches-Nachricht wieder heraus. */
+  matchDetails: Record<string, MatchRecord>;
+  /** Deckanalysen je Deckname (analyzeDeck/deckAnalysis) - sie haengen am Deckinhalt, nicht an Partien,
+   *  und werden darum ueber die ganze Sitzung gemerkt. */
+  deckAnalyses: Record<string, DeckAnalysis>;
+  /** Angefragt, aber noch ohne Antwort: verhindert, dass dieselbe Partie bzw. dasselbe Deck bei jedem
+   *  Klick erneut angefragt wird. Ein error der Bridge raeumt beide Listen leer (welche Anfrage
+   *  fehlschlug, sagt die Fehlermeldung nicht) - der naechste Versuch darf sonst nie mehr fragen. */
+  pendingMatch: string[];
+  pendingAnalysis: string[];
 }
 
 export const initialState: AppState = {
   screen: "lobby", precons: [], decks: [], choices: [], log: [], hiddenKinds: ["MANA", "PHASE"], lastLogId: 0,
   aiModes: ["standard", "hybrid", "sim"], aiProfiles: ["Default"], aiTimeout: 5, bestOf: 0, expectNewMatch: false,
-  archidekt: { loading: false }, matches: [], matchesTotal: 0,
+  archidekt: { loading: false }, matches: [], matchesTotal: 0, matchDetails: {}, deckAnalyses: {},
+  pendingMatch: [], pendingAnalysis: [],
 };
 
 const LOG_MAX = 500;
@@ -133,15 +147,38 @@ export function reduce(s: AppState, m: Inbound): AppState {
       // wuerde der naechste turn-0-Snapshot (Reconnect der alten Partie) faelschlich als Spielstart gelten.
       // Ein error beendet auch ein laufendes archidektList (unabhaengig davon, ob er davon stammt).
       const archidekt = { ...s.archidekt, loading: false };
-      if (m.text === INCORRECT_ACTION_TEXT) return { ...s, toast: { text: m.text, n: (s.toast?.n ?? 0) + 1 }, expectNewMatch: false, archidekt };
-      return { ...s, log: [...s.log, { text: "⚠ " + m.text, warn: true }].slice(-LOG_MAX), expectNewMatch: false, archidekt };
+      // Offene matchDetail-/analyzeDeck-Anfragen gelten nach einem Fehler als erledigt: die Meldung sagt
+      // nicht, welche gemeint war, und eine haengende Anfrage wuerde jeden weiteren Versuch blockieren.
+      const pending = { pendingMatch: [], pendingAnalysis: [] };
+      if (m.text === INCORRECT_ACTION_TEXT) return { ...s, toast: { text: m.text, n: (s.toast?.n ?? 0) + 1 }, expectNewMatch: false, archidekt, ...pending };
+      return { ...s, log: [...s.log, { text: "⚠ " + m.text, warn: true }].slice(-LOG_MAX), expectNewMatch: false, archidekt, ...pending };
     }
     case "archidektDecks":
       return { ...s, archidekt: { username: m.username, decks: m.decks, loading: false } };
     case "archidektProgress":
       return { ...s, archidekt: { ...s.archidekt, progress: m } };
-    case "matches":
-      return { ...s, matches: m.matches, matchesTotal: m.total ?? m.matches.length };
+    case "matches": {
+      // Geloeschte Partien auch aus den gemerkten Details werfen - sonst zeigt ein spaeterer Datensatz
+      // mit derselben Id (theoretisch) die alte Zeitachse, und der Speicher waechst ohne Grund.
+      const ids = new Set(m.matches.map((r) => r.id));
+      const kept = Object.entries(s.matchDetails).filter(([id]) => ids.has(id));
+      return {
+        ...s, matches: m.matches, matchesTotal: m.total ?? m.matches.length,
+        matchDetails: kept.length === Object.keys(s.matchDetails).length ? s.matchDetails : Object.fromEntries(kept),
+      };
+    }
+    case "match":
+      // Antwort auf matchDetail: der vollstaendige Datensatz EINER Partie (mit Zeitachse). Die Liste in
+      // s.matches bleibt, wie sie ist - sie ist der Stand der Bridge, das Detail nur ihr Anhang.
+      return {
+        ...s, matchDetails: { ...s.matchDetails, [m.match.id]: m.match },
+        pendingMatch: s.pendingMatch.filter((id) => id !== m.match.id),
+      };
+    case "deckAnalysis":
+      return {
+        ...s, deckAnalyses: { ...s.deckAnalyses, [m.deck]: m.analysis },
+        pendingAnalysis: s.pendingAnalysis.filter((deck) => deck !== m.deck),
+      };
     default:
       return s;
   }
@@ -169,9 +206,13 @@ interface Store extends AppState {
   cancelSeriesCountdown: () => void;
   /** Setzt archidekt.loading und schickt archidektList - die Bridge antwortet mit archidektDecks/error. */
   requestArchidektList: (username: string) => void;
+  /** Laedt eine Partie vollstaendig nach (matchDetail), wenn sie nicht schon vorliegt oder unterwegs ist. */
+  requestMatchDetail: (id: string) => void;
+  /** Fordert die Deckanalyse an (analyzeDeck), wenn sie nicht schon vorliegt oder unterwegs ist. */
+  requestDeckAnalysis: (deck: string) => void;
 }
 
-export const useStore = create<Store>((set) => ({
+export const useStore = create<Store>((set, get) => ({
   ...initialState,
   apply: (m) => set((s) => reduce(s, m)),
   clearChoice: (id) => set((s) => ({ choices: s.choices.filter((c) => c.id !== id) })),
@@ -195,5 +236,17 @@ export const useStore = create<Store>((set) => ({
   requestArchidektList: (username) => {
     set((s) => ({ archidekt: { ...s.archidekt, loading: true } }));
     send({ type: "archidektList", username });
+  },
+  requestMatchDetail: (id) => {
+    const s = get();
+    if (s.matchDetails[id] || s.pendingMatch.includes(id)) return;
+    set({ pendingMatch: [...s.pendingMatch, id] });
+    send({ type: "matchDetail", id });
+  },
+  requestDeckAnalysis: (deck) => {
+    const s = get();
+    if (s.deckAnalyses[deck] || s.pendingAnalysis.includes(deck)) return;
+    set({ pendingAnalysis: [...s.pendingAnalysis, deck] });
+    send({ type: "analyzeDeck", deck });
   },
 }));

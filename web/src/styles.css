@@ -767,56 +767,136 @@ button.deck-card-main:hover:not(:disabled) { background: rgba(79, 140, 255, 0.06
 .deck-import .hint { margin: 0; color: var(--muted); font-size: 12px; }
 .deck-import .primary { align-self: flex-start; }
 
-/* ---------- Statistik (Stats.tsx) ---------------------------------------------------------- */
-.stats-screen { padding: 6vh 16px 48px; }
-.lobby-card.stats { width: min(1100px, 100%); gap: 16px; }
-.stats-head { flex-direction: row; align-items: flex-start; justify-content: space-between; gap: 16px; }
-.stats-head h1 { margin: 0 0 4px; }
+/* ---------- Statistik-Board (Stats.tsx, Spec §4) -------------------------------------------- */
+/* Volle Fensterbreite statt der 1100-px-Karte von frueher: die Kennzahlen stehen in Bloecken
+   nebeneinander, die Decknamen brauchen keine Ellipse mehr, und die Partienliste hat Platz fuer die
+   aufgeklappte Zeitachse. */
+.statboard { width: 100%; min-height: 100vh; display: flex; flex-direction: column; gap: 16px; padding: 20px 20px 48px; }
+.sb-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; flex-wrap: wrap; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+.sb-head h1 { margin: 0 0 2px; font-size: 22px; }
+.sb-head .subtitle { margin: 0; max-width: 70ch; color: var(--muted); font-size: 13px; }
+.sb-controls { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.sb-chips { display: flex; gap: 4px; padding: 3px; border-radius: 999px; background: rgba(0, 0, 0, 0.25); border: 1px solid var(--line); }
+button.sb-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 13px; border-radius: 999px; border: 1px solid transparent; background: transparent; color: var(--muted); font: inherit; font-size: 12px; cursor: pointer; }
+button.sb-chip:hover:not(.on) { color: var(--text); background: var(--panel); }
+button.sb-chip.on { background: var(--accent-soft); border-color: rgba(79, 140, 255, 0.35); color: #fff; }
+.sb-chip-n { font-size: 11px; color: var(--faint); font-variant-numeric: tabular-nums; }
+.sb-chip.on .sb-chip-n { color: var(--accent-2); }
+.sb-explain { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); cursor: pointer; }
+.sb-explain input { width: 15px; height: 15px; cursor: pointer; accent-color: var(--accent); }
 .empty-stats { margin: 0; font-size: 14px; }
-.stats-main { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 16px; align-items: start; }
-@media (max-width: 900px) { .stats-main { grid-template-columns: minmax(0, 1fr); } }
+.sb-side-title { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
 
-/* Deckliste links: aktive Zeile mit Akzentkante. */
-.stat-decks { display: flex; flex-direction: column; gap: 4px; }
-.stat-decks-title { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
-.stat-decks .muted { margin: 0; font-size: 12px; }
-button.stat-deck { display: flex; align-items: center; gap: 8px; width: 100%; padding: 7px 10px; text-align: left; font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-left: 3px solid transparent; border-radius: var(--radius-sm); cursor: pointer; }
-button.stat-deck:hover:not(:disabled) { background: var(--panel-2); border-color: var(--line-2); border-left-color: var(--line-2); }
-button.stat-deck.on { background: var(--accent-soft); border-color: rgba(79, 140, 255, 0.35); border-left-color: var(--accent); color: #fff; }
-.stat-deck-name { flex: 1; min-width: 0; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.stat-deck-games { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
-.stat-deck.on .stat-deck-games { color: var(--accent-2); }
-/* Nur bei Decks ohne gewertete Partie: sagt, warum da eine 0 steht. Bewusst nur Text in --faint,
-   kein Chip - die Liste soll ruhig bleiben. */
-.stat-deck-capped { font-size: 10.5px; color: var(--faint); font-variant-numeric: tabular-nums; white-space: nowrap; }
-/* Ersetzt die Kacheln, wenn es zu einem Deck keine Bilanz gibt (nur Zugdeckel-Partien). */
-.stat-empty { padding: 10px 12px; border-radius: var(--radius-md); background: var(--panel); border: 1px solid var(--line); }
-.stat-empty .muted { margin: 0; font-size: 12px; }
+.sb-body { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 1100px) { .sb-body { grid-template-columns: minmax(0, 1fr); } }
 
-/* Kacheln rechts: Wert gross, Label klein, Zusatz (Intervall, zweite Zahl) darunter. */
-.stat-right { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
-.stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
-.stat-tile { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: var(--radius-md); background: var(--panel); border: 1px solid var(--line); }
-.stat-value { font-size: 22px; font-weight: 700; line-height: 1.2; font-variant-numeric: tabular-nums; }
-.stat-label { font-size: 11px; line-height: 1.3; color: var(--muted); }
-.stat-sub { font-size: 10.5px; color: var(--faint); font-variant-numeric: tabular-nums; }
-.stat-tables { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
-.stat-tables section { padding: 10px 12px; border-radius: var(--radius-md); background: var(--panel); border: 1px solid var(--line); }
-.stat-tables .muted { margin: 0; font-size: 12px; }
-.stat-line { display: flex; justify-content: space-between; gap: 10px; padding: 2px 0; font-size: 12px; }
-.stat-line .num { color: var(--muted); font-variant-numeric: tabular-nums; }
+/* Deckliste links: Commander-Bild, Commander-Name gross, Deckname klein, Bilanz darunter. Nichts wird
+   abgeschnitten - die Zeile waechst lieber in die Hoehe (Kevins "Decknamen sind abgeschnitten"). */
+/* Bewusst NICHT sticky: mitklebend muesste die Liste auf Fensterhoehe begrenzt werden und scrollte bei
+   vielen Decks in sich - also genau wieder eine abgeschnittene Liste. Sie steht lieber vollstaendig oben. */
+.sb-decks { display: flex; flex-direction: column; gap: 5px; }
+.sb-decks .muted { margin: 0; font-size: 12px; }
+button.sb-deck { display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 10px 7px 7px; text-align: left; font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-left: 3px solid transparent; border-radius: var(--radius-md); cursor: pointer; }
+button.sb-deck:hover:not(.on) { background: var(--panel-2); border-color: var(--line-2); }
+button.sb-deck.on { background: var(--accent-soft); border-color: rgba(79, 140, 255, 0.35); border-left-color: var(--accent); }
+.sb-deck .deck-art { width: 46px; height: 64px; }
+.sb-deck-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.sb-deck-name { font-size: 13px; font-weight: 600; line-height: 1.25; overflow-wrap: anywhere; }
+.sb-deck.on .sb-deck-name { color: #fff; }
+.sb-deck-sub { font-size: 11px; color: var(--muted); line-height: 1.25; overflow-wrap: anywhere; }
+.sb-deck-record { margin-top: 2px; font-size: 11px; color: var(--faint); font-variant-numeric: tabular-nums; }
+.sb-deck-capped { color: var(--gold-text); }
+.sb-deck-games { align-self: flex-start; font-size: 13px; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
+.sb-deck.on .sb-deck-games { color: var(--accent-2); }
 
-/* Partienliste: Zeilenraster mit "gewertet"-Schalter und Papierkorb (Zwei-Klick-Bestaetigung). */
+/* Rechte Spalte: ein Block je Thema, jeder mit Ueberschrift und (wahlweise) einem erklaerenden Satz. */
+.sb-panels { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.sb-block { padding: 12px 14px 14px; border-radius: var(--radius); background: var(--panel); border: 1px solid var(--line); }
+.sb-block-head { margin-bottom: 10px; }
+.sb-block h2 { margin: 0; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.sb-block-note { margin: 4px 0 0; max-width: 92ch; font-size: 11.5px; line-height: 1.45; color: var(--faint); }
+.sb-block > .muted { margin: 0; font-size: 12.5px; }
+.sb-two { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 16px; }
+@media (max-width: 900px) { .sb-two { grid-template-columns: minmax(0, 1fr); } }
+
+/* Kacheln: Wert gross, Label, Zusatzzahl, darunter der Erklaersatz. Die Spalten sind breit genug fuer
+   zweizeilige Labels, damit nichts umbricht wie es will. */
+.tile-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 8px; }
+.tile { display: flex; flex-direction: column; gap: 1px; padding: 9px 11px 10px; border-radius: var(--radius-md); background: rgba(0, 0, 0, 0.2); border: 1px solid var(--line); }
+.tile.empty .tile-value { color: var(--faint); }
+.tile-value { font-size: 21px; font-weight: 700; line-height: 1.25; font-variant-numeric: tabular-nums; }
+.tile-label { font-size: 11.5px; line-height: 1.3; color: var(--text); }
+.tile-sub { font-size: 10.5px; color: var(--faint); font-variant-numeric: tabular-nums; }
+/* Warum es den Wert nicht gibt - steht immer da, auch ohne "Erklärungen": das ist kein Lehrsatz,
+   sondern der Zustand der Daten. */
+.tile-missing { font-size: 10.5px; color: var(--gold-text); }
+.tile-hint { margin-top: 5px; font-size: 11px; line-height: 1.45; color: var(--muted); }
+
+/* Auffaelligkeiten (Spec §5) - der Block ganz oben, der die Kacheln in Saetze uebersetzt. */
+.sb-block.findings { border-color: var(--line-2); background: var(--panel-2); }
+.finding-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.finding { display: flex; align-items: flex-start; gap: 9px; padding: 8px 11px; border-radius: var(--radius-md); background: rgba(0, 0, 0, 0.25); border: 1px solid var(--line); border-left: 3px solid var(--line-2); }
+.finding.warn { border-left-color: var(--gold); }
+.finding.info { border-left-color: var(--blue); }
+.finding-icon { display: flex; padding-top: 1px; }
+.finding.warn .finding-icon { color: var(--gold); }
+.finding.info .finding-icon { color: var(--blue); }
+.finding-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; font-size: 12.5px; line-height: 1.45; }
+.finding-text b { font-size: 12.5px; }
+.finding-needs { color: var(--muted); }
+.finding-more { flex: none; align-self: center; font-size: 11px; color: var(--faint); white-space: nowrap; }
+@media (max-width: 700px) { .finding-more { display: none; } }
+
+/* Block 6: Deckinhalt aus der Kartendatenbank (Manakurve, Farbquellen, Aufgaben). */
+.deck-analysis { display: grid; grid-template-columns: minmax(150px, 0.9fr) minmax(220px, 1.3fr) minmax(150px, 0.8fr) minmax(220px, 1.4fr); gap: 16px; align-items: start; }
+@media (max-width: 1400px) { .deck-analysis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 800px) { .deck-analysis { grid-template-columns: minmax(0, 1fr); } }
+.da-title { margin-bottom: 6px; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--faint); }
+.da-numbers { display: flex; flex-direction: column; gap: 6px; }
+.da-num { display: flex; align-items: baseline; gap: 8px; }
+.da-num b { min-width: 42px; font-size: 17px; font-variant-numeric: tabular-nums; }
+.da-num span { font-size: 11.5px; color: var(--muted); }
+.curve { display: flex; align-items: flex-end; gap: 4px; height: 92px; }
+.curve-col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; gap: 2px; }
+.curve-n { font-size: 10px; color: var(--faint); font-variant-numeric: tabular-nums; }
+.curve-bar { width: 100%; min-height: 2px; border-radius: 3px 3px 0 0; background: linear-gradient(var(--accent-2), var(--accent)); }
+.curve-k { font-size: 10px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.da-source-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.da-source { display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px 3px 5px; border-radius: 999px; background: rgba(0, 0, 0, 0.25); border: 1px solid var(--line); font-size: 12px; font-variant-numeric: tabular-nums; }
+.da-source i { width: 11px; height: 11px; border-radius: 50%; border: 1px solid rgba(0, 0, 0, 0.45); }
+.da-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.da-chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border-radius: 999px; background: rgba(0, 0, 0, 0.25); border: 1px solid var(--line); font-size: 11.5px; color: var(--text); }
+.da-chip b { font-variant-numeric: tabular-nums; }
+/* 0 Karten fuer eine Aufgabe ist genau die Aussage, auf die die Regeln zeigen - nicht wegdimmen,
+   sondern markieren. */
+.da-chip.zero { color: var(--gold-text); border-color: var(--gold-line); background: var(--gold-soft); }
+.da-chip.muted-chip { color: var(--faint); }
+
+/* Block 7: Gegner mit Bild, daneben die Todesursachen. */
+.opp-list { display: flex; flex-direction: column; gap: 5px; }
+.opp { display: flex; align-items: center; gap: 9px; padding: 5px 9px 5px 5px; border-radius: var(--radius-md); background: rgba(0, 0, 0, 0.2); border: 1px solid var(--line); }
+.opp .deck-art { width: 34px; height: 48px; }
+.opp-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.opp-name { font-size: 12.5px; overflow-wrap: anywhere; }
+.opp-sub { font-size: 11px; color: var(--faint); }
+.opp-record { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.loss-list .stat-line { display: flex; justify-content: space-between; gap: 10px; padding: 2px 0; font-size: 12px; }
+.loss-list .stat-line .num { color: var(--muted); font-variant-numeric: tabular-nums; }
+.loss-list .muted { margin: 0; font-size: 12px; }
+
+/* Partienliste: Zeilenraster mit Aufklapp-Pfeil, "gewertet"-Schalter und Papierkorb (Zwei-Klick). */
 .match-list { display: flex; flex-direction: column; gap: 3px; padding-top: 14px; border-top: 1px solid var(--line); }
 .match-head { display: flex; align-items: center; gap: 16px; margin-bottom: 4px; }
-.match-title { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
 .match-filter { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); cursor: pointer; }
+.match-hint { font-size: 11px; color: var(--faint); }
 .match-list > .muted { margin: 4px 0 0; font-size: 12px; }
+.match-entry { display: flex; flex-direction: column; }
 /* Spalte "Quelle" traegt zwei Chips (Quelle + KI-Bedenkzeit), daher 118px statt 78px. */
-.match-row { position: relative; display: grid; grid-template-columns: 112px 118px minmax(0, 1fr) 172px 46px 58px 80px 44px; align-items: center; gap: 8px; padding: 5px 8px; border-radius: var(--radius-sm); font-size: 12px; }
+.match-row { position: relative; display: grid; grid-template-columns: 24px 112px 118px minmax(0, 1fr) 172px 46px 58px 80px 44px; align-items: center; gap: 8px; padding: 5px 8px; border-radius: var(--radius-sm); font-size: 12px; }
 .match-row:not(.head) { background: rgba(0, 0, 0, 0.22); border: 1px solid var(--line); }
 .match-row:not(.head):hover { border-color: var(--line-2); }
 .match-row.head { padding: 0 8px; font-size: 10px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--faint); }
+.match-entry.open .match-row { border-color: var(--line-2); border-radius: var(--radius-sm) var(--radius-sm) 0 0; }
 /* Nicht gewertete Partien bleiben sichtbar (Filter aus), aber sichtbar zurueckgenommen. */
 .match-row.uncounted { opacity: 0.55; }
 .match-row .num { text-align: right; font-variant-numeric: tabular-nums; }
@@ -836,6 +916,10 @@ button.stat-deck.on { background: var(--accent-soft); border-color: rgba(79, 140
 .chip.excl { font-weight: 500; color: var(--gold); border-color: var(--gold-line); background: var(--gold-soft); }
 .match-counted { display: flex; justify-content: center; }
 .match-counted input { width: 15px; height: 15px; cursor: pointer; accent-color: var(--accent); }
+button.match-toggle { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; padding: 0; border-radius: var(--radius-sm); border: 1px solid transparent; background: transparent; color: var(--muted); cursor: pointer; }
+button.match-toggle:hover:not(:disabled) { color: #fff; border-color: var(--line-2); background: var(--panel); }
+button.match-toggle .icon { display: block; transition: transform .12s ease; }
+.match-entry.open button.match-toggle .icon { transform: rotate(90deg); }
 .match-row button.delete { justify-self: end; display: inline-flex; align-items: center; justify-content: center; min-height: 22px; padding: 3px 8px; font-size: 11px; line-height: 1.3; border-radius: 999px; background: transparent; border: 1px solid transparent; color: var(--muted); }
 .match-row button.delete .icon { display: block; }
 .match-row button.delete:hover:not(:disabled) { color: #fff; border-color: var(--red); background: rgba(229, 72, 77, 0.15); }
@@ -843,6 +927,25 @@ button.stat-deck.on { background: var(--accent-soft); border-color: rgba(79, 140
    damit die Spalten nicht springen und Zuege/Dauer lesbar bleiben. */
 .match-row button.delete.confirm { position: absolute; right: 8px; top: 50%; z-index: 1; transform: translateY(-50%); white-space: nowrap; font-weight: 600; color: #fff; border-color: var(--red); background: linear-gradient(rgba(229, 72, 77, 0.3), rgba(229, 72, 77, 0.3)) rgba(8, 11, 14, 0.95); }
 .match-row button.delete.confirm:hover:not(:disabled) { background: linear-gradient(rgba(229, 72, 77, 0.45), rgba(229, 72, 77, 0.45)) rgba(8, 11, 14, 0.95); border-color: var(--red); }
+
+/* Aufgeklappte Partie: die Zeitachse je Sitz (MatchTimeline). */
+.match-detail { padding: 10px 12px 12px; border: 1px solid var(--line-2); border-top: 0; border-radius: 0 0 var(--radius-sm) var(--radius-sm); background: rgba(0, 0, 0, 0.3); }
+.match-detail > .muted { margin: 0; font-size: 12px; }
+.timeline { display: flex; flex-direction: column; gap: 8px; }
+.timeline-legend { display: flex; gap: 14px; font-size: 11px; color: var(--muted); }
+.timeline-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.timeline-legend i { width: 14px; height: 3px; border-radius: 2px; }
+.timeline-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px; }
+.timeline-seat { min-width: 0; }
+.timeline-name { margin-bottom: 2px; font-size: 11.5px; color: var(--muted); }
+.timeline-seat .muted { margin: 0; font-size: 11.5px; }
+.timeline-svg { width: 100%; height: auto; overflow: visible; }
+.timeline-svg .tl-axis { stroke: var(--line-2); stroke-width: 1; }
+.timeline-svg .tl-grid { stroke: var(--line); stroke-width: 1; stroke-dasharray: 3 4; }
+.timeline-svg text { font-size: 9px; fill: var(--faint); }
+.timeline-svg .tl-caption { font-size: 9px; fill: var(--muted); }
+.timeline-svg .tl-end { font-size: 9.5px; fill: var(--text); font-weight: 600; }
+.timeline-svg .tl-tick { font-size: 9px; fill: var(--faint); }
 
 /* Lobby: "Spiel starten" und "Statistik" nebeneinander. */
 .lobby-actions { display: flex; gap: 10px; }

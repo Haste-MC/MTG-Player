@@ -450,3 +450,90 @@ describe("store: thinking", () => {
     expect(useStore.getState().thinking).toBeUndefined();
   });
 });
+
+describe("store: Deckanalyse und Partie-Detail", () => {
+  const analysis = {
+    cards: 100, lands: 36, basics: 22, avgCmc: 3.4,
+    curve: { "0": 2, "1": 7, "2": 13, "3": 15, "4": 11, "5": 7, "6": 5, "7+": 4 },
+    sources: { W: 0, U: 12, B: 15, R: 0, G: 0, any: 6 }, identity: ["U", "B"],
+    categories: { ramp: 8, draw: 9, removal: 6, wipes: 1, counters: 3, flyerDefense: 2, wipeProtection: 0, recursion: 4, tutors: 2 },
+    unclassified: 31,
+  };
+  /** Derselbe Datensatz, aber mit Zeitachse - so kommt er von matchDetail zurueck. */
+  const withTimeline = (id: string): MatchRecord => {
+    const r = matchRecord({ id });
+    return { ...r, v: 2, seats: [{ ...r.seats[0], timeline: [{ turn: 1, lands: 1, creatures: 0, life: 40, hand: 6, spells: 1 }] }] };
+  };
+
+  beforeEach(() => {
+    useStore.setState({ ...initialState });
+    vi.mocked(send).mockClear();
+  });
+
+  it("initialState startet ohne Analysen und ohne Details", () => {
+    expect(initialState.deckAnalyses).toEqual({});
+    expect(initialState.matchDetails).toEqual({});
+  });
+
+  it("deckAnalysis merkt die Analyse je Deckname", () => {
+    const s = reduce(initialState, { type: "deckAnalysis", deck: "Koma Ramp", analysis });
+    expect(s.deckAnalyses["Koma Ramp"]).toEqual(analysis);
+    const zweite = reduce(s, { type: "deckAnalysis", deck: "Krenko Goblins", analysis: { ...analysis, lands: 34 } });
+    expect(Object.keys(zweite.deckAnalyses).sort()).toEqual(["Koma Ramp", "Krenko Goblins"]);
+    expect(zweite.deckAnalyses["Koma Ramp"]).toEqual(analysis);
+  });
+
+  it("match merkt das Detail je Id, ohne die Partienliste anzufassen", () => {
+    const liste = reduce(initialState, { type: "matches", matches: [matchRecord({ id: "m1" })] });
+    const s = reduce(liste, { type: "match", match: withTimeline("m1") });
+    expect(s.matchDetails["m1"].seats[0].timeline).toHaveLength(1);
+    expect(s.matches[0].seats[0].timeline).toBeUndefined();   // die Liste bleibt ohne Zeitachse
+  });
+
+  it("eine geloeschte Partie faellt mit der naechsten matches-Nachricht aus den Details", () => {
+    const geladen = reduce(
+      reduce(initialState, { type: "matches", matches: [matchRecord({ id: "m1" }), matchRecord({ id: "m2" })] }),
+      { type: "match", match: withTimeline("m1") },
+    );
+    expect(geladen.matchDetails["m1"]).toBeDefined();
+    const s = reduce(geladen, { type: "matches", matches: [matchRecord({ id: "m2" })] });
+    expect(s.matchDetails).toEqual({});
+  });
+
+  it("requestDeckAnalysis fragt einmal und merkt sich die offene Anfrage", () => {
+    useStore.getState().requestDeckAnalysis("Koma Ramp");
+    expect(send).toHaveBeenCalledWith({ type: "analyzeDeck", deck: "Koma Ramp" });
+    expect(useStore.getState().pendingAnalysis).toEqual(["Koma Ramp"]);
+    useStore.getState().requestDeckAnalysis("Koma Ramp");
+    expect(send).toHaveBeenCalledTimes(1);
+  });
+
+  it("eine vorliegende Analyse wird nicht erneut angefragt", () => {
+    useStore.getState().apply({ type: "deckAnalysis", deck: "Koma Ramp", analysis });
+    expect(useStore.getState().pendingAnalysis).toEqual([]);
+    useStore.getState().requestDeckAnalysis("Koma Ramp");
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it("requestMatchDetail fragt einmal je Id, ein vorliegendes Detail gar nicht", () => {
+    useStore.getState().requestMatchDetail("m1");
+    useStore.getState().requestMatchDetail("m1");
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send).toHaveBeenCalledWith({ type: "matchDetail", id: "m1" });
+    useStore.getState().apply({ type: "match", match: withTimeline("m1") });
+    expect(useStore.getState().pendingMatch).toEqual([]);
+    useStore.getState().requestMatchDetail("m1");
+    expect(send).toHaveBeenCalledTimes(1);
+  });
+
+  it("ein Fehler der Bridge gibt die offenen Anfragen wieder frei", () => {
+    useStore.getState().requestMatchDetail("weg");
+    useStore.getState().requestDeckAnalysis("Kein Deck");
+    useStore.getState().apply({ type: "error", text: "Partie weg: unbekannte Partie" });
+    expect(useStore.getState().pendingMatch).toEqual([]);
+    expect(useStore.getState().pendingAnalysis).toEqual([]);
+    // Nach dem Fehler darf erneut gefragt werden (die Bridge kann inzwischen wieder koennen).
+    useStore.getState().requestMatchDetail("weg");
+    expect(send).toHaveBeenCalledTimes(3);
+  });
+});

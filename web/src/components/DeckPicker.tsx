@@ -341,8 +341,9 @@ function RemoteArt({ url }: { url: ArchidektEntry["art"] }) {
 
 /** Commander-Art einer Kachel: Ausschnitt des Kartenbilds (CSS zoomt auf den Art-Bereich), bei zwei Commandern beide je zur
  * Haelfte nebeneinander; ohne Commander ein Schraffur-Platzhalter. CardImage rendert bei fehlendem imageKey oder 404 nichts,
- * dann bleibt der dunkle Grund. */
-function Art({ commanders, big }: { commanders: DeckInfo["commanders"]; big?: boolean }) {
+ * dann bleibt der dunkle Grund. Exportiert, weil das Statistik-Board (Stats.tsx) dieselben Bilder fuer Decks und Gegner
+ * zeigt - eine zweite Kopie waere eine zweite Wahrheit ueber den Bildausschnitt. */
+export function Art({ commanders, big }: { commanders: DeckInfo["commanders"]; big?: boolean }) {
   return (
     <span className={"deck-art" + (big ? " big" : "") + (commanders.length > 1 ? " pair" : "")}>
       {commanders.length === 0 && <span className="deck-art-empty" />}

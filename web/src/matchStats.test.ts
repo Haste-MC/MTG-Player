@@ -1015,3 +1015,54 @@ describe("v2-Kennzahlen", () => {
     expect(s?.counteredRate).toBeCloseTo(3 / 22, 6);
   });
 });
+
+describe("Platz, Ausscheide-Zug, Leben und Verluste", () => {
+  it("Platz im Pod: 1 plus die Mitspieler, die den Sitz ueberlebt haben", () => {
+    // Drei Sitze: "Du" scheidet in Zug 8 aus, der zweite Gegner in Zug 6, der Sieger ueberlebt.
+    // Einer ueberlebt den eigenen Sitz -> Platz 2.
+    const pod = v2Record("pod", { eliminatedTurn: 8 }, { pod: true, turns: 12 });
+    pod.seats[2] = { ...pod.seats[2], winner: false, lossReason: "LifeReachedZero", eliminatedTurn: 6 };
+    const s = summarize([pod], "Testdeck");
+    expect(s?.avgPlace).toBe(2);
+  });
+
+  it("wer gewinnt, steht auf Platz 1 - auch im Pod", () => {
+    const pod = v2Record("sieg", { winner: true, lossReason: undefined, eliminatedTurn: null }, { pod: true });
+    const s = summarize([pod], "Testdeck");
+    expect(s?.avgPlace).toBe(1);
+  });
+
+  it("gleichzeitig Ausgeschiedene teilen sich den Platz", () => {
+    // "Du" und der zweite Gegner fallen beide in Zug 7 - beide Platz 2, keiner Platz 3.
+    const pod = v2Record("gleichzeitig", { eliminatedTurn: 7 }, { pod: true, turns: 9 });
+    pod.seats[2] = { ...pod.seats[2], winner: false, lossReason: "LifeReachedZero", eliminatedTurn: 7 };
+    const s = summarize([pod], "Testdeck");
+    expect(s?.avgPlace).toBe(2);
+  });
+
+  it("Ausscheide-Zug mittelt nur ueber die Partien, in denen der Sitz ausschied", () => {
+    const s = summarize([
+      v2Record("raus", { eliminatedTurn: 6 }),
+      v2Record("ueberlebt", { winner: true, lossReason: undefined, eliminatedTurn: null }),
+    ], "Testdeck");
+    expect(s?.games).toBe(2);
+    expect(s?.avgEliminatedTurn).toBe(6);
+  });
+
+  it("ohne ein einziges Ausscheiden fehlt der Ausscheide-Zug, statt 0 zu behaupten", () => {
+    const s = summarize([v2Record("ueberlebt", { winner: true, lossReason: undefined, eliminatedTurn: null })], "Testdeck");
+    expect(s?.avgEliminatedTurn).toBeUndefined();
+  });
+
+  it("Ø Leben am Ende zaehlt seit v1, verlorene Bleibende erst ab v2", () => {
+    const alt = summarize([v2Record("alt", { lifeEnd: 12, permanentsLost: 9 }, { v: 1 })], "Testdeck");
+    expect(alt?.avgLifeEnd).toBe(12);
+    expect(alt?.avgPermanentsLost).toBeUndefined();
+    const neu = summarize([
+      v2Record("neu1", { lifeEnd: 0, permanentsLost: 8 }),
+      v2Record("neu2", { lifeEnd: 10, permanentsLost: 4 }),
+    ], "Testdeck");
+    expect(neu?.avgLifeEnd).toBe(5);
+    expect(neu?.avgPermanentsLost).toBe(6);
+  });
+});

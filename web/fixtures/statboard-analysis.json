@@ -1,0 +1,224 @@
+[
+ {
+  "type": "deckAnalysis",
+  "deck": "Felothar Landfall",
+  "analysis": {
+   "cards": 100,
+   "lands": 33,
+   "basics": 19,
+   "avgCmc": 3.8,
+   "curve": {
+    "0": 1,
+    "1": 5,
+    "2": 11,
+    "3": 14,
+    "4": 12,
+    "5": 9,
+    "6": 7,
+    "7+": 8
+   },
+   "sources": {
+    "W": 14,
+    "U": 0,
+    "B": 15,
+    "R": 0,
+    "G": 17,
+    "any": 5
+   },
+   "identity": [
+    "W",
+    "B",
+    "G"
+   ],
+   "categories": {
+    "ramp": 9,
+    "draw": 6,
+    "removal": 7,
+    "wipes": 2,
+    "counters": 0,
+    "flyerDefense": 1,
+    "wipeProtection": 0,
+    "recursion": 5,
+    "tutors": 3
+   },
+   "unclassified": 34
+  }
+ },
+ {
+  "type": "deckAnalysis",
+  "deck": "Krenko Goblins",
+  "analysis": {
+   "cards": 100,
+   "lands": 38,
+   "basics": 30,
+   "avgCmc": 2.9,
+   "curve": {
+    "0": 2,
+    "1": 9,
+    "2": 15,
+    "3": 13,
+    "4": 10,
+    "5": 6,
+    "6": 4,
+    "7+": 3
+   },
+   "sources": {
+    "W": 0,
+    "U": 0,
+    "B": 0,
+    "R": 36,
+    "G": 0,
+    "any": 4
+   },
+   "identity": [
+    "R"
+   ],
+   "categories": {
+    "ramp": 7,
+    "draw": 4,
+    "removal": 5,
+    "wipes": 0,
+    "counters": 0,
+    "flyerDefense": 0,
+    "wipeProtection": 0,
+    "recursion": 2,
+    "tutors": 3
+   },
+   "unclassified": 41
+  }
+ },
+ {
+  "type": "deckAnalysis",
+  "deck": "Ojutai Skies",
+  "analysis": {
+   "cards": 100,
+   "lands": 36,
+   "basics": 20,
+   "avgCmc": 3.3,
+   "curve": {
+    "0": 1,
+    "1": 6,
+    "2": 13,
+    "3": 15,
+    "4": 11,
+    "5": 8,
+    "6": 5,
+    "7+": 5
+   },
+   "sources": {
+    "W": 18,
+    "U": 19,
+    "B": 0,
+    "R": 0,
+    "G": 0,
+    "any": 6
+   },
+   "identity": [
+    "W",
+    "U"
+   ],
+   "categories": {
+    "ramp": 5,
+    "draw": 10,
+    "removal": 8,
+    "wipes": 3,
+    "counters": 0,
+    "flyerDefense": 12,
+    "wipeProtection": 4,
+    "recursion": 2,
+    "tutors": 2
+   },
+   "unclassified": 28
+  }
+ },
+ {
+  "type": "deckAnalysis",
+  "deck": "Koma Ramp",
+  "analysis": {
+   "cards": 100,
+   "lands": 37,
+   "basics": 24,
+   "avgCmc": 4.1,
+   "curve": {
+    "0": 0,
+    "1": 4,
+    "2": 9,
+    "3": 12,
+    "4": 13,
+    "5": 10,
+    "6": 8,
+    "7+": 7
+   },
+   "sources": {
+    "W": 0,
+    "U": 20,
+    "B": 0,
+    "R": 0,
+    "G": 21,
+    "any": 5
+   },
+   "identity": [
+    "U",
+    "G"
+   ],
+   "categories": {
+    "ramp": 14,
+    "draw": 8,
+    "removal": 6,
+    "wipes": 1,
+    "counters": 5,
+    "flyerDefense": 3,
+    "wipeProtection": 2,
+    "recursion": 3,
+    "tutors": 4
+   },
+   "unclassified": 30
+  }
+ },
+ {
+  "type": "deckAnalysis",
+  "deck": "Thrasios & Tymna",
+  "analysis": {
+   "cards": 100,
+   "lands": 32,
+   "basics": 8,
+   "avgCmc": 2.4,
+   "curve": {
+    "0": 3,
+    "1": 14,
+    "2": 18,
+    "3": 14,
+    "4": 9,
+    "5": 5,
+    "6": 3,
+    "7+": 2
+   },
+   "sources": {
+    "W": 12,
+    "U": 21,
+    "B": 20,
+    "R": 0,
+    "G": 14,
+    "any": 12
+   },
+   "identity": [
+    "W",
+    "U",
+    "B",
+    "G"
+   ],
+   "categories": {
+    "ramp": 12,
+    "draw": 13,
+    "removal": 9,
+    "wipes": 2,
+    "counters": 8,
+    "flyerDefense": 2,
+    "wipeProtection": 3,
+    "recursion": 4,
+    "tutors": 9
+   },
+   "unclassified": 22
+  }
+ }
+]

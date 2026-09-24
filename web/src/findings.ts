@@ -37,6 +37,11 @@ export const TURN_CAPPED_MAX = 0.2;
 /** Ø eliminatedTurn / turns: darunter ist der Sitz deutlich vor Partieende ausgeschieden. */
 export const ELIMINATION_SHARE_MIN = 0.7;
 
+/** Titel der beiden Sonderfaelle (siehe findings()): Zeilen, die KEIN Befund sind. Die Anzeige haengt
+ * an ihnen weder den Verweis auf die Kartenvorschlaege noch den Hinweis auf die fehlende Deckanalyse. */
+export const TOO_FEW_TITLE = "Zu wenige Partien";
+export const NOTHING_TITLE = "Nichts Auffälliges";
+
 /** Hinweis, den die Anzeige an jede Zeile haengt - die Kartenvorschlaege selbst sind Stueck 2 und
  * gehoeren nicht in die Regeln. */
 export const SUGGESTIONS_HINT = "Kartenvorschläge folgen.";
@@ -168,7 +173,7 @@ const RULES: Rule[] = [manaScrew, flood, mulligans, sweeps, flyers, countered, t
 export function findings(s: DeckSummary | undefined, deck: DeckAnalysis | undefined, format: Format): Finding[] {
   if (!s || s.games < MIN_GAMES) {
     return [{
-      level: "info", title: "Zu wenige Partien",
+      level: "info", title: TOO_FEW_TITLE,
       text: `Zu wenige Partien für Aussagen (${s?.games ?? 0} von ${MIN_GAMES}${formatSuffix(format)}).`,
     }];
   }
@@ -181,7 +186,7 @@ export function findings(s: DeckSummary | undefined, deck: DeckAnalysis | undefi
   const found = RULES.map((rule) => rule(ctx)).filter((f): f is Finding => f !== undefined);
   if (found.length === 0) {
     return [{
-      level: "info", title: "Nichts Auffälliges",
+      level: "info", title: NOTHING_TITLE,
       text: `Nichts Auffälliges bei ${games} gewerteten Partien${formatSuffix(format)}.`,
     }];
   }

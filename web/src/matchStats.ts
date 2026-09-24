@@ -101,6 +101,15 @@ export interface DeckSummary {
   avgLandsTurn3?: number; avgLandsTurn5?: number; missedLandDropRate: number; avgMissedLandDrops: number;
   avgSpells: number; avgSpellMana: number; avgCommanderTurn?: number; avgCommanderTax: number;
   avgDamageDealt: number; avgDamageTaken: number; lossReasons: Record<string, number>;
+  /** Ø Leben am Partieende (bzw. beim Ausscheiden - Forge haelt den Stand fest). Seit v1 gezaehlt. */
+  avgLifeEnd: number;
+  /** Ø Platz: 1 plus die Zahl der Mitspieler, die den Sitz ueberlebt haben (siehe placeOf). Im Duell
+   * immer 1 oder 2 und damit nur eine andere Schreibweise der Siegquote - die Anzeige zeigt ihn nur im
+   * Pod. Ueber ALLE gewerteten Partien der Auswahl, denn eliminatedTurn gibt es seit v1. */
+  avgPlace: number;
+  /** Ø Zug, in dem der Sitz ausgeschieden ist - nur ueber die Partien, in denen er ausschied; fehlt,
+   * wenn er in keiner ueberhaupt ausgeschieden ist (dann gibt es nichts zu mitteln). */
+  avgEliminatedTurn?: number;
   opponents: { deck: string; games: number; wins: number }[];
   /** Partien dieses Decks, die die Bridge am Zugdeckel abgeschnitten hat (excludeReason "Zugdeckel") -
    * nicht gewertet, aber selbst eine Kennzahl: ein Deck ohne verlaessliche Siegbedingung laeuft dort hinein. */
@@ -136,6 +145,8 @@ export interface DeckSummary {
   /** Ø groesster Verlust in einem Aufloesungsfenster; eine Partie ohne Massenentfernung geht mit 0 ein
    * (eine gemessene 0, kein fehlender Wert). */
   avgBiggestSweep?: number;
+  /** Ø verlorene eigene bleibende Karten je Partie (jede Quelle, nicht nur Massenentfernung). */
+  avgPermanentsLost?: number;
   /** Anteil des erlittenen KAMPFschadens, der von Fliegern bzw. von Trampelschaden kam; fehlt, wenn der
    * Sitz in keiner v2-Partie Kampfschaden genommen hat (0 von 0 ist keine Quote). */
   flyingShare?: number;
@@ -151,6 +162,20 @@ export interface DeckSummary {
   /** Ø eliminatedTurn / turns - wie weit in die Partie hinein der Sitz durchgehalten hat (1 = bis zum
    * Schluss). Nur ueber die Partien, in denen der Sitz ausgeschieden ist; fehlt, wenn er immer ueberlebte. */
   avgEliminationShare?: number;
+}
+
+/** Platz des Sitzes `index` in seiner Partie: 1 plus die Zahl der Mitspieler, die ihn ueberlebt haben.
+ * Ueberlebt hat, wer gar nicht ausgeschieden ist (eliminatedTurn fehlt/null - der Sieger und bei einem
+ * Remis alle Verbliebenen) oder spaeter ausschied. Gleichzeitig Ausgeschiedene teilen sich den Platz:
+ * ein Doppel-K.-o. im selben Zug ist zweimal Platz 3, nicht Platz 3 und 4. */
+function placeOf(record: MatchRecord, index: number): number {
+  const own = record.seats[index].eliminatedTurn;
+  const outlived = record.seats.filter((other, j) => {
+    if (j === index) return false;
+    if (other.eliminatedTurn == null) return own != null;      // ueberlebt - liegt vor jedem Ausgeschiedenen
+    return own != null && other.eliminatedTurn > own;
+  });
+  return 1 + outlived.length;
 }
 
 /** Ein Sitz mit seiner Partie - die Arbeitseinheit von summarize (je Partie hoechstens einer, siehe pickSeat). */
@@ -210,6 +235,9 @@ export function summarize(records: MatchRecord[], deck: string, format: Format =
   const commanderTurns = entries
     .map((e) => e.seat.firstCommanderTurn)
     .filter((t): t is number => t != null);
+  const eliminatedTurns = entries
+    .map((e) => e.seat.eliminatedTurn)
+    .filter((t): t is number => t != null);
 
   return {
     games, wins, losses, draws, winRate: wins / games, ci: wilson(wins, games),
@@ -230,6 +258,9 @@ export function summarize(records: MatchRecord[], deck: string, format: Format =
     avgCommanderTax: avg(entries.map((e) => e.seat.commanderTax)),
     avgDamageDealt: avg(entries.map((e) => e.seat.damageDealt)),
     avgDamageTaken: avg(entries.map((e) => e.seat.damageTaken)),
+    avgLifeEnd: avg(entries.map((e) => e.seat.lifeEnd)),
+    avgPlace: avg(entries.map((e) => placeOf(e.record, e.index))),
+    ...opt("avgEliminatedTurn", eliminatedTurns.length > 0 ? avg(eliminatedTurns) : undefined),
     lossReasons,
     ...v2Metrics(entries.filter((e) => isV2(e.record))),
     turnCappedGames,
@@ -276,6 +307,7 @@ function v2Metrics(v2: Entry[]): Partial<DeckSummary> & { v2Games: number } {
     ...opt("counteredRate", share(sum((seat) => seat.spellsCountered), sum((seat) => seat.spells))),
     sweepGames: seats.filter((seat) => (seat.sweepsSuffered ?? 0) >= 1).length,
     avgBiggestSweep: mean((seat) => seat.biggestSweep),
+    avgPermanentsLost: mean((seat) => seat.permanentsLost),
     ...opt("flyingShare", share(sum((seat) => seat.damageTakenFlying), combatTaken)),
     ...opt("tramplingShare", share(sum((seat) => seat.damageTakenTrample), combatTaken)),
     avgAttacks: mean((seat) => seat.attacksDeclared),
