@@ -978,3 +978,21 @@ button.match-toggle .icon { display: block; transition: transform .12s ease; }
 /* Lobby: "Spiel starten" und "Statistik" nebeneinander. */
 .lobby-actions { display: flex; gap: 10px; }
 .lobby-actions .primary { flex: 1; }
+
+/* Kampf-Panel (Seitenspalte, ueber dem Stack): Angreifer nach Ziel gruppiert, Blocker eingerueckt.
+   Rahmen/Hintergrund kommen wie bei Stack und Log aus ".side > *". */
+.combat-panel { flex: 0 1 auto; padding: var(--pad); max-height: 34%; overflow: auto; scrollbar-width: thin; }
+.combat-group + .combat-group { margin-top: 10px; }
+.combat-target { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+.combat-target b { color: var(--text); }
+.combat-row { display: flex; flex-direction: column; gap: 3px; padding: 4px 0; }
+.combat-row + .combat-row { border-top: 1px solid var(--line); }
+.combat-card { display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 12px; }
+.combat-card .stack-thumb { width: 26px; height: 37px; }
+.combat-card.blk .stack-thumb { width: 21px; height: 30px; }
+.combat-card .pile-name { display: block; font-size: 8px; line-height: 1.1; padding: 2px; }
+.combat-body { min-width: 0; display: flex; align-items: baseline; gap: 6px; }
+.combat-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.combat-blockers { display: flex; flex-direction: column; gap: 3px; margin-left: 14px; }
+.combat-unblocked { margin-left: 14px; font-size: 10px; font-weight: 600; letter-spacing: 0.04em;
+  text-transform: uppercase; color: var(--red); }

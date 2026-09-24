@@ -6,6 +6,10 @@
   "priorityPlayer": 3,
   "gameOver": false,
   "spectator": true,
+  "combat": [
+    { "attacker": 204, "defenderPlayer": 3, "blockers": [304] },
+    { "attacker": 404, "defenderPlayer": 1 }
+  ],
   "players": [
     {
       "id": 1,

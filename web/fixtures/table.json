@@ -633,5 +633,9 @@
     "okEnabled": true,
     "cancelEnabled": true,
     "seq": 12
-  }
+  },
+  "combat": [
+    { "attacker": 305, "defenderPlayer": 1, "blockers": [212] },
+    { "attacker": 405, "defenderPlayer": 1 }
+  ]
 }

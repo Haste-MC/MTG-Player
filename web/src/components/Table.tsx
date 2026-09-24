@@ -10,6 +10,7 @@ import PhaseBar from "./PhaseBar";
 import Thinking from "./Thinking";
 import CardDetail from "./CardDetail";
 import CardImage from "./CardImage";
+import Combat from "./Combat";
 
 /** Sekunden, die der Auto-Start-Countdown im Spielende-Dialog laeuft (Spec §1). */
 const COUNTDOWN_SECONDS = 5;
@@ -143,6 +144,7 @@ export default function Table() {
       )}
       <div className="side">
         <CardDetail />
+        <Combat state={state} />
         <div className="stack">
           <div className="panel-title">Stack{state.stack.length > 0 && <span className="count">{state.stack.length}</span>}
             {state.stack.length > 1 && <span className="muted">oben löst zuerst auf</span>}
