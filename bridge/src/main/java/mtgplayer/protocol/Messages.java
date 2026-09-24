@@ -136,6 +136,20 @@ public final class Messages {
         public Matches(List<MatchRecord> matches, int total) { this("matches", matches, total); }
     }
 
+    /**
+     * Fortschritt eines Sparring-Laufs (Spec §3): einmal zu Beginn mit {@code done == 0} und nach jedem
+     * Spielende. {@code current} ist der Gegner der gerade laufenden Partie ({@code null}, sobald keine
+     * mehr folgt), {@code errors} sammelt "&lt;Gegner&gt;: &lt;Grund&gt;" je gescheiterter Partie (sie
+     * zählt trotzdem in {@code done} mit), und {@code running} ist genau in der letzten Nachricht eines
+     * Laufs {@code false} - auch nach {@code sparringCancel}.
+     */
+    public record SparringProgress(String type, int done, int total, String current, List<String> errors,
+                                   boolean running) {
+        public SparringProgress(int done, int total, String current, List<String> errors, boolean running) {
+            this("sparringProgress", done, total, current, errors, running);
+        }
+    }
+
     /** Antwort auf {@code {"type":"matchDetail","id":"..."}}: der vollstaendige Datensatz inkl. Zeitachse. */
     public record MatchMsg(String type, MatchRecord match) {
         public MatchMsg(MatchRecord match) { this("match", match); }

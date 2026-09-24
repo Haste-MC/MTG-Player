@@ -11,7 +11,10 @@ import mtgplayer.images.ImageHandler;
 import mtgplayer.match.AiMatch;
 import mtgplayer.protocol.Json;
 import mtgplayer.server.Bridge;
+import mtgplayer.sparring.SparringArgs;
+import mtgplayer.sparring.SparringRun;
 import mtgplayer.server.HttpStatic;
+import mtgplayer.stats.MatchRecord;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -27,6 +30,8 @@ import java.util.Random;
  * {@code --bench [Optionen]}: N Spiele KI gegen KI headless, siehe README Abschnitt "Bench".
  * {@code --bench-one <i> [Optionen]}: genau ein Bench-Spiel, fuer den internen Aufruf durch
  * {@code SubprocessRunner} - nicht fuer den direkten Gebrauch gedacht.
+ * {@code --sparring-one <json>}: genau eine Sparring-Partie, fuer den internen Aufruf durch
+ * {@code mtgplayer.sparring.SubprocessGameRunner} - nicht fuer den direkten Gebrauch gedacht.
  */
 public final class Main {
 
@@ -52,6 +57,21 @@ public final class Main {
             System.out.println("BENCH_RESULT " + Json.mapper().writeValueAsString(record));
             // Forge/Swing koennen nicht-daemon Threads hinterlassen, die ein blosses return ueberleben
             // wuerden - der Kindprozess soll aber zuverlaessig enden, sobald sein einziges Spiel fertig ist.
+            System.exit(0);
+            return;
+        }
+
+        if (args.length > 0 && args[0].equals("--sparring-one")) {
+            // Von SubprocessGameRunner aufgerufen: genau eine Partie, Datensatz als JSON-Zeile auf
+            // stdout (siehe Spec, Abschnitt 3). args[1] ist ein JSON-SparringArgs.Job.
+            if (args.length < 2) {
+                throw new IllegalArgumentException("--sparring-one braucht den Auftrag als JSON");
+            }
+            SparringArgs.Job job = Json.mapper().readValue(args[1], SparringArgs.Job.class);
+            MatchRecord record = SparringRun.playOne(job, System.out::println);
+            System.out.println("SPARRING_RESULT " + Json.mapper().writeValueAsString(record));
+            // wie bei --bench-one: Forge/Swing koennen nicht-daemon Threads hinterlassen, die ein
+            // blosses return ueberleben wuerden.
             System.exit(0);
             return;
         }

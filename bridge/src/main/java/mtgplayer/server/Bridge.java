@@ -16,6 +16,10 @@ import mtgplayer.gui.WebGuiGame;
 import mtgplayer.match.HumanMatch;
 import mtgplayer.protocol.Json;
 import mtgplayer.protocol.Messages;
+import mtgplayer.sparring.GameRunner;
+import mtgplayer.sparring.SparringArgs;
+import mtgplayer.sparring.SparringRun;
+import mtgplayer.sparring.SubprocessGameRunner;
 import mtgplayer.stats.MatchRecord;
 import mtgplayer.stats.MatchStore;
 
@@ -39,6 +43,8 @@ public final class Bridge {
     private final Archidekt archidekt;
     private final DeckSource decks;
     private final MatchStore matches;
+    /** Sparring (Stueck 3): genau ein Lauf zur Zeit, siehe {@link SparringRun}. */
+    private final SparringRun sparring;
     /** Genau ein archidektImport-Lauf zur Zeit (siehe handle, "archidektImport"). */
     private final AtomicBoolean importRunning = new AtomicBoolean();
     /** Deckel der "matches"-Liste zum Client (Task 3) - siehe {@link #matchesMsg()}. */
@@ -49,13 +55,25 @@ public final class Bridge {
     }
 
     /** Fuer Tests (siehe BridgeArchidektImportTest/BridgeEndToEndTest): eigenes Deck-Verzeichnis,
-     *  Archidekt ohne Netz und eigener Partien-Speicher - Kevins ~/.mtg-player bleibt unberuehrt. */
+     *  Archidekt ohne Netz und eigener Partien-Speicher - Kevins ~/.mtg-player bleibt unberuehrt.
+     *  Sparring spielt hier wie im Betrieb in Kindprozessen. */
     Bridge(int wsPort, DeckStore store, Archidekt archidekt, MatchStore matches) {
+        this(wsPort, store, archidekt, matches, new SubprocessGameRunner());
+    }
+
+    /** Fuer Tests, die Sparring ueber das Protokoll pruefen (siehe BridgeSparringTest): der
+     *  {@link GameRunner} ist dort eine Attrappe, damit kein echtes Spiel und kein Kindprozess anlaeuft. */
+    Bridge(int wsPort, DeckStore store, Archidekt archidekt, MatchStore matches, GameRunner sparringRunner) {
         this.store = store;
         this.archidekt = archidekt;
         this.decks = new DeckSource(store, archidekt);
         this.matches = matches;
         this.ws = new WsServer(wsPort, this::handle, this::onClientConnected);
+        // Der Lauf meldet Fortschritt und - je gespeicherter Partie - den Datensatz selbst; die
+        // gedeckelte "matches"-Liste baut nur die Bridge (siehe matchesMsg()), deshalb hier die
+        // Umsetzung MatchRecord -> matches.
+        this.sparring = new SparringRun(store, matches, sparringRunner,
+                o -> ws.send(o instanceof MatchRecord ? matchesMsg() : o));
         this.gui = new WebGuiGame(ws);
         // KI-only-Modus: HostedMatch.startGame holt sich bei einer leeren guis-Map (Zuschauer, kein
         // menschlicher Sitz) sein IGuiGame ueber GuiBase.getInterface().getNewGuiGame() - liefert unsere
@@ -78,6 +96,9 @@ public final class Bridge {
     }
 
     public void stop() throws InterruptedException {
+        // Ein laufendes Sparring soll das Herunterfahren nicht ueberdauern (es endet nach der
+        // gerade laufenden Partie, der Thread ist ohnehin ein Daemon).
+        sparring.cancel();
         match.end();
         ws.stop(1000);
     }
@@ -199,6 +220,8 @@ public final class Bridge {
             case "deleteMatch" -> deleteMatch(msg.path("id").asText());
             case "setMatchCounted" -> setMatchCounted(msg.path("id").asText(), msg.path("counted").asBoolean());
             case "matchDetail" -> matchDetail(msg.path("id").asText());
+            case "sparringStart" -> sparringStart(msg);
+            case "sparringCancel" -> sparring.cancel();
             case "requestState" -> onClientConnected();
             default -> ws.send(new Messages.ErrorMsg("unbekannter Nachrichtentyp: " + type));
         }
@@ -239,6 +262,32 @@ public final class Bridge {
             return Precons.load(name);
         } catch (IllegalArgumentException ignored) {
             return null;
+        }
+    }
+
+    /**
+     * {"type":"sparringStart","deck":"…","games":5,"ai":{…},"timeout":5,"maxTurns":60} (Spec &sect;3) -
+     * startet den Hintergrundlauf und antwortet danach nur noch mit sparringProgress/matches. Ein
+     * zweiter Start waehrend eines Laufs meldet "Sparring läuft noch", ein Deck ohne Gegner (oder mit
+     * unbrauchbaren Parametern) "Sparring: &lt;Grund&gt;".
+     *
+     * <p>Absichtlich KEIN Hintergrund-Task: die Sperre gegen einen zweiten Lauf sitzt in
+     * {@link SparringRun#start} und wuerde in zwei parallel gestarteten Threads zum Wettlauf - hier
+     * auf dem WebSocket-Thread ist die Reihenfolge zweier Nachrichten die, in der sie ankamen. Der
+     * Start selbst liest nur die Deck-Dateien (wie {@code onClientConnected}), gespielt wird auf dem
+     * Thread des Laufs.</p>
+     */
+    private void sparringStart(JsonNode msg) {
+        try {
+            sparring.start(SparringArgs.fromJson(msg));
+        } catch (IllegalStateException e) {
+            ws.send(new Messages.ErrorMsg(e.getMessage()));
+        } catch (RuntimeException e) {
+            if (!(e instanceof IllegalArgumentException)) {
+                e.printStackTrace();
+            }
+            ws.send(new Messages.ErrorMsg("Sparring: "
+                    + (e instanceof IllegalArgumentException ? e.getMessage() : e.toString())));
         }
     }
 
