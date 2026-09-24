@@ -128,11 +128,20 @@ export interface DeckSummary {
   // avgEliminationShare) koennte man technisch auch aus v1-Feldern rechnen - sie teilen sich hier
   // bewusst die eine Stichprobe des Vorfall-Blocks, damit alle Kacheln dieses Blocks dasselbe "n"
   // meinen und untereinander vergleichbar bleiben.
-  /** Partien der Auswahl mit v >= 2 - die Grundlage aller folgenden Kennzahlen. */
+  /** Partien der Auswahl mit v >= 2 - die Grundlage aller folgenden Kennzahlen.
+   *
+   * ACHTUNG beim Beschriften: drei Kennzahlen rechnen ueber eine TEILMENGE davon und nennen ihre eigene
+   * Stichprobe daneben - manaScrewRate ueber manaScrewGames, avgSweepSize ueber sweepGames,
+   * avgEliminationShare ueber eliminationGames. Wer dort v2Games hinschreibt, behauptet einen groesseren
+   * Nenner, als gerechnet wurde. */
   v2Games: number;
   /** Anteil der Partien mit hoechstens MANA_SCREW_LANDS Laendern im eigenen Zug MANA_SCREW_TURN; Nenner
    * sind nur die Partien, in denen der Sitz so viele eigene Zuege hatte (sonst ist nichts zu beurteilen). */
   manaScrewRate?: number;
+  /** ANZAHL der v2-Partien, in denen der Sitz den Messzug ueberhaupt erlebt hat - der Nenner von
+   * manaScrewRate. Kleiner als v2Games, sobald eine Partie vorher endete; wer die Quote in einem Satz
+   * nennt, nennt DIESE Stichprobe und nicht v2Games. */
+  manaScrewGames?: number;
   /** Ø Laender in der nach allen Mulligans behaltenen Starthand. */
   avgOpeningLands?: number;
   /** Zauber je eigenem Zug, gepoolt: alle Zauber geteilt durch alle eigenen Zuege. */
@@ -143,8 +152,12 @@ export interface DeckSummary {
    * die Anzeige bildet sie bei Bedarf mit v2Games). */
   sweepGames?: number;
   /** Ø groesster Verlust in einem Aufloesungsfenster; eine Partie ohne Massenentfernung geht mit 0 ein
-   * (eine gemessene 0, kein fehlender Wert). */
+   * (eine gemessene 0, kein fehlender Wert). Ueber ALLE v2-Partien - "je Partie", nicht "je Vorfall". */
   avgBiggestSweep?: number;
+  /** Ø groesster Verlust NUR ueber die sweepGames - also die Groesse einer Massenentfernung, wenn eine
+   * kam. Fehlt, wenn keine kam (0 von 0 ist kein Mittelwert). Der Unterschied zu avgBiggestSweep ist
+   * kein Detail: "im Schnitt 2,9 Karten" liest sich als "je Vorfall", gerechnet ist es aber je Partie. */
+  avgSweepSize?: number;
   /** Ø verlorene eigene bleibende Karten je Partie (jede Quelle, nicht nur Massenentfernung). */
   avgPermanentsLost?: number;
   /** Anteil des erlittenen KAMPFschadens, der von Fliegern bzw. von Trampelschaden kam; fehlt, wenn der
@@ -162,6 +175,9 @@ export interface DeckSummary {
   /** Ø eliminatedTurn / turns - wie weit in die Partie hinein der Sitz durchgehalten hat (1 = bis zum
    * Schluss). Nur ueber die Partien, in denen der Sitz ausgeschieden ist; fehlt, wenn er immer ueberlebte. */
   avgEliminationShare?: number;
+  /** ANZAHL der v2-Partien, in denen der Sitz ausgeschieden ist - die Stichprobe von
+   * avgEliminationShare (hoechstens v2Games, im Duell oft deutlich weniger). */
+  eliminationGames?: number;
 }
 
 /** Platz des Sitzes `index` in seiner Partie: 1 plus die Zahl der Mitspieler, die ihn ueberlebt haben.
@@ -298,15 +314,19 @@ function v2Metrics(v2: Entry[]): Partial<DeckSummary> & { v2Games: number } {
   const combatTaken = sum((seat) =>
     (seat.damageTakenFlying ?? 0) + (seat.damageTakenTrample ?? 0) + (seat.damageTakenOther ?? 0));
   const eliminated = v2.filter((e) => e.seat.eliminatedTurn != null && e.record.turns > 0);
+  // Partien MIT Massenentfernung - Stichprobe von avgSweepSize (avgBiggestSweep mittelt dagegen ueber alle).
+  const swept = seats.filter((seat) => (seat.sweepsSuffered ?? 0) >= 1);
 
   return {
     v2Games: v2.length,
     ...opt("manaScrewRate", share(screwed.length, judgeable.length)),
+    manaScrewGames: judgeable.length,
     avgOpeningLands: mean((seat) => seat.openingLands),
     ...opt("spellsPerTurn", share(sum((seat) => seat.spells), ownTurns)),
     ...opt("counteredRate", share(sum((seat) => seat.spellsCountered), sum((seat) => seat.spells))),
-    sweepGames: seats.filter((seat) => (seat.sweepsSuffered ?? 0) >= 1).length,
+    sweepGames: swept.length,
     avgBiggestSweep: mean((seat) => seat.biggestSweep),
+    ...opt("avgSweepSize", swept.length > 0 ? avg(swept.map((seat) => seat.biggestSweep ?? 0)) : undefined),
     avgPermanentsLost: mean((seat) => seat.permanentsLost),
     ...opt("flyingShare", share(sum((seat) => seat.damageTakenFlying), combatTaken)),
     ...opt("tramplingShare", share(sum((seat) => seat.damageTakenTrample), combatTaken)),
@@ -318,6 +338,7 @@ function v2Metrics(v2: Entry[]): Partial<DeckSummary> & { v2Games: number } {
     ...opt("avgEliminationShare", eliminated.length > 0
       ? avg(eliminated.map((e) => (e.seat.eliminatedTurn as number) / e.record.turns))
       : undefined),
+    eliminationGames: eliminated.length,
   };
 }
 

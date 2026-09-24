@@ -931,6 +931,7 @@ button.match-toggle .icon { display: block; transition: transform .12s ease; }
 /* Aufgeklappte Partie: die Zeitachse je Sitz (MatchTimeline). */
 .match-detail { padding: 10px 12px 12px; border: 1px solid var(--line-2); border-top: 0; border-radius: 0 0 var(--radius-sm) var(--radius-sm); background: rgba(0, 0, 0, 0.3); }
 .match-detail > .muted { margin: 0; font-size: 12px; }
+.match-detail > .muted.warn { color: var(--red); }   /* matchDetail abgelehnt - kein ewiges "wird geladen" (siehe Stats.tsx) */
 .timeline { display: flex; flex-direction: column; gap: 8px; }
 .timeline-legend { display: flex; gap: 14px; font-size: 11px; color: var(--muted); }
 .timeline-legend span { display: inline-flex; align-items: center; gap: 5px; }

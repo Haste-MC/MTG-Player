@@ -56,6 +56,7 @@ export default function Stats() {
   const deckAnalyses = useStore((s) => s.deckAnalyses);
   const pendingAnalysis = useStore((s) => s.pendingAnalysis);
   const matchDetails = useStore((s) => s.matchDetails);
+  const pendingMatch = useStore((s) => s.pendingMatch);
   const requestDeckAnalysis = useStore((s) => s.requestDeckAnalysis);
   const requestMatchDetail = useStore((s) => s.requestMatchDetail);
   const log = useStore((s) => s.log);
@@ -114,8 +115,14 @@ export default function Stats() {
 
   // Deckwechsel (oder erster Aufbau): Deckanalyse anfordern - der Store fragt jedes Deck nur einmal.
   useEffect(() => { if (deck) requestDeckAnalysis(deck); }, [deck, requestDeckAnalysis]);
-  // Aufgeklappte Partie: Zeitachse nachladen (die Liste traegt sie nicht).
-  useEffect(() => { if (open) requestMatchDetail(open); }, [open, requestMatchDetail]);
+  // Aufgeklappte Partie: Zeitachse nachladen (die Liste traegt sie nicht). Bewusst im Klick und nicht
+  // in einem Effekt: so steht pendingMatch schon im selben Commit, in dem die Zeile aufgeht - sonst
+  // zeigte sie fuer einen Frame die Fehlermeldung ("nicht geladen"), bevor die Anfrage ueberhaupt raus ist.
+  const toggleRow = (id: string) => {
+    if (open === id) { setOpen(undefined); return; }
+    setOpen(id);
+    requestMatchDetail(id);
+  };
 
   // "Wirklich löschen?" faellt nach CONFIRM_MS oder beim naechsten Klick ausserhalb dieses Knopfs zurueck
   // (der bestaetigende Klick auf den Knopf selbst ist ausgenommen - mousedown kommt vor click).
@@ -247,8 +254,8 @@ export default function Stats() {
             {rows.map((m) => (
               <Row key={m.id} record={m} deck={deck} confirm={confirmDelete === m.id}
                 onDelete={() => clickDelete(m.id)} open={open === m.id}
-                onToggle={() => setOpen(open === m.id ? undefined : m.id)}
-                detail={matchDetails[m.id]} />
+                onToggle={() => toggleRow(m.id)}
+                detail={matchDetails[m.id]} pending={pendingMatch.includes(m.id)} />
             ))}
           </div>
         </>
@@ -258,10 +265,10 @@ export default function Stats() {
 }
 
 function Row(
-  { record, deck, confirm, onDelete, open, onToggle, detail }:
+  { record, deck, confirm, onDelete, open, onToggle, detail, pending }:
   {
     record: MatchRecord; deck?: string; confirm: boolean; onDelete: () => void;
-    open: boolean; onToggle: () => void; detail?: MatchRecord;
+    open: boolean; onToggle: () => void; detail?: MatchRecord; pending: boolean;
   },
 ) {
   const seat = viewSeat(record, deck);
@@ -311,7 +318,14 @@ function Row(
       </div>
       {open && (
         <div className="match-detail">
-          {detail ? <MatchTimeline record={detail} /> : <p className="muted">Zeitachse wird geladen …</p>}
+          {/* Weder Detail noch offene Anfrage heisst: die Bridge hat mit "error" geantwortet (der Store
+              raeumt pendingMatch dabei leer) - sonst stuende hier fuer immer "wird geladen …". Der
+              Wortlaut des Fehlers steht oben ueber der Liste (status). */}
+          {detail
+            ? <MatchTimeline record={detail} />
+            : pending
+            ? <p className="muted">Zeitachse wird geladen …</p>
+            : <p className="muted warn">Zeitachse nicht geladen – zum erneuten Versuch zu- und wieder aufklappen.</p>}
         </div>
       )}
     </div>

@@ -6,7 +6,8 @@ import type { DeckAnalysis } from "./protocol";
 //
 // Drei Grundsaetze, die jede Regel einhaelt:
 //  1. Jeder Satz nennt ZAHL UND STICHPROBE. "Mana-Screw" allein ist keine Aussage, "in 43 % von 7
-//     Partien" ist eine.
+//     Partien" ist eine. Gemeint ist die Stichprobe, ueber die WIRKLICH gerechnet wurde: drei Kennzahlen
+//     haben eine kleinere als v2Games (manaScrewGames, sweepGames, eliminationGames - siehe DeckSummary).
 //  2. Eine Regel, die an einer Kennzahl aus Runde B haengt, braucht dafuer genug v2-Partien
 //     (MIN_GAMES) - nicht bloss genug Partien insgesamt. Sonst meldet eine einzelne neue Partie mit
 //     einem Massenentfernungs-Zauber "100 %".
@@ -36,6 +37,10 @@ export const COUNTERED_MAX = 0.15;
 export const TURN_CAPPED_MAX = 0.2;
 /** Ø eliminatedTurn / turns: darunter ist der Sitz deutlich vor Partieende ausgeschieden. */
 export const ELIMINATION_SHARE_MIN = 0.7;
+/** Eigene Mindeststichprobe von "Frueh raus": so viele Partien muss der Sitz ueberhaupt ausgeschieden
+ * sein. Der Mittelwert rechnet NUR ueber diese (siehe DeckSummary.eliminationGames) - genug v2-Partien
+ * heisst also noch lange nicht genug Grundlage: in 20 Partien kann man einmal ausgeschieden sein. */
+export const MIN_ELIMINATIONS = 5;
 
 /** Titel der beiden Sonderfaelle (siehe findings()): Zeilen, die KEIN Befund sind. Die Anzeige haengt
  * an ihnen weder den Verweis auf die Kartenvorschlaege noch den Hinweis auf die fehlende Deckanalyse. */
@@ -65,9 +70,13 @@ type Rule = (c: Ctx) => Finding | undefined;
 const manaScrew: Rule = ({ s, deck, incident }) => {
   const rate = incident(s.manaScrewRate);
   if (rate === undefined || rate <= MANA_SCREW_MAX) return undefined;
+  // Gerechnet wird ueber manaScrewGames, nicht ueber v2Games: wer vor seinem 3. eigenen Zug ausschied,
+  // steht in keinem der beiden Toepfe der Quote (siehe matchStats.v2Metrics).
+  const games = s.manaScrewGames ?? s.v2Games;
   return {
     level: "warn", title: "Mana-Screw",
-    text: `In ${pct(rate)} der ${s.v2Games} Partien mit Vorfall-Daten standen im 3. eigenen Zug höchstens 2 Länder.`,
+    text: `In ${pct(rate)} der ${games} Partien, die deinen 3. eigenen Zug überhaupt erreicht haben,`
+      + " standen dort höchstens 2 Länder.",
     needs: deck && `Das Deck hat ${deck.lands} Länder bei Ø CMC ${num(deck.avgCmc)}.`,
   };
 };
@@ -104,11 +113,15 @@ const sweeps: Rule = ({ s, deck, incident }) => {
   if (games === undefined || !deck || deck.categories.wipeProtection !== 0) return undefined;
   const rate = games / s.v2Games;
   if (rate <= SWEEP_GAMES_MAX) return undefined;
+  // Die Groesse gehoert zum Vorfall, nicht zur Partie: avgBiggestSweep mittelt ueber ALLE v2-Partien
+  // (Nullen inbegriffen) und waere hier als "auf einmal" gelesen schlicht falsch. Ohne avgSweepSize
+  // (alte Auswertung) bleibt der Satz bei der Haeufigkeit stehen.
+  const size = s.avgSweepSize;
   return {
     level: "warn", title: "Massenentfernung",
     text: `In ${games} von ${s.v2Games} Partien mit Vorfall-Daten (${pct(rate)}) hat dich eine Massenentfernung getroffen`
-      + `, im Schnitt ${num(s.avgBiggestSweep ?? 0)} eigene bleibende Karten auf einmal.`,
-    needs: "Das Deck hat 0 Karten, die eine Massenentfernung überstehen (Unzerstörbar, Fluchsicher, Rückholer).",
+      + (size !== undefined ? `, dabei im Schnitt ${num(size)} eigene bleibende Karten auf einmal.` : "."),
+    needs: `Das Deck hat ${cards(0)}, die eine Massenentfernung überstehen (Unzerstörbar, Fluchsicher, Rückholer).`,
   };
 };
 
@@ -120,7 +133,8 @@ const flyers: Rule = ({ s, deck, incident }) => {
   return {
     level: "warn", title: "Flieger",
     text: `${pct(share)} des erlittenen Kampfschadens kam in ${s.v2Games} Partien mit Vorfall-Daten von fliegenden Kreaturen.`,
-    needs: `Das Deck hat ${deck.categories.flyerDefense} Karten, die Flieger aufhalten können (Fliegen, Reichweite).`,
+    needs: `Das Deck hat ${cards(deck.categories.flyerDefense)}, die Flieger aufhalten`
+      + `${deck.categories.flyerDefense === 1 ? " kann" : " können"} (Fliegen, Reichweite).`,
   };
 };
 
@@ -155,10 +169,14 @@ const turnCapped: Rule = ({ s }) => {
 const earlyOut: Rule = ({ s, format, incident }) => {
   if (format !== "pod") return undefined;
   const share = incident(s.avgEliminationShare);
-  if (share === undefined || share >= ELIMINATION_SHARE_MIN) return undefined;
+  // Eigene Mindeststichprobe: gemittelt wird nur ueber die Partien, in denen der Sitz ausschied - und
+  // genau die nennt der Satz auch. v2Games waere hier der falsche Nenner (und meist der groessere).
+  const games = s.eliminationGames ?? 0;
+  if (share === undefined || games < MIN_ELIMINATIONS || share >= ELIMINATION_SHARE_MIN) return undefined;
   return {
     level: "info", title: "Früh raus",
-    text: `Du bist im Schnitt nach ${pct(share)} der Partiedauer ausgeschieden (${s.v2Games} Partien mit Vorfall-Daten).`,
+    text: `Du bist im Schnitt nach ${pct(share)} der Partiedauer ausgeschieden`
+      + ` (${games} Partien, in denen du überhaupt ausgeschieden bist).`,
   };
 };
 
@@ -201,6 +219,12 @@ function formatSuffix(format: Format): string {
 /** Anteil als ganze Prozent ("43 %"). */
 function pct(share: number): string {
   return `${Math.round(share * 100)} %`;
+}
+
+/** "1 Karte" / "2 Karten" - der Satz steht sonst mit "1 Karten" da. Achtung: das Verb im Relativsatz
+ * dahinter muss mitgehen ("die Flieger aufhalten kann"), sonst ist nur die halbe Zeile richtig. */
+function cards(n: number): string {
+  return `${n} ${n === 1 ? "Karte" : "Karten"}`;
 }
 
 /** Zahl mit deutschem Dezimalkomma ("3,4"). */

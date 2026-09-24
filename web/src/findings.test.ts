@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   COUNTERED_MAX, ELIMINATION_SHARE_MIN, FLOOD_MAX, FLYER_DEFENSE_MAX, FLYING_SHARE_MAX, MANA_SCREW_MAX,
-  MIN_GAMES, MULLIGAN_MAX, SWEEP_GAMES_MAX, TURN_CAPPED_MAX, findings,
+  MIN_ELIMINATIONS, MIN_GAMES, MULLIGAN_MAX, SWEEP_GAMES_MAX, TURN_CAPPED_MAX, findings,
 } from "./findings";
 import type { DeckSummary } from "./matchStats";
 import type { DeckAnalysis } from "./protocol";
@@ -24,6 +24,10 @@ function summary(over: Partial<DeckSummary> = {}): DeckSummary {
     avgAttacks: 6, avgAttackersFaced: 5, avgHandEnd: 3, avgRemovalCast: 3, avgCounterspellsCast: 1,
     avgPermanentsLost: 4,
     avgEliminationShare: 0.9,
+    // Die drei Teilstichproben stehen absichtlich NICHT auf v2Games (10): genau diese Gleichheit hat
+    // drei falsche Saetze durch die Tests gelassen ("in X % der 10 Partien mit Vorfall-Daten", obwohl
+    // ueber 7 bzw. 1 bzw. 8 gerechnet wurde).
+    manaScrewGames: 7, avgSweepSize: 3, eliminationGames: 8,
     ...over,
   };
 }
@@ -103,6 +107,17 @@ describe("Regel: Mana-Screw", () => {
     expect(titles(summary({ manaScrewRate: MANA_SCREW_MAX }), analysis(), "all")).not.toContain("Mana-Screw");
   });
 
+  it("nennt die Partien mit 3. eigenem Zug, nicht die v2-Partien", () => {
+    // 12 gewertete, 10 mit Vorfall-Daten, aber nur 6 kamen ueberhaupt zum 3. eigenen Zug - und nur
+    // ueber die rechnet manaScrewRate (siehe matchStats.v2Metrics).
+    const s = summary({ games: 12, v2Games: 10, manaScrewGames: 6, manaScrewRate: 0.5 });
+    const f = findings(s, analysis(), "all").find((x) => x.title === "Mana-Screw");
+    expect(f?.text).toContain("50 %");
+    expect(f?.text).toContain("6 Partien");
+    expect(f?.text).not.toContain("10");
+    expect(f?.text).not.toContain("12");
+  });
+
   it("ohne Deckanalyse meldet die Regel trotzdem, nur ohne Deckbezug", () => {
     const f = findings(summary({ manaScrewRate: 0.5 }), undefined, "all").find((x) => x.title === "Mana-Screw");
     expect(f?.level).toBe("warn");
@@ -159,6 +174,22 @@ describe("Regel: Massenentfernung", () => {
     expect(titles(s, analysis({ wipeProtection: 0 }), "all")).not.toContain("Massenentfernung");
   });
 
+  it("nennt die Ø Groesse JE VORFALL, nicht den Schnitt ueber alle Partien", () => {
+    // 4 von 10 Partien mit Massenentfernung, je Vorfall 4,5 Karten - ueber alle zehn gemittelt waeren
+    // es 1,8. "im Schnitt 1,8 Karten auf einmal" waere eine Aussage ueber Partien ohne Vorfall.
+    const s = summary({ v2Games: 10, sweepGames: 4, avgBiggestSweep: 1.8, avgSweepSize: 4.5 });
+    const f = findings(s, analysis({ wipeProtection: 0 }), "all").find((x) => x.title === "Massenentfernung");
+    expect(f?.text).toContain("4,5");
+    expect(f?.text).not.toContain("1,8");
+  });
+
+  it("ohne gemessene Groesse (alte Auswertung) bleibt der Satz bei der Haeufigkeit", () => {
+    const s = summary({ v2Games: 10, sweepGames: 4, avgSweepSize: undefined });
+    const f = findings(s, analysis({ wipeProtection: 0 }), "all").find((x) => x.title === "Massenentfernung");
+    expect(f?.text).toContain("4 von 10");
+    expect(f?.text).not.toContain("auf einmal");
+  });
+
   it("mit Schutz im Deck schweigt die Regel, auch bei hoher Quote", () => {
     const s = summary({ v2Games: 10, sweepGames: 6 });
     expect(titles(s, analysis({ wipeProtection: 2 }), "all")).not.toContain("Massenentfernung");
@@ -180,6 +211,18 @@ describe("Regel: Flieger", () => {
   it("unter der Schwelle -> kein Befund", () => {
     expect(titles(summary({ flyingShare: FLYING_SHARE_MAX }), analysis({ flyerDefense: 0 }), "all"))
       .not.toContain("Flieger");
+  });
+
+  it("eine einzige Karte steht im Singular (nie \"1 Karten\")", () => {
+    const f = findings(summary({ flyingShare: 0.8 }), analysis({ flyerDefense: 1 }), "all")
+      .find((x) => x.title === "Flieger");
+    expect(f?.needs).toContain("1 Karte, die Flieger aufhalten kann");
+  });
+
+  it("mehrere Karten stehen im Plural", () => {
+    const f = findings(summary({ flyingShare: 0.8 }), analysis({ flyerDefense: 2 }), "all")
+      .find((x) => x.title === "Flieger");
+    expect(f?.needs).toContain("2 Karten, die Flieger aufhalten können");
   });
 
   it("genug Fliegerabwehr -> kein Befund", () => {
@@ -231,6 +274,24 @@ describe("Regel: frueh raus (nur im Pod)", () => {
       .not.toContain("Früh raus");
   });
 
+  it("nennt die Partien, in denen du ausgeschieden bist - nicht die v2-Partien", () => {
+    const s = summary({ v2Games: 20, eliminationGames: 6, avgEliminationShare: 0.4 });
+    const f = findings(s, analysis(), "pod").find((x) => x.title === "Früh raus");
+    expect(f?.text).toContain("6 Partien");
+    expect(f?.text).not.toContain("20");
+  });
+
+  it(`unter ${MIN_ELIMINATIONS} Ausscheiden schweigt die Regel, auch bei vielen v2-Partien`, () => {
+    // 20 Partien mit Vorfall-Daten, aber nur viermal ausgeschieden: der Mittelwert steht auf vier Zahlen.
+    const s = summary({ v2Games: 20, eliminationGames: MIN_ELIMINATIONS - 1, avgEliminationShare: 0.2 });
+    expect(titles(s, analysis(), "pod")).not.toContain("Früh raus");
+  });
+
+  it(`genau ${MIN_ELIMINATIONS} Ausscheiden reichen`, () => {
+    const s = summary({ v2Games: 20, eliminationGames: MIN_ELIMINATIONS, avgEliminationShare: 0.2 });
+    expect(titles(s, analysis(), "pod")).toContain("Früh raus");
+  });
+
   it("im Duell und in 'Alle' schweigt die Regel (dort mischen sich die Formate)", () => {
     const s = summary({ avgEliminationShare: 0.3 });
     expect(titles(s, analysis(), "duel")).not.toContain("Früh raus");
@@ -261,9 +322,9 @@ describe("Reihenfolge und Text", () => {
   });
 
   it("jeder Befund nennt Zahl und Stichprobe", () => {
-    const s = summary({ manaScrewRate: 0.5, v2Games: 8, games: 12 });
+    const s = summary({ manaScrewRate: 0.5, v2Games: 8, manaScrewGames: 8, games: 12 });
     const f = findings(s, analysis(), "all").find((x) => x.title === "Mana-Screw");
     expect(f?.text).toContain("50 %");
-    expect(f?.text).toContain("8"); // Stichprobe: die v2-Partien, nicht alle 12
+    expect(f?.text).toContain("8"); // Stichprobe: die beurteilbaren Partien, nicht alle 12
   });
 });

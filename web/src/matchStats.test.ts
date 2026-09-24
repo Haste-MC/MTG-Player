@@ -896,6 +896,10 @@ describe("v2-Kennzahlen", () => {
     expect(s.avgRemovalCast).toBeUndefined();
     expect(s.avgCounterspellsCast).toBeUndefined();
     expect(s.avgEliminationShare).toBeUndefined();
+    // Auch die Stichproben der drei Teilmengen fehlen - ohne v2-Partie gibt es nichts zu zaehlen.
+    expect(s.manaScrewGames).toBeUndefined();
+    expect(s.avgSweepSize).toBeUndefined();
+    expect(s.eliminationGames).toBeUndefined();
     // Die Flut-Quote steht trotzdem: lands/spells zaehlt die Bridge seit v1 (Titania war nie geflutet).
     expect(s.floodRate).toBe(0);
   });
@@ -964,6 +968,41 @@ describe("v2-Kennzahlen", () => {
     expect(s?.avgOpeningLands).toBeCloseTo(3, 6);
   });
 
+  it("manaScrewGames ist die Stichprobe der Quote, nicht v2Games", () => {
+    // Drei v2-Partien, aber nur zwei kamen zum 3. eigenen Zug: die Quote rechnet ueber zwei, und genau
+    // diese Zahl braucht die Anzeige fuer ihren Satz (sonst steht dort "von 3").
+    const s = summarize([
+      v2Record("screw", { landsByTurn: [0, 1, 2, 2, 3], lands: 3 }),
+      v2Record("ok", { landsByTurn: [0, 1, 2, 3, 4], lands: 4 }),
+      v2Record("kurz", { landsByTurn: [0, 1, 2], lands: 2 }),
+    ], "Testdeck");
+    expect(s?.v2Games).toBe(3);
+    expect(s?.manaScrewGames).toBe(2);
+    expect(s?.manaScrewRate).toBeCloseTo(0.5, 6);
+  });
+
+  it("avgSweepSize mittelt NUR ueber die Partien mit Massenentfernung, avgBiggestSweep ueber alle", () => {
+    const s = summarize([
+      v2Record("fegerA", { biggestSweep: 5, sweepsSuffered: 1, permanentsLost: 5 }),
+      v2Record("fegerB", { biggestSweep: 4, sweepsSuffered: 1, permanentsLost: 4 }),
+      v2Record("ruhig", { biggestSweep: 0, sweepsSuffered: 0, permanentsLost: 1 }),
+    ], "Testdeck");
+    expect(s?.v2Games).toBe(3);
+    expect(s?.sweepGames).toBe(2);
+    expect(s?.avgBiggestSweep).toBeCloseTo(3, 6);     // (5 + 4 + 0) / 3 - je Partie
+    expect(s?.avgSweepSize).toBeCloseTo(4.5, 6);      // (5 + 4) / 2 - je Vorfall
+  });
+
+  it("eliminationGames zaehlt nur die Partien, in denen der Sitz ausgeschieden ist", () => {
+    const s = summarize([
+      v2Record("raus", { eliminatedTurn: 6 }, { turns: 12 }),
+      v2Record("ueberlebt", { winner: true, lossReason: undefined, eliminatedTurn: null }, { turns: 12 }),
+    ], "Testdeck");
+    expect(s?.v2Games).toBe(2);
+    expect(s?.eliminationGames).toBe(1);
+    expect(s?.avgEliminationShare).toBeCloseTo(0.5, 6);
+  });
+
   it("Flut: mindestens 6 Laender UND hoechstens 2 Zauber (Definition wie im Bench-ActivityCounter)", () => {
     const s = summarize([
       v2Record("flut", { landsByTurn: [0, 1, 2, 3, 4, 5, 6], lands: 6, spells: 2 }),
@@ -1000,6 +1039,9 @@ describe("v2-Kennzahlen", () => {
     expect(s?.tramplingShare).toBeUndefined();
     expect(s?.counteredRate).toBeUndefined();
     expect(s?.avgEliminationShare).toBeUndefined();
+    expect(s?.eliminationGames).toBe(0);
+    // Ohne eine einzige Massenentfernung gibt es keine Ø Groesse je Vorfall (0 von 0).
+    expect(s?.avgSweepSize).toBeUndefined();
     // Mittelwerte ueber gezaehlte Felder bleiben: eine gemessene 0 ist eine Aussage.
     expect(s?.sweepGames).toBe(0);
     expect(s?.avgBiggestSweep).toBe(0);

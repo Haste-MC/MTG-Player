@@ -64,6 +64,12 @@ function sample(s: DeckSummary): string {
     : `Gerechnet über ${s.v2Games} von ${s.games} Partien der Auswahl.`;
 }
 
+/** Stichprobe einer Kennzahl, die NICHT ueber alle v2-Partien rechnet (siehe DeckSummary): die eigene
+ * Zahl und wodurch sie begrenzt ist. v2Games gehoert in so einen Satz nicht - es ist der groessere Nenner. */
+function subSample(n: number, s: DeckSummary, what: string): string {
+  return `Gerechnet über ${n} von ${s.games} Partien der Auswahl – ${what}.`;
+}
+
 /** Die Kennzahlen-Bloecke 1 bis 5 der Spec. Block 6 (Deckinhalt) und 7 (Gegner) stehen daneben in
  * DeckAnalysisPanel bzw. Stats.tsx, weil sie keine Kacheln, sondern Listen mit Bildern sind. */
 export default function StatBlocks({ s, format, explain }: { s: DeckSummary; format: Format; explain: boolean }) {
@@ -107,7 +113,9 @@ export default function StatBlocks({ s, format, explain }: { s: DeckSummary; for
           missing="keine Partie lief so lange"
           hint="Nur über Partien, in denen du den fünften eigenen Zug überhaupt erlebt hast." />
         <Tile explain={explain} value={optPct(s.manaScrewRate)} label="Mana-Screw-Quote"
-          sub={s.manaScrewRate != null ? sample(s) : undefined}
+          sub={s.manaScrewRate != null
+            ? subSample(s.manaScrewGames ?? s.v2Games, s, "nur die, die deinen 3. eigenen Zug erreicht haben")
+            : undefined}
           hint="Partien mit höchstens 2 Ländern im dritten eigenen Zug. Über 30 % ist es die Manabasis, nicht das Pech." />
         <Tile explain={explain} value={pct(s.floodRate)} label="Flut-Quote"
           sub={`über alle ${s.games} Partien`}
