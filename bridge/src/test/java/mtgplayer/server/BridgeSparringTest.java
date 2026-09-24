@@ -22,6 +22,8 @@ import mtgplayer.decks.DeckStore;
 import mtgplayer.forge.ForgeBoot;
 import mtgplayer.forge.Precons;
 import mtgplayer.protocol.Json;
+import mtgplayer.sparring.GameRunner;
+import mtgplayer.sparring.SparringArgs;
 import mtgplayer.stats.MatchRecord;
 import mtgplayer.stats.MatchStore;
 import org.java_websocket.client.WebSocketClient;
@@ -53,7 +55,7 @@ class BridgeSparringTest {
     private static final BlockingQueue<JsonNode> inbox = new LinkedBlockingQueue<>();
     private static final List<JsonNode> seenMatches = Collections.synchronizedList(new ArrayList<>());
 
-    /** Haelt die Attrappe in der ersten Partie fest, bis der Test sie freigibt. */
+    /** Haelt die Attrappe in der ersten Partie fest, bis {@code cancel()} (oder {@link #stop()}) freigibt. */
     private static final CountDownLatch inGame = new CountDownLatch(1);
     private static final CountDownLatch release = new CountDownLatch(1);
     private static final AtomicInteger games = new AtomicInteger();
@@ -73,22 +75,38 @@ class BridgeSparringTest {
             decks.save(p[0], d);
         }
         bridge = new Bridge(PORT, decks, Archidekt.standard(), new MatchStore(tmp.resolve("matches.json")),
-                (args, opponent, seed) -> {
-                    games.incrementAndGet();
-                    inGame.countDown();
-                    // Endet die Wartezeit anders als durch die Freigabe des Tests (Frist abgelaufen
-                    // oder Unterbrechung), darf die Attrappe KEINEN Datensatz liefern: der Lauf waere
-                    // dann still fertig, ein zweiter Start ginge durch, und der Test scheiterte
-                    // zehn Sekunden spaeter an der falschen Stelle ("keine Nachricht 'error'").
-                    try {
-                        if (!release.await(60, TimeUnit.SECONDS)) {
-                            throw new IllegalStateException("Attrappe: Freigabe blieb aus");
+                new GameRunner() {
+                    @Override
+                    public MatchRecord play(SparringArgs args, String opponent, long seed) {
+                        games.incrementAndGet();
+                        inGame.countDown();
+                        // Endet die Wartezeit anders als durch die Freigabe (Frist abgelaufen oder
+                        // Unterbrechung), darf die Attrappe KEINEN Datensatz liefern: der Lauf waere
+                        // dann still fertig, ein zweiter Start ginge durch, und der Test scheiterte
+                        // zehn Sekunden spaeter an der falschen Stelle ("keine Nachricht 'error'").
+                        try {
+                            if (!release.await(60, TimeUnit.SECONDS)) {
+                                throw new IllegalStateException("Attrappe: Freigabe blieb aus");
+                            }
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                            throw new IllegalStateException("Attrappe: unterbrochen", e);
                         }
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                        throw new IllegalStateException("Attrappe: unterbrochen", e);
+                        return record(opponent);
                     }
-                    return record(opponent);
+
+                    /**
+                     * Der Abbruch selbst gibt die Partie frei - wie {@code SparringRunTest.BlockingRunner}.
+                     * Genau hier lag die Flakiness: zaehlt der Test-Thread die Sperre gleich nach dem
+                     * {@code sparringCancel} ueber den Socket herunter, kann die Partie fertig sein,
+                     * BEVOR der WebSocket-Thread den Abbruch ueberhaupt gelesen hat - dann startet Partie 2
+                     * und {@code games} steht am Ende auf 2. Ueber diesen Weg ist die Freigabe ursaechlich
+                     * NACH dem Abbruch, ganz ohne Warterei im Test.
+                     */
+                    @Override
+                    public void cancel() {
+                        release.countDown();
+                    }
                 });
         bridge.start();
         client = new WebSocketClient(new URI("ws://127.0.0.1:" + PORT)) {
@@ -169,8 +187,8 @@ class BridgeSparringTest {
         assertTrue(err.path("text").asText().contains("Sparring läuft noch"),
                 err + " (games=" + games.get() + ")");
 
+        // Kein countDown hier: das erledigt cancel() der Attrappe (siehe oben).
         send("{\"type\":\"sparringCancel\"}");
-        release.countDown();
 
         JsonNode last = await("sparringProgress", n -> !n.get("running").asBoolean(), 30);
         assertEquals(1, last.get("done").asInt(), last.toString());
