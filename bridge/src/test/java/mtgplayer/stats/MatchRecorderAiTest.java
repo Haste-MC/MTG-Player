@@ -95,6 +95,47 @@ class MatchRecorderAiTest {
     }
 
     /**
+     * Regressionstest fuer den Schraegstrich-Bug: Kevins Decks heissen z. B.
+     * {@code "…" // Umbris, Fear Manifest} - genau so in der {@code .dck}-Datei und in der Lobby.
+     * {@code RegisteredPlayer.getDeck()} liefert aber nur noch Forges eigene Kopie
+     * ({@code originalDeck.copyTo(originalDeck.getName())}), und deren {@code DeckBase}-Konstruktor
+     * saniert jeden Schraegstrich zu einem Unterstrich - vorher fand die Statistik zu keinem von
+     * Kevins 46 Decks mehr das passende Deck (kein Commander-Bild, keine Deck-Analyse, Sparring lehnte
+     * jedes Deck als "nicht gespeichert" ab). {@link AiMatch} kennt den rohen Namen noch VOR diesem
+     * Kopiervorgang und gibt ihn jetzt an den {@link MatchRecorder} weiter - dieser Test spielt mit
+     * einem entsprechend umbenannten Deck und prueft, dass der Datensatz den Schraegstrich behaelt.
+     */
+    @Test
+    @Timeout(value = 5, unit = TimeUnit.MINUTES)
+    void deckNameMitSchraegstrichUeberlebtDenRecorder() throws Exception {
+        String rawName = "\"Sliver Overlord\" // Umbris, Fear Manifest";
+        Deck a = renamed(Precons.load("Abzan Armor [TDC] [2025]"), rawName);
+        Deck b = Precons.load("Adaptive Enchantment [C18] [2018]");
+        List<MatchRecord> sunk = new ArrayList<>();
+
+        AiMatch.play(List.of(a, b), List.of("KI 1", "KI 2"), List.of(AiConfig.DEFAULT, AiConfig.DEFAULT),
+                3, 2, s -> { }, sunk::add);
+
+        assertEquals(1, sunk.size(), "genau ein Datensatz je Partie");
+        MatchRecord.Seat seat = sunk.get(0).seats().get(0);
+        assertEquals("KI 1", seat.name(), "Sitz 0 ist das umbenannte Deck");
+        assertEquals(rawName, seat.deck(),
+                "der Recorder muss den vom Aufrufer gegebenen (rohen) Namen benutzen, nicht Forges "
+                        + "eigene, sanitierte Kopie (RegisteredPlayer.getDeck())");
+        assertTrue(seat.deck().contains("//"), "Schraegstrich bleibt erhalten: " + seat.deck());
+        assertFalse(seat.deck().contains("__"), "keine Forge-Sanitierung im Datensatz: " + seat.deck());
+    }
+
+    /** Kopie eines Decks mit neuem, ROHEM Namen - {@code new Deck(other, name)} liefe ueber
+     *  {@code DeckBase(String)} und saniert Schraegstriche selbst schon weg, deshalb hier wie
+     *  {@code DeckStore} der Umweg ueber {@link Deck#setName}, das nicht saniert. */
+    private static Deck renamed(Deck source, String name) {
+        Deck copy = new Deck(source);
+        copy.setName(name);
+        return copy;
+    }
+
+    /**
      * {@code MatchRecord} traegt {@code counterFailures}/{@code castsNotOnStack} selbst nicht (siehe
      * {@code MatchRecorder} - AiMatch bleibt unveraendert, der Recorder ist nach der Partie nicht mehr
      * erreichbar), pruefbar bleibt aber das Log: ueber viele echte Ereignisse einer ganzen KI-Partie

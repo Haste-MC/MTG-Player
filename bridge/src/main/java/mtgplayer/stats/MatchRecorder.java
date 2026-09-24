@@ -157,6 +157,8 @@ public final class MatchRecorder {
     private Game game;
     private final String source;
     private final Integer aiTimeout;
+    /** Deckname je {@link RegisteredPlayer}, vom Aufrufer gegeben; siehe der 5-arg-Konstruktor. */
+    private final Map<RegisteredPlayer, String> deckNames;
     private final Consumer<MatchRecord> sink;
     private final Instant startedAt = Instant.now();
     private final List<Seat> seats = new ArrayList<>();
@@ -188,24 +190,45 @@ public final class MatchRecorder {
         this(game, source, null, sink);
     }
 
+    /** Ohne eigene Decknamen (siehe unten) - fuer Aufrufer, die nur Forges (womoeglich sanitierten)
+     *  Namen kennen, etwa Tests. */
+    public MatchRecorder(Game game, String source, Integer aiTimeout, Consumer<MatchRecord> sink) {
+        this(game, source, aiTimeout, Map.of(), sink);
+    }
+
     /**
      * @param game      das laufende Spiel; der Recorder meldet sich sofort an seinem Ereignisbus an
      * @param source    {@code "live"}, {@code "spectate"} oder {@code "sparring"}
      * @param aiTimeout Bedenkzeit je KI-Entscheidung in Sekunden, wie der Starter sie gesetzt hat
      *                  ({@code Game.AI_TIMEOUT}); {@code null} wenn unbekannt. Steht im Datensatz,
      *                  weil sich eine lange Partie sonst nicht mehr mit ihrem Budget erklaeren laesst.
+     * @param deckNames Deckname je {@link RegisteredPlayer}, so wie ihn der Aufrufer VOR dem Spielstart
+     *                  kannte. Noetig, weil {@code RegisteredPlayer.getDeck()} nicht das Original liefert,
+     *                  sondern eine Kopie ({@code originalDeck.copyTo(originalDeck.getName())}), und deren
+     *                  {@code DeckBase}-Konstruktor jeden Schraegstrich im Namen zu einem Unterstrich
+     *                  saniert (Forge-Fork, {@code RegisteredPlayer.restoreDeck}/{@code DeckBase}) - bei
+     *                  Kevins Decks etwa {@code "…" // Umbris, Fear Manifest} zu {@code "…" __ Umbris,
+     *                  Fear Manifest}. {@code originalDeck} ist privat und hat keinen Getter ("never
+     *                  return or modify this instance"), der Recorder kann sich den unsanitierten Namen
+     *                  also nicht selbst zurueckholen - nur der Aufrufer kennt ihn, er hat das Deck ja
+     *                  selbst aufgeloest, BEVOR er es an {@code RegisteredPlayer.forCommander(...)}
+     *                  uebergeben hat. Fehlt ein Sitz in der Map (aeltere Aufrufer, Tests), faellt
+     *                  {@link Seat#deckName()} auf Forges (womoeglich sanitierten) Namen zurueck - siehe
+     *                  auch die anderen Konstruktoren. {@code null} wird wie eine leere Map behandelt.
      * @param sink      bekommt den fertigen Datensatz genau einmal (aus {@link #finish()}); darf
      *                  {@code null} sein (Tests, oder wenn der Aufrufer selbst abholt)
      */
-    public MatchRecorder(Game game, String source, Integer aiTimeout, Consumer<MatchRecord> sink) {
+    public MatchRecorder(Game game, String source, Integer aiTimeout, Map<RegisteredPlayer, String> deckNames,
+                          Consumer<MatchRecord> sink) {
         this.game = game;
         this.source = source;
         this.aiTimeout = aiTimeout;
+        this.deckNames = deckNames == null ? Map.of() : deckNames;
         this.sink = sink;
         // getRegisteredPlayers() statt getPlayers(): die Liste schrumpft nicht, wenn ein Sitz
         // ausscheidet - sonst fehlte am Ende genau der Sitz, dessen Niederlage wir festhalten wollen.
         for (Player p : game.getRegisteredPlayers()) {
-            Seat seat = new Seat(p);
+            Seat seat = new Seat(p, this.deckNames);
             seats.add(seat);
             byView.put(p.getView(), seat);
         }
@@ -1077,6 +1100,8 @@ public final class MatchRecorder {
     /** Laufende Zaehlung eines Sitzes; wird am Ende in {@link MatchRecord.Seat} umgegossen. */
     private static final class Seat {
         private final Player player;
+        /** Siehe {@link MatchRecorder#deckNames}; hier nur durchgereicht fuer {@link #deckName()}. */
+        private final Map<RegisteredPlayer, String> deckNames;
         private final List<Integer> landsByTurn = new ArrayList<>(List.of(0));
         private int ownTurns;
         private int mulligans;
@@ -1129,8 +1154,9 @@ public final class MatchRecorder {
         private int combatDamageTaken;
         private Integer eliminatedTurn;
 
-        private Seat(Player player) {
+        private Seat(Player player, Map<RegisteredPlayer, String> deckNames) {
             this.player = player;
+            this.deckNames = deckNames;
         }
 
         /** @param noWinners Abbruch/Absturz: kein Sitz gilt als Sieger (siehe {@link MatchRecorder#build}) */
@@ -1156,9 +1182,19 @@ public final class MatchRecorder {
                     handEnd, openingLands, removalCast);
         }
 
-        /** Der Name, unter dem die Partie gestartet wurde (Lobby-Auswahl) - danach gruppiert die Statistik. */
+        /**
+         * Der Name, unter dem die Partie gestartet wurde (Lobby-Auswahl) - danach gruppiert die
+         * Statistik. Zuerst der vom Aufrufer gegebene Name ({@link #deckNames}, siehe dort): Forges
+         * eigener Weg ({@code RegisteredPlayer.getDeck()}) liefert eine Kopie, deren Name Schraegstriche
+         * schon zu Unterstrichen saniert hat. Nur wenn der Aufrufer nichts mitgegeben hat (aeltere
+         * Aufrufer, Tests), gilt Forges Name als Rueckfall - besser ein sanitierter Name als gar keiner.
+         */
         private String deckName() {
             RegisteredPlayer rp = player.getRegisteredPlayer();
+            String given = rp == null ? null : deckNames.get(rp);
+            if (given != null) {
+                return given;
+            }
             Deck d = rp == null ? null : rp.getDeck();
             return d == null ? null : d.getName();
         }

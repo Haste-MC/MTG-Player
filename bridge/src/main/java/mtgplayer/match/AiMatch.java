@@ -17,7 +17,9 @@ import mtgplayer.stats.MatchRecorder;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Observer;
 import java.util.function.Consumer;
 
@@ -72,10 +74,15 @@ public final class AiMatch {
             throw new IllegalArgumentException("2–6 Decks mit gleich vielen Namen");
         }
         List<RegisteredPlayer> players = new ArrayList<>();
+        // Rohe Decknamen VOR RegisteredPlayer.forCommander(...) sichern und dem Recorder mitgeben - siehe
+        // MatchRecorder(..., deckNames, ...): Forges eigene Kopie (RegisteredPlayer.getDeck()) saniert
+        // Schraegstriche im Namen zu Unterstrichen, das Original (decks.get(i)) noch nicht.
+        Map<RegisteredPlayer, String> deckNames = new HashMap<>();
         for (int i = 0; i < decks.size(); i++) {
             RegisteredPlayer rp = RegisteredPlayer.forCommander(decks.get(i));
             rp.setPlayer(configs.get(i).newLobbyPlayer(names.get(i)));
             players.add(rp);
+            deckNames.put(rp, decks.get(i).getName());
         }
 
         GameRules rules = CommanderRules.create();
@@ -94,7 +101,8 @@ public final class AiMatch {
         // Lokale Variable statt anonymer Anmeldung: der Zugdeckel-Haken unten muss den Recorder erreichen.
         // Vor match.startGame(...), damit Mulligans und der erste Zug schon mitgezaehlt werden; der
         // Recorder schliesst sich selbst ueber GameEventGameFinished ab.
-        final MatchRecorder recorder = sink == null ? null : new MatchRecorder(game, "sparring", aiTimeout, sink);
+        final MatchRecorder recorder = sink == null ? null
+                : new MatchRecorder(game, "sparring", aiTimeout, deckNames, sink);
 
         // Forge selbst kann ein Spiel ebenfalls mit GameEndReason.Draw beenden (gleichzeitiger Verlust,
         // Stack > 999, GameDrawEffect) - dieses Flag markiert nur ein Unentschieden DURCH UNS (Zugdeckel),

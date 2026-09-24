@@ -52,13 +52,20 @@ public final class HumanMatch {
         }
         end();
         List<RegisteredPlayer> players = new ArrayList<>();
+        // Namen VOR RegisteredPlayer.forCommander(...) abgreifen und der Recorder-Verdrahtung mitgeben:
+        // RegisteredPlayer.getDeck() liefert spaeter nur noch Forges eigene Kopie, deren Name schon
+        // sanitiert ist (siehe MatchRecorder, deckNames-Parameter) - hier, beim Aufloesen der Decks,
+        // steht der rohe Name noch zur Verfuegung.
+        Map<RegisteredPlayer, String> deckNames = new HashMap<>();
         RegisteredPlayer human = RegisteredPlayer.forCommander(humanDeck);
         human.setPlayer(new LobbyPlayerHuman(humanName));
         players.add(human);
+        deckNames.put(human, humanDeck.getName());
         for (int i = 0; i < aiDecks.size(); i++) {
             RegisteredPlayer rp = RegisteredPlayer.forCommander(aiDecks.get(i));
             rp.setPlayer(aiConfigs.get(i).newLobbyPlayer(aiNames.get(i)));
             players.add(rp);
+            deckNames.put(rp, aiDecks.get(i).getName());
         }
         Map<RegisteredPlayer, IGuiGame> guis = new HashMap<>();
         guis.put(human, gui);
@@ -71,7 +78,7 @@ public final class HumanMatch {
         // HostedMatch.startGame liest diese Preference beim Spielstart (setzt Game.AI_TIMEOUT) - kein save(),
         // die Aenderung soll nur diese JVM/Session betreffen.
         FModel.getPreferences().setPref(FPref.MATCH_AI_TIMEOUT, String.valueOf(aiTimeout));
-        record(gui, "live", aiTimeout, sink);
+        record(gui, "live", aiTimeout, deckNames, sink);
         hosted.startMatch(rules, null, players, guis, null);
     }
 
@@ -97,10 +104,13 @@ public final class HumanMatch {
         }
         end();
         List<RegisteredPlayer> players = new ArrayList<>();
+        // Siehe start(...): rohe Decknamen VOR RegisteredPlayer.forCommander(...) sichern.
+        Map<RegisteredPlayer, String> deckNames = new HashMap<>();
         for (int i = 0; i < aiDecks.size(); i++) {
             RegisteredPlayer rp = RegisteredPlayer.forCommander(aiDecks.get(i));
             rp.setPlayer(aiConfigs.get(i).newLobbyPlayer(aiNames.get(i)));
             players.add(rp);
+            deckNames.put(rp, aiDecks.get(i).getName());
         }
 
         GameRules rules = CommanderRules.create();
@@ -108,7 +118,7 @@ public final class HumanMatch {
         hosted = new HostedMatch();
         gui.resetForNewMatch(); // sonst haengt Auswahl/Prompt-Zustand aus dem vorigen Spiel noch dran
         FModel.getPreferences().setPref(FPref.MATCH_AI_TIMEOUT, String.valueOf(aiTimeout));
-        record(gui, "spectate", aiTimeout, sink);
+        record(gui, "spectate", aiTimeout, deckNames, sink);
         hosted.startMatch(rules, null, players, Map.of(), null);
     }
 
@@ -129,8 +139,9 @@ public final class HumanMatch {
      * Ereignisbus und schliesst sich mit {@code GameEventGameFinished} ab; ein abgebrochener Start
      * hinterlaesst nur den Haken, der beim naechsten Start ersetzt wird.</p>
      */
-    private void record(WebGuiGame gui, String source, int aiTimeout, Consumer<MatchRecord> sink) {
-        gui.onNewGame(game -> recorder = new MatchRecorder(game, source, aiTimeout, sink));
+    private void record(WebGuiGame gui, String source, int aiTimeout, Map<RegisteredPlayer, String> deckNames,
+                         Consumer<MatchRecord> sink) {
+        gui.onNewGame(game -> recorder = new MatchRecorder(game, source, aiTimeout, deckNames, sink));
     }
 
     public boolean isRunning() {
