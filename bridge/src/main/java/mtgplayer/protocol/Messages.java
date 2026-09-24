@@ -121,8 +121,21 @@ public final class Messages {
         public DeckAnalysisMsg(String deck, DeckAnalysis analysis) { this("deckAnalysis", deck, analysis); }
     }
 
-    /** Bei Verbindung (nach {@link Lobby}) und nach jeder Aenderung (siehe {@link mtgplayer.server.Bridge}): die ganze Liste. */
-    public record Matches(String type, List<MatchRecord> matches) {
-        public Matches(List<MatchRecord> matches) { this("matches", matches); }
+    /**
+     * Bei Verbindung (nach {@link Lobby}) und nach jeder Aenderung (siehe {@link mtgplayer.server.Bridge}):
+     * die neuesten 300 Partien, aelteste zuerst, je Datensatz OHNE {@code timeline}
+     * (siehe {@link MatchRecord#withoutTimeline()} - {@code Json.MAPPER} laesst das dadurch
+     * {@code null}e Feld beim Serialisieren komplett weg statt einer leeren Liste, der Client erkennt
+     * daran "nicht geladen"). {@code total}: die tatsaechliche Gesamtzahl gespeicherter Partien, auch
+     * wenn mehr als 300 vorliegen. Die volle Zeitachse einer Partie liefert erst {@link MatchMsg} auf
+     * {@code matchDetail}.
+     */
+    public record Matches(String type, List<MatchRecord> matches, int total) {
+        public Matches(List<MatchRecord> matches, int total) { this("matches", matches, total); }
+    }
+
+    /** Antwort auf {@code {"type":"matchDetail","id":"..."}}: der vollstaendige Datensatz inkl. Zeitachse. */
+    public record MatchMsg(String type, MatchRecord match) {
+        public MatchMsg(MatchRecord match) { this("match", match); }
     }
 }

@@ -41,6 +41,8 @@ public final class Bridge {
     private final MatchStore matches;
     /** Genau ein archidektImport-Lauf zur Zeit (siehe handle, "archidektImport"). */
     private final AtomicBoolean importRunning = new AtomicBoolean();
+    /** Deckel der "matches"-Liste zum Client (Task 3) - siehe {@link #matchesMsg()}. */
+    private static final int LIST_MAX = 300;
 
     public Bridge(int wsPort) {
         this(wsPort, DeckStore.standard(), Archidekt.standard(), MatchStore.standard());
@@ -82,7 +84,7 @@ public final class Bridge {
 
     private void onClientConnected() {
         ws.send(new Messages.Lobby(Precons.infos(), store.infos()));
-        ws.send(new Messages.Matches(matches.all()));
+        ws.send(matchesMsg());
         // state vor choice: beides in EINEM Runnable, sonst kann pending() vor pushState() beim Client ankommen
         GuiBase.getInterface().invokeInEdtLater(() -> {
             gui.pushState();
@@ -181,6 +183,7 @@ public final class Bridge {
             case "archidektImport" -> archidektImport(msg.path("ids"));
             case "deleteMatch" -> deleteMatch(msg.path("id").asText());
             case "setMatchCounted" -> setMatchCounted(msg.path("id").asText(), msg.path("counted").asBoolean());
+            case "matchDetail" -> matchDetail(msg.path("id").asText());
             case "requestState" -> onClientConnected();
             default -> ws.send(new Messages.ErrorMsg("unbekannter Nachrichtentyp: " + type));
         }
@@ -229,7 +232,7 @@ public final class Bridge {
         GuiBase.getInterface().runBackgroundTask("delete-match", () -> {
             try {
                 matches.delete(id);
-                ws.send(new Messages.Matches(matches.all()));
+                ws.send(matchesMsg());
             } catch (RuntimeException e) {
                 // wie bei "concede": sonst stirbt der Fehler still auf dem Hintergrund-Thread
                 e.printStackTrace();
@@ -244,7 +247,7 @@ public final class Bridge {
         GuiBase.getInterface().runBackgroundTask("set-match-counted", () -> {
             try {
                 matches.setCounted(id, counted);
-                ws.send(new Messages.Matches(matches.all()));
+                ws.send(matchesMsg());
             } catch (RuntimeException e) {
                 // wie bei "concede": sonst stirbt der Fehler still auf dem Hintergrund-Thread
                 e.printStackTrace();
@@ -252,6 +255,39 @@ public final class Bridge {
                         + (e instanceof IllegalArgumentException ? e.getMessage() : e.toString())));
             }
         });
+    }
+
+    /**
+     * {"type":"matchDetail","id":"..."} → {@link Messages.MatchMsg} mit dem vollstaendigen Datensatz
+     * (inkl. Zeitachse), oder error "Partie <id>: unbekannte Partie". Hintergrund-Task wie bei
+     * deleteMatch/setMatchCounted: {@link MatchStore#all()} liest die Datei, das hat auf dem UI-Thread
+     * nichts verloren.
+     */
+    private void matchDetail(String id) {
+        GuiBase.getInterface().runBackgroundTask("match-detail", () -> {
+            MatchRecord r = matches.all().stream().filter(m -> m.id().equals(id)).findFirst().orElse(null);
+            if (r == null) {
+                ws.send(new Messages.ErrorMsg("Partie " + id + ": unbekannte Partie"));
+                return;
+            }
+            ws.send(new Messages.MatchMsg(r));
+        });
+    }
+
+    /**
+     * Die "matches"-Liste fuer den Client (Task 3): die neuesten {@link #LIST_MAX} Partien, aelteste
+     * zuerst wie {@link MatchStore#all()}, je Datensatz ohne Zeitachse (siehe
+     * {@link MatchRecord#withoutTimeline()}) - bei ~25 Kennzahlen und Zeitachse je Sitz waere die volle
+     * Liste am Deckel (2000) sonst zweistellige MB gross. {@code total}: die tatsaechliche Gesamtzahl,
+     * auch wenn mehr als {@link #LIST_MAX} gespeichert sind - das Board zeigt sie im Kopf. Details laedt
+     * der Client erst bei Bedarf ueber {@code matchDetail}.
+     */
+    private Messages.Matches matchesMsg() {
+        List<MatchRecord> all = matches.all();
+        int total = all.size();
+        List<MatchRecord> newest = total <= LIST_MAX ? all : all.subList(total - LIST_MAX, total);
+        List<MatchRecord> stripped = newest.stream().map(MatchRecord::withoutTimeline).toList();
+        return new Messages.Matches(stripped, total);
     }
 
     /** {"type":"archidektList","username":"..."} → archidektDecks (Konto-Liste, nur Commander) oder error. */
@@ -433,7 +469,7 @@ public final class Bridge {
                         + (e.getMessage() == null ? e.toString() : e.getMessage())));
                 return;
             }
-            ws.send(new Messages.Matches(matches.all()));
+            ws.send(matchesMsg());
         };
         ui(() -> {
             try {

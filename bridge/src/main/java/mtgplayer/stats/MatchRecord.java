@@ -50,6 +50,19 @@ public record MatchRecord(int v, String id, String startedAt, String endedAt, lo
     }
 
     /**
+     * Neuer Datensatz mit bei jedem Sitz entfernter Zeitachse (das Feld wird {@code null}) - fuer die
+     * schlanke "matches"-Liste (siehe {@code mtgplayer.protocol.Messages.Matches} und
+     * {@code mtgplayer.server.Bridge}): {@code Json.MAPPER} (NON_NULL) laesst ein {@code null}-Feld
+     * beim Serialisieren komplett weg, statt eine leere Liste zu schreiben - der Client unterscheidet
+     * daran "nicht geladen" von "geladen, aber leer". Die volle Zeitachse gibt es erst auf Anfrage ueber
+     * {@code matchDetail}.
+     */
+    public MatchRecord withoutTimeline() {
+        return new MatchRecord(v, id, startedAt, endedAt, durationMs, source, aiTimeout, turns, reason,
+                draw, counted, excludeReason, seats.stream().map(s -> s.withTimeline(null)).toList());
+    }
+
+    /**
      * Ergebnis und Kennzahlen eines Sitzes ueber die gesamte Partie. ai: {@code null} bei einem
      * menschlichen Sitz. eliminatedTurn/firstMissedLandDrop/firstCommanderTurn: {@code null}, wenn das
      * Ereignis nicht eintrat (Sitz ueberlebte / keine verpasste Landabgabe / kein Commander-Cast).
@@ -124,13 +137,39 @@ public record MatchRecord(int v, String id, String startedAt, String endedAt, lo
                        int handEnd, int openingLands, int removalCast) {
 
         /**
-         * {@code timeline} ist nie {@code null}: in einem v1-Datensatz fehlt das Feld ganz, und
-         * Jackson legt dann {@code null} in die Komponente. Die Auswertung soll sich darauf nicht
-         * einstellen muessen - eine leere Liste heisst hier "keine Daten", genau wie die 0 bei den
-         * uebrigen Feldern aus Runde B.
+         * {@code timeline} ist bei jedem ueber {@code MatchRecorder} aufgezeichneten oder ueber
+         * {@code MatchStore#all()} gelesenen Sitz nie {@code null} - die Auswertung soll sich darauf
+         * verlassen koennen, eine leere Liste heisst dort "keine Daten", genau wie die 0 bei den
+         * uebrigen Feldern aus Runde B. Der Compact-Konstruktor selbst laesst {@code null} aber
+         * ausdruecklich durch (nur {@code List.copyOf} fuer ein tatsaechlich uebergebenes Array),
+         * statt es wie frueher automatisch durch eine leere Liste zu ersetzen: Jackson liefert
+         * {@code null} fuer ein im JSON fehlendes Feld (v1-Datensatz vor Runde B), und
+         * {@link MatchRecord#withoutTimeline()} erzeugt es absichtlich, damit {@code Json.MAPPER}
+         * (NON_NULL) das Feld beim Senden komplett weglaesst - der Client unterscheidet daran
+         * "nicht geladen" von "geladen, aber leer". {@code MatchStore#all()} normalisiert ein
+         * gelesenes {@code null} beim Laden von der Platte zurueck auf eine leere Liste; wer einen
+         * Sitz direkt ueber den Konstruktor baut (statt ueber {@link #withTimeline}), muss diese
+         * Normalisierung bei Bedarf selbst mitbringen.
          */
         public Seat {
-            timeline = timeline == null ? List.of() : List.copyOf(timeline);
+            timeline = timeline == null ? null : List.copyOf(timeline);
+        }
+
+        /**
+         * Neuer Sitz mit ausgetauschter Zeitachse, sonst unveraendert - siehe
+         * {@link MatchRecord#withoutTimeline()} (dorthin {@code null}) und {@code MatchStore#all()}
+         * (von dort eine leere Liste fuer eine beim Lesen angetroffene {@code null}-Zeitachse).
+         */
+        public Seat withTimeline(List<TurnPoint> timeline) {
+            return new Seat(name, deck, human, ai, winner, lossReason, eliminatedTurn, mulligans, lands,
+                    landsByTurn, missedLandDrops, firstMissedLandDrop, spells, spellMana, spellsCountered,
+                    spellsFizzled, counterspellsCast, cardsDrawn, cardsDiscarded, cardsMilled, permanentsLost,
+                    creaturesLostInCombat, creaturesLostOther, biggestSweep, sweepsSuffered, tokensCreated,
+                    attacksDeclared, attackedTurns, attackersFaced, blocksDeclared, damageTakenFlying,
+                    damageTakenTrample, damageTakenOther, damageTakenNonCombat, damageDealtCombat,
+                    damageDealtNonCombat, commanderDamageTaken, lifeGained, timeline, commanderCasts,
+                    commanderTax, firstCommanderTurn, damageDealt, damageTaken, combatDamageTaken, lifeEnd,
+                    poisonEnd, handEnd, openingLands, removalCast);
         }
     }
 

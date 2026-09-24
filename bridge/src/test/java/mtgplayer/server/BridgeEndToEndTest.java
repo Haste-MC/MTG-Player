@@ -209,6 +209,8 @@ class BridgeEndToEndTest {
         JsonNode initialMatches = await("matches", n -> true, 5);
         assertTrue(initialMatches.get("matches").isArray());
         assertEquals(0, initialMatches.get("matches").size(), initialMatches.toString());
+        // Task 3: "total" traegt die tatsaechliche Gesamtzahl, unabhaengig vom 300er-Deckel.
+        assertEquals(0, initialMatches.get("total").asInt(), initialMatches.toString());
 
         send("{\"type\":\"startGame\",\"humanDeck\":{\"precon\":\"Abzan Armor [TDC] [2025]\"},"
                 + "\"opponents\":[{\"precon\":\"Adaptive Enchantment [C18] [2018]\",\"name\":\"KI 1\"}]}");
@@ -278,8 +280,17 @@ class BridgeEndToEndTest {
         // ist nicht garantiert).
         JsonNode updated = awaitMatches(n -> n.get("matches").size() >= 1, 10);
         assertEquals(1, updated.get("matches").size(), updated.toString());
+        assertEquals(1, updated.get("total").asInt(), updated.toString());
         String matchId = updated.get("matches").get(0).get("id").asText();
         assertFalse(updated.get("matches").get(0).get("counted").asBoolean(), "aufgegebene Partie zaehlt nicht");
+        // Task 3: die schlanke Liste traegt keine Zeitachse - weder je Partie noch je Sitz.
+        assertFalse(updated.get("matches").get(0).has("timeline"), updated.toString());
+        assertFalse(updated.get("matches").get(0).get("seats").get(0).has("timeline"), updated.toString());
+
+        // matchDetail liefert denselben Datensatz vollstaendig, inklusive (ggf. leerer) Zeitachse.
+        send("{\"type\":\"matchDetail\",\"id\":\"" + matchId + "\"}");
+        JsonNode detail = await("match", n -> matchId.equals(n.path("match").path("id").asText()), 10);
+        assertTrue(detail.get("match").get("seats").get(0).has("timeline"), detail.toString());
 
         // setMatchCounted schickt die aktualisierte Liste mit geaendertem counted.
         send("{\"type\":\"setMatchCounted\",\"id\":\"" + matchId + "\",\"counted\":true}");
@@ -291,6 +302,7 @@ class BridgeEndToEndTest {
         send("{\"type\":\"deleteMatch\",\"id\":\"" + matchId + "\"}");
         JsonNode afterDelete = await("matches", n -> matchWithId(n, matchId) == null, 10);
         assertEquals(0, afterDelete.get("matches").size(), afterDelete.toString());
+        assertEquals(0, afterDelete.get("total").asInt(), afterDelete.toString());
     }
 
     private static JsonNode matchWithId(JsonNode matchesMsg, String id) {
@@ -411,5 +423,15 @@ class BridgeEndToEndTest {
         send("{\"type\":\"analyzeDeck\",\"deck\":\"gibt es nicht\"}");
         JsonNode err = await("error", n -> n.path("text").asText().startsWith("Deckanalyse gibt es nicht:"), 10);
         assertEquals("Deckanalyse gibt es nicht: unbekanntes Deck", err.path("text").asText());
+    }
+
+    /** matchDetail mit unbekannter Id: "error" beginnend mit "Partie <id>: " statt still zu bleiben. */
+    @Test
+    @Order(11)
+    @Timeout(value = 1, unit = TimeUnit.MINUTES)
+    void matchDetailUnbekannteIdLiefertError() throws Exception {
+        send("{\"type\":\"matchDetail\",\"id\":\"gibt es nicht\"}");
+        JsonNode err = await("error", n -> n.path("text").asText().startsWith("Partie gibt es nicht:"), 10);
+        assertEquals("Partie gibt es nicht: unbekannte Partie", err.path("text").asText());
     }
 }

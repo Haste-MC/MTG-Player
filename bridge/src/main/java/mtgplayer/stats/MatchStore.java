@@ -46,7 +46,11 @@ public final class MatchStore {
         try {
             String json = Files.readString(file);
             List<MatchRecord> list = Json.mapper().readValue(json, new TypeReference<List<MatchRecord>>() { });
-            return new ArrayList<>(list);
+            List<MatchRecord> out = new ArrayList<>(list.size());
+            for (MatchRecord r : list) {
+                out.add(normalizeTimelines(r));
+            }
+            return out;
         } catch (IOException e) {
             // warn statt report: eine kaputte Datei ist kein Spielabsturz. report() wuerde die Crash-
             // Listener ausloesen (eine gerade laufende Partie waere "Absturz") und dem Browser
@@ -84,6 +88,32 @@ public final class MatchStore {
         int i = indexOf(list, id);
         list.set(i, list.get(i).withCounted(counted, list.get(i).excludeReason()));
         write(list);
+    }
+
+    /**
+     * Jackson liefert fuer eine im JSON fehlende Zeitachse (Feld nie geschrieben - v1-Datensatz vor
+     * Runde B) {@code null} in {@code Seat.timeline()}; der Compact-Konstruktor von
+     * {@link MatchRecord.Seat} laesst das inzwischen bewusst durch (siehe dort - wegen
+     * {@link MatchRecord#withoutTimeline()}, das dasselbe {@code null} absichtlich erzeugt). Erst
+     * HIER, beim Lesen von der Platte, wird aus einem gelesenen {@code null} eine leere Liste
+     * ("keine Daten") - ein frisch aufgezeichneter Datensatz ({@code MatchRecorder}) traegt ohnehin
+     * immer eine echte (ggf. leere) Liste und ist von dieser Methode unberuehrt.
+     */
+    private static MatchRecord normalizeTimelines(MatchRecord r) {
+        boolean anyNull = false;
+        for (MatchRecord.Seat s : r.seats()) {
+            if (s.timeline() == null) {
+                anyNull = true;
+                break;
+            }
+        }
+        if (!anyNull) return r;
+        List<MatchRecord.Seat> seats = new ArrayList<>(r.seats().size());
+        for (MatchRecord.Seat s : r.seats()) {
+            seats.add(s.timeline() == null ? s.withTimeline(List.of()) : s);
+        }
+        return new MatchRecord(r.v(), r.id(), r.startedAt(), r.endedAt(), r.durationMs(), r.source(),
+                r.aiTimeout(), r.turns(), r.reason(), r.draw(), r.counted(), r.excludeReason(), seats);
     }
 
     /** @throws IllegalArgumentException unbekannte Partie ("unbekannte Partie: &lt;id&gt;") */
