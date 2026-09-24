@@ -984,10 +984,13 @@ button.match-toggle .icon { display: block; transition: transform .12s ease; }
 
 /* Kampf-Panel (Seitenspalte, ueber dem Stack): Angreifer nach Ziel gruppiert, Blocker eingerueckt.
    Rahmen/Hintergrund kommen wie bei Stack und Log aus ".side > *". Waechst mit der Spalte statt eines
-   festen Deckels (frueher max-height: 34%) - bei vielen Angreifern (Alpha-Strike, genau der Fall, fuer
-   den die Anzeige gebaut ist) schnitt der Deckel die zweite Gruppe ab, obwohl der Zaehler oben alle
-   zaehlt. min-height: 0 ist noetig, damit ein Flex-Kind ueberhaupt schrumpfen und scrollen darf. */
-.combat-panel { flex: 1 1 auto; padding: var(--pad); min-height: 0; overflow: auto; scrollbar-width: thin; }
+   Der Deckel teilt die Spalte: das Detail-Panel darueber ist starr 418 px hoch, also bleiben bei 884 px
+   Spalte nur ~430 px fuer Kampf, Stack und Log zusammen. Gemessen bei 1600x900: 26 % lassen den
+   Normalfall (zwei Gruppen, 209 px) unangetastet und deckeln einen Alpha-Strike mit 14 Angreifern bei
+   230 px, sodass Stack (105 px) und Log (~95 px) stehen bleiben; ohne Deckel schrumpft das Log auf
+   20 px. Was darueber hinausgeht, wird gescrollt - die Gruppenkoepfe bleiben dabei sticky.
+   min-height: 0 ist noetig, damit ein Flex-Kind ueberhaupt schrumpfen und scrollen darf. */
+.combat-panel { flex: 0 1 auto; padding: var(--pad); max-height: 26%; min-height: 0; overflow: auto; scrollbar-width: thin; }
 .combat-group + .combat-group { margin-top: 10px; }
 /* Sticky, damit beim Scrollen durch viele Gruppen klar bleibt, zu wem die folgenden Zeilen gehoeren;
    Panel-Hintergrund darunter, sonst schimmern die vorbeiscrollenden Reihen durch die Ueberschrift. */
