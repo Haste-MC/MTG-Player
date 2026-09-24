@@ -87,4 +87,19 @@ class DeckImportTest {
         assertEquals("Felothar the Steadfast", DeckImport.suggestName(ARCHIDEKT, r.deck()));
         assertEquals("Mein Deck", DeckImport.suggestName("Name: Mein Deck\n" + ARCHIDEKT, r.deck()));
     }
+
+    /** Archidekt-Export nennt ein Set, in dem wir die Karte nicht fuehren (unsere Editionsdateien hinken der
+     *  Kartensynchronisierung hinterher). Der Name allein muss reichen. */
+    @Test
+    void karteImFalschenSetWirdUeberDenNamenGefunden() {
+        DeckImport.Result r = DeckImport.parse("""
+                1 Sol Ring (zzz) 999
+                1 Llanowar Elves (zzz) 1
+                Commander
+                1 Krenko, Mob Boss (zzz) 2
+                """);
+        assertTrue(r.problems().isEmpty(), () -> String.join(" | ", r.problems()));
+        assertEquals(2, r.deck().get(DeckSection.Main).countAll());
+        assertEquals("Krenko, Mob Boss", r.deck().getCommanders().get(0).getName());
+    }
 }

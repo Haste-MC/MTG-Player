@@ -87,7 +87,10 @@ public final class DeckImport {
             }
             if (type == TokenType.UNKNOWN_CARD || type == TokenType.UNSUPPORTED_CARD
                     || type == TokenType.CARD_FROM_INVALID_SET || type == TokenType.CARD_FROM_NOT_ALLOWED_SET) {
-                Token recovered = type == TokenType.UNKNOWN_CARD ? retryWithoutSet(rec, t, currentSection) : null;
+                // Auch bei bekanntem Namen im falschen/unbekannten Set nochmal ohne Set-Angabe versuchen:
+                // Archidekt-Exporte tragen Set-Kuerzel, und neu zugespielte Karten liegen bei uns oft in einem
+                // anderen Set als im Export (Editionsdateien hinken der Kartensynchronisierung hinterher).
+                Token recovered = retryWithoutSet(rec, t, currentSection);
                 if (recovered != null) {
                     DeckSection section = recovered.getTokenSection() == null
                             ? (currentSection == null ? DeckSection.Main : currentSection) : recovered.getTokenSection();
