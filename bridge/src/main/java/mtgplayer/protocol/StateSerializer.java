@@ -2,12 +2,15 @@ package mtgplayer.protocol;
 
 import com.google.common.collect.Multiset;
 import forge.card.MagicColor;
+import forge.game.GameEntityView;
 import forge.game.GameView;
 import forge.game.card.CardView;
 import forge.game.card.CardView.CardStateView;
 import forge.game.card.CounterType;
+import forge.game.combat.CombatView;
 import forge.game.player.PlayerView;
 import forge.game.spellability.StackItemView;
+import forge.util.collect.FCollection;
 import forge.util.collect.FCollectionView;
 
 import java.util.ArrayList;
@@ -41,6 +44,7 @@ public final class StateSerializer {
                 stack.add(stackItem(i++, si, ctx, cards));
             }
         }
+        List<Snapshot.AttackSnap> combat = combat(gv, ctx, cards);
         PlayerView turn = gv.getPlayerTurn();
         return new Snapshot(
                 Snapshot.TYPE,
@@ -56,7 +60,8 @@ public final class StateSerializer {
                 ctx.stops(),
                 ctx.fullControl(),
                 ctx.prompt(),
-                ctx.spectator() ? Boolean.TRUE : null);
+                ctx.spectator() ? Boolean.TRUE : null,
+                combat);
     }
 
     private static Snapshot.PlayerSnap player(PlayerView p, FCollectionView<PlayerView> all, ViewContext ctx,
@@ -165,6 +170,50 @@ public final class StateSerializer {
             }
         }
         return out.isEmpty() ? null : out;
+    }
+
+    /** Forges CombatView in Zeilen je Angreifer uebersetzen. Null (nicht leere Liste), wenn kein Kampf
+     *  laeuft - das UI prueft nur "da oder nicht". Karten, die noch nicht in der Kartentabelle stehen,
+     *  werden dabei nachgetragen. */
+    private static List<Snapshot.AttackSnap> combat(GameView gv, ViewContext ctx,
+                                                    Map<Integer, Snapshot.CardSnap> cards) {
+        CombatView cv = gv.getCombat();
+        if (cv == null || cv.getNumAttackers() == 0) return null;
+        List<Snapshot.AttackSnap> out = new ArrayList<>();
+        for (CardView attacker : cv.getAttackers()) {
+            if (attacker == null) continue;
+            cards.computeIfAbsent(attacker.getId(), id -> cardSnap(attacker, ctx));
+            Integer defenderPlayer = null;
+            Integer defenderCard = null;
+            GameEntityView defender = cv.getDefender(attacker);
+            if (defender instanceof PlayerView p) {
+                defenderPlayer = p.getId();
+            } else if (defender instanceof CardView c) {
+                defenderCard = c.getId();
+                cards.computeIfAbsent(c.getId(), id -> cardSnap(c, ctx));
+            }
+            out.add(new Snapshot.AttackSnap(attacker.getId(), defenderPlayer, defenderCard,
+                    blockers(cv, attacker, ctx, cards)));
+        }
+        return out.isEmpty() ? null : out;
+    }
+
+    /** Blocker eines Angreifers. Solange das Band nicht als geblockt markiert ist (der Mensch teilt noch
+     *  zu), fuehrt Forge die Zuordnung nur als geplante Blocker - dann zaehlen die. */
+    private static List<Integer> blockers(CombatView cv, CardView attacker, ViewContext ctx,
+                                          Map<Integer, Snapshot.CardSnap> cards) {
+        FCollection<CardView> blockers = cv.getBlockers(attacker);
+        if (blockers == null || blockers.isEmpty()) {
+            blockers = cv.getPlannedBlockers(attacker);
+        }
+        if (blockers == null || blockers.isEmpty()) return null;
+        List<Integer> ids = new ArrayList<>();
+        for (CardView b : blockers) {
+            if (b == null) continue;
+            cards.computeIfAbsent(b.getId(), id -> cardSnap(b, ctx));
+            ids.add(b.getId());
+        }
+        return ids.isEmpty() ? null : ids;
     }
 
     private static Snapshot.StackSnap stackItem(int index, StackItemView si, ViewContext ctx,

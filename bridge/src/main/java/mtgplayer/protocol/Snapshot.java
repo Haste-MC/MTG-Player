@@ -22,7 +22,9 @@ public record Snapshot(
         Messages.StopsMsg stops,
         boolean fullControl,
         PromptSnap prompt,
-        Boolean spectator) {
+        Boolean spectator,
+        /** Eine Zeile je Angreifer, solange ein Kampf laeuft; sonst null (siehe StateSerializer). */
+        List<AttackSnap> combat) {
 
     public static final String TYPE = "state";
 
@@ -83,6 +85,16 @@ public record Snapshot(
                     null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
         }
     }
+
+    /** Ein Angreifer mit seinem Ziel und seinen Blockern. Genau eines von {@code defenderPlayer} und
+     *  {@code defenderCard} ist gesetzt (Forges Verteidiger ist ein Spieler ODER eine Karte - Planeswalker,
+     *  Battle); liefert Forge kein Ziel, bleiben beide null und die Zeile bleibt trotzdem erhalten. */
+    public record AttackSnap(
+            int attacker,
+            Integer defenderPlayer,
+            Integer defenderCard,
+            /** Blocker dieses Angreifers, null wenn keiner zugeteilt ist. */
+            List<Integer> blockers) { }
 
     public record StackSnap(
             int index,
