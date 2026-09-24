@@ -618,7 +618,9 @@ input[type="checkbox"] { accent-color: var(--accent); width: 14px; height: 14px;
 .stack-text { line-height: 1.35; }
 .stack-body .muted { font-size: 11px; }
 
-.log { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; padding: var(--pad); }
+/* min-height als Untergrenze statt 0: waehrend eines Kampfes teilt sich die Spalte mit dem Kampf-Panel,
+   und ohne Boden schrumpft das Log dort auf seinen angeschnittenen Titel zusammen. */
+.log { flex: 1 1 0; min-height: 90px; display: flex; flex-direction: column; padding: var(--pad); }
 .log .panel-title { flex-wrap: wrap; row-gap: 4px; }
 .log-filter { display: flex; flex-wrap: wrap; gap: 4px; margin-left: auto; }
 .log-filter .chip { font-size: 9.5px; padding: 1px 6px; border-radius: 999px; border: 1px solid var(--line-2); background: transparent; color: var(--muted); cursor: pointer; text-transform: uppercase; letter-spacing: 0.03em; line-height: 1.5; }
@@ -983,14 +985,16 @@ button.match-toggle .icon { display: block; transition: transform .12s ease; }
 .lobby-actions .primary { flex: 1; }
 
 /* Kampf-Panel (Seitenspalte, ueber dem Stack): Angreifer nach Ziel gruppiert, Blocker eingerueckt.
-   Rahmen/Hintergrund kommen wie bei Stack und Log aus ".side > *". Waechst mit der Spalte statt eines
-   Der Deckel teilt die Spalte: das Detail-Panel darueber ist starr 418 px hoch, also bleiben bei 884 px
-   Spalte nur ~430 px fuer Kampf, Stack und Log zusammen. Gemessen bei 1600x900: 26 % lassen den
-   Normalfall (zwei Gruppen, 209 px) unangetastet und deckeln einen Alpha-Strike mit 14 Angreifern bei
-   230 px, sodass Stack (105 px) und Log (~95 px) stehen bleiben; ohne Deckel schrumpft das Log auf
-   20 px. Was darueber hinausgeht, wird gescrollt - die Gruppenkoepfe bleiben dabei sticky.
+   Rahmen/Hintergrund kommen wie bei Stack und Log aus ".side > *".
+   Hoehe: Das Detail-Panel darueber hat eine feste Hoehe (--detail-h) und schrumpft nie mit; bei 884 px
+   Spalte (1600x900) bleiben darunter nur gut 440 px fuer Kampf, Stack und Log zusammen. Ohne Deckel
+   frisst ein Alpha-Strike sie ganz (gemessen: Log auf seinen angeschnittenen Titel geschrumpft, 20 px).
+   Deshalb Deckel plus eine Untergrenze am Log (.log unten):
+   der Kampf nimmt, was Stack und Log uebrig lassen, und scrollt darueber hinaus - die Gruppenkoepfe
+   bleiben dabei sticky, damit sichtbar bleibt, zu wem die Zeilen gehoeren. Gemessen bei 1600x900:
+   zwei Gruppen (242 px) passen ganz hinein, 14 Angreifer werden bei 288 px gescrollt, Log bleibt 88 px.
    min-height: 0 ist noetig, damit ein Flex-Kind ueberhaupt schrumpfen und scrollen darf. */
-.combat-panel { flex: 0 1 auto; padding: var(--pad); max-height: 26%; min-height: 0; overflow: auto; scrollbar-width: thin; }
+.combat-panel { flex: 0 1 auto; padding: var(--pad); max-height: 40%; min-height: 0; overflow: auto; scrollbar-width: thin; }
 .combat-group + .combat-group { margin-top: 10px; }
 /* Sticky, damit beim Scrollen durch viele Gruppen klar bleibt, zu wem die folgenden Zeilen gehoeren;
    Panel-Hintergrund darunter, sonst schimmern die vorbeiscrollenden Reihen durch die Ueberschrift. */
