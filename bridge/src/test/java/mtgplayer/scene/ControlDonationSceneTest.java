@@ -1,0 +1,82 @@
+package mtgplayer.scene;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
+
+import forge.game.card.Card;
+import forge.game.card.CounterEnumType;
+import forge.game.phase.PhaseType;
+import forge.game.player.Player;
+import forge.game.staticability.StaticAbilityCantBeCast;
+import forge.game.zone.ZoneType;
+import mtgplayer.ai.AiConfig;
+import mtgplayer.forge.ForgeBoot;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
+
+import java.util.concurrent.TimeUnit;
+
+/** Kontrollwechsel weg von der KI ("verschenken"): Forges {@code ControlGainAi} war nur auf das
+ *  Wegnehmen fremder Permanents ausgelegt, und {@code PumpAi} konnte einen reinen Traeger-Pump auf
+ *  einen Gegner gar nicht anzielen. Ergebnis im Spiel: eine KI mit Steel Golem ("du kannst keine
+ *  Kreaturenzauber wirken") sass sechs Zuege mit voller Hand da, obwohl Iroh ihr genau den Ausweg bot. */
+class ControlDonationSceneTest {
+
+    @BeforeAll
+    static void boot() {
+        ForgeBoot.init();
+    }
+
+    /** Szene A: Iroh + eigenes Sperr-Permanent. Die KI muss den Selbst-Stax verschenken und bekommt
+     *  dafuer den Ally-Spielstein mit einer +1/+1-Marke (ein Permanent bei den Gegnern). */
+    @Test
+    @Timeout(value = 5, unit = TimeUnit.MINUTES)
+    void verschenktDasPermanentDasDieEigenenKreaturenSperrt() {
+        Scene s = Scene.twoPlayers(AiConfig.DEFAULT, AiConfig.DEFAULT, 5);
+        Player a = s.player(0), b = s.player(1);
+
+        s.card("Iroh, Tea Master", a, ZoneType.Battlefield);
+        Card golem = s.card("Steel Golem", a, ZoneType.Battlefield);
+        s.cards("Forest", 4, a, ZoneType.Battlefield);
+        s.cards("Grizzly Bears", 3, a, ZoneType.Hand);
+        s.cards("Forest", 10, a, ZoneType.Library);
+        s.cards("Island", 10, b, ZoneType.Library);
+        s.card("Island", b, ZoneType.Battlefield);
+
+        s.setPhase(PhaseType.MAIN1, a);
+        s.loopUntil(PhaseType.MAIN2, a);
+
+        assertSame(b, golem.getController(), "Sperr-Permanent haette verschenkt werden muessen\n" + s.state());
+        assertEquals(1, s.count(a, ZoneType.Battlefield, "Ally Token"), s.state());
+        Card ally = a.getCardsIn(ZoneType.Battlefield).stream()
+                .filter(c -> c.getName().equals("Ally Token")).findFirst().orElseThrow();
+        assertEquals(1, ally.getCounters(CounterEnumType.P1P1), "eine Marke je eigenem Permanent beim Gegner");
+        Card bears = a.getCardsIn(ZoneType.Hand).getFirst();
+        assertFalse(StaticAbilityCantBeCast.cantBeCastAbility(bears.getFirstSpellAbility(), bears, a),
+                "die Sperre auf den eigenen Kreaturenzaubern muss weg sein\n" + s.state());
+    }
+
+    /** Szene B: dieselbe Faehigkeit ohne Nachteils-Permanent. Ein funktionierendes Permanent
+     *  (Kreatur oder Land) darf die KI nicht fuer einen 1/1 hergeben. */
+    @Test
+    @Timeout(value = 5, unit = TimeUnit.MINUTES)
+    void verschenktKeinFunktionierendesPermanent() {
+        Scene s = Scene.twoPlayers(AiConfig.DEFAULT, AiConfig.DEFAULT, 5);
+        Player a = s.player(0), b = s.player(1);
+
+        s.card("Iroh, Tea Master", a, ZoneType.Battlefield);
+        s.card("Grizzly Bears", a, ZoneType.Battlefield);
+        s.cards("Forest", 4, a, ZoneType.Battlefield);
+        s.cards("Forest", 10, a, ZoneType.Library);
+        s.cards("Island", 10, b, ZoneType.Library);
+        s.card("Island", b, ZoneType.Battlefield);
+
+        s.setPhase(PhaseType.MAIN1, a);
+        s.loopUntil(PhaseType.MAIN2, a);
+
+        assertEquals(1, b.getCardsIn(ZoneType.Battlefield).size(), "nichts verschenkt\n" + s.state());
+        assertEquals(0, s.count(a, ZoneType.Battlefield, "Ally Token"), s.state());
+    }
+}
