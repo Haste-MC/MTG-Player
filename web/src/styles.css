@@ -552,6 +552,11 @@ input[type="checkbox"] { accent-color: var(--accent); width: 14px; height: 14px;
 .phasebar .phase.current.stop::after { background: #fff; }
 .phasebar .fullcontrol { margin-left: auto; display: flex; gap: 6px; align-items: center; color: var(--muted); cursor: pointer; white-space: nowrap; }
 
+/* Serienstand waehrend der Partie (Spec §1): in der Phasenleiste und (compact) in der Zuschauer-
+   Fusszeile neben der Denk-Anzeige - siehe PhaseBar.tsx und Table.tsx. */
+.series-status { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 32%; flex: none; }
+.series-status.compact { font-size: 11px; max-width: 30%; }
+
 .prompt { display: flex; gap: 12px; align-items: center; padding: 6px 10px 6px 6px; flex: none; border-radius: var(--radius); background: var(--panel-2); border: 1px solid var(--line); box-shadow: var(--shadow); }
 /* Kurzer Hinweis (Forges flashIncorrectAction) als Pille neben der Prompt-Nachricht, blendet nach 2 s aus (Prompt.tsx). */
 .prompt .toast { flex: none; padding: 4px 12px; border-radius: 999px; background: rgba(229, 72, 77, 0.16); border: 1px solid rgba(229, 72, 77, 0.45); color: #ff9b9e; font-size: 12px; font-weight: 600; white-space: nowrap; animation: toast-in .15s ease, toast-out .3s ease 1.7s forwards; pointer-events: none; }
@@ -636,6 +641,7 @@ input[type="checkbox"] { accent-color: var(--accent); width: 14px; height: 14px;
 .dialog .dialog-message { color: var(--text); }
 .dialog .hint { color: var(--muted); font-size: 12px; }
 .dialog .series { margin: 6px 0 0; color: var(--muted); font-size: 13px; }
+.dialog .series-countdown { margin: 8px 0 0; color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
 .options { list-style: none; padding: 0; margin: 12px 0 0; display: flex; flex-direction: column; gap: 6px; }
 .options li { padding: 8px 10px; border: 1px solid var(--line); border-left: 3px solid transparent; border-radius: var(--radius-md); background: var(--panel); cursor: pointer; transition: background .15s ease, border-color .15s ease; }
 .options li:hover { background: var(--panel-2); border-color: var(--line-2); }

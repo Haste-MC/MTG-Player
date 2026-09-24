@@ -270,6 +270,58 @@ describe("store: serie", () => {
   });
 });
 
+describe("store: serien-countdown", () => {
+  beforeEach(() => {
+    useStore.setState({ ...initialState, seriesCountdown: undefined });
+  });
+
+  it("initialState hat keinen laufenden countdown", () => {
+    expect(initialState.seriesCountdown).toBeUndefined();
+  });
+
+  it("startSeriesCountdown setzt die sekunden", () => {
+    useStore.getState().startSeriesCountdown(5);
+    expect(useStore.getState().seriesCountdown).toBe(5);
+  });
+
+  it("tickSeriesCountdown zaehlt herunter", () => {
+    useStore.getState().startSeriesCountdown(3);
+    useStore.getState().tickSeriesCountdown();
+    expect(useStore.getState().seriesCountdown).toBe(2);
+    useStore.getState().tickSeriesCountdown();
+    expect(useStore.getState().seriesCountdown).toBe(1);
+  });
+
+  it("tickSeriesCountdown wird bei 1 zu undefined statt 0 anzuzeigen", () => {
+    useStore.getState().startSeriesCountdown(1);
+    useStore.getState().tickSeriesCountdown();
+    expect(useStore.getState().seriesCountdown).toBeUndefined();
+  });
+
+  it("tickSeriesCountdown ohne laufenden countdown bleibt undefined", () => {
+    useStore.getState().tickSeriesCountdown();
+    expect(useStore.getState().seriesCountdown).toBeUndefined();
+  });
+
+  it("cancelSeriesCountdown bricht sofort ab", () => {
+    useStore.getState().startSeriesCountdown(5);
+    useStore.getState().cancelSeriesCountdown();
+    expect(useStore.getState().seriesCountdown).toBeUndefined();
+  });
+
+  it("gameOver setzt einen laufenden countdown der vorigen partie zurueck", () => {
+    useStore.getState().startSeriesCountdown(4);
+    useStore.getState().apply({ type: "gameOver", winner: "Du" });
+    expect(useStore.getState().seriesCountdown).toBeUndefined();
+  });
+
+  it("backToLobby raeumt einen laufenden countdown weg", () => {
+    useStore.getState().startSeriesCountdown(4);
+    useStore.getState().backToLobby();
+    expect(useStore.getState().seriesCountdown).toBeUndefined();
+  });
+});
+
 describe("store: archidekt", () => {
   const entries: ArchidektDecks["decks"] = [
     { id: 1, name: "Deck 1", updatedAt: "2026-09-01T00:00:00.000000Z", art: "https://example.com/a.webp" },

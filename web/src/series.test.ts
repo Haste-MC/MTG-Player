@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatSeries, recordResult, seriesKey, seriesWinner, startSeries } from "./series";
+import { formatSeries, nextSeriesStep, recordResult, seriesKey, seriesWinner, startSeries } from "./series";
 import type { StartGame } from "./protocol";
 
 const msg: StartGame = { type: "startGame", humanDeck: { precon: "A" }, opponents: [{ precon: "B", name: "KI 1" }] };
@@ -29,5 +29,28 @@ describe("series", () => {
   });
   it("formatSeries in namensreihenfolge mit nullen", () => {
     expect(formatSeries({ key: "k", wins: { "KI 1": 1 }, games: 1 }, ["Du", "KI 1"])).toBe("Du 0 · KI 1 1");
+  });
+
+  describe("nextSeriesStep", () => {
+    it("none ohne serie oder bei bestOf 0", () => {
+      const s = recordResult(startSeries(undefined, msg), "Du");
+      expect(nextSeriesStep(undefined, 3, true)).toEqual({ kind: "none" });
+      expect(nextSeriesStep(s, 0, true)).toEqual({ kind: "none" });
+    });
+    it("none wenn die letzte partie nicht gewertet wurde (abgebrochen)", () => {
+      const s = recordResult(startSeries(undefined, msg), "Du");
+      expect(nextSeriesStep(s, 3, false)).toEqual({ kind: "none" });
+    });
+    it("countdown bei laufender, offener serie mit gewerteter letzter partie", () => {
+      const s = recordResult(startSeries(undefined, msg), "Du");
+      expect(nextSeriesStep(s, 3, true)).toEqual({ kind: "countdown" });
+    });
+    it("decided sobald jemand ceil(bestOf/2) siege hat - auch wenn die letzte partie nicht gewertet wurde", () => {
+      let s = startSeries(undefined, msg);
+      s = recordResult(s, "Du");
+      s = recordResult(s, "Du");
+      expect(nextSeriesStep(s, 3, true)).toEqual({ kind: "decided", winner: "Du" });
+      expect(nextSeriesStep(s, 3, false)).toEqual({ kind: "decided", winner: "Du" });
+    });
   });
 });

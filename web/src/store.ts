@@ -32,6 +32,10 @@ export interface AppState {
   series?: Series;
   /** Serienlaenge aus der Lobby (0 = keine Serie). */
   bestOf: number;
+  /** Sekunden bis zum automatischen Start des naechsten Spiels der Serie (Spielende-Dialog,
+   *  siehe nextSeriesStep in series.ts); undefined = kein Countdown. Laeuft nur, waehrend der Dialog
+   *  offen ist - Table.tsx raeumt den Interval-Timer beim Schliessen/Unmount auf. */
+  seriesCountdown?: number;
   /** true zwischen noteStart() und dem naechsten Snapshot: der naechste turn-0-state ist sicher ein
    *  Spielstart, kein Reconnect-Replay der alten Partie (die z. B. bei einem sofortigen Concede selbst
    *  bei turn 0 geendet haben kann). Wird bei jedem Snapshot und bei jedem error zurueckgesetzt. */
@@ -112,8 +116,13 @@ export function reduce(s: AppState, m: Inbound): AppState {
     case "gameOver":
       // thinking mit raus: die Partie ist vorbei, es rechnet niemand mehr. Die Bridge schickt zwar beim
       // Schliessen des Tickers ihr seconds: 0 hinterher, aber ein Reconnect mitten im Spielende-Overlay
-      // liesse sonst "KI 2 denkt ... 31 s" unter dem Ergebnis stehen.
-      return { ...s, winner: m.winner ?? null, choices: [], thinking: undefined, series: s.series ? recordResult(s.series, m.winner ?? null) : s.series };
+      // liesse sonst "KI 2 denkt ... 31 s" unter dem Ergebnis stehen. seriesCountdown mit raus: ein neuer
+      // Spielende-Dialog faengt immer frisch an (Table.tsx startet ihn per nextSeriesStep neu) - sonst
+      // koennte ein alter Countdown-Stand kurz aufblitzen, bevor der Effekt ihn neu setzt.
+      return {
+        ...s, winner: m.winner ?? null, choices: [], thinking: undefined, seriesCountdown: undefined,
+        series: s.series ? recordResult(s.series, m.winner ?? null) : s.series,
+      };
     case "error": {
       // Ein fehlgeschlagenes startGame (z. B. Deckfehler) darf expectNewMatch nicht scharf lassen - sonst
       // wuerde der naechste turn-0-Snapshot (Reconnect der alten Partie) faelschlich als Spielstart gelten.
@@ -147,6 +156,12 @@ interface Store extends AppState {
   noteStart: (msg: StartGame) => void;
   resetSeries: () => void;
   setBestOf: (n: number) => void;
+  /** Startet den Countdown bis zum naechsten Serienspiel (Sekunden bis zum Auto-Start). */
+  startSeriesCountdown: (seconds: number) => void;
+  /** Eine Sekunde runter; bei 1 -> undefined statt eine "0 …" anzuzeigen (Table.tsx sendet dann sofort). */
+  tickSeriesCountdown: () => void;
+  /** "Serie beenden": bricht den Countdown sofort ab, ohne das naechste Spiel zu starten. */
+  cancelSeriesCountdown: () => void;
   /** Setzt archidekt.loading und schickt archidektList - die Bridge antwortet mit archidektDecks/error. */
   requestArchidektList: (username: string) => void;
 }
@@ -155,13 +170,20 @@ export const useStore = create<Store>((set) => ({
   ...initialState,
   apply: (m) => set((s) => reduce(s, m)),
   clearChoice: (id) => set((s) => ({ choices: s.choices.filter((c) => c.id !== id) })),
-  backToLobby: () => set({ screen: "lobby", state: undefined, winner: undefined, choices: [], thinking: undefined }),
+  backToLobby: () => set({
+    screen: "lobby", state: undefined, winner: undefined, choices: [], thinking: undefined, seriesCountdown: undefined,
+  }),
   openStats: () => set({ screen: "stats" }),
   setHover: (id) => set({ hover: id }),
   clearToast: () => set({ toast: undefined }),
   noteStart: (msg) => set((s) => ({ lastStart: msg, series: startSeries(s.series, msg), expectNewMatch: true })),
   resetSeries: () => set({ series: undefined }),
   setBestOf: (n) => set({ bestOf: n }),
+  startSeriesCountdown: (seconds) => set({ seriesCountdown: seconds }),
+  tickSeriesCountdown: () => set((s) => ({
+    seriesCountdown: s.seriesCountdown === undefined || s.seriesCountdown <= 1 ? undefined : s.seriesCountdown - 1,
+  })),
+  cancelSeriesCountdown: () => set({ seriesCountdown: undefined }),
   toggleKind: (kind) => set((s) => ({
     hiddenKinds: s.hiddenKinds.includes(kind) ? s.hiddenKinds.filter((k) => k !== kind) : [...s.hiddenKinds, kind],
   })),

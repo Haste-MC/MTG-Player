@@ -35,3 +35,21 @@ export function seriesWinner(s: Series, bestOf: number): string | undefined {
 export function formatSeries(s: Series, names: string[]): string {
   return names.map((n) => `${n} ${s.wins[n] ?? 0}`).join(" · ");
 }
+
+/** Was der Spielende-Dialog nach dem letzten Spiel als Naechstes tun soll (Spec §1):
+ *  - "decided", sobald ein Name die Serie fuer sich entschieden hat (seriesWinner) - egal ob die
+ *    zuletzt gespielte Partie gewertet wurde, das Ergebnis steht ja schon fest.
+ *  - "countdown" nur bei einer laufenden, noch offenen Serie (bestOf > 0) UND einer gewerteten letzten
+ *    Partie - eine abgebrochene Partie (lastMatchCounted: false) darf nichts automatisch starten.
+ *  - sonst "none": keine Serie (series fehlt), bestOf 0 oder eben eine abgebrochene letzte Partie. */
+export function nextSeriesStep(
+  series: Series | undefined,
+  bestOf: number,
+  lastMatchCounted: boolean,
+): { kind: "countdown" } | { kind: "decided"; winner: string } | { kind: "none" } {
+  if (!series || bestOf <= 0) return { kind: "none" };
+  const winner = seriesWinner(series, bestOf);
+  if (winner) return { kind: "decided", winner };
+  if (!lastMatchCounted) return { kind: "none" };
+  return { kind: "countdown" };
+}
