@@ -1,0 +1,129 @@
+package mtgplayer.decks;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import forge.deck.Deck;
+import forge.deck.DeckSection;
+import forge.item.PaperCard;
+import forge.model.FModel;
+import mtgplayer.forge.ForgeBoot;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+
+import java.time.Instant;
+import java.util.List;
+
+class SuggestionsTest {
+
+    @BeforeAll
+    static void boot() {
+        ForgeBoot.init();
+    }
+
+    private static PaperCard card(String name) {
+        PaperCard pc = FModel.getMagicDb().getCommonCards().getCard(name);
+        assertNotNull(pc, "Karte nicht in der Datenbank: " + name);
+        return pc;
+    }
+
+    /** Gruenes Commander-Deck mit Titania: ein Schutzzauber ist bereits drin, damit "schon im Deck" greift. */
+    private static Deck deck(String... mainCards) {
+        Deck d = new Deck("Test");
+        d.getOrCreate(DeckSection.Commander).add(card("Titania, Protector of Argoth"));
+        for (String n : mainCards) {
+            d.getMain().add(card(n));
+        }
+        d.getMain().add(card("Forest"), 30);
+        return d;
+    }
+
+    private static Edhrec.Page page(Edhrec.Card... cards) {
+        return new Edhrec.Page("titania-protector-of-argoth", List.of(cards), Instant.now());
+    }
+
+    private static Edhrec.Card ec(String name, double share) { return new Edhrec.Card(name, share, false); }
+    private static Edhrec.Card gc(String name, double share) { return new Edhrec.Card(name, share, true); }
+
+    @Test
+    void schlaegtKartenDerGefragtenRolleVor() {
+        Suggestions.Result r = Suggestions.of(deck(), List.of("wipeProtection"), 4,
+                page(ec("Heroic Intervention", 0.68), ec("Llanowar Elves", 0.4)));
+        assertEquals(List.of("Heroic Intervention"), r.items().stream().map(Suggestions.Item::name).toList());
+        assertEquals("wipeProtection", r.items().get(0).role());
+        assertEquals(0.68, r.items().get(0).share(), 1e-9);
+        assertEquals("edhrec", r.source());
+    }
+
+    @Test
+    void laesstWegWasSchonImDeckIst() {
+        Suggestions.Result r = Suggestions.of(deck("Heroic Intervention"), List.of("wipeProtection"), 4,
+                page(ec("Heroic Intervention", 0.68)));
+        assertTrue(r.items().isEmpty(), r.items().toString());
+    }
+
+    @Test
+    void laesstWegWasNichtZurFarbidentitaetPasst() {
+        // Counterspell ist blau, Titania gruen - darf nicht vorgeschlagen werden.
+        Suggestions.Result r = Suggestions.of(deck(), List.of("counters"), 4, page(ec("Counterspell", 0.5)));
+        assertTrue(r.items().isEmpty(), r.items().toString());
+    }
+
+    @Test
+    void laesstLaenderWeg() {
+        Suggestions.Result r = Suggestions.of(deck(), List.of("ramp"), 4, page(ec("Ancient Tomb", 0.6)));
+        assertTrue(r.items().stream().noneMatch(i -> i.name().equals("Ancient Tomb")), r.items().toString());
+    }
+
+    @Test
+    void sortiertNachAnteilDannKosten() {
+        Suggestions.Result r = Suggestions.of(deck(), List.of("ramp"), 4,
+                page(ec("Cultivate", 0.5), ec("Llanowar Elves", 0.5), ec("Rampant Growth", 0.7)));
+        // Rampant Growth (0.7) vor den beiden mit 0.5; dort zuerst die billigere Karte.
+        assertEquals(List.of("Rampant Growth", "Llanowar Elves", "Cultivate"),
+                r.items().stream().map(Suggestions.Item::name).toList());
+    }
+
+    @Test
+    void hoechstensFuenfJeRolle() {
+        Suggestions.Result r = Suggestions.of(deck(), List.of("ramp"),  4,
+                page(ec("Llanowar Elves", 0.9), ec("Elvish Mystic", 0.8), ec("Fyndhorn Elves", 0.7),
+                     ec("Rampant Growth", 0.6), ec("Cultivate", 0.5), ec("Kodama's Reach", 0.4)));
+        assertEquals(5, r.items().size());
+    }
+
+    @Test
+    void bracketZweiLaesstGameChangerWeg() {
+        Suggestions.Result r = Suggestions.of(deck(), List.of("ramp"), 2,
+                page(gc("Crop Rotation", 0.8), ec("Llanowar Elves", 0.4)));
+        assertEquals(List.of("Llanowar Elves"), r.items().stream().map(Suggestions.Item::name).toList());
+    }
+
+    @Test
+    void bracketDreiNimmtGameChangerMitHinweis() {
+        Suggestions.Result r = Suggestions.of(deck(), List.of("ramp"), 3, page(gc("Crop Rotation", 0.8)));
+        assertEquals(1, r.items().size());
+        assertTrue(r.items().get(0).gameChanger());
+        assertNotNull(r.note());
+        assertTrue(r.note().contains("Bracket 3"), r.note());
+    }
+
+    @Test
+    void ohneRollenNichts() {
+        Suggestions.Result r = Suggestions.of(deck(), List.of(), 4, page(ec("Llanowar Elves", 0.4)));
+        assertTrue(r.items().isEmpty());
+        assertNotNull(r.note());
+    }
+
+    @Test
+    void traegtAnzeigedatenMit() {
+        Suggestions.Result r = Suggestions.of(deck(), List.of("ramp"), 4, page(ec("Llanowar Elves", 0.4)));
+        Suggestions.Item i = r.items().get(0);
+        assertEquals(1, i.cmc());
+        assertEquals("{G}", i.manaCost());
+        assertFalse(i.imageKey().isBlank());
+        assertFalse(i.text().isBlank());
+    }
+}
