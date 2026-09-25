@@ -13,6 +13,7 @@ import forge.model.FModel;
 import forge.player.LobbyPlayerHuman;
 import mtgplayer.ai.AiConfig;
 import mtgplayer.gui.WebGuiGame;
+import mtgplayer.stats.CardLog;
 import mtgplayer.stats.MatchRecord;
 import mtgplayer.stats.MatchRecorder;
 
@@ -21,6 +22,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Consumer;
 
 /**
@@ -47,6 +49,19 @@ public final class HumanMatch {
     /** @param sink bekommt den Datensatz der Partie, sobald sie vorbei ist (siehe {@link #record}) */
     public void start(String humanName, Deck humanDeck, List<Deck> aiDecks, List<String> aiNames,
                        List<AiConfig> aiConfigs, int aiTimeout, WebGuiGame gui, Consumer<MatchRecord> sink) {
+        start(humanName, humanDeck, aiDecks, aiNames, aiConfigs, aiTimeout, gui, sink, Set.of(), null);
+    }
+
+    /**
+     * @param sink     bekommt den Datensatz der Partie, sobald sie vorbei ist (siehe {@link #record})
+     * @param ownDecks Decknamen (aus dem {@code DeckStore} des Aufrufers), fuer die eine Kartenbiografie
+     *                 gefuehrt wird - siehe {@code MatchRecorder}
+     * @param cardSink bekommt die Kartenbiografie der Partie, sobald sie vorbei ist (siehe
+     *                 {@link #record}); {@code null} wenn der Aufrufer keine will
+     */
+    public void start(String humanName, Deck humanDeck, List<Deck> aiDecks, List<String> aiNames,
+                       List<AiConfig> aiConfigs, int aiTimeout, WebGuiGame gui, Consumer<MatchRecord> sink,
+                       Set<String> ownDecks, Consumer<CardLog> cardSink) {
         if (aiDecks.size() != aiNames.size() || aiDecks.size() != aiConfigs.size() || aiDecks.isEmpty() || aiDecks.size() > 5) {
             throw new IllegalArgumentException("1–5 KI-Decks mit gleich vielen Namen");
         }
@@ -78,7 +93,7 @@ public final class HumanMatch {
         // HostedMatch.startGame liest diese Preference beim Spielstart (setzt Game.AI_TIMEOUT) - kein save(),
         // die Aenderung soll nur diese JVM/Session betreffen.
         FModel.getPreferences().setPref(FPref.MATCH_AI_TIMEOUT, String.valueOf(aiTimeout));
-        record(gui, "live", aiTimeout, deckNames, sink);
+        record(gui, "live", aiTimeout, deckNames, sink, ownDecks, cardSink);
         hosted.startMatch(rules, null, players, guis, null);
     }
 
@@ -99,6 +114,19 @@ public final class HumanMatch {
     /** @param sink bekommt den Datensatz der Partie, sobald sie vorbei ist (siehe {@link #record}) */
     public void startSpectator(List<Deck> aiDecks, List<String> aiNames, List<AiConfig> aiConfigs, int aiTimeout,
                                WebGuiGame gui, Consumer<MatchRecord> sink) {
+        startSpectator(aiDecks, aiNames, aiConfigs, aiTimeout, gui, sink, Set.of(), null);
+    }
+
+    /**
+     * @param sink     bekommt den Datensatz der Partie, sobald sie vorbei ist (siehe {@link #record})
+     * @param ownDecks Decknamen (aus dem {@code DeckStore} des Aufrufers), fuer die eine Kartenbiografie
+     *                 gefuehrt wird - siehe {@code MatchRecorder}
+     * @param cardSink bekommt die Kartenbiografie der Partie, sobald sie vorbei ist (siehe
+     *                 {@link #record}); {@code null} wenn der Aufrufer keine will
+     */
+    public void startSpectator(List<Deck> aiDecks, List<String> aiNames, List<AiConfig> aiConfigs, int aiTimeout,
+                               WebGuiGame gui, Consumer<MatchRecord> sink, Set<String> ownDecks,
+                               Consumer<CardLog> cardSink) {
         if (aiDecks.size() != aiNames.size() || aiDecks.size() != aiConfigs.size() || aiDecks.size() < 2 || aiDecks.size() > 6) {
             throw new IllegalArgumentException("2–6 KI-Decks mit gleich vielen Namen");
         }
@@ -118,7 +146,7 @@ public final class HumanMatch {
         hosted = new HostedMatch();
         gui.resetForNewMatch(); // sonst haengt Auswahl/Prompt-Zustand aus dem vorigen Spiel noch dran
         FModel.getPreferences().setPref(FPref.MATCH_AI_TIMEOUT, String.valueOf(aiTimeout));
-        record(gui, "spectate", aiTimeout, deckNames, sink);
+        record(gui, "spectate", aiTimeout, deckNames, sink, ownDecks, cardSink);
         hosted.startMatch(rules, null, players, Map.of(), null);
     }
 
@@ -140,8 +168,8 @@ public final class HumanMatch {
      * hinterlaesst nur den Haken, der beim naechsten Start ersetzt wird.</p>
      */
     private void record(WebGuiGame gui, String source, int aiTimeout, Map<RegisteredPlayer, String> deckNames,
-                         Consumer<MatchRecord> sink) {
-        gui.onNewGame(game -> recorder = new MatchRecorder(game, source, aiTimeout, deckNames, sink));
+                         Consumer<MatchRecord> sink, Set<String> ownDecks, Consumer<CardLog> cardSink) {
+        gui.onNewGame(game -> recorder = new MatchRecorder(game, source, aiTimeout, deckNames, ownDecks, sink, cardSink));
     }
 
     public boolean isRunning() {

@@ -12,6 +12,7 @@ import forge.game.event.GameEventTurnEnded;
 import forge.game.player.Player;
 import forge.game.player.RegisteredPlayer;
 import mtgplayer.ai.AiConfig;
+import mtgplayer.stats.CardLog;
 import mtgplayer.stats.MatchRecord;
 import mtgplayer.stats.MatchRecorder;
 
@@ -21,6 +22,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Observer;
+import java.util.Set;
 import java.util.function.Consumer;
 
 /**
@@ -64,9 +66,24 @@ public final class AiMatch {
      *             {@code "sparring"}, weil KI-gegen-KI ueber diesen Weg das Sparring aus Stueck 3 ist.
      *             {@code null} = nicht erfassen (Bench-Laeufe, Tests).
      */
-    @SuppressWarnings("deprecation")
     public static Result play(List<Deck> decks, List<String> names, List<AiConfig> configs, int aiTimeout,
                                int maxTurns, Consumer<String> log, Consumer<MatchRecord> sink) {
+        return play(decks, names, configs, aiTimeout, maxTurns, log, sink, Set.of(), null);
+    }
+
+    /**
+     * @param sink     bekommt den {@link MatchRecord} der Partie, sobald sie vorbei ist - Quelle
+     *                 {@code "sparring"}, weil KI-gegen-KI ueber diesen Weg das Sparring aus Stueck 3 ist.
+     *                 {@code null} = nicht erfassen (Bench-Laeufe, Tests).
+     * @param ownDecks Decknamen (aus dem {@code DeckStore} des Aufrufers), fuer die eine Kartenbiografie
+     *                 gefuehrt wird - siehe {@code MatchRecorder}
+     * @param cardSink bekommt die Kartenbiografie der Partie, sobald sie vorbei ist; {@code null} wenn
+     *                 der Aufrufer keine will
+     */
+    @SuppressWarnings("deprecation")
+    public static Result play(List<Deck> decks, List<String> names, List<AiConfig> configs, int aiTimeout,
+                               int maxTurns, Consumer<String> log, Consumer<MatchRecord> sink,
+                               Set<String> ownDecks, Consumer<CardLog> cardSink) {
         if (maxTurns <= 0) {
             throw new IllegalArgumentException("maxTurns muss > 0 sein");
         }
@@ -102,7 +119,7 @@ public final class AiMatch {
         // Vor match.startGame(...), damit Mulligans und der erste Zug schon mitgezaehlt werden; der
         // Recorder schliesst sich selbst ueber GameEventGameFinished ab.
         final MatchRecorder recorder = sink == null ? null
-                : new MatchRecorder(game, "sparring", aiTimeout, deckNames, sink);
+                : new MatchRecorder(game, "sparring", aiTimeout, deckNames, ownDecks, sink, cardSink);
 
         // Forge selbst kann ein Spiel ebenfalls mit GameEndReason.Draw beenden (gleichzeitiger Verlust,
         // Stack > 999, GameDrawEffect) - dieses Flag markiert nur ein Unentschieden DURCH UNS (Zugdeckel),

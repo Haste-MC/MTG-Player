@@ -12,8 +12,10 @@ import mtgplayer.ai.AiConfig;
 import mtgplayer.decks.DeckStore;
 import mtgplayer.match.AiMatch;
 import mtgplayer.protocol.Messages;
+import mtgplayer.stats.CardStore;
 import mtgplayer.stats.MatchRecord;
 import mtgplayer.stats.MatchStore;
+import java.util.Set;
 
 /**
  * Ein Sparring-Lauf (Spec §3): zieht je Partie einen Gegner (siehe {@link SparringOpponents}), spielt
@@ -161,6 +163,15 @@ public final class SparringRun {
      * zurueckgeben. Die Sitzreihenfolge wechselt mit dem Seed; den Startspieler lost Forge zusaetzlich
      * selbst aus (wie im Bench).
      *
+     * <p>Kartenbiografie (Runde C, Stueck 2): beide Sitze bestreiten Decks aus demselben
+     * {@code DeckStore} (der Gegner kommt ueber {@link SparringOpponents} ebenfalls aus Kevins
+     * Bestand) - {@code ownDecks} ist deshalb schlicht {@link DeckStore#names()}, jeder Sitz bekommt
+     * eine Kartenbiografie. Anders als der {@link MatchRecord} (kommt als JSON-Zeile ueber stdout zum
+     * Elternprozess zurueck, siehe {@code Main}/{@code SubprocessGameRunner}) schreibt der Kindprozess
+     * die Kartendatei selbst und direkt ueber {@link CardStore#standard()} - er teilt sich mit der
+     * Bridge dasselbe {@code ~/.mtg-player} (bzw. dasselbe {@code -Dmtgplayer.data} in Tests), das
+     * Protokoll muss dafuer nicht erweitert werden.</p>
+     *
      * @param log bekommt jede Forge-Logzeile (im Kindprozess: stdout)
      */
     public static MatchRecord playOne(SparringArgs.Job job, Consumer<String> log) {
@@ -173,7 +184,10 @@ public final class SparringRun {
         List<String> names = swap ? List.of(job.opponent(), job.deck()) : List.of(job.deck(), job.opponent());
         AiConfig ai = job.aiConfig();
         AtomicReference<MatchRecord> record = new AtomicReference<>();
-        AiMatch.play(table, names, List.of(ai, ai), job.timeout(), job.maxTurns(), log, record::set);
+        Set<String> ownDecks = Set.copyOf(store.names());
+        CardStore cards = CardStore.standard();
+        AiMatch.play(table, names, List.of(ai, ai), job.timeout(), job.maxTurns(), log, record::set,
+                ownDecks, cards::write);
         MatchRecord r = record.get();
         if (r == null) {
             throw new IllegalStateException("Partie lieferte keinen Datensatz");

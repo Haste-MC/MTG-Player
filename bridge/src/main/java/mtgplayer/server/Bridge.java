@@ -23,6 +23,8 @@ import mtgplayer.sparring.GameRunner;
 import mtgplayer.sparring.SparringArgs;
 import mtgplayer.sparring.SparringRun;
 import mtgplayer.sparring.SubprocessGameRunner;
+import mtgplayer.stats.CardLog;
+import mtgplayer.stats.CardStore;
 import mtgplayer.stats.MatchRecord;
 import mtgplayer.stats.MatchStore;
 
@@ -48,6 +50,8 @@ public final class Bridge {
     private final Archidekt archidekt;
     private final DeckSource decks;
     private final MatchStore matches;
+    /** Kartenbiografien (Runde C): eigene Ablage neben {@link #matches}, siehe {@link CardStore}. */
+    private final CardStore cards = CardStore.standard();
     /** Kartenvorschlaege (Stueck 2): EDHREC-Anreicherung, siehe {@link #suggestCards}. */
     private final Edhrec edhrec;
     /** Sparring (Stueck 3): genau ein Lauf zur Zeit, siehe {@link SparringRun}. */
@@ -362,6 +366,9 @@ public final class Bridge {
         GuiBase.getInterface().runBackgroundTask("delete-match", () -> {
             try {
                 matches.delete(id);
+                // Die Kartendatei gehoert zur Partie (siehe CardStore) und muss mit ihr verschwinden -
+                // anders als bei "nicht gewertet" (setMatchCounted), das bewusst nichts loescht.
+                cards.delete(id);
                 ws.send(matchesMsg());
             } catch (RuntimeException e) {
                 // wie bei "concede": sonst stirbt der Fehler still auf dem Hintergrund-Thread
@@ -609,12 +616,25 @@ public final class Bridge {
             }
             ws.send(matchesMsg());
         };
+        // Eigene Decks = alle Namen, die der Store gerade kennt (siehe CardStore/MatchRecorder) - nicht
+        // nur die dieser einen Partie: ein Sitz mit einem fremden/importierten Deck bekommt so weiterhin
+        // keine Kartenbiografie, aber Kevins eigene Decks immer, egal gegen wen sie antreten.
+        Set<String> ownDecks = Set.copyOf(store.names());
+        Consumer<CardLog> cardSink = log -> {
+            // Wie beim Sink oben: laeuft im Guava-EventBus, eine Ausnahme von hier darf nicht die
+            // bereits gespeicherte Partie (matches.add oben) unsichtbar machen.
+            try {
+                cards.write(log);
+            } catch (RuntimeException e) {
+                e.printStackTrace();
+            }
+        };
         ui(() -> {
             try {
                 if (spectate) {
-                    match.startSpectator(ai, names, configs, timeout, gui, sink);
+                    match.startSpectator(ai, names, configs, timeout, gui, sink, ownDecks, cardSink);
                 } else {
-                    match.start("Du", humanDeck, ai, names, configs, timeout, gui, sink);
+                    match.start("Du", humanDeck, ai, names, configs, timeout, gui, sink, ownDecks, cardSink);
                 }
             } catch (RuntimeException e) {
                 ws.send(new Messages.ErrorMsg("Spielstart fehlgeschlagen: " + e));
