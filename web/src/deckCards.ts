@@ -32,21 +32,39 @@ export function sortCards(cards: CardStat[], mode: SortMode): CardStat[] {
   }
 }
 
-/** Zahl mit deutschem Dezimalkomma - eine eigene, winzige Kopie statt eines Imports aus
- *  components/StatTiles: deckCards.ts bleibt so browserfrei testbar (wie schon matchStats.ts). */
+/** Zahl mit deutschem Dezimalkomma - dieselbe Formatierung wie StatTiles.one (toFixed(1) + Komma statt
+ *  Punkt), aber eine eigene, winzige Kopie statt eines Imports aus components/StatTiles: kein Modul
+ *  unter web/src/*.ts importiert bisher aus components/*.tsx (reine Module bleiben unterhalb der
+ *  Komponenten, nie umgekehrt) - dasselbe Prinzip wie das lokale `pct` in Suggestions.tsx, das dieselbe
+ *  Formel wie StatTiles auch nicht importiert. */
 const one = (x: number) => x.toFixed(1).replace(".", ",");
 
+/** Ø-Zug ohne unechte Genauigkeit: eine Nachkommastelle bleibt nur stehen, wenn sie etwas aussagt -
+ *  naemlich dass die Karte NICHT immer im selben Zug gewirkt wurde (Zuege 3 und 4 ergeben z. B. 3,5).
+ *  Ist der Schnitt eine glatte Zahl, behauptet ",0" eine Genauigkeit, die castGames (oft nur eine
+ *  Handvoll Partien, siehe Datei-Kopf) nicht hergibt - "Zug 3" statt "Zug 3,0" ist die ehrlichere
+ *  Angabe UND kuerzer. Bei einer echten Bruchzahl bleibt die eine Nachkommastelle (wie bei StatTiles.one)
+ *  stehen, denn eine zweite waere fuer eine Zug-Zaehlung ohnehin nie zu rechtfertigen. */
+function turnLabel(avg: number): string {
+  return Number.isInteger(avg) ? String(avg) : one(avg);
+}
+
 /**
- * Ein Satz je Kartenzeile, gebaut aus bis zu fuenf Teilaussagen. `withCardData` ist die Grundlage JEDER
- * Zahl darin (siehe Datei-Kopf), nicht `games`.
+ * Ein Satz je Kartenzeile, gebaut aus bis zu fuenf Teilaussagen - aber nur aus den Teilen, die dem Leser
+ * tatsaechlich etwas Neues sagen (Kevin schneidet seine Karten nach genau diesen Saetzen, siehe
+ * DeckCards.tsx). `withCardData` ist die Grundlage JEDER Zahl darin (siehe Datei-Kopf), nicht `games`.
  *
  *  - nie gezogen (handGames === 0): die Karte tauchte in keiner Partie mit Aufzeichnung auf - eigener,
  *    kurzer Satz statt "0 von X auf der Hand", der nur zum Nachrechnen einlaeden wuerde.
  *  - sonst: "H von withCardData Partien auf der Hand", dahinter entweder "nie gewirkt" (castGames === 0)
  *    oder "N-mal gewirkt" mit dem Schnitt ihres fruehesten Wirk-Zugs, wenn die Bridge einen mitschickt.
- *  - liegen geblieben (stuckGames > 0): ein Teil der Hand-Partien blieb trotzdem ungespielt - das kann
- *    neben "nie gewirkt" (dann stuckGames === handGames) genauso stehen wie neben "N-mal gewirkt"
- *    (nur ein Teil der Partien blieb liegen).
+ *  - liegen geblieben (stuckGames > 0): ein Teil der Hand-Partien blieb trotzdem ungespielt. War die
+ *    Karte NIE gewirkt UND stuckGames === handGames, ist das exakt dieselbe Aussage wie "nie gewirkt"
+ *    (wer nie gewirkt hat, ist in jeder Hand-Partie liegen geblieben) - die dritte Teilaussage entfaellt
+ *    dann. Sonst bleibt sie stehen: castGames und handGames sind UNABHAENGIG gezaehlte Groessen (eine
+ *    aus dem Friedhof gewirkte Karte zaehlt z. B. NICHT als Hand-Partie, siehe Kartenaufzeichnung Task 3
+ *    im Ledger) - stuckGames laesst sich in diesem Fall NICHT einfach aus handGames und castGames
+ *    herleiten, die Zahl bleibt also eine echte, neue Information.
  *  - gekontert/verloren nur, wenn sie tatsaechlich vorkamen (0 ist keine Aussage wert).
  */
 export function cardLine(card: CardStat, withCardData: number): string {
@@ -54,13 +72,14 @@ export function cardLine(card: CardStat, withCardData: number): string {
     return `In keiner der ${withCardData} Partien mit Aufzeichnung gezogen.`;
   }
   const parts = [`${card.handGames} von ${withCardData} Partien auf der Hand`];
+  const stuckIsRedundant = card.castGames === 0 && card.stuckGames === card.handGames;
   if (card.castGames === 0) {
     parts.push("nie gewirkt");
   } else {
-    const turn = card.avgCastTurn !== undefined ? ` (Ø Zug ${one(card.avgCastTurn)})` : "";
+    const turn = card.avgCastTurn !== undefined ? ` (Ø Zug ${turnLabel(card.avgCastTurn)})` : "";
     parts.push(`${card.castGames === 1 ? "einmal" : card.castGames + "-mal"} gewirkt${turn}`);
   }
-  if (card.stuckGames > 0) {
+  if (card.stuckGames > 0 && !stuckIsRedundant) {
     parts.push(`${card.stuckGames} von ${card.handGames} liegen geblieben`);
   }
   if (card.counteredGames > 0) {

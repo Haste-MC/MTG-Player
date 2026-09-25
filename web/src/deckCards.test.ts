@@ -36,14 +36,25 @@ describe("sortCards", () => {
 });
 
 describe("cardLine", () => {
-  it("nie gewirkt: auf der Hand, aber nie gespielt", () => {
+  it("nie gewirkt: 'liegen geblieben' entfaellt, weil es dieselbe Aussage waere (stuckGames === handGames)", () => {
     const c = card({ name: "Cyclonic Rift", handGames: 3, stuckGames: 3 });
-    expect(cardLine(c, 5)).toBe("3 von 5 Partien auf der Hand, nie gewirkt, 3 von 3 liegen geblieben.");
+    expect(cardLine(c, 5)).toBe("3 von 5 Partien auf der Hand, nie gewirkt.");
   });
 
-  it("mehrfach gewirkt mit Durchschnittszug", () => {
+  it("nie gewirkt, aber NICHT in jeder Hand-Partie liegen geblieben: der dritte Teil bleibt, weil er sich "
+    + "nicht aus den ersten beiden ergibt (Grenzfall, siehe Kommentar an cardLine)", () => {
+    const c = card({ name: "Grenzfall-Karte", handGames: 5, stuckGames: 3 });
+    expect(cardLine(c, 6)).toBe("5 von 6 Partien auf der Hand, nie gewirkt, 3 von 5 liegen geblieben.");
+  });
+
+  it("mehrfach gewirkt mit einem echten Bruch als Durchschnittszug (Zuege waren nicht immer gleich)", () => {
     const c = card({ name: "Sol Ring", handGames: 8, castGames: 8, avgCastTurn: 1.5 });
     expect(cardLine(c, 9)).toBe("8 von 9 Partien auf der Hand, 8-mal gewirkt (Ø Zug 1,5).");
+  });
+
+  it("mehrfach gewirkt mit glattem Durchschnittszug: keine Nachkommastelle - ',0' waere unechte Genauigkeit", () => {
+    const c = card({ name: "Krenko, Mob Boss", handGames: 9, castGames: 7, stuckGames: 2, avgCastTurn: 3 });
+    expect(cardLine(c, 9)).toBe("9 von 9 Partien auf der Hand, 7-mal gewirkt (Ø Zug 3), 2 von 9 liegen geblieben.");
   });
 
   it("nie gezogen: kein Satz ueber withCardData, sondern der eigene Hinweis", () => {
@@ -51,9 +62,10 @@ describe("cardLine", () => {
     expect(cardLine(c, 6)).toBe("In keiner der 6 Partien mit Aufzeichnung gezogen.");
   });
 
-  it("liegen geblieben (teilweise): trotz Wirkung blieb sie in einem Teil der Partien ungespielt", () => {
+  it("liegen geblieben (teilweise): trotz Wirkung blieb sie in einem Teil der Partien ungespielt - "
+    + "diese Zahl bleibt IMMER stehen, wenn castGames > 0", () => {
     const c = card({ name: "Wrath of God", handGames: 4, castGames: 1, stuckGames: 3, avgCastTurn: 6 });
-    expect(cardLine(c, 4)).toBe("4 von 4 Partien auf der Hand, einmal gewirkt (Ø Zug 6,0), 3 von 4 liegen geblieben.");
+    expect(cardLine(c, 4)).toBe("4 von 4 Partien auf der Hand, einmal gewirkt (Ø Zug 6), 3 von 4 liegen geblieben.");
   });
 
   it("gekontert und verloren stehen nur, wenn sie vorkamen", () => {
