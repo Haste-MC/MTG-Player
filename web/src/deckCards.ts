@@ -8,6 +8,10 @@ import type { CardStat } from "./protocol";
 // gewertete Partie ohne lesbare Kartendatei (alte Partien vor dieser Aufzeichnung) zaehlt in games, aber
 // nicht in withCardData. Ein Satz wie "6 von 12 Partien auf der Hand" waere darum falsch, wenn nur 9 der
 // 12 Partien ueberhaupt Aufzeichnung haben - die 6 beziehen sich auf die 9, nicht auf die 12.
+//
+// Befund 10 (Ausnahme von "JEDE Zahl"): die "liegen geblieben"-Zahl haelt NICHT gegen withCardData,
+// sondern gegen handGames - "2 von 8 liegen geblieben" heisst "2 der 8 Hand-Partien", nicht "2 der 8
+// Partien mit Aufzeichnung" (withCardData kann groesser sein, wenn die Karte manchmal ungezogen blieb).
 
 /** Die drei Sortierungen der Tabelle (Task-6-Brief: "Handlungsbedarf", "Name", "am haeufigsten
  *  gewirkt"). "action" baut dieselbe Regel wie CardStats.of auf der Bridge nach (dort schon die
@@ -50,43 +54,57 @@ function turnLabel(avg: number): string {
 }
 
 /**
- * Ein Satz je Kartenzeile, gebaut aus bis zu fuenf Teilaussagen - aber nur aus den Teilen, die dem Leser
+ * Ein Satz je Kartenzeile, gebaut aus bis zu sechs Teilaussagen - aber nur aus den Teilen, die dem Leser
  * tatsaechlich etwas Neues sagen (Kevin schneidet seine Karten nach genau diesen Saetzen, siehe
- * DeckCards.tsx). `withCardData` ist die Grundlage JEDER Zahl darin (siehe Datei-Kopf), nicht `games`.
+ * DeckCards.tsx). `withCardData` ist die Grundlage JEDER Zahl darin (siehe Datei-Kopf, Befund 10 fuer die
+ * eine Ausnahme).
  *
- *  - nie gezogen (handGames === 0): die Karte tauchte in keiner Partie mit Aufzeichnung auf - eigener,
- *    kurzer Satz statt "0 von X auf der Hand", der nur zum Nachrechnen einlaeden wuerde.
- *  - sonst: "H von withCardData Partien auf der Hand", dahinter entweder "nie gewirkt" (castGames === 0)
- *    oder "N-mal gewirkt" mit dem Schnitt ihres fruehesten Wirk-Zugs, wenn die Bridge einen mitschickt.
+ *  - nie gezogen UND nie gewirkt (handGames === 0 && castGames === 0): die Karte tauchte in keiner Partie
+ *    mit Aufzeichnung auf - eigener, kurzer Satz statt "0 von X auf der Hand, nie gewirkt", der nur zum
+ *    Nachrechnen einlaeden wuerde.
+ *  - nie gezogen, ABER gewirkt (Befund 1: handGames === 0 UND castGames > 0): eine aus dem Friedhof oder
+ *    Exil gewirkte Karte ist im Reanimator-Deck der NORMALFALL, nicht der Rand - "nie gezogen" bleibt
+ *    stehen (wahr und relevant), verschluckt aber nicht mehr castGames/counteredGames/lostGames wie
+ *    zuvor der sofortige Ausstieg oben.
+ *  - sonst: "H von withCardData Partien auf der Hand", dahinter "nie gewirkt" (castGames === 0) oder
+ *    "in C von withCardData Partien gewirkt" mit dem Schnitt ihrer fruehesten Wirk-Zuege, wenn die
+ *    Bridge einen mitschickt (Befund 2: das ist eine PARTIEN-Zaehlung, keine Ereigniszaehlung - eine
+ *    Karte, die in einer Partie dreimal gewirkt wurde und in einer zweiten einmal, ist "in 2 von N
+ *    Partien gewirkt", nicht "3-mal").
  *  - liegen geblieben (stuckGames > 0): ein Teil der Hand-Partien blieb trotzdem ungespielt. War die
  *    Karte NIE gewirkt UND stuckGames === handGames, ist das exakt dieselbe Aussage wie "nie gewirkt"
- *    (wer nie gewirkt hat, ist in jeder Hand-Partie liegen geblieben) - die dritte Teilaussage entfaellt
- *    dann. Sonst bleibt sie stehen: castGames und handGames sind UNABHAENGIG gezaehlte Groessen (eine
- *    aus dem Friedhof gewirkte Karte zaehlt z. B. NICHT als Hand-Partie, siehe Kartenaufzeichnung Task 3
- *    im Ledger) - stuckGames laesst sich in diesem Fall NICHT einfach aus handGames und castGames
- *    herleiten, die Zahl bleibt also eine echte, neue Information.
- *  - gekontert/verloren nur, wenn sie tatsaechlich vorkamen (0 ist keine Aussage wert).
+ *    (wer nie gewirkt hat, ist in jeder Hand-Partie liegen geblieben) - die Teilaussage entfaellt dann.
+ *    Sonst bleibt sie stehen: castGames und handGames sind UNABHAENGIG gezaehlte Groessen (eine aus dem
+ *    Friedhof gewirkte Karte zaehlt z. B. NICHT als Hand-Partie, siehe Kartenaufzeichnung Task 3 im
+ *    Ledger) - stuckGames laesst sich in diesem Fall NICHT einfach aus handGames und castGames herleiten,
+ *    die Zahl bleibt also eine echte, neue Information.
+ *  - gekontert/verloren (Befund 2, dieselbe Partien-Zaehlung wie beim Wirken): "in K Partie(n) gekontert"
+ *    bzw. "in L Partie(n) verloren", nur wenn sie tatsaechlich vorkamen (0 ist keine Aussage wert).
  */
 export function cardLine(card: CardStat, withCardData: number): string {
-  if (card.handGames === 0) {
+  const neverCast = card.castGames === 0;
+  if (card.handGames === 0 && neverCast) {
     return `In keiner der ${withCardData} Partien mit Aufzeichnung gezogen.`;
   }
-  const parts = [`${card.handGames} von ${withCardData} Partien auf der Hand`];
-  const stuckIsRedundant = card.castGames === 0 && card.stuckGames === card.handGames;
-  if (card.castGames === 0) {
-    parts.push("nie gewirkt");
-  } else {
-    const turn = card.avgCastTurn !== undefined ? ` (Ø Zug ${turnLabel(card.avgCastTurn)})` : "";
-    parts.push(`${card.castGames === 1 ? "einmal" : card.castGames + "-mal"} gewirkt${turn}`);
-  }
+
+  // Befund 11: avgCastTurn ist der Schnitt der FRUEHESTEN Wirk-Zuege je Partie, nicht "der" Wirk-Zug -
+  // "Ø ab Zug 3" sagt das, "Ø Zug 3" laese sich wie ein fester, einziger Zeitpunkt.
+  const turn = card.avgCastTurn !== undefined ? ` (Ø ab Zug ${turnLabel(card.avgCastTurn)})` : "";
+  const castClause = neverCast ? "nie gewirkt" : `in ${card.castGames} von ${withCardData} Partien gewirkt${turn}`;
+
+  const parts = card.handGames === 0
+    ? [`nie gezogen, aber ${castClause}`]
+    : [`${card.handGames} von ${withCardData} Partien auf der Hand`, castClause];
+
+  const stuckIsRedundant = neverCast && card.stuckGames === card.handGames;
   if (card.stuckGames > 0 && !stuckIsRedundant) {
     parts.push(`${card.stuckGames} von ${card.handGames} liegen geblieben`);
   }
   if (card.counteredGames > 0) {
-    parts.push(`${card.counteredGames}-mal gekontert`);
+    parts.push(`in ${card.counteredGames} ${card.counteredGames === 1 ? "Partie" : "Partien"} gekontert`);
   }
   if (card.lostGames > 0) {
-    parts.push(`${card.lostGames}-mal verloren`);
+    parts.push(`in ${card.lostGames} ${card.lostGames === 1 ? "Partie" : "Partien"} verloren`);
   }
   return parts.join(", ") + ".";
 }

@@ -49,27 +49,45 @@ describe("cardLine", () => {
 
   it("mehrfach gewirkt mit einem echten Bruch als Durchschnittszug (Zuege waren nicht immer gleich)", () => {
     const c = card({ name: "Sol Ring", handGames: 8, castGames: 8, avgCastTurn: 1.5 });
-    expect(cardLine(c, 9)).toBe("8 von 9 Partien auf der Hand, 8-mal gewirkt (Ø Zug 1,5).");
+    expect(cardLine(c, 9)).toBe("8 von 9 Partien auf der Hand, in 8 von 9 Partien gewirkt (Ø ab Zug 1,5).");
   });
 
   it("mehrfach gewirkt mit glattem Durchschnittszug: keine Nachkommastelle - ',0' waere unechte Genauigkeit", () => {
     const c = card({ name: "Krenko, Mob Boss", handGames: 9, castGames: 7, stuckGames: 2, avgCastTurn: 3 });
-    expect(cardLine(c, 9)).toBe("9 von 9 Partien auf der Hand, 7-mal gewirkt (Ø Zug 3), 2 von 9 liegen geblieben.");
+    expect(cardLine(c, 9))
+      .toBe("9 von 9 Partien auf der Hand, in 7 von 9 Partien gewirkt (Ø ab Zug 3), 2 von 9 liegen geblieben.");
   });
 
-  it("nie gezogen: kein Satz ueber withCardData, sondern der eigene Hinweis", () => {
+  it("nie gezogen UND nie gewirkt: kein Satz ueber withCardData, sondern der eigene Hinweis", () => {
     const c = card({ name: "Blasphemous Act", neverDrawnGames: 6 });
     expect(cardLine(c, 6)).toBe("In keiner der 6 Partien mit Aufzeichnung gezogen.");
+  });
+
+  it("Befund 1: aus dem Friedhof/Exil gewirkt, nie auf der Hand - castGames, Zug, gekontert und "
+    + "verloren bleiben stehen, statt (wie vor der Behebung) komplett zu verschwinden", () => {
+    const c = card({
+      name: "Reanimated Giant", handGames: 0, castGames: 8, avgCastTurn: 2, counteredGames: 1, lostGames: 3,
+    });
+    expect(cardLine(c, 9)).toBe(
+      "nie gezogen, aber in 8 von 9 Partien gewirkt (Ø ab Zug 2), in 1 Partie gekontert, in 3 Partien verloren.");
   });
 
   it("liegen geblieben (teilweise): trotz Wirkung blieb sie in einem Teil der Partien ungespielt - "
     + "diese Zahl bleibt IMMER stehen, wenn castGames > 0", () => {
     const c = card({ name: "Wrath of God", handGames: 4, castGames: 1, stuckGames: 3, avgCastTurn: 6 });
-    expect(cardLine(c, 4)).toBe("4 von 4 Partien auf der Hand, einmal gewirkt (Ø Zug 6), 3 von 4 liegen geblieben.");
+    expect(cardLine(c, 4))
+      .toBe("4 von 4 Partien auf der Hand, in 1 von 4 Partien gewirkt (Ø ab Zug 6), 3 von 4 liegen geblieben.");
   });
 
-  it("gekontert und verloren stehen nur, wenn sie vorkamen", () => {
+  it("gekontert und verloren stehen nur, wenn sie vorkamen, als Partien- nicht als Ereigniszaehlung (Befund 2)", () => {
     const c = card({ name: "Craterhoof Behemoth", handGames: 2, castGames: 1, counteredGames: 1, lostGames: 1 });
-    expect(cardLine(c, 2)).toBe("2 von 2 Partien auf der Hand, einmal gewirkt, 1-mal gekontert, 1-mal verloren.");
+    expect(cardLine(c, 2))
+      .toBe("2 von 2 Partien auf der Hand, in 1 von 2 Partien gewirkt, in 1 Partie gekontert, in 1 Partie verloren.");
+  });
+
+  it("gekontert und verloren in der Mehrzahl (Befund 2): 'in N Partien', nicht 'N-mal'", () => {
+    const c = card({ name: "Cyclonic Rift", handGames: 5, castGames: 3, counteredGames: 2, lostGames: 2 });
+    expect(cardLine(c, 5))
+      .toBe("5 von 5 Partien auf der Hand, in 3 von 5 Partien gewirkt, in 2 Partien gekontert, in 2 Partien verloren.");
   });
 });
