@@ -69,9 +69,16 @@ function Frame({ top, max, caption }: { top: number; max: number; caption: strin
   );
 }
 
+/** Ab v3 zaehlt TurnPoint.turn den eigenen Zug des Sitzes; in einem aelteren Datensatz steht dort
+ * weiterhin Forges globale Zugnummer (alte Datensaetze werden nicht umgerechnet, siehe
+ * MatchRecord.VERSION in der Bridge) - die Achse sagt dem Betrachter, was er gerade sieht. */
+function turnAxisLabel(v: number | undefined): string {
+  return (v ?? 1) >= 3 ? "Eigener Zug" : "Partiezug (alle Sitze)";
+}
+
 /** Die Kurve eines Sitzes. Ohne Punkte (Partie endete vor dem ersten eigenen Zug) bleibt ein Satz statt
  * eines leeren Rahmens. */
-function SeatChart({ seat }: { seat: MatchSeat }) {
+function SeatChart({ seat, turnLabel }: { seat: MatchSeat; turnLabel: string }) {
   const points = seat.timeline ?? [];
   const title = `${seat.name} · ${seat.deck}`;
   if (points.length === 0) {
@@ -102,7 +109,7 @@ function SeatChart({ seat }: { seat: MatchSeat }) {
           <text key={p.turn} className="tl-tick" x={xOf(p.turn, first, last)} y={H - 4} textAnchor="middle">{p.turn}</text>
         ))}
         {/* ganz rechts in den Rand gesetzt, damit die Beschriftung nicht auf der letzten Zugnummer liegt */}
-        <text className="tl-axis-label" x={W} y={H - 4} textAnchor="end">Zug</text>
+        <text className="tl-axis-label" x={W} y={H - 4} textAnchor="end">{turnLabel}</text>
       </svg>
     </div>
   );
@@ -126,11 +133,12 @@ export default function MatchTimeline({ record }: { record: MatchRecord }) {
   if (!any) {
     return <p className="muted">Diese Partie ist älter als die Zeitachse – für sie wurde nichts aufgezeichnet.</p>;
   }
+  const turnLabel = turnAxisLabel(record.v);
   return (
     <div className="timeline">
       <Legend />
       <div className="timeline-grid">
-        {record.seats.map((seat, i) => <SeatChart key={seat.name + i} seat={seat} />)}
+        {record.seats.map((seat, i) => <SeatChart key={seat.name + i} seat={seat} turnLabel={turnLabel} />)}
       </div>
     </div>
   );

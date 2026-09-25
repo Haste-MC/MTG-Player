@@ -182,8 +182,12 @@ export interface GameOver { type: "gameOver"; winner?: string; }
 export interface ErrorMsg { type: "error"; text: string; }
 
 /** Ein Punkt der Zeitachse eines Sitzes (MatchRecord.TurnPoint, ab v2): Stand zu Beginn eines EIGENEN
- * Zuges. `turn` ist Forges globale Zugnummer (wie MatchRecord.turns/eliminatedTurn), nicht der wievielte
- * eigene Zug es war. lands/creatures sind die eigenen Bleibenden IM SPIEL (Bestand, nicht kumulierte
+ * Zuges. `turn` bedeutet ab v3 den EIGENEN Zug des Sitzes (1, 2, 3 ...), nicht mehr Forges globale
+ * Zugnummer: in einer Vierer-Runde lag ein Sitz sonst bei 1, 5, 9 ... und der naechste bei 2, 6, 10 ... -
+ * die Kurven zweier Sitze lagen damit versetzt statt uebereinander. In einem v1/v2-Datensatz steht hier
+ * WEITERHIN Forges globale Zugnummer (wie MatchRecord.turns/eliminatedTurn) - alte Datensaetze werden
+ * nicht umgerechnet, siehe MatchTimeline.tsx (beschriftet die x-Achse je nach Formatversion des
+ * Datensatzes). lands/creatures sind die eigenen Bleibenden IM SPIEL (Bestand, nicht kumulierte
  * Abgaben - dafuer gibt es landsByTurn), life das Leben, hand die Handkarten.
  *
  * `spells` faellt aus der Reihe: die anderen vier sind ein Stand ZU Zugbeginn, spells ist die Zahl der
@@ -249,9 +253,11 @@ export interface MatchSeat {
 /** Eine gespielte Partie aus mtgplayer.stats.MatchRecord (Bridge). reason ist Forges Spielende-Grund
  * (z. B. "AllOpponentsLost"). counted/excludeReason: automatisch nicht gewertete Partien (zu kurz,
  * aufgegeben, Zugdeckel, abgebrochen, Absturz) tragen counted:false und einen Grund in excludeReason.
- * v ist die Formatversion des Datensatzes (aktuell 2). Ab v2 traegt jeder Sitz die Vorfall-Kennzahlen aus
+ * v ist die Formatversion des Datensatzes (aktuell 3). Ab v2 traegt jeder Sitz die Vorfall-Kennzahlen aus
  * Runde B (gekonterte Zauber, Verluste, Kampf und Schaden, Zeitachse - siehe MatchSeat). v < 2 heisst fuer
- * die: KEINE DATEN, nicht "0" - dort wurde nie gezaehlt, und eine Quote daraus waere erfunden.
+ * die: KEINE DATEN, nicht "0" - dort wurde nie gezaehlt, und eine Quote daraus waere erfunden. Ab v3
+ * zaehlt TurnPoint.turn den eigenen Zug des Sitzes statt Forges globaler Zugnummer (siehe TurnPoint) -
+ * alle Pruefungen der Form v >= 2 gelten davon unberuehrt unveraendert weiter.
  * Datensaetze ganz ohne Feld gelten der Bridge als v1. */
 export interface MatchRecord {
   v?: number; id: string; startedAt: string; endedAt: string; durationMs: number;
