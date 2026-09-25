@@ -12,6 +12,7 @@ import forge.localinstance.properties.ForgePreferences.FPref;
 import forge.model.FModel;
 import forge.player.LobbyPlayerHuman;
 import mtgplayer.ai.AiConfig;
+import mtgplayer.forge.AbilityLoopWatch;
 import mtgplayer.gui.WebGuiGame;
 import mtgplayer.stats.CardLog;
 import mtgplayer.stats.MatchRecord;
@@ -166,10 +167,18 @@ public final class HumanMatch {
      * meldet uns genau dort, ohne Warteschleife. Der Recorder haengt sich selbst an Forges
      * Ereignisbus und schliesst sich mit {@code GameEventGameFinished} ab; ein abgebrochener Start
      * hinterlaesst nur den Haken, der beim naechsten Start ersetzt wird.</p>
+     *
+     * <p>Am selben Punkt haengt auch der {@link AbilityLoopWatch} an - unabhaengig davon, ob {@code sink}
+     * gesetzt ist: er hat mit der Partiestatistik nichts zu tun (siehe dort), sondern soll jede Live-
+     * und Zuschauer-Partie beobachten, in der genau der Verdachtsfall (eine KI haengt sich an einer
+     * Faehigkeit fest) beobachtet wurde.</p>
      */
     private void record(WebGuiGame gui, String source, int aiTimeout, Map<RegisteredPlayer, String> deckNames,
                          Consumer<MatchRecord> sink, Set<String> ownDecks, Consumer<CardLog> cardSink) {
-        gui.onNewGame(game -> recorder = new MatchRecorder(game, source, aiTimeout, deckNames, ownDecks, sink, cardSink));
+        gui.onNewGame(game -> {
+            recorder = new MatchRecorder(game, source, aiTimeout, deckNames, ownDecks, sink, cardSink);
+            new AbilityLoopWatch(game);
+        });
     }
 
     public boolean isRunning() {

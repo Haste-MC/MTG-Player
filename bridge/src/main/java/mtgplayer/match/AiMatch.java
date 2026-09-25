@@ -12,6 +12,7 @@ import forge.game.event.GameEventTurnEnded;
 import forge.game.player.Player;
 import forge.game.player.RegisteredPlayer;
 import mtgplayer.ai.AiConfig;
+import mtgplayer.forge.AbilityLoopWatch;
 import mtgplayer.stats.CardLog;
 import mtgplayer.stats.MatchRecord;
 import mtgplayer.stats.MatchRecorder;
@@ -120,6 +121,10 @@ public final class AiMatch {
         // Recorder schliesst sich selbst ueber GameEventGameFinished ab.
         final MatchRecorder recorder = sink == null ? null
                 : new MatchRecorder(game, "sparring", aiTimeout, deckNames, ownDecks, sink, cardSink);
+        // Anders als der Recorder UNABHAENGIG von sink angehaengt: der Wächter hat mit der
+        // Partiestatistik nichts zu tun (siehe dort) und soll gerade KI-gegen-KI-Sparring beobachten -
+        // hier laeuft am ehesten Sim-KI, und genau ihr Modus ist die offene Frage beim Verdachtsfall.
+        new AbilityLoopWatch(game);
 
         // Forge selbst kann ein Spiel ebenfalls mit GameEndReason.Draw beenden (gleichzeitiger Verlust,
         // Stack > 999, GameDrawEffect) - dieses Flag markiert nur ein Unentschieden DURCH UNS (Zugdeckel),
