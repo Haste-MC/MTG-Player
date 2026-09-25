@@ -5,6 +5,7 @@ import forge.deck.Deck;
 import forge.gui.GuiBase;
 import forge.item.PaperCard;
 import mtgplayer.ai.AiConfig;
+import mtgplayer.app.UpdateApply;
 import mtgplayer.app.UpdateCheck;
 import mtgplayer.app.Version;
 import mtgplayer.decks.Archidekt;
@@ -14,6 +15,7 @@ import mtgplayer.decks.DeckStore;
 import mtgplayer.decks.Edhrec;
 import mtgplayer.decks.Suggestions;
 import mtgplayer.forge.CrashLog;
+import mtgplayer.forge.ForgeBoot;
 import mtgplayer.forge.Precons;
 import mtgplayer.forge.WebGuiBase;
 import mtgplayer.gui.Stops;
@@ -31,6 +33,8 @@ import mtgplayer.stats.CardStore;
 import mtgplayer.stats.MatchRecord;
 import mtgplayer.stats.MatchStore;
 
+import java.io.IOException;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -72,6 +76,12 @@ public final class Bridge {
      *  der Pruefung verbindet, bekaeme die Nachricht sonst nie: {@link #onClientConnected()} schickt
      *  sie zusaetzlich beim (Re-)Verbinden nach, wenn sie inzwischen vorliegt. */
     private volatile Messages.VersionMsg versionMsg;
+    /** App-Paket, Aufgabe 5: das erkannte Update herunterladen/pruefen/entpacken, siehe
+     *  {@link #applyUpdate()}. Anders als {@link #updateCheck} direkt real instanziert statt injiziert:
+     *  {@link UpdateApply#run} laeuft nie von selbst (anders als {@link #checkVersion()} bei jedem
+     *  {@link #start()}), sondern nur auf ein ausdrueckliches "applyUpdate" vom Client - kein
+     *  bestehender Bridge-Test schickt das, also braucht es keine Test-Sperre wie NO_UPDATE_CHECK. */
+    private final UpdateApply updateApply = new UpdateApply();
     /** Genau ein archidektImport-Lauf zur Zeit (siehe handle, "archidektImport"). */
     private final AtomicBoolean importRunning = new AtomicBoolean();
     /** Deckel der "matches"-Liste zum Client (Task 3) - siehe {@link #matchesMsg()}. */
@@ -203,6 +213,38 @@ public final class Bridge {
                         versionMsg = msg;
                         ws.send(msg);
                     });
+        });
+    }
+
+    /**
+     * {"type":"applyUpdate"} (Aufgabe 5, Spec §5/§6): das ueber {@link #checkVersion()} erkannte
+     * Update herunterladen, pruefen und entpacken ({@link UpdateApply#run}) - Fortschritt/Fehler
+     * gehen als updateState raus. Ohne zuvor gemeldetes Update ({@link #versionMsg} noch
+     * {@code null}) passiert nichts: ohne "version" haette der Client (Aufgabe 6) den
+     * "Aktualisieren"-Knopf nie gezeigt, ein "applyUpdate" waere dann ein Client-Fehler.
+     */
+    private void applyUpdate() {
+        Messages.VersionMsg vm = versionMsg;
+        if (vm == null) {
+            ws.send(new Messages.ErrorMsg("Update: keine neuere Fassung bekannt"));
+            return;
+        }
+        UpdateCheck.Release release = new UpdateCheck.Release(vm.latest(), vm.url(), vm.sha256(), vm.notes());
+        Path appDir = ForgeBoot.assetsDir().getParent();
+        GuiBase.getInterface().runBackgroundTask("apply-update", () -> {
+            UpdateApply.Result result = updateApply.run(release, appDir,
+                    state -> ws.send(new Messages.UpdateStateMsg(state)));
+            if (result == null) return; // "fehler" ist schon raus, siehe UpdateApply.run
+            // Das Skript tauscht den App-Ordner erst NACH dem Ende dieses Prozesses (Windows haelt die
+            // eigenen Dateien fest, solange er laeuft - siehe UpdateApply-Klassenkommentar). Also hier
+            // starten und die JVM beenden, wie Spec §5 es fuer "Aktualisieren" vorsieht.
+            try {
+                new ProcessBuilder(result.script().toString()).start();
+            } catch (IOException e) {
+                ws.send(new Messages.ErrorMsg("Update: Skript konnte nicht gestartet werden - " + e.getMessage()));
+                return;
+            }
+            System.exit(0);
         });
     }
 
@@ -346,6 +388,7 @@ public final class Bridge {
             case "matchDetail" -> matchDetail(msg.path("id").asText());
             case "sparringStart" -> sparringStart(msg);
             case "sparringCancel" -> sparring.cancel();
+            case "applyUpdate" -> applyUpdate();
             case "requestState" -> onClientConnected();
             default -> ws.send(new Messages.ErrorMsg("unbekannter Nachrichtentyp: " + type));
         }

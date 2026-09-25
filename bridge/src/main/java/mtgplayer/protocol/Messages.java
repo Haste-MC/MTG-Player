@@ -194,4 +194,16 @@ public final class Messages {
             this("version", current, release.tag(), release.url(), release.sha256(), release.notes());
         }
     }
+
+    /**
+     * Fortschritt/Fehler eines {@code applyUpdate}-Laufs (Spec §5/§6, Aufgabe 5): {@code state} wie
+     * {@link mtgplayer.app.UpdateApply#run} es ueber seinen {@code zustand}-Consumer meldet, in der
+     * Reihenfolge "laden", "pruefen", "entpacken", "neustart" - ein Fehlschlag an jeder Stelle endet
+     * stattdessen mit "fehler". {@code text}: ein Klartextzusatz, nur bei "fehler" belegt (die anderen
+     * Zustaende sprechen fuer sich, der Client formuliert die Anzeige selbst - Aufgabe 6).
+     */
+    public record UpdateStateMsg(String type, String state, String text) {
+        public UpdateStateMsg(String state) { this("updateState", state, null); }
+        public UpdateStateMsg(String state, String text) { this("updateState", state, text); }
+    }
 }
