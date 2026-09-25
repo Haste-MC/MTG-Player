@@ -78,6 +78,10 @@ class ControlDonationSceneTest {
 
         assertEquals(1, b.getCardsIn(ZoneType.Battlefield).size(), "nichts verschenkt\n" + s.state());
         assertEquals(0, s.count(a, ZoneType.Battlefield, "Ally Token"), s.state());
+        assertFalse(s.log(1000).contains("failed to target"),
+                "ohne verschenkbares Permanent darf der Traeger gar nicht erst einen Gegner anvisieren,\n"
+                        + "sonst verwirft MagicStack.add die Faehigkeit wieder - dieselbe Endlosmeldung wie im echten Log\n"
+                        + s.log(1000));
     }
 
     /** Szene C: drei Spieler. Ein Permanent, das den eigenen Controller sperrt, ist eine Waffe -
