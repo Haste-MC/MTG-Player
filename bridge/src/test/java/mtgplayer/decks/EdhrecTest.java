@@ -166,4 +166,67 @@ class EdhrecTest {
         assertTrue(e.page(List.of()).isEmpty());
         assertEquals(0, calls.get());
     }
+
+    /** Befund 10: "nicht erreichbar" (Netz-/Serverfehler) und "EDHREC kennt den Commander nicht" (403,
+     *  siehe {@link Edhrec.UnknownCommanderException}) sind zwei verschiedene Gruende - der Client soll
+     *  sie unterscheiden koennen. */
+    @Test
+    void lookupUnterscheidetNichtErreichbarVonUnbekanntemCommander(@TempDir Path dir) {
+        Edhrec unreachable = new Edhrec(url -> { throw new RuntimeException("Verbindung fehlgeschlagen"); }, dir);
+        Edhrec.Lookup unreachableLookup = unreachable.lookup(List.of("Titania, Protector of Argoth"));
+        assertTrue(unreachableLookup.page().isEmpty());
+        assertEquals(Edhrec.Reason.UNREACHABLE, unreachableLookup.reason());
+
+        Edhrec unknown = new Edhrec(url -> { throw new Edhrec.UnknownCommanderException("HTTP 403"); }, dir);
+        Edhrec.Lookup unknownLookup = unknown.lookup(List.of("Titania, Protector of Argoth"));
+        assertTrue(unknownLookup.page().isEmpty());
+        assertEquals(Edhrec.Reason.UNKNOWN_COMMANDER, unknownLookup.reason());
+    }
+
+    /** lookup() ohne jeden Commander (leere Namensliste) meldet den eigenen Grund - kein Netzabruf noetig,
+     *  um das zu wissen. */
+    @Test
+    void lookupOhneCommanderMeldetEigenenGrund(@TempDir Path dir) {
+        Edhrec e = new Edhrec(url -> "{}", dir);
+        assertEquals(Edhrec.Reason.NO_COMMANDER, e.lookup(List.of()).reason());
+    }
+
+    /** Erfolgreicher Abruf: OK, wie schon page() zeigt. */
+    @Test
+    void lookupMeldetOkBeiErfolgreicherSeite(@TempDir Path dir) throws Exception {
+        String json = fixture();
+        Edhrec e = new Edhrec(url -> json, dir);
+        assertEquals(Edhrec.Reason.OK, e.lookup(List.of("Titania, Protector of Argoth")).reason());
+    }
+
+    /** Befund 9: eine Antwort mit 200 und gueltigem JSON, aber ohne Kartenlisten, ist kein Erfolg - sonst
+     *  laege sie sieben Tage (MAX_AGE) als "erfolgreicher Stand" auf der Platte. */
+    @Test
+    void leereKartenlisteWirdNichtAlsErfolgGewertetUndNichtZwischengespeichert(@TempDir Path dir) {
+        String emptyJson = "{\"container\":{\"json_dict\":{\"cardlists\":[]}}}";
+        AtomicInteger calls = new AtomicInteger();
+        Edhrec e = new Edhrec(url -> { calls.incrementAndGet(); return emptyJson; }, dir);
+        Edhrec.Lookup lookup = e.lookup(List.of("Titania, Protector of Argoth"));
+        assertTrue(lookup.page().isEmpty(), "leere Kartenliste ist kein Erfolg");
+        assertFalse(Files.isRegularFile(dir.resolve("titania-protector-of-argoth.json")),
+                "eine leere Antwort darf nicht als Stand auf der Platte landen");
+        // Ein zweiter Aufruf muss also wieder abrufen - es liegt ja nichts Brauchbares im Zwischenspeicher.
+        e.lookup(List.of("Titania, Protector of Argoth"));
+        assertEquals(2, calls.get());
+    }
+
+    /** Dieselbe leere Antwort, aber mit einem aelteren, gueltigen Stand auf der Platte: der alte Stand
+     *  gewinnt (wie bei jedem anderen Fehlschlag), die leere Antwort wird nicht draufgeschrieben. */
+    @Test
+    void leereKartenlisteFaelltAufAltenStandZurueck(@TempDir Path dir) throws Exception {
+        Path file = dir.resolve("titania-protector-of-argoth.json");
+        Files.writeString(file, fixture());
+        Files.setLastModifiedTime(file, java.nio.file.attribute.FileTime.from(
+                Instant.now().minus(Duration.ofDays(30))));
+        String emptyJson = "{\"container\":{\"json_dict\":{\"cardlists\":[]}}}";
+        Edhrec e = new Edhrec(url -> emptyJson, dir);
+        Edhrec.Lookup lookup = e.lookup(List.of("Titania, Protector of Argoth"));
+        assertTrue(lookup.page().isPresent(), "der alte Stand haette benutzt werden muessen");
+        assertEquals(Edhrec.Reason.OK, lookup.reason());
+    }
 }

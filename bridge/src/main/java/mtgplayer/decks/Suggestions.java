@@ -51,15 +51,25 @@ public final class Suggestions {
 
     private Suggestions() { }
 
+    /** Ohne einen bekannten Grund (der 4-Parameter-Aufruf, ueberwiegend aus Tests, die selbst eine
+     *  {@code Edhrec.Page} bauen und den Rueckfall nicht ueber Edhrec#lookup ausloesen): "nicht erreichbar"
+     *  war schon vor Befund 10 die einzige Meldung im Rueckfall, bleibt also die Vorbelegung. */
+    public static Result of(Deck deck, List<String> roles, Integer bracket, Edhrec.Page page) {
+        return of(deck, roles, bracket, page, Edhrec.Reason.UNREACHABLE);
+    }
+
     /**
      * @param deck   das zu ergaenzende Deck (Haupt- und Kommandeursektion zaehlen)
      * @param roles  angefragte Luecken, in der Reihenfolge aus DeckAnalysis.rules() - bei Ueberschneidung
      *               gewinnt die zuerst angefragte Rolle
-     * @param bracket 1-5 oder null; steuert nur, ob EDHRECs Game Changer mitgenommen werden
+     * @param bracket 1-5 oder null; steuert, ob Game Changer mitgenommen werden - im EDHREC-Zweig anhand
+     *               der Kennzeichnung der Seite, im Rueckfall anhand von Forges gamechangers.txt (Befund 4)
      * @param page   EDHREC-Kandidaten des Commanders, oder {@code null}, wenn EDHREC den Commander nicht
      *               fuehrt - dann kommen die Kandidaten aus Forges Kartendatenbank (Result.source() "db")
+     * @param reason nur relevant, wenn {@code page == null}: warum es keine EDHREC-Seite gibt (Befund 10) -
+     *               steuert den Satz in {@code Result.note()}
      */
-    public static Result of(Deck deck, List<String> roles, Integer bracket, Edhrec.Page page) {
+    public static Result of(Deck deck, List<String> roles, Integer bracket, Edhrec.Page page, Edhrec.Reason reason) {
         if (roles.isEmpty()) {
             // Ohne Luecke gibt es nichts zu erledigen - eine leere Rollenliste ist kein Fehler.
             return new Result(page == null ? "db" : "edhrec", "Keine Lücke gefunden.", List.of(),
@@ -218,7 +228,14 @@ public final class Suggestions {
                 ? "Game Changer sind in Bracket 3 auf drei Karten begrenzt." : null;
         String note;
         if (page == null) {
-            note = "Ohne EDHREC-Daten: Vorschläge nur aus der Kartendatenbank."
+            // Befund 10: EDHREC antwortet auf einen unbekannten Slug mit 403 - das ist Kevin gegenueber ein
+            // anderer Sachverhalt als "nicht erreichbar" (Netz/Serverfehler) und verdient einen anderen Satz.
+            String because = switch (reason) {
+                case UNKNOWN_COMMANDER -> "Commander dort unbekannt";
+                case NO_COMMANDER -> "kein Commander im Deck";
+                default -> "nicht erreichbar";
+            };
+            note = "Ohne EDHREC-Daten (" + because + "): Vorschläge nur aus der Kartendatenbank."
                     + (gameChangerNote == null ? "" : " " + gameChangerNote);
         } else {
             note = gameChangerNote;

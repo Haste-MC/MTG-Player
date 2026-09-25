@@ -296,9 +296,11 @@ public final class Bridge {
                     ws.send(new Messages.ErrorMsg("Kartenvorschläge " + name + ": unbekanntes Deck"));
                     return;
                 }
-                Edhrec.Page page = edhrec.page(commanderNames(deck)).orElse(null);
+                // Befund 10: lookup() statt page() - der Grund eines Fehlschlags (nicht erreichbar vs.
+                // Commander dort unbekannt) geht sonst verloren, bevor er im Text landen kann.
+                Edhrec.Lookup lookup = edhrec.lookup(commanderNames(deck));
                 ws.send(new Messages.CardSuggestionsMsg(name,
-                        Suggestions.of(deck, roles, store.bracket(name), page)));
+                        Suggestions.of(deck, roles, store.bracket(name), lookup.page().orElse(null), lookup.reason())));
             } catch (RuntimeException e) {
                 // wie bei "concede": sonst stirbt der Fehler still auf dem Hintergrund-Thread
                 e.printStackTrace();
