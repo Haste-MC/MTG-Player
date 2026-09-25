@@ -7,6 +7,7 @@ import { send } from "../ws";
 import { Art, TrashIcon } from "./DeckPicker";
 import StatBlocks, { mmss } from "./StatTiles";
 import Findings from "./Findings";
+import Suggestions from "./Suggestions";
 import DeckAnalysisPanel from "./DeckAnalysisPanel";
 import MatchTimeline from "./MatchTimeline";
 
@@ -263,6 +264,7 @@ export default function Stats() {
               {summary && deck ? (
                 <>
                   <Findings findings={found} analyzed={analysis !== undefined} />
+                  <Suggestions deck={analysisName ?? deck} analysis={analysis} found={found} />
                   <StatBlocks s={summary} format={format} explain={explain} />
                   <DeckAnalysisPanel deck={analysisName ?? deck} analysis={analysis} explain={explain}
                     pending={analysisName !== undefined && pendingAnalysis.includes(analysisName)} />

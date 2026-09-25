@@ -876,8 +876,6 @@ button.sb-deck.on { background: var(--accent-soft); border-color: rgba(79, 140, 
 .finding-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; font-size: 12.5px; line-height: 1.45; }
 .finding-text b { font-size: 12.5px; }
 .finding-needs { color: var(--muted); }
-.finding-more { flex: none; align-self: center; font-size: 11px; color: var(--faint); white-space: nowrap; }
-@media (max-width: 700px) { .finding-more { display: none; } }
 
 /* Block 6: Deckinhalt aus der Kartendatenbank (Manakurve, Farbquellen, Aufgaben). */
 .deck-analysis { display: grid; grid-template-columns: minmax(150px, 0.9fr) minmax(220px, 1.3fr) minmax(150px, 0.8fr) minmax(220px, 1.4fr); gap: 16px; align-items: start; }
@@ -1016,3 +1014,25 @@ button.match-toggle .icon { display: block; transition: transform .12s ease; }
 .combat-blockers { display: flex; flex-direction: column; gap: 3px; margin-left: 14px; }
 .combat-unblocked { margin-left: 14px; font-size: 10px; font-weight: 600; letter-spacing: 0.04em;
   text-transform: uppercase; color: var(--red); }
+
+/* Kartenvorschlaege (Stueck 2, Suggestions.tsx unter den Auffaelligkeiten desselben Decks): eine Gruppe
+   je Rolle, Zeilen mit Miniatur links wie beim Stack (.stack-thumb, 34x48), Schnitt rechts gedaempft -
+   er ist ein Denkanstoss, keine Aufforderung, keine neue Warnfarbe. Keine eigene Farbvariable: --gold
+   fuer die Marke "Game Changer" wie ueberall sonst im Board (Commander-Rahmen, Zugdeckel-Punkt). */
+.suggest-count { margin-left: 7px; font-size: 11px; padding: 0 7px; border-radius: 999px; background: var(--gold); color: #1a1408; font-weight: 700; vertical-align: middle; }
+.suggest-source { margin: 0 0 10px; font-size: 12px; color: var(--muted); }
+.suggest-source .suggest-note { color: var(--faint); }
+.suggest-group + .suggest-group { margin-top: 12px; }
+.suggest-rows { display: flex; flex-direction: column; gap: 6px; }
+.suggest-row { display: flex; align-items: center; gap: 9px; padding: 6px 9px; border-radius: var(--radius-sm); background: rgba(0, 0, 0, 0.2); border: 1px solid var(--line); flex-wrap: wrap; }
+.suggest-thumb { flex: none; width: 34px; height: 48px; border-radius: 4px; background: rgba(0, 0, 0, 0.35); overflow: hidden; }
+.suggest-thumb .art { width: 100%; height: 100%; object-fit: cover; display: block; }
+.suggest-thumb .pile-name { display: block; font-size: 7px; line-height: 1.1; padding: 2px; }
+.suggest-body { flex: 1 1 200px; min-width: 0; display: flex; flex-direction: column; gap: 2px; font-size: 12.5px; }
+.suggest-name { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; font-weight: 600; }
+.suggest-name .cost { font-weight: 400; color: var(--muted); }
+.suggest-gc { font-size: 10px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--gold); border: 1px solid var(--gold-line); background: var(--gold-soft); padding: 1px 6px; border-radius: 999px; }
+.suggest-share { color: var(--muted); font-size: 11.5px; }
+/* flex-basis statt fester Breite: die Begruendung darf umbrechen (Spec: "keine abgeschnittenen
+   Begruendungen"), zieht sich bei wenig Platz aber unter Bild+Name statt sie zu stauchen. */
+.suggest-cut { flex: 1 1 220px; text-align: right; color: var(--muted); font-size: 11.5px; }

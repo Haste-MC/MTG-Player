@@ -47,10 +47,6 @@ export const MIN_ELIMINATIONS = 5;
 export const TOO_FEW_TITLE = "Zu wenige Partien";
 export const NOTHING_TITLE = "Nichts Auffälliges";
 
-/** Hinweis, den die Anzeige an jede Zeile haengt - die Kartenvorschlaege selbst sind Stueck 2 und
- * gehoeren nicht in die Regeln. */
-export const SUGGESTIONS_HINT = "Kartenvorschläge folgen.";
-
 /** Die neun Kategorien aus DeckAnalysis.categories - dieselben Namen wie auf der Bridge-Seite
  * (mtgplayer.decks.DeckAnalysis), damit ein Befund und ein Deckcheck ohne Uebersetzung zusammenpassen. */
 export type Role = "ramp" | "draw" | "removal" | "wipes" | "counters"

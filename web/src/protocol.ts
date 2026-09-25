@@ -363,7 +363,12 @@ export type Outbound =
   // error ("Sparring: keine Gegner im Bracket 3: ...", "Sparring läuft noch").
   | { type: "sparringStart"; deck: string; games: number; ai?: AiPick; timeout?: number; maxTurns?: number }
   // Laufendes Sparring abbrechen; die laufende Partie wird abgeschossen, der Lauf endet mit running: false.
-  | { type: "sparringCancel" };
+  | { type: "sparringCancel" }
+  // Kartenvorschlaege fuer die angegebenen Rollen anfordern (Stueck 2, Spec §8); roles kommt aus
+  // roleGaps() in findings.ts. Dort ist Role ein enger String-Typ - hier bewusst string[], denn
+  // protocol.ts haengt an keiner anderen Quelldatei (wie schon bei CardSuggestion.role oben). Die
+  // Bridge antwortet mit cardSuggestions oder error.
+  | { type: "suggestCards"; deck: string; roles: string[] };
 
 export type StartGame = Extract<Outbound, { type: "startGame" }>;
 

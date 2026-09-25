@@ -1,0 +1,36 @@
+[
+ {
+  "type": "cardSuggestions",
+  "deck": "Krenko Goblins",
+  "source": "edhrec",
+  "note": "Werte gelten für Pod-Partien (2+ Gegner).",
+  "suggestions": [
+   {
+    "name": "Sakura-Tribe Elder",
+    "role": "ramp",
+    "manaCost": "{1}{G}",
+    "cmc": 2,
+    "share": 0.42,
+    "imageKey": "c:Sakura-Tribe Elder|C21|1",
+    "cut": { "name": "Rampant Growth", "reason": "kein Blocker, wenn es hart auf hart kommt" }
+   },
+   {
+    "name": "Cultivate",
+    "role": "ramp",
+    "manaCost": "{2}{G}",
+    "cmc": 3,
+    "share": 0.35,
+    "imageKey": "c:Cultivate|C21|1"
+   },
+   {
+    "name": "Beast Within",
+    "role": "removal",
+    "manaCost": "{2}{G}",
+    "cmc": 3,
+    "share": 0.51,
+    "gameChanger": true,
+    "imageKey": "c:Beast Within|C21|1"
+   }
+  ]
+ }
+]

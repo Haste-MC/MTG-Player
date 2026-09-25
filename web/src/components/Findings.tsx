@@ -1,4 +1,4 @@
-import { NOTHING_TITLE, SUGGESTIONS_HINT, TOO_FEW_TITLE, type Finding } from "../findings";
+import { NOTHING_TITLE, TOO_FEW_TITLE, type Finding } from "../findings";
 
 // Auffaelligkeiten (Spec §5): der Block, der Kevins "ich sehe nicht, wo man Schwaechen rauslesen soll"
 // beantwortet. Er steht UEBER den Kacheln, weil er die Kacheln in Saetze uebersetzt - die Regeln selbst
@@ -22,8 +22,10 @@ function LevelIcon({ level }: { level: Finding["level"] }) {
 }
 
 /** Die Befunde des gewaehlten Decks im gewaehlten Format. Die Liste ist nie leer: findings() liefert
- * auch fuer "zu wenige Partien" und "nichts Auffaelliges" genau eine Zeile. `hint` haengt den Verweis
- * auf die Kartenvorschlaege (Stueck 2) an - nur an echte Befunde, nicht an diese beiden Saetze. */
+ * auch fuer "zu wenige Partien" und "nichts Auffaelliges" genau eine Zeile. `real` unterscheidet diese
+ * beiden Sonderfaelle von echten Befunden - nur bei echten Befunden ergibt der Hinweis auf die fehlende
+ * Deckanalyse ueberhaupt Sinn. Der Verweis auf die Kartenvorschlaege (Stueck 2) steht seit Stueck 6 nicht
+ * mehr hier, sondern als eigener Abschnitt darunter (siehe Suggestions.tsx). */
 export default function Findings({ findings, analyzed }: { findings: Finding[]; analyzed: boolean }) {
   const real = findings.some((f) => f.title !== TOO_FEW_TITLE && f.title !== NOTHING_TITLE);
   return (
@@ -43,7 +45,6 @@ export default function Findings({ findings, analyzed }: { findings: Finding[]; 
               <span>{f.text}</span>
               {f.needs && <span className="finding-needs">{f.needs}</span>}
             </div>
-            {real && <span className="finding-more">{SUGGESTIONS_HINT}</span>}
           </li>
         ))}
       </ul>
