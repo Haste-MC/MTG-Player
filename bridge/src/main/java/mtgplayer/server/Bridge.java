@@ -24,6 +24,7 @@ import mtgplayer.sparring.SparringArgs;
 import mtgplayer.sparring.SparringRun;
 import mtgplayer.sparring.SubprocessGameRunner;
 import mtgplayer.stats.CardLog;
+import mtgplayer.stats.CardStats;
 import mtgplayer.stats.CardStore;
 import mtgplayer.stats.MatchRecord;
 import mtgplayer.stats.MatchStore;
@@ -247,6 +248,7 @@ public final class Bridge {
             }
             case "analyzeDeck" -> analyzeDeck(msg.path("deck").asText());
             case "suggestCards" -> suggestCards(msg.path("deck").asText(), roles(msg.path("roles")));
+            case "deckCards" -> deckCards(msg.path("deck").asText());
             case "archidektList" -> archidektList(msg.path("username").asText(""));
             case "archidektImport" -> archidektImport(msg.path("ids"));
             case "deleteMatch" -> deleteMatch(msg.path("id").asText());
@@ -319,6 +321,33 @@ public final class Bridge {
                 // wie bei "concede": sonst stirbt der Fehler still auf dem Hintergrund-Thread
                 e.printStackTrace();
                 ws.send(new Messages.ErrorMsg("Kartenvorschläge " + name + ": "
+                        + (e instanceof IllegalArgumentException ? e.getMessage() : e.toString())));
+            }
+        });
+    }
+
+    /**
+     * {"type":"deckCards","deck":"&lt;Name&gt;"} → {@link Messages.CardStatsMsg} oder error
+     * "Kartenauswertung &lt;name&gt;: unbekanntes Deck". Deckaufloesung wie bei analyzeDeck (gespeichertes
+     * Deck, sonst Precon) - {@link CardStats#of} selbst braucht dafuer nur den Namen (Abgleich mit
+     * {@link MatchRecord.Seat#deck}), das aufgeloeste {@link Deck} dient hier allein der
+     * Bekanntheitspruefung, damit ein Tippfehler nicht schlicht "keine Partien" liefert. Hintergrund-Task
+     * wie analyzeDeck: die Auswertung liest die ganze Partienhistorie und je gewerteter Partie eine
+     * Kartendatei, das hat auf dem UI-Thread nichts verloren.
+     */
+    private void deckCards(String name) {
+        GuiBase.getInterface().runBackgroundTask("deck-cards", () -> {
+            try {
+                Deck deck = forAnalysis(name);
+                if (deck == null) {
+                    ws.send(new Messages.ErrorMsg("Kartenauswertung " + name + ": unbekanntes Deck"));
+                    return;
+                }
+                ws.send(new Messages.CardStatsMsg(name, CardStats.of(name, matches.all(), cards)));
+            } catch (RuntimeException e) {
+                // wie bei "concede": sonst stirbt der Fehler still auf dem Hintergrund-Thread
+                e.printStackTrace();
+                ws.send(new Messages.ErrorMsg("Kartenauswertung " + name + ": "
                         + (e instanceof IllegalArgumentException ? e.getMessage() : e.toString())));
             }
         });

@@ -3,6 +3,7 @@ package mtgplayer.protocol;
 import mtgplayer.ai.AiConfig;
 import mtgplayer.decks.DeckAnalysis;
 import mtgplayer.decks.Suggestions;
+import mtgplayer.stats.CardStats;
 import mtgplayer.stats.MatchRecord;
 
 import java.util.List;
@@ -165,5 +166,17 @@ public final class Messages {
     /** Antwort auf {@code {"type":"matchDetail","id":"..."}}: der vollstaendige Datensatz inkl. Zeitachse. */
     public record MatchMsg(String type, MatchRecord match) {
         public MatchMsg(MatchRecord match) { this("match", match); }
+    }
+
+    /**
+     * Antwort auf {@code {"type":"deckCards","deck":"&lt;Name&gt;"}}: die Kartenauswertung des Decks ueber
+     * alle gewerteten Partien (siehe {@link CardStats}). deck: der angefragte Name (gespeichertes Deck
+     * oder Precon, wie bei {@link DeckAnalysisMsg}).
+     */
+    public record CardStatsMsg(String type, String deck, int games, int withCardData, boolean enough,
+                               List<CardStats.Card> cards) {
+        public CardStatsMsg(String deck, CardStats stats) {
+            this("cardStats", deck, stats.games(), stats.withCardData(), stats.enough(), stats.cards());
+        }
     }
 }
