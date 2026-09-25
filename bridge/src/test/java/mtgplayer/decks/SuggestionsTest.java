@@ -346,14 +346,15 @@ class SuggestionsTest {
         // Ohne eigene Partien waere Cultivate der Schnitt (Befund aus verkettetZweiZutreffendeGruendeMitUnd:
         // nicht auf der Seite gefuehrt UND mit {2}{G} teurer als Rampant Growth {1}{G}) - genau die "bisherigen
         // Regeln (kein EDHREC-Eintrag, teurer)", die laut Task-5-Brief von der neuen Stufe 0 gestochen werden.
-        // Rampant Growth war laut eigener Auswertung in 9 Partien 6x auf der Hand und nie gewirkt.
+        // Rampant Growth war laut eigener Auswertung in 6 von 9 Partien auf der Hand und nie gewirkt.
         Suggestions.Result r = Suggestions.of(deck("Cultivate", "Rampant Growth"), List.of("ramp"), 4,
                 page(ec("Llanowar Elves", 0.4), ec("Rampant Growth", 0.5)),
                 neverCastOwn("Rampant Growth", 6, 9));
         Suggestions.Cut cut = r.items().get(0).cut();
         assertNotNull(cut, "ohne Schnittkandidat: " + r.items());
         assertEquals("Rampant Growth", cut.name());
-        assertEquals("in 9 Partien 6× auf der Hand, nie gewirkt", cut.reason());
+        // Befund 2: Partien- statt Ereigniszaehlung - "in 6 von 9 Partien auf der Hand", nicht "6x".
+        assertEquals("in 6 von 9 Partien auf der Hand, nie gewirkt", cut.reason());
     }
 
     @Test

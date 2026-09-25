@@ -317,6 +317,10 @@ public final class Suggestions {
      * anderer Schnitt vergebenen Karten ausschliessen (Regel 5: jeder Kandidat hoechstens einmal), die
      * Begruendung darf das nicht - "hat den niedrigsten Anteil der Karten dieser Rolle in deinem Deck"
      * ist eine Aussage ueber das ganze Deck, nicht nur ueber das, was gerade noch uebrig ist.</p>
+     * <p>Stufe 0 ({@link #neverCastCut}) sticht dabei bewusst auch die Rollen-Prioritaet der Regeln 1-4:
+     * eine rollenlose Karte aus {@code noRoleAvailable} mit vielen Hand-Partien ohne Wirkung schlaegt eine
+     * rollengleiche Karte aus {@code sameRoleAvailable} mit weniger Hand-Partien - Kevins eigene Erfahrung
+     * zaehlt mehr als "trifft dieselbe Rolle wie der Vorschlag" (siehe {@link #neverCastCut}).</p>
      */
     private static Cut cutCandidate(List<PaperCard> mainCards, String role, Edhrec.Page page,
                                      Set<String> cutChosen, Map<String, CardStats.Card> own) {
@@ -356,8 +360,11 @@ public final class Suggestions {
      * aus {@code sameRoleAvailable} oder {@code noRoleAvailable}, die laut {@code own} in mindestens {@link
      * #MIN_HAND_GAMES_FOR_NEVER_CAST} Partien auf der Hand war und in keiner davon gewirkt wurde. Bei
      * mehreren Treffern gewinnt der mit den meisten Hand-Partien (die staerkste Beobachtung), dann der Name
-     * fuer eine feste Reihenfolge. {@code own} ist leer, wenn die Bridge keine ausreichend abgesicherte
-     * Auswertung hat ({@code CardStats#enough}) - dann liefert diese Stufe nie einen Treffer.
+     * fuer eine feste Reihenfolge - beide Pools werden dabei in EINEM gemeinsamen Vergleich durchsucht
+     * (Befund 12): eine rollenlose Karte mit mehr Hand-Partien schlaegt eine rollengleiche mit weniger,
+     * die Rollen-Prioritaet der spaeteren Regeln 1-4 gilt hier bewusst nicht. {@code own} ist leer, wenn
+     * die Bridge keine ausreichend abgesicherte Auswertung hat ({@code CardStats#enough}) - dann liefert
+     * diese Stufe nie einen Treffer.
      */
     private static Cut neverCastCut(List<PaperCard> sameRoleAvailable, List<PaperCard> noRoleAvailable,
                                      Map<String, CardStats.Card> own) {
@@ -390,7 +397,10 @@ public final class Suggestions {
         // Begruendung darf nie mehr behaupten, als der Code geprueft hat - N ist damit garantiert die Zahl
         // aus genau dieser Auswertung, nicht die Gesamtzahl aller Partien.
         int withCardData = winnerStats.handGames() + winnerStats.neverDrawnGames();
-        String reason = "in " + withCardData + " Partien " + winnerStats.handGames() + "× auf der Hand, nie gewirkt";
+        // Befund 2: "in 9 Partien 6× auf der Hand" klang nach einer Ereigniszaehlung (mehrfach in einer
+        // Partie auf der Hand, z. B. nach einem Mulligan) - handGames zaehlt aber Partien, keine
+        // Ereignisse. Dieselbe "H von N"-Form wie deckCards.ts (web/src/deckCards.ts, cardLine).
+        String reason = "in " + winnerStats.handGames() + " von " + withCardData + " Partien auf der Hand, nie gewirkt";
         return new Cut(winner.getName(), reason);
     }
 
