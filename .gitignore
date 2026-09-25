@@ -5,3 +5,4 @@ bridge/assets/forge.profile.properties
 .idea/
 *.iml
 web/dist/
+build/
