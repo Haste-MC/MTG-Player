@@ -11,11 +11,13 @@ import forge.deck.DeckSection;
 import forge.item.PaperCard;
 import forge.model.FModel;
 import mtgplayer.forge.ForgeBoot;
+import mtgplayer.stats.CardStats;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 
 class SuggestionsTest {
 
@@ -47,6 +49,16 @@ class SuggestionsTest {
 
     private static Edhrec.Card ec(String name, double share) { return new Edhrec.Card(name, share, false); }
     private static Edhrec.Card gc(String name, double share) { return new Edhrec.Card(name, share, true); }
+
+    /** Kartenauswertung fuer genau eine Karte: {@code handGames} Partien auf der Hand, nie gewirkt, der
+     *  Rest der Partien mit Kartendaten nie gezogen - so ergibt {@code handGames + neverDrawnGames} genau
+     *  die Partien mit Kartendaten, wie es {@link mtgplayer.stats.CardStats#buildCard} auch tut. */
+    private static Map<String, CardStats.Card> neverCastOwn(String name, int handGames, int withCardData) {
+        int neverDrawnGames = withCardData - handGames;
+        CardStats.Card card = new CardStats.Card(name, null, null, null, handGames, 0, null, handGames,
+                neverDrawnGames, 0, 0);
+        return Map.of(name, card);
+    }
 
     @Test
     void schlaegtKartenDerGefragtenRolleVor() {
@@ -325,5 +337,54 @@ class SuggestionsTest {
                 "Kodama's Reach ist NICHT der niedrigste Anteil - Elvish Mystic (4 %) steht noch im Deck: "
                         + secondCut.reason());
         assertEquals("ist mit 2 {G} die teuerste Karte dieser Rolle", secondCut.reason());
+    }
+
+    // -- Task 5: Schnittgrund aus eigenen Partien -------------------------------------------------------
+
+    @Test
+    void schnittAusEigenenPartienSticheDieAltenRegeln() {
+        // Ohne eigene Partien waere Cultivate der Schnitt (Befund aus verkettetZweiZutreffendeGruendeMitUnd:
+        // nicht auf der Seite gefuehrt UND mit {2}{G} teurer als Rampant Growth {1}{G}) - genau die "bisherigen
+        // Regeln (kein EDHREC-Eintrag, teurer)", die laut Task-5-Brief von der neuen Stufe 0 gestochen werden.
+        // Rampant Growth war laut eigener Auswertung in 9 Partien 6x auf der Hand und nie gewirkt.
+        Suggestions.Result r = Suggestions.of(deck("Cultivate", "Rampant Growth"), List.of("ramp"), 4,
+                page(ec("Llanowar Elves", 0.4), ec("Rampant Growth", 0.5)),
+                neverCastOwn("Rampant Growth", 6, 9));
+        Suggestions.Cut cut = r.items().get(0).cut();
+        assertNotNull(cut, "ohne Schnittkandidat: " + r.items());
+        assertEquals("Rampant Growth", cut.name());
+        assertEquals("in 9 Partien 6× auf der Hand, nie gewirkt", cut.reason());
+    }
+
+    @Test
+    void wenigerAlsDreiHandPartienLaesstDieAltenRegelnUnveraendert() {
+        // Dieselbe Fixture wie oben, aber nur 2 Hand-Partien - unter der Schwelle von 3 beweist "nie
+        // gewirkt" noch nichts, die alte Rangfolge (Cultivate) muss unveraendert gewinnen.
+        Suggestions.Result r = Suggestions.of(deck("Cultivate", "Rampant Growth"), List.of("ramp"), 4,
+                page(ec("Llanowar Elves", 0.4), ec("Rampant Growth", 0.5)),
+                neverCastOwn("Rampant Growth", 2, 5));
+        Suggestions.Cut cut = r.items().get(0).cut();
+        assertNotNull(cut, "ohne Schnittkandidat: " + r.items());
+        assertEquals("Cultivate", cut.name());
+        assertEquals("führt EDHREC für diesen Commander gar nicht und ist mit 2 {G} die teuerste Karte dieser Rolle",
+                cut.reason());
+    }
+
+    @Test
+    void leereKartenauswertungAendertNichtsGegenprobe() {
+        // Gegenprobe gegen Regression: dieselbe Fixture, aber ohne eigene Kartenauswertung (die Bridge
+        // uebergibt eine leere Map, wenn CardStats#enough nicht gilt) - das Verhalten muss exakt dem der
+        // alten 4-Parameter-Ueberladung entsprechen.
+        Edhrec.Page samePage = page(ec("Llanowar Elves", 0.4), ec("Rampant Growth", 0.5));
+        Suggestions.Result withEmptyOwn = Suggestions.of(deck("Cultivate", "Rampant Growth"), List.of("ramp"), 4,
+                samePage, Map.of());
+        Suggestions.Result withoutOwnAtAll = Suggestions.of(deck("Cultivate", "Rampant Growth"), List.of("ramp"), 4,
+                samePage);
+        assertEquals(withoutOwnAtAll, withEmptyOwn);
+        Suggestions.Cut cut = withEmptyOwn.items().get(0).cut();
+        assertNotNull(cut, "ohne Schnittkandidat: " + withEmptyOwn.items());
+        assertEquals("Cultivate", cut.name());
+        assertEquals("führt EDHREC für diesen Commander gar nicht und ist mit 2 {G} die teuerste Karte dieser Rolle",
+                cut.reason());
     }
 }

@@ -11,6 +11,7 @@ import forge.item.PaperCard;
 import forge.localinstance.properties.ForgeConstants;
 import forge.model.FModel;
 import forge.util.FileUtil;
+import mtgplayer.stats.CardStats;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -58,6 +59,20 @@ public final class Suggestions {
         return of(deck, roles, bracket, page, Edhrec.Reason.UNREACHABLE);
     }
 
+    /** Ohne eigene Partien (die 5-Parameter-Ueberladung, ueberwiegend aus Tests vor Task 5): keine Karte
+     *  kann als "nie gewirkt" schneiden, die neue erste Stufe der Schnitt-Rangfolge (siehe {@link
+     *  #neverCastCut}) greift dann nie - die bestehende Rangfolge bleibt unveraendert. */
+    public static Result of(Deck deck, List<String> roles, Integer bracket, Edhrec.Page page, Edhrec.Reason reason) {
+        return of(deck, roles, bracket, page, reason, Map.of());
+    }
+
+    /** Ohne einen bekannten Grund, aber mit eigener Kartenauswertung (Task 5): "nicht erreichbar" bleibt
+     *  wie bei der 4-Parameter-Ueberladung die Vorbelegung. */
+    public static Result of(Deck deck, List<String> roles, Integer bracket, Edhrec.Page page,
+                             Map<String, CardStats.Card> own) {
+        return of(deck, roles, bracket, page, Edhrec.Reason.UNREACHABLE, own);
+    }
+
     /**
      * @param deck   das zu ergaenzende Deck (Haupt- und Kommandeursektion zaehlen)
      * @param roles  angefragte Luecken, in der Reihenfolge aus DeckAnalysis.rules() - bei Ueberschneidung
@@ -68,8 +83,12 @@ public final class Suggestions {
      *               fuehrt - dann kommen die Kandidaten aus Forges Kartendatenbank (Result.source() "db")
      * @param reason nur relevant, wenn {@code page == null}: warum es keine EDHREC-Seite gibt (Befund 10) -
      *               steuert den Satz in {@code Result.note()}
+     * @param own    Kevins Kartenauswertung des Decks (Task 5), Name -&gt; {@link CardStats.Card} - leer,
+     *               wenn die Bridge keine ausreichend abgesicherte Auswertung hat ({@code CardStats#enough}).
+     *               Speist einzig die neue erste Stufe der Schnitt-Rangfolge ({@link #neverCastCut}).
      */
-    public static Result of(Deck deck, List<String> roles, Integer bracket, Edhrec.Page page, Edhrec.Reason reason) {
+    public static Result of(Deck deck, List<String> roles, Integer bracket, Edhrec.Page page, Edhrec.Reason reason,
+                             Map<String, CardStats.Card> own) {
         if (roles.isEmpty()) {
             // Ohne Luecke gibt es nichts zu erledigen - eine leere Rollenliste ist kein Fehler.
             return new Result(page == null ? "db" : "edhrec", "Keine Lücke gefunden.", List.of(),
@@ -148,7 +167,7 @@ public final class Suggestions {
                         break;
                     }
                     anyGameChangerIncluded |= candidate.gameChanger();
-                    addWithCut(candidate, mainCards, page, chosen, cutChosen, items);
+                    addWithCut(candidate, mainCards, page, chosen, cutChosen, items, own);
                     takenForRole++;
                     if (items.size() >= MAX_ITEMS) {
                         break;
@@ -214,7 +233,7 @@ public final class Suggestions {
                         break;
                     }
                     anyGameChangerIncluded |= candidate.gameChanger();
-                    addWithCut(candidate, mainCards, null, chosen, cutChosen, items);
+                    addWithCut(candidate, mainCards, null, chosen, cutChosen, items, own);
                     takenForRole++;
                     if (items.size() >= MAX_ITEMS) {
                         break;
@@ -277,8 +296,9 @@ public final class Suggestions {
 
     /** Haengt an einen Vorschlagskandidaten seinen Schnittkandidaten und schreibt beide Merkzettel fort. */
     private static void addWithCut(Item candidate, List<PaperCard> mainCards, Edhrec.Page page,
-                                    Set<String> chosen, Set<String> cutChosen, List<Item> items) {
-        Cut cut = cutCandidate(mainCards, candidate.role(), page, cutChosen);
+                                    Set<String> chosen, Set<String> cutChosen, List<Item> items,
+                                    Map<String, CardStats.Card> own) {
+        Cut cut = cutCandidate(mainCards, candidate.role(), page, cutChosen, own);
         items.add(new Item(candidate.name(), candidate.role(), candidate.manaCost(), candidate.cmc(),
                 candidate.share(), candidate.gameChanger(), candidate.imageKey(), candidate.text(), cut));
         chosen.add(candidate.name().toLowerCase(Locale.ROOT));
@@ -288,9 +308,10 @@ public final class Suggestions {
     }
 
     /**
-     * Schnittkandidat fuer einen Vorschlag der Rolle {@code role} (Spec §7, Regeln 1-4): zuerst Karten der
-     * Hauptsektion mit derselben Rolle, sonst Karten, die keine der neun Rollen treffen, jeweils ohne
-     * Laender/Commander (schon durch {@code mainCards}) und ohne bereits vergebene Karten.
+     * Schnittkandidat fuer einen Vorschlag der Rolle {@code role} (Spec §7, Regeln 1-4, plus Task 5 als
+     * neue Stufe 0): zuerst eine Karte, die in eigenen Partien oft auf der Hand war und nie gewirkt wurde,
+     * sonst Karten der Hauptsektion mit derselben Rolle, sonst Karten, die keine der neun Rollen treffen,
+     * jeweils ohne Laender/Commander (schon durch {@code mainCards}) und ohne bereits vergebene Karten.
      * <p>Befund 1: {@code pickPool} (wonach gewaehlt wird) und {@code reasonBasis} (woran die Begruendung
      * ihre Superlative misst) sind bewusst zwei verschiedene Listen. Die Wahl selbst MUSS die schon als
      * anderer Schnitt vergebenen Karten ausschliessen (Regel 5: jeder Kandidat hoechstens einmal), die
@@ -298,7 +319,7 @@ public final class Suggestions {
      * ist eine Aussage ueber das ganze Deck, nicht nur ueber das, was gerade noch uebrig ist.</p>
      */
     private static Cut cutCandidate(List<PaperCard> mainCards, String role, Edhrec.Page page,
-                                     Set<String> cutChosen) {
+                                     Set<String> cutChosen, Map<String, CardStats.Card> own) {
         List<PaperCard> sameRoleAll = new ArrayList<>();
         List<PaperCard> noRoleAll = new ArrayList<>();
         for (PaperCard pc : mainCards) {
@@ -309,12 +330,68 @@ public final class Suggestions {
                 noRoleAll.add(pc);
             }
         }
-        Cut cut = pickCut(available(sameRoleAll, cutChosen), sameRoleAll, page, false);
+        List<PaperCard> sameRoleAvailable = available(sameRoleAll, cutChosen);
+        List<PaperCard> noRoleAvailable = available(noRoleAll, cutChosen);
+
+        // Neue Stufe 0 (Task 5): eigene Erfahrung schlaegt jede EDHREC-gestuetzte Vermutung, deshalb zuerst
+        // geprueft - unabhaengig davon, ob eine andere Karte nach den bisherigen Regeln vorne laege.
+        Cut neverCast = neverCastCut(sameRoleAvailable, noRoleAvailable, own);
+        if (neverCast != null) {
+            return neverCast;
+        }
+
+        Cut cut = pickCut(sameRoleAvailable, sameRoleAll, page, false);
         if (cut != null) {
             return cut;
         }
-        List<PaperCard> noRoleAvailable = available(noRoleAll, cutChosen);
         return pickCut(noRoleAvailable, noRoleAvailable, page, true);
+    }
+
+    /** Unter so vielen Partien MIT der Karte auf der Hand beweist "nie gewirkt" noch nichts (Task 5) - ein
+     *  einzelner Fehlgriff ist kein Muster, das einen Schnitt rechtfertigt. */
+    private static final int MIN_HAND_GAMES_FOR_NEVER_CAST = 3;
+
+    /**
+     * Schnittkandidat aus Kevins eigenen Partien (Task 5, neue Stufe 0 vor Spec §7 Regeln 1-4): eine Karte
+     * aus {@code sameRoleAvailable} oder {@code noRoleAvailable}, die laut {@code own} in mindestens {@link
+     * #MIN_HAND_GAMES_FOR_NEVER_CAST} Partien auf der Hand war und in keiner davon gewirkt wurde. Bei
+     * mehreren Treffern gewinnt der mit den meisten Hand-Partien (die staerkste Beobachtung), dann der Name
+     * fuer eine feste Reihenfolge. {@code own} ist leer, wenn die Bridge keine ausreichend abgesicherte
+     * Auswertung hat ({@code CardStats#enough}) - dann liefert diese Stufe nie einen Treffer.
+     */
+    private static Cut neverCastCut(List<PaperCard> sameRoleAvailable, List<PaperCard> noRoleAvailable,
+                                     Map<String, CardStats.Card> own) {
+        if (own.isEmpty()) {
+            return null;
+        }
+        PaperCard winner = null;
+        CardStats.Card winnerStats = null;
+        for (List<PaperCard> pool : List.of(sameRoleAvailable, noRoleAvailable)) {
+            for (PaperCard pc : pool) {
+                CardStats.Card stats = own.get(pc.getName());
+                if (stats == null || stats.castGames() != 0
+                        || stats.handGames() < MIN_HAND_GAMES_FOR_NEVER_CAST) {
+                    continue;
+                }
+                if (winner == null || stats.handGames() > winnerStats.handGames()
+                        || (stats.handGames() == winnerStats.handGames()
+                            && pc.getName().compareTo(winner.getName()) < 0)) {
+                    winner = pc;
+                    winnerStats = stats;
+                }
+            }
+        }
+        if (winner == null) {
+            return null;
+        }
+        // handGames + neverDrawnGames ist je Karte exakt withCardData (CardStats#buildCard zaehlt jede
+        // Partie mit Kartendaten genau einmal in eines der beiden Felder) - dieselbe Partienzahl, die
+        // CardStats als "mit Kartendaten" fuehrt, ohne dass sie hier separat mitgegeben werden muesste. Eine
+        // Begruendung darf nie mehr behaupten, als der Code geprueft hat - N ist damit garantiert die Zahl
+        // aus genau dieser Auswertung, nicht die Gesamtzahl aller Partien.
+        int withCardData = winnerStats.handGames() + winnerStats.neverDrawnGames();
+        String reason = "in " + withCardData + " Partien " + winnerStats.handGames() + "× auf der Hand, nie gewirkt";
+        return new Cut(winner.getName(), reason);
     }
 
     /** {@code cards} ohne die schon als Schnitt vergebenen (Regel 5) - die Auswahlgrundlage, nicht die

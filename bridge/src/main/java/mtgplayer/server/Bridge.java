@@ -31,6 +31,7 @@ import mtgplayer.stats.MatchStore;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
@@ -302,7 +303,8 @@ public final class Bridge {
     /**
      * {"type":"suggestCards","deck":"&lt;Name&gt;","roles":[…]} → {@link Messages.CardSuggestionsMsg} oder
      * error "Kartenvorschläge &lt;name&gt;: unbekanntes Deck". Hintergrund-Task wie analyzeDeck: der
-     * EDHREC-Abruf und der Rückfall über die ganze Kartendatenbank haben auf dem UI-Thread nichts verloren.
+     * EDHREC-Abruf, die Kartenauswertung ueber die Partienhistorie und der Rückfall über die ganze
+     * Kartendatenbank haben auf dem UI-Thread nichts verloren.
      */
     private void suggestCards(String name, List<String> roles) {
         GuiBase.getInterface().runBackgroundTask("suggest-cards", () -> {
@@ -315,8 +317,16 @@ public final class Bridge {
                 // Befund 10: lookup() statt page() - der Grund eines Fehlschlags (nicht erreichbar vs.
                 // Commander dort unbekannt) geht sonst verloren, bevor er im Text landen kann.
                 Edhrec.Lookup lookup = edhrec.lookup(commanderNames(deck));
+                // Task 5: eigene Partien schlagen EDHREC-Vermutungen beim Schnittgrund - aber nur, wenn die
+                // Auswertung ueberhaupt ausreichend abgesichert ist (CardStats#enough); sonst waere "nie
+                // gewirkt" eine Behauptung auf duenner Grundlage, also eine leere Map statt einer Zahl.
+                CardStats own = CardStats.of(name, matches.all(), cards);
+                Map<String, CardStats.Card> ownCards = own.enough()
+                        ? own.cards().stream().collect(Collectors.toMap(CardStats.Card::name, c -> c))
+                        : Map.of();
                 ws.send(new Messages.CardSuggestionsMsg(name,
-                        Suggestions.of(deck, roles, store.bracket(name), lookup.page().orElse(null), lookup.reason())));
+                        Suggestions.of(deck, roles, store.bracket(name), lookup.page().orElse(null),
+                                lookup.reason(), ownCards)));
             } catch (RuntimeException e) {
                 // wie bei "concede": sonst stirbt der Fehler still auf dem Hintergrund-Thread
                 e.printStackTrace();
