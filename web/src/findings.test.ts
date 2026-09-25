@@ -391,6 +391,14 @@ describe("roleGaps", () => {
     const found: Finding[] = [{ level: "warn", title: "Flieger", text: "", role: "flyerDefense" }];
     expect(roleGaps(undefined, found)).toEqual(["flyerDefense"]);
   });
+
+  it("bei gleicher Unterschreitung entscheidet die Reihenfolge von ROLE_TARGETS", () => {
+    // ramp (Ziel 10, Ist 8) und removal (Ziel 8, Ist 6) unterschreiten beide um genau 2 - die anderen
+    // Richtwerte sind exakt erfuellt (Unterschreitung 0, zaehlen also nicht mit). ROLE_TARGETS nennt
+    // ramp vor removal, genau in dieser Reihenfolge muss roleGaps sie liefern.
+    const gaps = roleGaps(analysis({ ramp: 8, draw: 8, removal: 6, wipes: 2, flyerDefense: 4, wipeProtection: 2 }), []);
+    expect(gaps).toEqual(["ramp", "removal"]);
+  });
 });
 
 describe("Reihenfolge und Text", () => {

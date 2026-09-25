@@ -317,10 +317,11 @@ export interface CardSuggestion {
 }
 
 /** Antwort auf suggestCards. source unterscheidet den EDHREC-Fall (mit share/cut) vom Datenbank-Rueckfall
- *  ohne Netz; note traegt eine Erklaerung dazu (z. B. "EDHREC nicht erreichbar"), wenn es sie gibt. */
+ *  ohne Netz; note traegt eine Erklaerung dazu (z. B. "EDHREC nicht erreichbar"), wenn es sie gibt.
+ *  fetched: Abrufdatum des EDHREC-Stands (ISO), fehlt bei source "db" - kein EDHREC-Stand, kein Datum. */
 export interface CardSuggestionsMsg {
   type: "cardSuggestions"; deck: string; source: "edhrec" | "db"; note?: string;
-  suggestions: CardSuggestion[];
+  suggestions: CardSuggestion[]; fetched?: string;
 }
 
 export type Inbound = Snapshot | Choice | Lobby | LogLine | Thinking | GameOver | ErrorMsg | ArchidektDecks | ArchidektProgress | Matches | MatchMsg | DeckAnalysisMsg | SparringProgress | CardSuggestionsMsg;

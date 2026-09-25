@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { roleGaps, type Finding, type Role } from "../findings";
 import type { CardSuggestion, DeckAnalysis } from "../protocol";
+import { suggestFreshness } from "../suggestFreshness";
 import { useStore } from "../store";
 import { send } from "../ws";
 import CardImage from "./CardImage";
@@ -39,6 +40,10 @@ export default function Suggestions({ deck, analysis, found }: { deck: string; a
   const [pendingFor, setPendingFor] = useState<string>();
   const roles = roleGaps(analysis, found);
   const loading = pendingFor === deck && !msg;
+  // Nur bei Quelle "edhrec" gibt es ueberhaupt ein Abrufdatum (msg.fetched fehlt bei "db") - new Date()
+  // hier statt einer Konstante: der Screenshot-Testlauf schickt Fixtures mit echten, im Verhaeltnis zum
+  // jeweiligen "jetzt" alten Zeitpunkten, die Veraltet-Marke muss also gegen die aktuelle Uhrzeit pruefen.
+  const stand = msg && msg.source === "edhrec" ? suggestFreshness(msg.fetched, new Date()) : undefined;
 
   const click = () => {
     setPendingFor(deck);
@@ -55,6 +60,8 @@ export default function Suggestions({ deck, analysis, found }: { deck: string; a
         <>
           <p className="suggest-source">
             Quelle: {msg.source === "edhrec" ? "EDHREC" : "Kartendatenbank"}
+            {stand && <span className="suggest-stand"> · Stand {stand.label}</span>}
+            {stand?.stale && <span className="suggest-stale"> · veraltet</span>}
             {msg.note && <span className="suggest-note"> · {msg.note}</span>}
           </p>
           {ROLE_ORDER.filter((role) => msg.suggestions.some((c) => c.role === role)).map((role) => (

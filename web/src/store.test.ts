@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { INCORRECT_ACTION_TEXT, reduce, initialState, sparringOpponents, useStore } from "./store";
-import type { ArchidektDecks, ArchidektProgress, Choice, DeckInfo, MatchRecord, Snapshot, StartGame } from "./protocol";
+import type { ArchidektDecks, ArchidektProgress, CardSuggestionsMsg, Choice, DeckInfo, MatchRecord, Snapshot, StartGame } from "./protocol";
 import { send } from "./ws";
 
 vi.mock("./ws", () => ({ send: vi.fn() }));
@@ -459,6 +459,11 @@ describe("store: Deckanalyse und Partie-Detail", () => {
     categories: { ramp: 8, draw: 9, removal: 6, wipes: 1, counters: 3, flyerDefense: 2, wipeProtection: 0, recursion: 4, tutors: 2 },
     unclassified: 31,
   };
+  /** Minimale Antwort auf suggestCards - nur die Felder, die reduce() ueberhaupt anfasst (Schluessel
+   *  ist deck, siehe store.ts case "cardSuggestions"). */
+  const suggestions = (deck: string): CardSuggestionsMsg => ({
+    type: "cardSuggestions", deck, source: "edhrec", suggestions: [],
+  });
   /** Derselbe Datensatz, aber mit Zeitachse - so kommt er von matchDetail zurueck. */
   const withTimeline = (id: string): MatchRecord => {
     const r = matchRecord({ id });
@@ -481,6 +486,16 @@ describe("store: Deckanalyse und Partie-Detail", () => {
     const zweite = reduce(s, { type: "deckAnalysis", deck: "Krenko Goblins", analysis: { ...analysis, lands: 34 } });
     expect(Object.keys(zweite.deckAnalyses).sort()).toEqual(["Koma Ramp", "Krenko Goblins"]);
     expect(zweite.deckAnalyses["Koma Ramp"]).toEqual(analysis);
+  });
+
+  it("cardSuggestions merkt die Antwort je Deckname", () => {
+    const s = reduce(initialState, suggestions("Koma Ramp"));
+    expect(s.suggestions["Koma Ramp"]).toEqual(suggestions("Koma Ramp"));
+    // Eine zweite Antwort fuer ein anderes Deck ersetzt den ersten Stand nicht (dasselbe Muster wie
+    // deckAnalysis oben, siehe store.ts case "cardSuggestions").
+    const zweite = reduce(s, suggestions("Krenko Goblins"));
+    expect(Object.keys(zweite.suggestions).sort()).toEqual(["Koma Ramp", "Krenko Goblins"]);
+    expect(zweite.suggestions["Koma Ramp"]).toEqual(suggestions("Koma Ramp"));
   });
 
   it("match merkt das Detail je Id, ohne die Partienliste anzufassen", () => {

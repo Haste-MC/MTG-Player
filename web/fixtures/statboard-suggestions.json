@@ -3,33 +3,56 @@
   "type": "cardSuggestions",
   "deck": "Krenko Goblins",
   "source": "edhrec",
-  "note": "Werte gelten für Pod-Partien (2+ Gegner).",
+  "fetched": "2026-09-22T10:15:30Z",
   "suggestions": [
    {
     "name": "Sakura-Tribe Elder",
     "role": "ramp",
-    "manaCost": "{1}{G}",
+    "manaCost": "1 {G}",
     "cmc": 2,
     "share": 0.42,
     "imageKey": "c:Sakura-Tribe Elder|C21|1",
-    "cut": { "name": "Rampant Growth", "reason": "kein Blocker, wenn es hart auf hart kommt" }
+    "cut": {
+     "name": "Rampant Growth",
+     "reason": "spielt in vergleichbaren Decks fast niemand (4 %) und ist mit 2 {G}{G}{G} die teuerste Karte dieser Rolle"
+    }
    },
    {
     "name": "Cultivate",
     "role": "ramp",
-    "manaCost": "{2}{G}",
+    "manaCost": "2 {G}",
     "cmc": 3,
     "share": 0.35,
-    "imageKey": "c:Cultivate|C21|1"
+    "imageKey": "c:Cultivate|C21|1",
+    "cut": {
+     "name": "Explosive Vegetation",
+     "reason": "hat mit 31 % den niedrigsten Anteil der Karten dieser Rolle in deinem Deck"
+    }
    },
    {
     "name": "Beast Within",
     "role": "removal",
-    "manaCost": "{2}{G}",
+    "manaCost": "2 {G}",
     "cmc": 3,
     "share": 0.51,
     "gameChanger": true,
-    "imageKey": "c:Beast Within|C21|1"
+    "imageKey": "c:Beast Within|C21|1",
+    "cut": {
+     "name": "Overrun",
+     "reason": "trifft keine der neun Rollen"
+    }
+   },
+   {
+    "name": "Heroic Intervention",
+    "role": "wipeProtection",
+    "manaCost": "1 {G}",
+    "cmc": 2,
+    "share": 0.68,
+    "imageKey": "c:Heroic Intervention|C21|1",
+    "cut": {
+     "name": "Fog",
+     "reason": "führt EDHREC für diesen Commander gar nicht"
+    }
    }
   ]
  }
