@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { INCORRECT_ACTION_TEXT, reduce, initialState, sparringOpponents, useStore } from "./store";
-import type { ArchidektDecks, ArchidektProgress, CardSuggestionsMsg, Choice, DeckInfo, MatchRecord, Snapshot, StartGame } from "./protocol";
+import type { ArchidektDecks, ArchidektProgress, CardStatsMsg, CardSuggestionsMsg, Choice, DeckInfo, MatchRecord, Snapshot, StartGame } from "./protocol";
 import { send } from "./ws";
 
 vi.mock("./ws", () => ({ send: vi.fn() }));
@@ -581,6 +581,57 @@ describe("store: Deckanalyse und Partie-Detail", () => {
     expect(useStore.getState().pendingSuggestions).toEqual([]);
     // Der Knopf darf danach wieder anfragen - vorher blieb er (rein lokaler useState) fuer immer auf "lädt …".
     useStore.getState().requestCardSuggestions("gibt es nicht", ["ramp"]);
+    expect(send).toHaveBeenCalledTimes(2);
+  });
+
+  // Befund 7: store.test.ts kannte cardStats bislang nicht - genau der Fall, den der Kommentar an
+  // pendingCards in store.ts beschwoert (ein error der Bridge muss die offene Anfrage wegraeumen, sonst
+  // haengt der Knopf in DeckCards.tsx fuer immer auf "lädt …"), war ungeprueft. Aufbau 1:1 wie bei
+  // cardSuggestions/pendingSuggestions oben.
+  const cardStats = (deck: string): CardStatsMsg => ({
+    type: "cardStats", deck, games: 9, withCardData: 9, enough: true, cards: [],
+  });
+
+  it("cardStats merkt die Antwort je Deckname", () => {
+    const s = reduce(initialState, cardStats("Koma Ramp"));
+    expect(s.cardStats["Koma Ramp"]).toEqual(cardStats("Koma Ramp"));
+    // Eine zweite Antwort fuer ein anderes Deck ersetzt den ersten Stand nicht (dasselbe Muster wie
+    // deckAnalysis/cardSuggestions oben).
+    const zweite = reduce(s, cardStats("Krenko Goblins"));
+    expect(Object.keys(zweite.cardStats).sort()).toEqual(["Koma Ramp", "Krenko Goblins"]);
+    expect(zweite.cardStats["Koma Ramp"]).toEqual(cardStats("Koma Ramp"));
+  });
+
+  it("requestDeckCards fragt einmal je Deck und merkt sich die offene Anfrage", () => {
+    useStore.getState().requestDeckCards("Koma Ramp");
+    expect(send).toHaveBeenCalledWith({ type: "deckCards", deck: "Koma Ramp" });
+    expect(useStore.getState().pendingCards).toEqual(["Koma Ramp"]);
+    // Waehrend die Anfrage noch offen ist, schickt ein zweiter Klick nichts Neues.
+    useStore.getState().requestDeckCards("Koma Ramp");
+    expect(send).toHaveBeenCalledTimes(1);
+  });
+
+  it("cardStats raeumt die offene Anfrage weg", () => {
+    useStore.getState().requestDeckCards("Koma Ramp");
+    useStore.getState().apply(cardStats("Koma Ramp"));
+    expect(useStore.getState().pendingCards).toEqual([]);
+  });
+
+  it("ein vorliegender Stand haelt requestDeckCards NICHT ab (der \"neu laden\"-Knopf muss nach einer "
+    + "weiteren Partie erneut fragen duerfen)", () => {
+    useStore.getState().apply(cardStats("Koma Ramp"));
+    useStore.getState().requestDeckCards("Koma Ramp");
+    expect(send).toHaveBeenCalledWith({ type: "deckCards", deck: "Koma Ramp" });
+  });
+
+  it("ein Fehler der Bridge gibt eine offene deckCards-Anfrage wieder frei (Befund 7)", () => {
+    useStore.getState().requestDeckCards("gibt es nicht");
+    expect(useStore.getState().pendingCards).toEqual(["gibt es nicht"]);
+    useStore.getState().apply({ type: "error", text: "Kartentabelle gibt es nicht: unbekanntes Deck" });
+    expect(useStore.getState().pendingCards).toEqual([]);
+    // Der Knopf darf danach wieder anfragen - vorher blieb er fuer immer auf "lädt …" (derselbe Fehler
+    // wie einst Befund 3 bei den Kartenvorschlaegen).
+    useStore.getState().requestDeckCards("gibt es nicht");
     expect(send).toHaveBeenCalledTimes(2);
   });
 });
