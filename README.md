@@ -407,3 +407,21 @@ ein einzelnes Spiel spielt man direkt nach: `java -Dforge.ai.sim.debug=true -cp 
 
 Gleiche Länder im Deckbau stapeln, 5–6-Spieler-Raster im Zuschauer-Modus nur per CSS vorbereitet (kein Fixture),
 sehr volle Zuschauer-Boards bei 1280×720 werden klein (Karten bis 42 px), Moxfield bewusst nicht.
+
+## Lizenz und Herkunft
+
+Copyright (C) 2026 Haste-MC
+
+MTG-Player baut auf [Forge](https://github.com/Card-Forge/forge) auf, einer freien Magic-Regel-Engine unter
+der GNU General Public License v3, und wird deshalb selbst unter der **GPLv3** verteilt – der vollständige
+Lizenztext steht in [LICENSE](LICENSE). Das heißt für jeden, der eine gebaute Fassung weitergibt: Lizenztext
+mitliefern, Quelltext verfügbar halten, Änderungen kenntlich machen.
+
+Die Engine steckt als Submodul unter `forge/` und ist ein **veränderter** Forge: Fork
+[Haste-MC/forge](https://github.com/Haste-MC/forge), Branch `mtg-player`, Basis Tag `forge-2.0.14`. Was
+gegenüber dem Original anders ist, steht commitweise in `git log forge-2.0.14..mtg-player` und zusammengefasst
+in `forge/MODIFICATIONS.md` – im Kern Fehlerbehebungen und Verbesserungen an der KI.
+
+Magic: The Gathering ist ein Markenzeichen von Wizards of the Coast; dieses Projekt steht in keiner Verbindung
+zu Wizards und ist kostenlos. Kartenbilder werden nicht mitgeliefert, sondern beim Spielen von
+[Scryfall](https://scryfall.com) geladen.
