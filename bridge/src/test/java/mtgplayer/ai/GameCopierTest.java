@@ -164,4 +164,38 @@ class GameCopierTest {
         assertTrue(CardLists.filter(copyA.getCardsIn(ZoneType.Battlefield), CardPredicates.nameEquals("Argoth, Sanctum of Nature")).isEmpty(),
                 "Argoth liegt in der Kopie als eigene bleibende Karte im Spiel");
     }
+
+    /** Kern des Equip-Pingpong-Fixes (equip-brake-report.md): {@code AttachAi} (Z. 1382-1389) bremst
+     *  wiederholtes Umhaengen einer Ausruestung im selben Zug bisher nur ueber {@code AiCardMemory},
+     *  das am {@code AiController} haengt - und {@code GameCopier.clonePlayer} baut fuer jede
+     *  Spielkopie der Simulation einen frischen, leeren {@code AiController} (siehe
+     *  equip-loop-report.md). Die Bremse ist deshalb in {@code sim}/{@code hybrid} strukturell
+     *  wirkungslos. {@code Card.aiAttachTurn} ersetzt/ergaenzt das Gedaechtnis durch ein Feld am
+     *  Kartenobjekt selbst (wie {@code turnInZone}) - dieser Test belegt, dass genau dieses Feld
+     *  eine Spielkopie uebersteht, so wie es {@code CardCopyService.copyStats} (allgemeiner Kopierpfad)
+     *  und {@code GameCopier.addCard} (Simulationskopie, die Karten aus der PaperCard neu aufbaut)
+     *  jetzt beide explizit mitnehmen. */
+    @Test
+    @Timeout(value = 2, unit = TimeUnit.MINUTES)
+    void aiAttachTurnUeberlebtDieKopie() {
+        Scene s = Scene.twoPlayers(AiConfig.DEFAULT, AiConfig.DEFAULT);
+        Player a = s.player(0);
+        Game game = s.game();
+        Card greaves = s.card("Lightning Greaves", a, ZoneType.Battlefield);
+        Card bears = s.card("Grizzly Bears", a, ZoneType.Battlefield);
+        greaves.attachToEntity(bears, null, true);
+
+        int turn = game.getPhaseHandler().getTurn();
+        assertEquals(-1, greaves.getAiAttachTurn(), "Vorbedingung: noch nicht markiert");
+        greaves.setAiAttachTurn(turn);
+        assertEquals(turn, greaves.getAiAttachTurn());
+
+        Game copy = assertDoesNotThrow(() -> new GameCopier(game).makeCopy());
+
+        Card copiedGreaves = CardLists.filter(copy.getPlayer(a.getId()).getCardsIn(ZoneType.Battlefield),
+                CardPredicates.nameEquals("Lightning Greaves")).getFirst();
+        assertNotNull(copiedGreaves, "Greaves nicht kopiert");
+        assertEquals(turn, copiedGreaves.getAiAttachTurn(),
+                "aiAttachTurn fehlt in der Simulationskopie - die Bremse waere dort weiter wirkungslos");
+    }
 }
