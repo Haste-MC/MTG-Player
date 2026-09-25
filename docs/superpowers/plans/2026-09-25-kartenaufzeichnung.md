@@ -464,3 +464,52 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 - Ledger-Zeile in `.superpowers/sdd/progress.md`, dann `git push`.
 - Kevin braucht einen Bridge-Neustart; die Aufzeichnung beginnt mit der nächsten Partie, alte Partien
   bekommen keine Kartendaten.
+
+---
+
+### Task 7: Zeitachse zählt eigene Züge (Formatversion 3)
+
+**Files:**
+- Modify: `bridge/src/main/java/mtgplayer/stats/MatchRecord.java` (VERSION 2 → 3, Kommentar an `TurnPoint`)
+- Modify: `bridge/src/main/java/mtgplayer/stats/MatchRecorder.java` (`notePoint`-Aufruf)
+- Modify: `bridge/src/test/java/mtgplayer/stats/` (Test für die neue Zählweise)
+- Modify: `web/src/components/MatchTimeline.tsx`, `web/src/protocol.ts` (Kommentar zur Bedeutung je Version)
+
+**Interfaces:**
+- Consumes: nichts Neues.
+- Produces: `TurnPoint.turn` bedeutet ab `v: 3` den eigenen Zug des Sitzes.
+
+- [ ] **Step 1: Test schreiben, der die Zählweise unterscheidet**
+
+Ein Szenentest mit **mehr als zwei Sitzen**, in dem mindestens zwei eigene Züge eines Sitzes vergehen: die
+Zeitachse dieses Sitzes muss `turn` 1, 2, 3 … tragen, nicht 1, 4, 7 … Ohne mehr als zwei Sitze fallen beide
+Zählweisen zusammen und der Test würde nichts beweisen. Zusätzlich: `MatchRecord.VERSION` ist 3, und ein
+Datensatz trägt `v: 3`.
+
+- [ ] **Step 2: Test laufen lassen – er muss scheitern**
+
+```bash
+cd <worktree>/bridge && timeout 590 mvn -q -Dtest='mtgplayer.stats.*Test' -DfailIfNoSpecifiedTests=false test
+```
+
+- [ ] **Step 3: Umstellen**
+
+`MatchRecorder.onTurnBegan` ruft `notePoint(turnOwner, turnOwner.ownTurns)` statt `e.turnNumber()` – der
+Zähler ist an dieser Stelle bereits erhöht, `landsByTurn` benutzt ihn direkt darüber genauso.
+`MatchRecord.VERSION` auf 3, Kommentar an `TurnPoint` und am Feld: ab v3 eigener Zug, darunter Partiezug.
+**Nicht** anfassen: `turns`, `eliminatedTurn` und alle Prüfungen der Form `v >= 2`.
+
+- [ ] **Step 4: Client beschriften**
+
+`MatchTimeline.tsx` bekommt die Formatversion des Datensatzes und beschriftet die x-Achse: ab v3
+„Eigener Zug", darunter „Partiezug (alle Sitze)". Der Kommentar an `TurnPoint` in `protocol.ts` sagt
+dasselbe. Kein Umrechnen alter Datensätze.
+
+- [ ] **Step 5: Prüfen und committen**
+
+```bash
+cd <worktree>/bridge && timeout 590 mvn -q -Dtest='mtgplayer.stats.*Test,mtgplayer.server.*Test' -DfailIfNoSpecifiedTests=false test
+cd /home/kevin/projects/MTG-Player/web && npx tsc --noEmit && npx vitest run
+```
+
+Danach zwei Commits (Bridge im Worktree mit Cherry-Pick, Client im Hauptbaum), Präfixe `bridge:` und `ui:`.

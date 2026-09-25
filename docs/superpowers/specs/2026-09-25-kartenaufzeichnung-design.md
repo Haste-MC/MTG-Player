@@ -162,3 +162,22 @@ erscheint nur, wenn die Auswertung `enough` meldet; sonst bleibt alles wie heute
 - Siegquote mit und ohne eine bestimmte Karte – bei diesen Stichproben wäre das Rauschen mit Nachkommastelle.
 - Aktivierte Fähigkeiten (anderes Ereignis, eigenes Stück).
 - Nachträgliche Aufzeichnung für bereits gespielte Partien – die Daten gibt es erst ab jetzt.
+
+## 10. Nachtrag: Zeitachse auf eigene Züge (Formatversion 3)
+
+Kevins Regel – „die turns müssen jeweils für jeden einzeln gezählt werden, da Forge jeden Zug hochzählt und
+nicht wie üblich für jeden Spieler" – gilt auch für die Zeitachse. Sie speichert heute Forges globale
+Zugnummer (`notePoint(turnOwner, e.turnNumber())`): In einer 4er-Runde liegen die Punkte eines Sitzes bei
+1, 5, 9 … und die des nächsten bei 2, 6, 10 …; zwei Kurven liegen versetzt statt übereinander, und „Zug 20"
+ist in Wahrheit die fünfte eigene Runde.
+
+- `MatchRecord.VERSION` steigt auf **3**. Ab v3 trägt `TurnPoint.turn` den **eigenen** Zug des Sitzes
+  (`ownTurns`, derselbe Zähler wie `landsByTurn`, das schon so zählt). Alle übrigen Felder bleiben, wie sie
+  sind; die vorhandenen Prüfungen im Client lauten durchweg `v >= 2` und gelten damit weiter.
+- Alte Datensätze werden **nicht** umgerechnet: eine Division durch die Sitzzahl wäre geraten, sobald ein
+  Spieler ausgeschieden ist. Sie behalten ihre globalen Zugnummern.
+- `MatchTimeline.tsx` beschriftet die Achse nach der Formatversion des Datensatzes: ab v3 „Eigener Zug",
+  darunter „Partiezug (alle Sitze)". Gemischt wird nie – die Version gilt für den ganzen Datensatz.
+- `MatchRecord.turns` (Partiedauer) und `eliminatedTurn` bleiben globale Zugnummern: die eine ist als
+  „Partiezüge insgesamt" beschriftet, die andere wird nur als Verhältnis zu `turns` ausgewertet, in dem sich
+  die Zählweise herauskürzt.
