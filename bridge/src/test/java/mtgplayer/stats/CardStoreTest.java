@@ -105,7 +105,7 @@ class CardStoreTest {
      * ein harmloser Name innerhalb von {@code dir}, keine Verzeichnis-Traversierung.
      */
     @Test
-    void doppelpunktIdBleibtImVerzeichnis(@TempDir Path dir) {
+    void zweiPunkteAlsIdTraversierenNicht(@TempDir Path dir) {
         CardStore store = new CardStore(dir);
         store.write(log("..", "Mein Deck"));
         assertEquals(Optional.of(log("..", "Mein Deck")), store.read(".."));

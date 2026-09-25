@@ -51,7 +51,7 @@ public final class Bridge {
     private final DeckSource decks;
     private final MatchStore matches;
     /** Kartenbiografien (Runde C): eigene Ablage neben {@link #matches}, siehe {@link CardStore}. */
-    private final CardStore cards = CardStore.standard();
+    private final CardStore cards;
     /** Kartenvorschlaege (Stueck 2): EDHREC-Anreicherung, siehe {@link #suggestCards}. */
     private final Edhrec edhrec;
     /** Sparring (Stueck 3): genau ein Lauf zur Zeit, siehe {@link SparringRun}. */
@@ -84,10 +84,20 @@ public final class Bridge {
      *  damit kein Test den echten EDHREC-Abruf ausloest oder nach ~/.mtg-player schreibt. */
     Bridge(int wsPort, DeckStore store, Archidekt archidekt, MatchStore matches, GameRunner sparringRunner,
            Edhrec edhrec) {
+        this(wsPort, store, archidekt, matches, sparringRunner, edhrec, CardStore.standard());
+    }
+
+    /** Fuer Tests, die die Kartendatei pruefen (siehe BridgeEndToEndTest, "deleteMatch loescht die
+     *  Kartendatei mit"): eigener {@link CardStore} statt {@link CardStore#standard()} - Kevins echte
+     *  {@code ~/.mtg-player/cards} bleibt unberuehrt, und die Pruefung haengt nicht am geteilten
+     *  {@code target/test-data}, das sich alle Testklassen im selben Fork teilen. */
+    Bridge(int wsPort, DeckStore store, Archidekt archidekt, MatchStore matches, GameRunner sparringRunner,
+           Edhrec edhrec, CardStore cards) {
         this.store = store;
         this.archidekt = archidekt;
         this.decks = new DeckSource(store, archidekt);
         this.matches = matches;
+        this.cards = cards;
         this.edhrec = edhrec;
         this.ws = new WsServer(wsPort, this::handle, this::onClientConnected);
         // Der Lauf meldet Fortschritt und - je gespeicherter Partie - den Datensatz selbst; die

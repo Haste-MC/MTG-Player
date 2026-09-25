@@ -8,8 +8,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.fasterxml.jackson.databind.JsonNode;
 import mtgplayer.decks.Archidekt;
 import mtgplayer.decks.DeckStore;
+import mtgplayer.decks.Edhrec;
 import mtgplayer.forge.ForgeBoot;
 import mtgplayer.protocol.Json;
+import mtgplayer.sparring.SubprocessGameRunner;
+import mtgplayer.stats.CardStore;
 import mtgplayer.stats.MatchStore;
 import org.java_websocket.client.WebSocketClient;
 import org.java_websocket.handshake.ServerHandshake;
@@ -67,12 +70,19 @@ class BridgeEndToEndTest {
     @TempDir
     static Path matchDir;
 
+    /** Eigener {@link CardStore} (Task 2, Runde C): siehe {@link #lobbyStartKeepPrioConcede()}, das nach
+     *  deleteMatch prueft, dass auch die Kartendatei verschwindet. */
+    private static CardStore cards;
+
     @BeforeAll
     static void start() throws Exception {
         ForgeBoot.init();
         // eigener MatchStore (Task 3): Kevins echte ~/.mtg-player/matches.json wird nie angefasst,
-        // obwohl dieser Test mehrere echte Partien bis gameOver spielt (concede).
-        bridge = new Bridge(PORT, DeckStore.standard(), Archidekt.standard(), new MatchStore(matchDir.resolve("matches.json")));
+        // obwohl dieser Test mehrere echte Partien bis gameOver spielt (concede). Eigener CardStore aus
+        // demselben Grund fuer ~/.mtg-player/cards (Task 2, Runde C).
+        cards = new CardStore(matchDir.resolve("cards"));
+        bridge = new Bridge(PORT, DeckStore.standard(), Archidekt.standard(), new MatchStore(matchDir.resolve("matches.json")),
+                new SubprocessGameRunner(), new Edhrec(), cards);
         bridge.start();
         client = new WebSocketClient(new URI("ws://127.0.0.1:" + PORT)) {
             @Override public void onOpen(ServerHandshake h) { }
@@ -283,6 +293,10 @@ class BridgeEndToEndTest {
         assertEquals(1, updated.get("total").asInt(), updated.toString());
         String matchId = updated.get("matches").get(0).get("id").asText();
         assertFalse(updated.get("matches").get(0).get("counted").asBoolean(), "aufgegebene Partie zaehlt nicht");
+        // Task 2 (Runde C): eine aufgegebene, aber sauber (ueber concede/GameEventGameFinished statt
+        // markAborted/markCrashed/markTurnCapped) beendete Partie liefert trotzdem eine Kartendatei -
+        // siehe MatchRecorder-Klassenkommentar "Kartenbiografie".
+        assertTrue(cards.read(matchId).isPresent(), "Kartendatei existiert nach einer sauber beendeten Partie");
         // Task 3: die schlanke Liste traegt keine Zeitachse - weder je Partie noch je Sitz.
         assertFalse(updated.get("matches").get(0).has("timeline"), updated.toString());
         assertFalse(updated.get("matches").get(0).get("seats").get(0).has("timeline"), updated.toString());
@@ -303,6 +317,9 @@ class BridgeEndToEndTest {
         JsonNode afterDelete = await("matches", n -> matchWithId(n, matchId) == null, 10);
         assertEquals(0, afterDelete.get("matches").size(), afterDelete.toString());
         assertEquals(0, afterDelete.get("total").asInt(), afterDelete.toString());
+        // Task 2 (Runde C): deleteMatch loescht die Kartendatei mit - sie gehoert zur Partie, anders als
+        // bei setMatchCounted (siehe oben), das bewusst nichts loescht.
+        assertTrue(cards.read(matchId).isEmpty(), "deleteMatch loescht auch die Kartendatei");
     }
 
     private static JsonNode matchWithId(JsonNode matchesMsg, String id) {
