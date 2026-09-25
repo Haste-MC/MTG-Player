@@ -24,8 +24,13 @@ wurzel="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # <ziel> muss absolut sein, BEVOR unten in bridge/ hineingewechselt wird (Maven fuer
 # dependency:copy-dependencies) - sonst zeigt ein relativ uebergebenes <ziel> nach dem cd auf den
 # falschen Ort (waere z.B. unter bridge/ statt an der gewuenschten Stelle gelandet).
+# Zwei Formen gelten als absolut: "/..." (Linux/macOS/Git-Bash-eigene Pfade) UND "<Buchstabe>:..."
+# (Windows-Laufwerkspfad, z.B. "D:\a\..." - so liefert der GitHub-Runner GITHUB_WORKSPACE auf
+# windows-latest; ohne diese zweite Form haette case sie faelschlich fuer relativ gehalten und
+# ihnen "$(pwd)/" vorangestellt).
 case "$ziel" in
     /*) ;;
+    [A-Za-z]:*) ;;
     *) ziel="$(pwd)/$ziel" ;;
 esac
 
@@ -102,7 +107,19 @@ echo "$version" > "$bild_ordner/version.txt"
 # sondern am tatsaechlich kopierten Hauptjar wiedergefunden (siehe Bericht: mit einem
 # Testjar+Testlauf gegen die generierte HiApp.cfg und den Launcher selbst geprueft, welchen Wert
 # $APPDIR zur Laufzeit tatsaechlich einsetzt).
-appdir_tatsaechlich="$(dirname "$(find "$bild_ordner" -name "$hauptjar")")"
+# -maxdepth 4, head -n1 und die Leer-Pruefung sind Pflicht, nicht Kosmetik: findet find nichts
+# (Virenscanner haelt die frisch kopierte Datei kurz fest, ein anderes JDK legt das Jar woanders
+# ab, ...), liefert "dirname \"\"" klanglos "." zurueck - MIT Exit-Code 0, set -e greift also
+# nicht. Das folgende mv haette dann das ausgeduennte res eine Ebene zu hoch (ins Arbeitsverzeichnis
+# des Aufrufers) geschoben und das Skript haette trotzdem "fertig" gemeldet - genau das still
+# kaputte Paket, das die ganze Messerei oben vermeiden soll. Dieselbe Absicherung wie beim
+# Hauptjar-Fund oben (Zeile ~48).
+appdir_treffer="$(find "$bild_ordner" -maxdepth 4 -name "$hauptjar" | head -n1)"
+if [ -z "$appdir_treffer" ]; then
+    echo "package.sh: $hauptjar nicht im erzeugten App-Image $bild_ordner gefunden - APPDIR unbekannt, breche ab" >&2
+    exit 1
+fi
+appdir_tatsaechlich="$(dirname "$appdir_treffer")"
 mv "$assets_staging" "$appdir_tatsaechlich/../assets"
 
 echo "package.sh: fertig."
