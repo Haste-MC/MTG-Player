@@ -111,8 +111,15 @@ Zu jedem Vorschlag ein Kandidat aus dem eigenen Deck:
 3. Findet sich in der Rolle nichts, kommen die unklassifizierten Karten des Decks dran (dieselbe Rangfolge).
 4. Findet sich auch dort nichts, fehlt `cut` – lieber kein Vorschlag als ein schlechter.
 5. Jeder Kandidat wird höchstens **einmal** vorgeschlagen; ist er vergeben, rückt der nächste nach.
-6. Der Grund nennt nur, was wirklich geprüft wurde: „spielt in vergleichbaren Decks fast niemand (4 %)",
-   „führt EDHREC für diesen Commander gar nicht", „ist mit {2}{G}{G}{G} die teuerste Karte dieser Rolle".
+6. Der Grund nennt nur, was wirklich geprüft wurde, und die Formulierung hängt an der tatsächlichen Zahl:
+   - kein EDHREC-Eintrag → „führt EDHREC für diesen Commander gar nicht"
+   - Anteil unter 10 % → „spielt in vergleichbaren Decks fast niemand (4 %)"
+   - Anteil ab 10 % → „hat mit 85 % den niedrigsten Anteil der Karten dieser Rolle in deinem Deck"
+     (ein hoher Anteil darf **nie** als „spielt fast niemand" erscheinen – die Karte ist dann nur der
+     schwächste Kandidat eines starken Feldes, und genau das muss dastehen)
+   - teuerste der Kandidatenliste → „ist mit {2}{G}{G}{G} die teuerste Karte dieser Rolle" (nur dann)
+   - aus dem Rückfall auf unklassifizierte Karten → „trifft keine der neun Rollen"
+   Treffen zwei Gründe zu, werden sie mit „und" verbunden.
 
 **Nicht enthalten:** „hat in deinen Partien nie gewirkt". Die Partiedatensätze halten keine Kartennamen,
 nur Zahlen je Sitz; das bräuchte eine eigene Aufzeichnung gewirkter Karten und ist damit ein eigenes Stück.
