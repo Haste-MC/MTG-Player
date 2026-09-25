@@ -31,7 +31,18 @@ import org.junit.jupiter.api.io.TempDir;
  * werden. {@code mtgplayer.data} zeigt laut {@code bridge/pom.xml} fuer jeden Testlauf auf
  * {@code target/test-data} - weder diese Test-JVM noch der Kindprozess schreiben also in Kevins echtes
  * {@code ~/.mtg-player}. Das Original {@code forge/forge-gui/res} wird von {@code trim-res.sh} nur
- * gelesen (Hardlinks) und landet hier ausschliesslich in einem {@code @TempDir}.</p>
+ * gelesen und landet hier ausschliesslich in einem {@code @TempDir}.</p>
+ *
+ * <p><b>Falle, die ein Review aufgedeckt hat:</b> {@code ForgeBoot.init()} legt bei gesetztem
+ * {@code mtgplayer.data} einen Symlink {@code <data>/assets/res -> <realAssets>/res} an und laesst
+ * ihn stehen, falls er schon existiert ({@code isolatedAssetsDir}). Bekaeme der Kindprozess DASSELBE
+ * {@code mtgplayer.data} wie diese Test-JVM (target/test-data, von der ersten {@link ForgeBoot#init()}
+ * hier oben schon mit einem Symlink aufs VOLLE res belegt), faende sein eigener {@code init()}-Aufruf
+ * diesen Symlink bereits vor und liesse ihn stehen - das ausgeduennte {@code res} liefe komplett ins
+ * Leere, der Kindprozess laede unbemerkt weiter das volle res (Kartenzahl waere dann immer gleich,
+ * ganz unabhaengig vom Inhalt des ausgeduennten Verzeichnisses - genau das ist beim ersten Anlauf
+ * passiert). Deshalb bekommt der Kindprozess hier ein EIGENES, frisches {@code mtgplayer.data}
+ * ({@code tmp.resolve("child-data")}), unter dem garantiert noch kein Symlink liegt.</p>
  */
 class TrimmedResTest {
 
@@ -55,8 +66,7 @@ class TrimmedResTest {
         long t0 = System.currentTimeMillis();
         runTrimScript(script, volleAssets.resolve("res"), ziel);
         long kopierMillis = System.currentTimeMillis() - t0;
-        // Siehe Klassenkommentar: Hardlinks statt Kopie machen das schnell - diese Zahl gehoert in den
-        // Bericht, falls es doch einmal laenger dauert (z. B. Quelle/@TempDir auf verschiedenen Mounts).
+        // trim-res.sh kopiert echt (kein Hardlink, siehe dort) - die gemessene Zeit gehoert in den Bericht.
         System.out.println("[TrimmedResTest] trim-res.sh: " + kopierMillis + " ms zum Ausduennen");
 
         ChildJvm.Result result = trimmedCheckImKindprozess(tmp, ziel);
@@ -103,10 +113,17 @@ class TrimmedResTest {
      * System-Property jedesmal frisch, kein Caching), das ist der einzige Hebel dafuer. Wie in
      * {@code ForgeBootDataDirTest}: den vorgefundenen Wert merken und im {@code finally} exakt wiederherstellen,
      * sonst verliert der Rest dieses Testlaufs (ein Fork fuer die ganze Klasse) die Isolation.
+     *
+     * <p>Ebenso {@code mtgplayer.data} umbiegen, auf ein FRISCHES Verzeichnis ({@code tmp.resolve("child-data")},
+     * garantiert noch nie von {@link ForgeBoot#init()} angefasst) statt auf denselben Wert wie diese
+     * Test-JVM - siehe Klassenkommentar ("Falle, die ein Review aufgedeckt hat") fuer den Grund: sonst
+     * findet der Kindprozess dort schon einen Symlink auf das VOLLE res vor und laesst ihn stehen.</p>
      */
     private static ChildJvm.Result trimmedCheckImKindprozess(Path tmp, Path ziel) {
-        String vorher = System.getProperty("mtgplayer.assets");
+        String vorherAssets = System.getProperty("mtgplayer.assets");
+        String vorherData = System.getProperty("mtgplayer.data");
         System.setProperty("mtgplayer.assets", ziel.toString());
+        System.setProperty("mtgplayer.data", tmp.resolve("child-data").toString());
         try {
             Path stderrFile = tmp.resolve("trimmed-check-stderr.log");
             ChildJvm.Result r = ChildJvm.run(List.of("--trimmed-check"), "TRIMMED_RESULT ", stderrFile,
@@ -116,11 +133,19 @@ class TrimmedResTest {
             }
             return r;
         } finally {
-            if (vorher == null) {
-                System.clearProperty("mtgplayer.assets");
-            } else {
-                System.setProperty("mtgplayer.assets", vorher);
-            }
+            restoreProperty("mtgplayer.assets", vorherAssets);
+            restoreProperty("mtgplayer.data", vorherData);
+        }
+    }
+
+    /** {@code null} = beim Start war keine Property gesetzt, sonst der vorgefundene Wert - siehe
+     *  {@code ForgeBootDataDirTest} fuer denselben Grund (kein blosses {@code clearProperty}, das
+     *  wuerde bei gesetzt gewesener Property die Isolation fuer den Rest dieses Forks wegnehmen). */
+    private static void restoreProperty(String key, String vorher) {
+        if (vorher == null) {
+            System.clearProperty(key);
+        } else {
+            System.setProperty(key, vorher);
         }
     }
 }
