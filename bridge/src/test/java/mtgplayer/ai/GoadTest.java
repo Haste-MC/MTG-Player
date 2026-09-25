@@ -198,6 +198,61 @@ class GoadTest {
         assertSame(b, combat.getDefenderByAttacker(bears), "Baeren greifen nicht B an" + why(s));
     }
 
+    /** (f) Angriffspflicht bei mehreren gegoadeten Kreaturen mit verschiedenen Goadern, wie am
+     *  Vierertisch mit Rendmaw, Creaking Nest: A haelt zwei Kreaturen. Die Baeren sind frei und greifen
+     *  C an (C ist lebensschwach, also der von der KI bevorzugte Verteidiger). Der Dreadmaw ist
+     *  ausschliesslich von C gegoadet - er darf C nach Goad-Regel nicht angreifen, solange B (nicht
+     *  goadend, legal angreifbar) zur Verfuegung steht, muss also B angreifen. {@code refreshCombatants}
+     *  in {@code AiAttackController} filtert den Dreadmaw aber schon vorab aus {@code this.attackers}
+     *  heraus, weil er den von der KI gewaehlten Verteidiger (C) nicht angreifen darf - und die
+     *  Pflicht-Angreifer-Schleife sieht dadurch nur die Baeren, nie den Dreadmaw. Ohne Fix bleibt der
+     *  Dreadmaw zu Hause, die eigene Erklaerung der KI hat eine Pflichtverletzung mehr als die
+     *  bestmoegliche legale Erklaerung, und {@code AiController} verwirft sie mit
+     *  "AI Attack declaration invalid". */
+    @Test
+    @Timeout(value = 3, unit = TimeUnit.MINUTES)
+    void f_gegoadeteKreaturMussZumNichtGoadendenVerteidiger() {
+        Scene s = Scene.of(List.of(AiConfig.DEFAULT, AiConfig.DEFAULT, AiConfig.DEFAULT), 3);
+        Player a = s.player(0), b = s.player(1), c = s.player(2);
+        for (int i = 0; i < 3; i++) {
+            s.cards("Forest", 10, s.player(i), ZoneType.Library);
+        }
+        Card bears = s.card(BEARS, a, ZoneType.Battlefield);
+        Card dreadmaw = s.card(DREADMAW, a, ZoneType.Battlefield);
+        // B bleibt bei voller Stammleben (unattraktives Ziel), C ist lebensschwach (attraktives Ziel) -
+        // choosePreferredDefenderPlayer gewichtet niedrige Leben quadratisch, das dominiert hier klar.
+        c.setLife(1, null);
+        dreadmaw.addGoad(s.game().getNextTimestamp(), c);
+        // C bekommt einen 3/3-Blocker: die (ungegoadeten, freien) Baeren wuerden dort sinnlos
+        // sterben und sollen deshalb zu Hause bleiben - der Fix darf die freie Entscheidung der KI
+        // nicht aushebeln, nur die Pflicht des Dreadmaw nachtragen.
+        Card blocker = s.card(BEARS, c, ZoneType.Battlefield);
+        blocker.setBasePower(3);
+        blocker.setBaseToughness(3);
+        s.setPhase(PhaseType.END_OF_TURN, c);
+
+        java.io.ByteArrayOutputStream captured = new java.io.ByteArrayOutputStream();
+        java.io.PrintStream oldErr = System.err;
+        System.setErr(new java.io.PrintStream(captured));
+        try {
+            s.loopUntil(PhaseType.COMBAT_DECLARE_BLOCKERS, a);
+        } finally {
+            System.setErr(oldErr);
+        }
+        String stderr = captured.toString();
+        assertFalse(stderr.contains("AI Attack declaration invalid"),
+                "Notbehelf ist eingesprungen - die KI-Planung wurde verworfen:\n" + stderr + why(s));
+
+        Combat combat = s.game().getCombat();
+        assertNotNull(combat, "kein Kampf" + why(s));
+        assertTrue(dreadmaw.isGoadedBy(c), "Goad verloren" + why(s));
+        assertTrue(combat.isAttacking(dreadmaw), "Dreadmaw greift nicht an (Pflicht)" + why(s));
+        assertSame(b, combat.getDefenderByAttacker(dreadmaw), "Dreadmaw greift nicht B an" + why(s));
+        assertFalse(combat.isAttacking(bears),
+                "ungegoadete Baeren greifen trotz sicherem Tod am 3/3-Blocker an - KI plant nicht mehr sinnvoll"
+                        + why(s));
+    }
+
     /** Sim-Bewertung: die Spielkopie der Voll-Simulation muss den Goad-Zustand tragen, sonst zaehlt die
      *  Simulation die gegoadete Kreatur als frei (Spec §3). Kopie nach dem Trigger aus (a). */
     @Test
