@@ -1,0 +1,384 @@
+{
+ "container": {
+  "json_dict": {
+   "cardlists": [
+    {
+     "header": "High Synergy Cards",
+     "tag": "highsynergycards",
+     "cardviews": [
+      {
+       "id": "618c8ecc-686d-41de-b9b1-1a7ee9cc7c14",
+       "name": "Zuran Orb",
+       "sanitized": "zuran-orb",
+       "slug": "zuran-orb",
+       "url": "/cards/zuran-orb",
+       "synergy": 0.8255787249057434,
+       "num_decks": 2439,
+       "potential_decks": 2735,
+       "trend_zscore": -0.18549833124792386
+      },
+      {
+       "id": "83036e21-21ea-4324-aa07-11757f80c417",
+       "name": "Sylvan Safekeeper",
+       "sanitized": "sylvan-safekeeper",
+       "slug": "sylvan-safekeeper",
+       "url": "/cards/sylvan-safekeeper",
+       "synergy": 0.7325348992746491,
+       "num_decks": 2281,
+       "potential_decks": 2735,
+       "trend_zscore": 1.1197210132963875
+      },
+      {
+       "id": "3f8a0a0e-81f7-40a2-b393-bdc1423549f6",
+       "name": "Ramunap Excavator",
+       "sanitized": "ramunap-excavator",
+       "slug": "ramunap-excavator",
+       "url": "/cards/ramunap-excavator",
+       "synergy": 0.7107839886605385,
+       "num_decks": 2212,
+       "potential_decks": 2735,
+       "trend_zscore": -1.0522654196930585
+      },
+      {
+       "id": "63c7f172-0aec-4629-967c-37253aed0f0d",
+       "name": "Splendid Reclamation",
+       "sanitized": "splendid-reclamation",
+       "slug": "splendid-reclamation",
+       "url": "/cards/splendid-reclamation",
+       "synergy": 0.6905930768231789,
+       "num_decks": 2019,
+       "potential_decks": 2735,
+       "trend_zscore": -0.5727844475023859
+      },
+      {
+       "id": "3e76be46-cf81-4fef-bc5b-f87666cb0413",
+       "name": "Harrow",
+       "sanitized": "harrow",
+       "slug": "harrow",
+       "url": "/cards/harrow",
+       "synergy": 0.6508404692941923,
+       "num_decks": 2279,
+       "potential_decks": 2735,
+       "trend_zscore": -0.511250871956812
+      },
+      {
+       "id": "2fe97fbe-a6d6-4e96-8c26-f81bcdf579a1",
+       "name": "Azusa, Lost but Seeking",
+       "sanitized": "azusa-lost-but-seeking",
+       "slug": "azusa-lost-but-seeking",
+       "url": "/cards/azusa-lost-but-seeking",
+       "synergy": 0.6072680671585535,
+       "num_decks": 2110,
+       "potential_decks": 2735,
+       "trend_zscore": -0.6807183721995352
+      },
+      {
+       "id": "ee5ac47c-e8b6-400e-b91e-a7cd0f952cf1",
+       "name": "Lotus Field",
+       "sanitized": "lotus-field",
+       "slug": "lotus-field",
+       "url": "/cards/lotus-field",
+       "synergy": 0.5742813036157013,
+       "num_decks": 1713,
+       "potential_decks": 2735,
+       "trend_zscore": 2.348843331471409
+      },
+      {
+       "id": "175e21a3-00f7-4c51-8a8e-fbfd7089efda",
+       "name": "Scapeshift",
+       "sanitized": "scapeshift",
+       "slug": "scapeshift",
+       "url": "/cards/scapeshift",
+       "synergy": 0.5614052166624589,
+       "num_decks": 1708,
+       "potential_decks": 2735,
+       "trend_zscore": 0.02412002124518709
+      }
+     ]
+    },
+    {
+     "header": "Game Changers",
+     "tag": "gamechangers",
+     "cardviews": [
+      {
+       "id": "523414cb-f8db-407a-808a-01454e03d8b9",
+       "name": "Crop Rotation",
+       "sanitized": "crop-rotation",
+       "slug": "crop-rotation",
+       "url": "/cards/crop-rotation",
+       "synergy": 0.6233539205741261,
+       "num_decks": 2193,
+       "potential_decks": 2735,
+       "trend_zscore": -0.918885189618231
+      },
+      {
+       "id": "3d23f800-7a6f-40e3-b242-9f5955e47a75",
+       "name": "Glacial Chasm",
+       "sanitized": "glacial-chasm",
+       "slug": "glacial-chasm",
+       "url": "/cards/glacial-chasm",
+       "synergy": 0.2980496449767192,
+       "num_decks": 869,
+       "potential_decks": 2735,
+       "trend_zscore": 0.22239225514329888
+      },
+      {
+       "id": "470ca3f4-29aa-4c4c-8ff2-8cdd70c69943",
+       "name": "Field of the Dead",
+       "sanitized": "field-of-the-dead",
+       "slug": "field-of-the-dead",
+       "url": "/cards/field-of-the-dead",
+       "synergy": 0.2205292690389008,
+       "num_decks": 707,
+       "potential_decks": 2735,
+       "trend_zscore": 0.21140833069815118
+      },
+      {
+       "id": "f39aa2e9-e294-4ce6-bf5e-e1f579101a7a",
+       "name": "Worldly Tutor",
+       "sanitized": "worldly-tutor",
+       "slug": "worldly-tutor",
+       "url": "/cards/worldly-tutor",
+       "synergy": 0.03517275852341803,
+       "num_decks": 601,
+       "potential_decks": 2735,
+       "trend_zscore": -1.6014050197770822
+      },
+      {
+       "id": "bfe3329c-7faa-4925-b9d2-075a1ab27e80",
+       "name": "Natural Order",
+       "sanitized": "natural-order",
+       "slug": "natural-order",
+       "url": "/cards/natural-order",
+       "synergy": 0.09140576383316806,
+       "num_decks": 566,
+       "potential_decks": 2735,
+       "trend_zscore": -1.40366582673797
+      },
+      {
+       "id": "25b0b816-0583-44aa-9dc5-f3ff48993a51",
+       "name": "Gaea's Cradle",
+       "sanitized": "gaeas-cradle",
+       "slug": "gaeas-cradle",
+       "url": "/cards/gaeas-cradle",
+       "synergy": 0.053522093971563864,
+       "num_decks": 453,
+       "potential_decks": 2735,
+       "trend_zscore": 0.07930204499025773
+      },
+      {
+       "id": "bd3d4b4b-cf31-4f89-8140-9650edb03c7b",
+       "name": "Ancient Tomb",
+       "sanitized": "ancient-tomb",
+       "slug": "ancient-tomb",
+       "url": "/cards/ancient-tomb",
+       "synergy": 0.0674803008259535,
+       "num_decks": 412,
+       "potential_decks": 2735,
+       "trend_zscore": -1.3677565572181822
+      },
+      {
+       "id": "28028830-83ed-45e2-b495-3b9ad9d3e988",
+       "name": "Mox Diamond",
+       "sanitized": "mox-diamond",
+       "slug": "mox-diamond",
+       "url": "/cards/mox-diamond",
+       "synergy": 0.02866072495044951,
+       "num_decks": 153,
+       "potential_decks": 2735,
+       "trend_zscore": 0.0
+      }
+     ]
+    },
+    {
+     "header": "Creatures",
+     "tag": "creatures",
+     "cardviews": [
+      {
+       "id": "39704000-65d3-4d39-849e-a3b617376bbc",
+       "name": "Eternal Witness",
+       "sanitized": "eternal-witness",
+       "slug": "eternal-witness",
+       "url": "/cards/eternal-witness",
+       "synergy": 0.2988443233507363,
+       "num_decks": 1514,
+       "potential_decks": 2735,
+       "trend_zscore": -3.18225955120932
+      },
+      {
+       "id": "1230be09-8436-4023-bb8b-d325456c0914",
+       "name": "Titania, Nature's Force",
+       "sanitized": "titania-natures-force",
+       "slug": "titania-natures-force",
+       "url": "/cards/titania-natures-force",
+       "synergy": 0.4456109325530505,
+       "num_decks": 1378,
+       "potential_decks": 2735,
+       "trend_zscore": 2.207195462741367
+      },
+      {
+       "id": "c6f1e60f-a195-4590-80b0-86767de6c423",
+       "name": "Avenger of Zendikar",
+       "sanitized": "avenger-of-zendikar",
+       "slug": "avenger-of-zendikar",
+       "url": "/cards/avenger-of-zendikar",
+       "synergy": 0.349585994733722,
+       "num_decks": 1376,
+       "potential_decks": 2735,
+       "trend_zscore": 0.3168311724632902
+      },
+      {
+       "id": "d9482aab-6ddf-48e1-84fa-b13d5ff81e69",
+       "name": "Icetill Explorer",
+       "sanitized": "icetill-explorer",
+       "slug": "icetill-explorer",
+       "url": "/cards/icetill-explorer",
+       "synergy": 0.3755207370560473,
+       "num_decks": 910,
+       "potential_decks": 1872,
+       "trend_zscore": 1.4271746473632954
+      },
+      {
+       "id": "84aa18de-6acc-46cc-8e28-3046790a6751",
+       "name": "Rampaging Baloths",
+       "sanitized": "rampaging-baloths",
+       "slug": "rampaging-baloths",
+       "url": "/cards/rampaging-baloths",
+       "synergy": 0.3169520808737507,
+       "num_decks": 1328,
+       "potential_decks": 2735,
+       "trend_zscore": 0.9359408054404607
+      },
+      {
+       "id": "66f135b4-8cb3-4a4e-86ae-81a3cf4b7259",
+       "name": "Aftermath Analyst",
+       "sanitized": "aftermath-analyst",
+       "slug": "aftermath-analyst",
+       "url": "/cards/aftermath-analyst",
+       "synergy": 0.41772101342597845,
+       "num_decks": 1295,
+       "potential_decks": 2735,
+       "trend_zscore": 0.9579425357826865
+      },
+      {
+       "id": "ea630ba1-22f9-4a10-bdc6-0d03128214f4",
+       "name": "Scute Swarm",
+       "sanitized": "scute-swarm",
+       "slug": "scute-swarm",
+       "url": "/cards/scute-swarm",
+       "synergy": 0.3073858363970551,
+       "num_decks": 1267,
+       "potential_decks": 2735,
+       "trend_zscore": 0.9655984132197496
+      },
+      {
+       "id": "66444549-ad9b-49c6-a7c6-34e977c1085d",
+       "name": "Tireless Tracker",
+       "sanitized": "tireless-tracker",
+       "slug": "tireless-tracker",
+       "url": "/cards/tireless-tracker",
+       "synergy": 0.3323878406326226,
+       "num_decks": 1194,
+       "potential_decks": 2735,
+       "trend_zscore": -0.23865522768006184
+      }
+     ]
+    },
+    {
+     "header": "Instants",
+     "tag": "instants",
+     "cardviews": [
+      {
+       "id": "97a8a5fe-0391-489b-9556-0a1bf7e1900d",
+       "name": "Constant Mists",
+       "sanitized": "constant-mists",
+       "slug": "constant-mists",
+       "url": "/cards/constant-mists",
+       "synergy": 0.48678210825834195,
+       "num_decks": 1445,
+       "potential_decks": 2735,
+       "trend_zscore": -1.5383951223699404
+      },
+      {
+       "id": "e32c67d1-187f-40df-b3b3-6036f5c92834",
+       "name": "Heroic Intervention",
+       "sanitized": "heroic-intervention",
+       "slug": "heroic-intervention",
+       "url": "/cards/heroic-intervention",
+       "synergy": 0.02617483105247259,
+       "num_decks": 1375,
+       "potential_decks": 2735,
+       "trend_zscore": 1.1741494785278683
+      },
+      {
+       "id": "2fa1dac5-51ba-403e-b48b-d2c0d23a8146",
+       "name": "Return of the Wildspeaker",
+       "sanitized": "return-of-the-wildspeaker",
+       "slug": "return-of-the-wildspeaker",
+       "url": "/cards/return-of-the-wildspeaker",
+       "synergy": 0.04544842148107181,
+       "num_decks": 1116,
+       "potential_decks": 2735,
+       "trend_zscore": 0.4712254492298571
+      },
+      {
+       "id": "5caae5ae-845f-42c2-b1ae-956df2739433",
+       "name": "Archdruid's Charm",
+       "sanitized": "archdruids-charm",
+       "slug": "archdruids-charm",
+       "url": "/cards/archdruids-charm",
+       "synergy": 0.10912712284064705,
+       "num_decks": 967,
+       "potential_decks": 2735,
+       "trend_zscore": 0.45263765319608656
+      },
+      {
+       "id": "d24b6640-ef2f-4c92-beb3-afdf78f9c2d5",
+       "name": "Nature's Claim",
+       "sanitized": "natures-claim",
+       "slug": "natures-claim",
+       "url": "/cards/natures-claim",
+       "synergy": 0.11014356031501124,
+       "num_decks": 851,
+       "potential_decks": 2735,
+       "trend_zscore": -1.5046587867772365
+      },
+      {
+       "id": "8967ceff-9e25-46da-926b-e05f4ee98325",
+       "name": "Realms Uncharted",
+       "sanitized": "realms-uncharted",
+       "slug": "realms-uncharted",
+       "url": "/cards/realms-uncharted",
+       "synergy": 0.2698150988123104,
+       "num_decks": 785,
+       "potential_decks": 2735,
+       "trend_zscore": -1.7030482416161048
+      },
+      {
+       "id": "017c415b-d635-43c6-92b8-8c95d1c4ff8d",
+       "name": "Force of Vigor",
+       "sanitized": "force-of-vigor",
+       "slug": "force-of-vigor",
+       "url": "/cards/force-of-vigor",
+       "synergy": 0.16981589694101404,
+       "num_decks": 752,
+       "potential_decks": 2735,
+       "trend_zscore": 0.435477934141673
+      },
+      {
+       "id": "d3571dee-7b90-4c0c-abc7-59b515ffa129",
+       "name": "Krosan Grip",
+       "sanitized": "krosan-grip",
+       "slug": "krosan-grip",
+       "url": "/cards/krosan-grip",
+       "synergy": 0.04462264625742779,
+       "num_decks": 612,
+       "potential_decks": 2735,
+       "trend_zscore": 0.04592089680850198
+      }
+     ]
+    }
+   ]
+  }
+ }
+}
