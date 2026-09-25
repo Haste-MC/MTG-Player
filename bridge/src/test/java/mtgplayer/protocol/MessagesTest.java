@@ -8,6 +8,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import mtgplayer.decks.Suggestions;
 import org.junit.jupiter.api.Test;
 
+import java.time.Instant;
 import java.util.List;
 
 /**
@@ -28,19 +29,22 @@ class MessagesTest {
                 "spielt in vergleichbaren Decks fast niemand (4 %) und ist mit {2}{G}{G}{G} die teuerste Karte dieser Rolle");
         Suggestions.Item item = new Suggestions.Item("Heroic Intervention", "wipeProtection", "{1}{G}", 2,
                 0.68, false, "c:heroic_intervention", "Instant\nUntil end of turn, permanents you control gain hexproof and indestructible.", cut);
-        Suggestions.Result result = new Suggestions.Result("edhrec", null, List.of(item));
+        Instant fetched = Instant.parse("2026-09-22T19:31:02Z");
+        Suggestions.Result result = new Suggestions.Result("edhrec", null, List.of(item), fetched);
 
         Messages.CardSuggestionsMsg msg = new Messages.CardSuggestionsMsg("Mein Deck", result);
         assertEquals("cardSuggestions", msg.type());
         assertEquals("Mein Deck", msg.deck());
         assertEquals("edhrec", msg.source());
         assertEquals(List.of(item), msg.suggestions());
+        assertEquals("2026-09-22T19:31:02Z", msg.fetched());
 
         JsonNode json = Json.parse(Json.toJson(msg));
         assertEquals("cardSuggestions", json.get("type").asText());
         assertEquals("Mein Deck", json.get("deck").asText());
         assertEquals("edhrec", json.get("source").asText());
         assertFalse(json.has("note"), "note ist null und soll fehlen, nicht als null-Feld erscheinen");
+        assertEquals("2026-09-22T19:31:02Z", json.get("fetched").asText());
         JsonNode suggestion = json.get("suggestions").get(0);
         assertEquals("Heroic Intervention", suggestion.get("name").asText());
         assertEquals("wipeProtection", suggestion.get("role").asText());
@@ -59,7 +63,8 @@ class MessagesTest {
         // source "db" (Ruecknahme ohne EDHREC): share fehlt (Spec §2), ebenso cut ohne Schnittkandidat.
         Suggestions.Item item = new Suggestions.Item("Rampant Growth", "ramp", "{2}{G}", 3,
                 null, false, "c:rampant_growth", "Search your library for a basic land card.", null);
-        Suggestions.Result result = new Suggestions.Result("db", "Ohne EDHREC-Daten: Vorschläge nur aus der Kartendatenbank.", List.of(item));
+        // Kein Netzabruf im Rueckfall -> kein Abrufdatum (siehe Suggestions.of).
+        Suggestions.Result result = new Suggestions.Result("db", "Ohne EDHREC-Daten: Vorschläge nur aus der Kartendatenbank.", List.of(item), null);
 
         Messages.CardSuggestionsMsg msg = new Messages.CardSuggestionsMsg("Mein Deck", result);
         JsonNode json = Json.parse(Json.toJson(msg));
@@ -68,12 +73,13 @@ class MessagesTest {
         JsonNode suggestion = json.get("suggestions").get(0);
         assertFalse(suggestion.has("share"), "share fehlt bei source db");
         assertFalse(suggestion.has("cut"), "cut fehlt ohne Schnittkandidat");
+        assertFalse(json.has("fetched"), "fetched ist null und soll fehlen, nicht als null-Feld erscheinen");
     }
 
     @Test
     void leereRollenLiefertLeereSuggestionsMitHinweis() {
         // Spec §2: leere roles -> leere suggestions mit festem Hinweistext (siehe Suggestions.of).
-        Suggestions.Result result = new Suggestions.Result("edhrec", "Keine Lücke gefunden.", List.of());
+        Suggestions.Result result = new Suggestions.Result("edhrec", "Keine Lücke gefunden.", List.of(), Instant.now());
         Messages.CardSuggestionsMsg msg = new Messages.CardSuggestionsMsg("Mein Deck", result);
         JsonNode json = Json.parse(Json.toJson(msg));
         assertEquals("Keine Lücke gefunden.", json.get("note").asText());

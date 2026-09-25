@@ -3,6 +3,7 @@ package mtgplayer.decks;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import forge.deck.Deck;
@@ -141,6 +142,24 @@ class SuggestionsTest {
         assertEquals("{G}", i.manaCost());
         assertFalse(i.imageKey().isBlank());
         assertFalse(i.text().isBlank());
+    }
+
+    @Test
+    void traegtDasAbrufdatumDerSeiteMit() {
+        // Kevin soll sehen koennen, wie alt der EDHREC-Stand ist, den die Vorschlaege benutzen - dafuer
+        // muss Result.fetched() genau der Instant sein, den die uebergebene Page traegt.
+        Instant fetched = Instant.parse("2026-09-01T12:00:00Z");
+        Suggestions.Result r = Suggestions.of(deck(), List.of("ramp"), 4,
+                new Edhrec.Page("titania-protector-of-argoth", List.of(ec("Llanowar Elves", 0.4)), fetched));
+        assertEquals(fetched, r.fetched());
+    }
+
+    @Test
+    void ohneEdhrecFehltDasAbrufdatum() {
+        // Der Datenbank-Rueckfall hat keinen EDHREC-Stand - "fehlt" statt eines erfundenen Datums.
+        Suggestions.Result r = Suggestions.of(deck(), List.of("wipeProtection"), 4, null);
+        assertEquals("db", r.source());
+        assertNull(r.fetched());
     }
 
     @Test

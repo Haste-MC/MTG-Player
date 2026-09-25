@@ -124,11 +124,14 @@ public final class Messages {
         public DeckAnalysisMsg(String deck, DeckAnalysis analysis) { this("deckAnalysis", deck, analysis); }
     }
 
-    /** Antwort auf {"type":"suggestCards"} (Spec 2026-09-25-kartenvorschlaege §2). */
+    /** Antwort auf {"type":"suggestCards"} (Spec 2026-09-25-kartenvorschlaege §2). fetched: Abrufdatum
+     *  des EDHREC-Stands (ISO, wie {@link MatchRecord#startedAt}), {@code null} im Datenbank-Rueckfall -
+     *  der Client zeigt daran, wie alt die angezeigten Vorschlaege sind. */
     public record CardSuggestionsMsg(String type, String deck, String source, String note,
-                                     List<Suggestions.Item> suggestions) {
+                                     List<Suggestions.Item> suggestions, String fetched) {
         public CardSuggestionsMsg(String deck, Suggestions.Result r) {
-            this("cardSuggestions", deck, r.source(), r.note(), r.items());
+            this("cardSuggestions", deck, r.source(), r.note(), r.items(),
+                    r.fetched() == null ? null : r.fetched().toString());
         }
     }
 

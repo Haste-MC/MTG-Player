@@ -27,6 +27,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -130,6 +131,11 @@ class BridgeSuggestCardsTest {
         assertTrue(suggestion.has("share"), "source edhrec traegt einen Anteil: " + suggestion);
         assertTrue(suggestion.has("imageKey"), suggestion.toString());
         assertTrue(suggestion.has("text"), suggestion.toString());
+        // Quelle "edhrec": die Bridge hat gerade erst abgerufen (Edhrec.page() ohne Zwischenstand im
+        // frischen Temp-Verzeichnis) - fetched muss also da sein und ein gueltiger ISO-Zeitpunkt.
+        assertTrue(msg.has("fetched"), msg.toString());
+        assertFalse(msg.get("fetched").isNull(), msg.toString());
+        Instant.parse(msg.get("fetched").asText());   // wirft, wenn kein gueltiges ISO-Datum
 
         assertEquals(1, edhrecCalls.get(), "genau ein Abruf ueber die eingesetzte Quelle, kein echtes Netz");
     }

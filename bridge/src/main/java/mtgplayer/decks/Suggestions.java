@@ -10,6 +10,7 @@ import forge.deck.DeckSection;
 import forge.item.PaperCard;
 import forge.model.FModel;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -41,7 +42,9 @@ public final class Suggestions {
     public record Item(String name, String role, String manaCost, int cmc, Double share, boolean gameChanger,
                         String imageKey, String text, Cut cut) { }
 
-    public record Result(String source, String note, List<Item> items) { }
+    /** fetched: Abrufdatum des EDHREC-Stands, aus dem die Vorschlaege stammen ({@code page.fetched()}),
+     *  {@code null} im Datenbank-Rueckfall - dort gibt es keinen Stand, dessen Alter man zeigen koennte. */
+    public record Result(String source, String note, List<Item> items, Instant fetched) { }
 
     private Suggestions() { }
 
@@ -56,7 +59,8 @@ public final class Suggestions {
     public static Result of(Deck deck, List<String> roles, Integer bracket, Edhrec.Page page) {
         if (roles.isEmpty()) {
             // Ohne Luecke gibt es nichts zu erledigen - eine leere Rollenliste ist kein Fehler.
-            return new Result(page == null ? "db" : "edhrec", "Keine Lücke gefunden.", List.of());
+            return new Result(page == null ? "db" : "edhrec", "Keine Lücke gefunden.", List.of(),
+                    page == null ? null : page.fetched());
         }
         // Entdupliziert, sonst wuerde z.B. List.of("ramp", "ramp") die Kandidatenliste zweimal durchlaufen
         // und bis zu 2*PER_ROLE statt hoechstens PER_ROLE Vorschlaege fuer dieselbe Rolle liefern.
@@ -202,7 +206,7 @@ public final class Suggestions {
             note = (noteGameChangers && anyGameChangerIncluded)
                     ? "Game Changer sind in Bracket 3 auf drei Karten begrenzt." : null;
         }
-        return new Result(source, note, List.copyOf(items));
+        return new Result(source, note, List.copyOf(items), page == null ? null : page.fetched());
     }
 
     /** Haengt an einen Vorschlagskandidaten seinen Schnittkandidaten und schreibt beide Merkzettel fort. */
