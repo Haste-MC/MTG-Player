@@ -324,7 +324,11 @@ public final class MatchRecorder {
                 t.name = land.getName();
                 t.cast++;
                 if (t.castTurn == null) {
-                    t.castTurn = Math.max(1, turns);
+                    // Der EIGENE Zug des Sitzes, nicht Forges globale Zugnummer - dieselbe Zaehlweise
+                    // wie firstCommanderTurn/firstMissedLandDrop. Mit dem globalen Zaehler stuende in
+                    // einer 4er-Runde ungefaehr das Vierfache, und "im Schnitt ab Zug 5" waere mit
+                    // einem Duell nicht vergleichbar.
+                    t.castTurn = Math.max(1, s.ownTurns);
                 }
             }
         } catch (RuntimeException ex) {
@@ -376,7 +380,9 @@ public final class MatchRecorder {
                 t.name = host.getName();
                 t.cast++;
                 if (t.castTurn == null) {
-                    t.castTurn = Math.max(1, turns);
+                    // Der EIGENE Zug des Sitzes (wie firstCommanderTurn zwei Zeilen weiter unten),
+                    // nicht Forges globale Zugnummer - siehe onLandPlayed fuer die Begruendung.
+                    t.castTurn = Math.max(1, s.ownTurns);
                 }
             }
             classifyCast(sa, s);

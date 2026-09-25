@@ -40,8 +40,10 @@ public record CardLog(int v, String id, List<SeatCards> seats) {
      * zusammengefassten Kopien (mindestens 1, nie {@code null}). {@code hand}/{@code cast}/
      * {@code countered}/{@code lost}: Zaehlungen ueber die ganze Partie; ein Wert von 0 steht als
      * {@code null} in der Datei ({@code Json.MAPPER} ist {@code NON_NULL}), damit die Datei nicht mit
-     * Nullen volllaeuft - siehe {@link #merge}. {@code castTurn}: Zug des ERSTEN Wirkens ueber alle
-     * zusammengefassten Kopien, {@code null} wenn die Karte nie gewirkt wurde. {@code end}: die Endzone
+     * Nullen volllaeuft - siehe {@link #merge}. {@code castTurn}: der EIGENE Zug des Sitzes (nicht
+     * Forges globale Zugnummer - dieselbe Zaehlweise wie {@code MatchRecord.Seat.firstCommanderTurn}),
+     * in dem die erste der zusammengefassten Kopien gewirkt wurde, {@code null} wenn die Karte nie
+     * gewirkt wurde. {@code end}: die Endzone
      * kleingeschrieben ({@code hand}, {@code library}, {@code graveyard}, {@code exile},
      * {@code battlefield}, {@code command}, {@code stack}, ...) der zuletzt zusammengefassten Kopie, oder
      * {@code none}, wenn die Karten-Id am Partieende nicht mehr aufloesbar war (siehe

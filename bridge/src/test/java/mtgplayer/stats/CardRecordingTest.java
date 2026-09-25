@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import forge.game.card.Card;
+import forge.game.event.GameEventLandPlayed;
 import forge.game.event.GameEventSpellAbilityCast;
 import forge.game.event.GameEventTurnBegan;
 import forge.game.player.Player;
@@ -78,6 +79,7 @@ class CardRecordingTest {
         RegisteredPlayer rpA = a.getRegisteredPlayer(), rpB = b.getRegisteredPlayer();
 
         Card bears = s.card("Grizzly Bears", a, ZoneType.Hand);            // wird gewirkt
+        Card forest = s.card("Forest", a, ZoneType.Hand);                  // wird gespielt (Land)
         s.card("Nesting Dragon", a, ZoneType.Hand);                        // bleibt auf der Hand liegen
         s.card("Cultivate", a, ZoneType.Library);                          // liegt die ganze Partie in der Bibliothek
         s.card("Grizzly Bears", b, ZoneType.Hand);                         // fremdes Deck - darf nicht auftauchen
@@ -86,9 +88,15 @@ class CardRecordingTest {
         MatchRecorder rec = new MatchRecorder(s.game(), "live", null,
                 Map.of(rpA, DECK_A, rpB, DECK_B), Set.of(DECK_A), null, null);
 
+        // A's ERSTER eigener Zug (global 1), dann B (global 2), dann A's ZWEITER eigener Zug (global 3) -
+        // Forges globale Zugnummer (3) und As eigener Zug (2) laufen damit bewusst auseinander, sonst
+        // wuerde der Test die beiden Zaehlweisen nicht unterscheiden (siehe castTurn-Assertions unten).
+        s.game().fireEvent(new GameEventTurnBegan(a.getView(), 1));
+        s.game().fireEvent(new GameEventTurnBegan(b.getView(), 2));
         s.game().fireEvent(new GameEventTurnBegan(a.getView(), 3));
         s.game().fireEvent(new GameEventSpellAbilityCast(
                 SpellAbilityView.get(bears.getFirstSpellAbility()), null, 0, null));
+        s.game().fireEvent(new GameEventLandPlayed(a.getView(), forest.getView()));
 
         rec.finish();
         CardLog log = rec.cardLog();
@@ -103,7 +111,12 @@ class CardRecordingTest {
 
         CardLog.Card gewirkt = card(seatA, "Grizzly Bears");
         assertTrue(gewirkt.cast() != null && gewirkt.cast() >= 1, "gewirkte Karte traegt cast >= 1: " + gewirkt);
-        assertNotNull(gewirkt.castTurn(), "gewirkte Karte traegt einen castTurn: " + gewirkt);
+        assertEquals(2, gewirkt.castTurn(), "castTurn zaehlt As EIGENEN Zug (den zweiten), nicht Forges "
+                + "globale Zugnummer (waere 3): " + gewirkt);
+
+        CardLog.Card gespielt = card(seatA, "Forest");
+        assertEquals(2, gespielt.castTurn(), "castTurn zaehlt auch beim Land den eigenen Zug, nicht die "
+                + "globale Zugnummer: " + gespielt);
 
         CardLog.Card liegtNoch = card(seatA, "Nesting Dragon");
         assertEquals("hand", liegtNoch.end(), "bleibt auf der Hand liegen: " + liegtNoch);
