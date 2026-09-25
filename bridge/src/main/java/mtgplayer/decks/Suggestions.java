@@ -8,11 +8,14 @@ import forge.deck.Deck;
 import forge.deck.DeckFormat;
 import forge.deck.DeckSection;
 import forge.item.PaperCard;
+import forge.localinstance.properties.ForgeConstants;
 import forge.model.FModel;
+import forge.util.FileUtil;
 
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -166,11 +169,18 @@ public final class Suggestions {
                 if (!DeckFormat.Commander.isLegalCard(pc)) {
                     continue;
                 }
+                // Befund 4: der Rueckfall hatte bislang keine Game-Changer-Kennzeichnung ("dort liegt keine
+                // vor" war falsch - Forge liefert sie selbst mit, siehe gameChangerNames()) und wandte die
+                // Bracket-Regel darum nur im EDHREC-Zweig an. Jetzt dieselbe Regel, dieselbe Kennzeichnung.
+                boolean gameChanger = isGameChanger(pc);
+                if (dropGameChangers && gameChanger) {
+                    continue;
+                }
                 List<String> cats = DeckAnalysis.categoriesOf(rules);
                 for (String role : requestedRoles) {
                     if (cats.contains(role)) {
                         byRole.get(role).add(new Item(pc.getName(), role, rules.getManaCost().getShortString(),
-                                rules.getManaCost().getCMC(), null, false, pc.getImageKey(false),
+                                rules.getManaCost().getCMC(), null, gameChanger, pc.getImageKey(false),
                                 rules.getOracleText(), null));
                     }
                 }
@@ -193,6 +203,7 @@ public final class Suggestions {
                     if (takenForRole >= PER_ROLE) {
                         break;
                     }
+                    anyGameChangerIncluded |= candidate.gameChanger();
                     addWithCut(candidate, mainCards, null, chosen, cutChosen, items);
                     takenForRole++;
                     if (items.size() >= MAX_ITEMS) {
@@ -203,14 +214,48 @@ public final class Suggestions {
         }
 
         String source = page == null ? "db" : "edhrec";
+        String gameChangerNote = (noteGameChangers && anyGameChangerIncluded)
+                ? "Game Changer sind in Bracket 3 auf drei Karten begrenzt." : null;
         String note;
         if (page == null) {
-            note = "Ohne EDHREC-Daten: Vorschläge nur aus der Kartendatenbank.";
+            note = "Ohne EDHREC-Daten: Vorschläge nur aus der Kartendatenbank."
+                    + (gameChangerNote == null ? "" : " " + gameChangerNote);
         } else {
-            note = (noteGameChangers && anyGameChangerIncluded)
-                    ? "Game Changer sind in Bracket 3 auf drei Karten begrenzt." : null;
+            note = gameChangerNote;
         }
         return new Result(source, note, List.copyOf(items), page == null ? null : page.fetched());
+    }
+
+    /** Game-Changer-Namen aus Forges eigener Liste (dieselbe, die CommanderBracketCalculator fuer den
+     *  Bracket-Rechner der Lobby liest) - einmal je JVM gelesen, die Datei aendert sich nicht zur Laufzeit. */
+    private static volatile Set<String> gameChangerNames;
+
+    private static Set<String> gameChangerNames() {
+        Set<String> names = gameChangerNames;
+        if (names == null) {
+            Set<String> read = new HashSet<>();
+            for (String line : FileUtil.readFile(ForgeConstants.COMMANDER_BRACKET_GAMECHANGERS_FILE)) {
+                String name = line.trim();
+                if (!name.isEmpty()) {
+                    read.add(name.toLowerCase(Locale.ROOT));
+                }
+            }
+            names = Set.copyOf(read);
+            gameChangerNames = names;
+        }
+        return names;
+    }
+
+    /** Ob {@code pc} auf der Game-Changer-Liste steht - ueber alle Suchnamen (Vorderseite, Rueckseite,
+     *  "Vorderseite // Rueckseite"), damit doppelseitige Karten wie "Tergrid, God of Fright // Tergrid's
+     *  Lantern" genauso greifen wie in gamechangers.txt selbst notiert. */
+    private static boolean isGameChanger(PaperCard pc) {
+        for (String n : pc.getAllSearchableNames()) {
+            if (gameChangerNames().contains(n.toLowerCase(Locale.ROOT))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** Haengt an einen Vorschlagskandidaten seinen Schnittkandidaten und schreibt beide Merkzettel fort. */

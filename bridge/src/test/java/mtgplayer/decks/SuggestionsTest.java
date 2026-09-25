@@ -266,6 +266,20 @@ class SuggestionsTest {
     }
 
     @Test
+    void datenbankRueckfallWendetBracketRegelAufGameChangerAn() {
+        // Befund 4: "dort liegt keine Game-Changer-Kennzeichnung vor" war falsch - Forge liefert die Liste
+        // selbst mit (gamechangers.txt). Ohne Bracket-Einschraenkung taucht Chrome Mox (Game Changer, gruen,
+        // manarock -> ramp) im Rueckfall auf - Testannahme, damit der zweite Teil ueberhaupt etwas beweist.
+        Suggestions.Result unrestricted = Suggestions.of(deck(), List.of("ramp"), 4, null);
+        assertTrue(unrestricted.items().stream().anyMatch(i -> i.name().equals("Chrome Mox") && i.gameChanger()),
+                "Testannahme verletzt: Chrome Mox muesste im freien Rueckfall auftauchen: " + unrestricted.items());
+        // Bracket 2 verbietet Game Changer - dieselbe Regel wie im EDHREC-Zweig, jetzt auch ohne EDHREC-Seite.
+        Suggestions.Result restricted = Suggestions.of(deck(), List.of("ramp"), 2, null);
+        assertFalse(restricted.items().stream().anyMatch(i -> i.name().equals("Chrome Mox")),
+                "Chrome Mox haette als Game Changer im Bracket-2-Rueckfall fehlen muessen: " + restricted.items());
+    }
+
+    @Test
     void loestDoppelseitigenKandidatennamenAufDieVorderseiteAuf() {
         // Befund 8: EDHREC fuehrt doppelseitige Karten unter ihrem vollen "Vorderseite // Rueckseite"-Namen
         // (auf der echten Titania-Seite steht mindestens ein solcher Name) - Forges Kartensuche kennt nur
