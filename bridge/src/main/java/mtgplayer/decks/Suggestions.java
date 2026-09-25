@@ -48,19 +48,29 @@ public final class Suggestions {
             // Ohne Luecke gibt es nichts zu erledigen - eine leere Rollenliste ist kein Fehler.
             return new Result("edhrec", "Keine Lücke gefunden.", List.of());
         }
+        // Entdupliziert, sonst wuerde z.B. List.of("ramp", "ramp") die Kandidatenliste zweimal durchlaufen
+        // und bis zu 2*PER_ROLE statt hoechstens PER_ROLE Vorschlaege fuer dieselbe Rolle liefern.
+        // LinkedHashSet haelt dabei die angefragte Reihenfolge fest (wichtig fuer "erste Rolle gewinnt" unten).
+        List<String> requestedRoles = List.copyOf(new LinkedHashSet<>(roles));
 
         ColorSet identity = commanderIdentity(deck);
         Set<String> inDeck = namesInDeck(deck);
         boolean dropGameChangers = bracket != null && (bracket == 1 || bracket == 2);
         boolean noteGameChangers = bracket != null && bracket == 3;
 
-        // Verhindert, dass dieselbe Karte zweimal auftaucht, wenn sie mehrere angefragte Rollen trifft -
-        // die zuerst angefragte Rolle, fuer die sie tatsaechlich in die Top PER_ROLE kommt, gewinnt.
+        // Verhindert, dass dieselbe Karte zweimal auftaucht, wenn sie mehrere angefragte Rollen trifft.
+        // Eine Karte gilt erst dann als "vergeben" (landet in chosen), wenn sie fuer eine Rolle tatsaechlich
+        // in die Top PER_ROLE aufgenommen wurde - trifft sie eine frueher angefragte Rolle, schafft es dort
+        // aber nicht in die Top 5 (weil andere Kandidaten einen hoeheren share/niedrigeren cmc haben), kann
+        // sie bei einer spaeter angefragten Rolle noch erscheinen. Das ist eine bewusste Lesart von "die
+        // zuerst angefragte Rolle gewinnt": gemeint ist die erste Rolle, in der die Karte tatsaechlich
+        // vorgeschlagen wird, nicht die erste Rolle, die sie ueberhaupt trifft. Festgehalten fuer Task 3,
+        // damit der Rueckfall ohne EDHREC dieselbe Regel benutzt.
         Set<String> chosen = new LinkedHashSet<>();
         List<Item> items = new ArrayList<>();
         boolean anyGameChangerIncluded = false;
 
-        for (String role : roles) {
+        for (String role : requestedRoles) {
             if (items.size() >= MAX_ITEMS) {
                 break;
             }

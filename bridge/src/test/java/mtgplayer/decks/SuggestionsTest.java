@@ -73,8 +73,14 @@ class SuggestionsTest {
 
     @Test
     void laesstLaenderWeg() {
-        Suggestions.Result r = Suggestions.of(deck(), List.of("ramp"), 4, page(ec("Ancient Tomb", 0.6)));
-        assertTrue(r.items().stream().noneMatch(i -> i.name().equals("Ancient Tomb")), r.items().toString());
+        // Ancient Tomb allein beweist nichts: die "ramp"-Regel in DeckAnalysis schliesst Laender schon
+        // selbst aus (landType(c) == null), der Test bliebe also auch ohne Land-Filter in Suggestions gruen.
+        // Load-bearing ist der Filter bei einer Rolle ohne eingebaute Land-Ausnahme: "tutors" trifft auf
+        // "search your library for" und damit auch auf ein Fetchland wie Evolving Wilds (laut
+        // DeckAnalysis.categoriesOf ausschliesslich "tutors", keine "ramp") - genau der Fall, den der
+        // Land-Filter in Suggestions abfangen muss.
+        Suggestions.Result r = Suggestions.of(deck(), List.of("tutors"), 4, page(ec("Evolving Wilds", 0.6)));
+        assertTrue(r.items().stream().noneMatch(i -> i.name().equals("Evolving Wilds")), r.items().toString());
     }
 
     @Test
@@ -89,6 +95,16 @@ class SuggestionsTest {
     @Test
     void hoechstensFuenfJeRolle() {
         Suggestions.Result r = Suggestions.of(deck(), List.of("ramp"),  4,
+                page(ec("Llanowar Elves", 0.9), ec("Elvish Mystic", 0.8), ec("Fyndhorn Elves", 0.7),
+                     ec("Rampant Growth", 0.6), ec("Cultivate", 0.5), ec("Kodama's Reach", 0.4)));
+        assertEquals(5, r.items().size());
+    }
+
+    @Test
+    void doppelteRolleBegrenztAufFuenf() {
+        // roles = ["ramp", "ramp"] darf die Kandidatenliste nicht zweimal durchlaufen - sonst kaemen bis
+        // zu zehn statt hoechstens PER_ROLE Vorschlaege fuer dieselbe Rolle heraus.
+        Suggestions.Result r = Suggestions.of(deck(), List.of("ramp", "ramp"), 4,
                 page(ec("Llanowar Elves", 0.9), ec("Elvish Mystic", 0.8), ec("Fyndhorn Elves", 0.7),
                      ec("Rampant Growth", 0.6), ec("Cultivate", 0.5), ec("Kodama's Reach", 0.4)));
         assertEquals(5, r.items().size());
