@@ -56,14 +56,14 @@
   - neuer Konstruktor `MatchRecorder(Game, String source, Integer aiTimeout, Map<RegisteredPlayer,String> deckNames, Set<String> ownDecks, Consumer<MatchRecord> sink, Consumer<CardLog> cardSink)`; die bisherigen Konstruktoren delegieren mit leerem Set und `null`-Kartensenke
   - `MatchRecorder.cardLog()` gibt den fertigen `CardLog` zurück (für Tests und für Aufrufer ohne Senke), `null` vor dem Abschluss
 
-- [ ] **Step 1: Worktree auf Stand bringen**
+- [x] **Step 1: Worktree auf Stand bringen**
 
 ```bash
 SCRATCH=/tmp/claude-1000/-home-kevin-projects-DiscordBot/4cee7c96-6aaf-442e-8cd8-a9f8632f3c2b/scratchpad
 git -C $SCRATCH/kampf checkout --detach $(git -C /home/kevin/projects/MTG-Player rev-parse HEAD)
 ```
 
-- [ ] **Step 2: Die fehlschlagenden Tests schreiben**
+- [x] **Step 2: Die fehlschlagenden Tests schreiben**
 
 `bridge/src/test/java/mtgplayer/stats/CardLogTest.java` prüft die Zusammenfassung ohne Forge-Partie, über die
 Bau-Schnittstelle von `CardLog` (eine `merge`-Methode, die Zeilen je Name zusammenfasst):
@@ -134,7 +134,7 @@ Karten in Zonen legen, `s.setPhase(...)`, `s.step(n)`) und prüft:
 Lies vor dem Schreiben `GoadTest.java` und `MeldTitaniaTest.java`, um den Szenen-Aufbau und die
 `Scene`-Hilfen zu übernehmen; erfinde keinen eigenen Rahmen.
 
-- [ ] **Step 3: Tests laufen lassen – sie müssen scheitern**
+- [x] **Step 3: Tests laufen lassen – sie müssen scheitern**
 
 ```bash
 cd <worktree>/bridge && timeout 590 mvn -q -Dtest='CardLogTest,CardRecordingTest' -DfailIfNoSpecifiedTests=false test
@@ -142,14 +142,14 @@ cd <worktree>/bridge && timeout 590 mvn -q -Dtest='CardLogTest,CardRecordingTest
 
 Erwartet: „cannot find symbol: class CardLog".
 
-- [ ] **Step 4: `CardLog` schreiben**
+- [x] **Step 4: `CardLog` schreiben**
 
 Record wie oben, dazu `public static List<Card> merge(List<Card> rows)`: gruppiert nach Name (Reihenfolge
 egal, Ausgabe nach Name sortiert), addiert `copies`/`hand`/`cast`/`countered`/`lost`, nimmt den kleinsten
 `castTurn` (null, wenn keiner), und als `end` die Zone der Kopie, die zuletzt in der Eingabe steht. Zähler mit
 Wert 0 werden zu `null`, damit die Datei nicht mit Nullen voll läuft.
 
-- [ ] **Step 5: Recorder erweitern**
+- [x] **Step 5: Recorder erweitern**
 
 - Neues Feld je Sitz: `Map<Integer, CardTally> byCardId` (Id → Zähler plus zuletzt gesehener Name), nur
   angelegt, wenn der Sitz aufgezeichnet wird (`ownDecks.contains(seat.deckName())`).
@@ -170,14 +170,14 @@ Wert 0 werden zu `null`, damit die Datei nicht mit Nullen voll läuft.
 - Alles in denselben `try/catch (RuntimeException)`-Rahmen wie die übrigen Zähler; ein Fehler erhöht
   `counterFailures` und darf die Partie nie stören.
 
-- [ ] **Step 6: Tests laufen lassen – jetzt grün**
+- [x] **Step 6: Tests laufen lassen – jetzt grün**
 
 ```bash
 cd <worktree>/bridge && timeout 590 mvn -q -Dtest='CardLogTest,CardRecordingTest' -DfailIfNoSpecifiedTests=false test
 grep -h "Tests run" target/surefire-reports/*.txt
 ```
 
-- [ ] **Step 7: Rückwirkung prüfen und committen**
+- [x] **Step 7: Rückwirkung prüfen und committen**
 
 ```bash
 cd <worktree>/bridge && timeout 590 mvn -q -Dtest='mtgplayer.stats.*Test' -DfailIfNoSpecifiedTests=false test
@@ -201,7 +201,7 @@ cd /home/kevin/projects/MTG-Player && git cherry-pick $(git -C <worktree> rev-pa
 - Consumes: `CardLog` aus Task 1.
 - Produces: `CardStore(Path dir)`, `CardStore.standard()`, `void write(CardLog)`, `Optional<CardLog> read(String id)`, `void delete(String id)`.
 
-- [ ] **Step 1: Die fehlschlagenden Tests schreiben**
+- [x] **Step 1: Die fehlschlagenden Tests schreiben**
 
 `CardStoreTest` mit `@TempDir`: schreiben und wieder lesen ergibt dieselben Zeilen; `read` auf eine
 unbekannte Id liefert ein leeres Optional; eine kaputte Datei liefert ein leeres Optional statt einer
@@ -209,20 +209,20 @@ Ausnahme (und schreibt eine Notiz über `CrashLog.note`, wie `MatchStore` es tut
 Datei und ist auf eine unbekannte Id ein Nichts; zwei Schreibvorgänge nacheinander überschreiben sauber.
 Sieh dir `MatchStoreTest` an und übernimm dessen Aufbau.
 
-- [ ] **Step 2: Tests laufen lassen – sie müssen scheitern**
+- [x] **Step 2: Tests laufen lassen – sie müssen scheitern**
 
 ```bash
 cd <worktree>/bridge && timeout 590 mvn -q -Dtest=CardStoreTest -DfailIfNoSpecifiedTests=false test
 ```
 
-- [ ] **Step 3: `CardStore` schreiben**
+- [x] **Step 3: `CardStore` schreiben**
 
 Atomar schreiben wie `MatchStore` (eindeutige Temp-Datei, `Files.move` mit `ATOMIC_MOVE`), Verzeichnis bei
 Bedarf anlegen, `standard()` nimmt `ForgeBoot.dataDir().resolve("cards")`. Dateiname ist die Partie-Id; die
 Id muss vor der Verwendung als Dateiname geprüft werden (nur `[A-Za-z0-9_-]`, sonst nicht schreiben und eine
 Notiz hinterlassen) – eine Id aus fremder Quelle darf nie in einen Pfad wandern.
 
-- [ ] **Step 4: Aufrufer verbinden**
+- [x] **Step 4: Aufrufer verbinden**
 
 - `HumanMatch` und `AiMatch` bekommen die eigenen Decknamen und die Kartensenke durchgereicht und geben sie
   an den neuen Recorder-Konstruktor. Die eigenen Decknamen sind die Namen aus dem `DeckStore`
@@ -232,7 +232,7 @@ Notiz hinterlassen) – eine Id aus fremder Quelle darf nie in einen Pfad wander
 - „nicht gewertet" (`setMatchCounted`) löscht **nichts** – die Datei bleibt liegen, die Auswertung überspringt
   ungewertete Partien.
 
-- [ ] **Step 5: Tests laufen lassen und committen**
+- [x] **Step 5: Tests laufen lassen und committen**
 
 ```bash
 cd <worktree>/bridge && timeout 590 mvn -q -Dtest='mtgplayer.stats.*Test,mtgplayer.server.*Test,mtgplayer.sparring.*Test' -DfailIfNoSpecifiedTests=false test
@@ -259,7 +259,7 @@ cd /home/kevin/projects/MTG-Player && git cherry-pick $(git -C <worktree> rev-pa
   - `static CardStats of(String deck, List<MatchRecord> matches, CardStore store)`
   - `static final int MIN_GAMES = 5`
 
-- [ ] **Step 1: Die fehlschlagenden Tests schreiben**
+- [x] **Step 1: Die fehlschlagenden Tests schreiben**
 
 `CardStatsTest` baut Partien und Kartendateien von Hand (kein Forge-Spiel nötig, `ForgeBoot.init()` nur für
 `imageKey`/`manaCost`) und prüft:
@@ -273,13 +273,13 @@ cd /home/kevin/projects/MTG-Player && git cherry-pick $(git -C <worktree> rev-pa
 - ein Deckname mit `//` findet auch Datensätze, die ihn mit `__` tragen (alte Datensätze, siehe
   `matchStats.ts`/`deckKey`) – such im vorhandenen Code nach der Normalisierung und benutze dieselbe.
 
-- [ ] **Step 2: Tests laufen lassen – sie müssen scheitern**
+- [x] **Step 2: Tests laufen lassen – sie müssen scheitern**
 
 ```bash
 cd <worktree>/bridge && timeout 590 mvn -q -Dtest=CardStatsTest -DfailIfNoSpecifiedTests=false test
 ```
 
-- [ ] **Step 3: `CardStats` schreiben**
+- [x] **Step 3: `CardStats` schreiben**
 
 Über die gewerteten Partien des Decks: Kartendatei lesen, den Sitz mit diesem Deck nehmen, je Kartenname die
 Partien zählen. `imageKey`, `manaCost` und `cmc` kommen aus Forges Kartendatenbank
@@ -287,7 +287,7 @@ Partien zählen. `imageKey`, `manaCost` und `cmc` kommen aus Forges Kartendatenb
 bleibt). Grundländer (`Plains`, `Island`, `Swamp`, `Mountain`, `Forest`) fallen raus. Sortiert wird nach
 `stuckGames` absteigend, dann `handGames` absteigend, dann Name – die Reihenfolge, die das UI zuerst zeigt.
 
-- [ ] **Step 4: Tests laufen lassen und committen**
+- [x] **Step 4: Tests laufen lassen und committen**
 
 ```bash
 cd <worktree>/bridge && timeout 590 mvn -q -Dtest='mtgplayer.stats.*Test' -DfailIfNoSpecifiedTests=false test
@@ -309,19 +309,19 @@ cd /home/kevin/projects/MTG-Player && git cherry-pick $(git -C <worktree> rev-pa
 **Interfaces:**
 - Produces: `{"type":"cardStats","deck":…,"games":…,"withCardData":…,"enough":…,"cards":[…]}`; Anfrage `{"type":"deckCards","deck":"<Name>"}`; unbekanntes Deck → `error` „Kartenauswertung <name>: unbekanntes Deck".
 
-- [ ] **Step 1: Test schreiben, der die Antwort über eine echte Bridge prüft**
+- [x] **Step 1: Test schreiben, der die Antwort über eine echte Bridge prüft**
 
 Nach dem Muster von `BridgeSuggestCardsTest` (dort steht, wie eine Test-Bridge mit eingesetzten Stores
 gebaut wird): eine Partie mit Kartendatei vorbereiten, `deckCards` schicken, Antwort prüfen (Typ, Deckname,
 `games`, eine erwartete Karte). Dazu der Fehlerfall mit unbekanntem Deck.
 
-- [ ] **Step 2: Test laufen lassen – er muss scheitern**
+- [x] **Step 2: Test laufen lassen – er muss scheitern**
 
 ```bash
 cd <worktree>/bridge && timeout 590 mvn -q -Dtest='mtgplayer.server.*Test' -DfailIfNoSpecifiedTests=false test
 ```
 
-- [ ] **Step 3: Nachricht und Behandlung schreiben**
+- [x] **Step 3: Nachricht und Behandlung schreiben**
 
 `Messages.CardStatsMsg` wie `Messages.DeckAnalysisMsg` aufgebaut; in `Bridge.handle` ein
 `case "deckCards" -> deckCards(msg.path("deck").asText())`, die Methode im Muster von `analyzeDeck`
@@ -329,7 +329,7 @@ cd <worktree>/bridge && timeout 590 mvn -q -Dtest='mtgplayer.server.*Test' -Dfai
 (RuntimeException)` mit `printStackTrace`). Der `CardStore` wird wie die anderen Stores als Feld gehalten und
 über den Test-Konstruktor einsetzbar gemacht.
 
-- [ ] **Step 4: Tests laufen lassen und committen**
+- [x] **Step 4: Tests laufen lassen und committen**
 
 ```bash
 cd <worktree>/bridge && timeout 590 mvn -q -Dtest='mtgplayer.server.*Test,mtgplayer.protocol.*Test' -DfailIfNoSpecifiedTests=false test
@@ -352,7 +352,7 @@ cd /home/kevin/projects/MTG-Player && git cherry-pick $(git -C <worktree> rev-pa
 - Consumes: `CardStats` aus Task 3.
 - Produces: `Suggestions.of(Deck deck, List<String> roles, Integer bracket, Edhrec.Page page, Map<String, CardStats.Card> own)` – `own` darf leer sein; die bisherige Signatur bleibt als Überladung mit leerer Map erhalten, damit vorhandene Tests weiter gelten.
 
-- [ ] **Step 1: Die fehlschlagenden Tests schreiben**
+- [x] **Step 1: Die fehlschlagenden Tests schreiben**
 
 In `SuggestionsTest`: Eine Karte des Decks, die laut Kartenauswertung in mindestens drei Partien auf der Hand
 war und **nie** gewirkt wurde, wird als Schnitt gewählt – auch dann, wenn eine andere Karte nach den
@@ -360,13 +360,13 @@ bisherigen Regeln (kein EDHREC-Eintrag, teurer) vorne läge. Die Begründung nen
 „in 9 Partien 6× auf der Hand, nie gewirkt". Zweiter Test: mit weniger als drei Hand-Partien greift die alte
 Rangfolge unverändert. Dritter Test: leere Kartenauswertung ändert nichts (Gegenprobe gegen Regression).
 
-- [ ] **Step 2: Tests laufen lassen – sie müssen scheitern**
+- [x] **Step 2: Tests laufen lassen – sie müssen scheitern**
 
 ```bash
 cd <worktree>/bridge && timeout 590 mvn -q -Dtest=SuggestionsTest -DfailIfNoSpecifiedTests=false test
 ```
 
-- [ ] **Step 3: Rangfolge erweitern**
+- [x] **Step 3: Rangfolge erweitern**
 
 Neue erste Stufe in der Schnitt-Rangfolge (die bestehenden Stufen rücken nach hinten): Karte war in
 mindestens **drei** Partien auf der Hand (benannte Konstante) und hat `castGames == 0`. Begründung genau in
@@ -375,7 +375,7 @@ der Form „in {N} Partien {M}× auf der Hand, nie gewirkt", wobei N die Partien
 verbunden. Die Bridge übergibt beim Beantworten von `suggestCards` die Kartenauswertung des Decks, aber nur
 wenn `enough` gilt – sonst eine leere Map.
 
-- [ ] **Step 4: Tests laufen lassen und committen**
+- [x] **Step 4: Tests laufen lassen und committen**
 
 ```bash
 cd <worktree>/bridge && timeout 590 mvn -q -Dtest='mtgplayer.decks.*Test,mtgplayer.server.*Test' -DfailIfNoSpecifiedTests=false test
@@ -402,7 +402,7 @@ cd /home/kevin/projects/MTG-Player && git cherry-pick $(git -C <worktree> rev-pa
 
 Alles im Hauptbaum unter `web/`, kein Java, kein Maven.
 
-- [ ] **Step 1: Typen und Ablage**
+- [x] **Step 1: Typen und Ablage**
 
 `protocol.ts`: `CardStat` und `CardStatsMsg` passend zur Antwort (alle Zähler Pflicht, `avgCastTurn`,
 `imageKey`, `manaCost`, `cmc` optional); die ausgehende Nachricht `{ type: "deckCards", deck }` in
@@ -410,19 +410,19 @@ Alles im Hauptbaum unter `web/`, kein Java, kein Maven.
 `suggestCards` (der `error`-Zweig muss die offene Anfrage löschen – sonst hängt der Knopf, siehe den
 Kommentar im Store).
 
-- [ ] **Step 2: Die fehlschlagenden Tests schreiben**
+- [x] **Step 2: Die fehlschlagenden Tests schreiben**
 
 `deckCards.test.ts` prüft `sortCards` in allen drei Modi („Handlungsbedarf", „Name", „am häufigsten
 gewirkt") – jeweils mit vertauschter Eingabereihenfolge, damit der Test nicht die Eingabe nachbetet – und
 `cardLine` für: nie gewirkt, mehrfach gewirkt mit Durchschnittszug, nie gezogen, liegen geblieben.
 
-- [ ] **Step 3: Tests laufen lassen – sie müssen scheitern**
+- [x] **Step 3: Tests laufen lassen – sie müssen scheitern**
 
 ```bash
 cd /home/kevin/projects/MTG-Player/web && npx vitest run src/deckCards.test.ts
 ```
 
-- [ ] **Step 4: Modul und Komponente schreiben**
+- [x] **Step 4: Modul und Komponente schreiben**
 
 `DeckCards.tsx`: Abschnitt „Karten" unter den Kartenvorschlägen, Laden erst auf Klick („Karten laden"),
 danach Kopfzeile „Karten · 9 von 12 gewerteten Partien mit Aufzeichnung" und die Tabelle (Miniatur über
@@ -430,7 +430,7 @@ danach Kopfzeile „Karten · 9 von 12 gewerteten Partien mit Aufzeichnung" und 
 Tabelle: „Noch zu wenige Partien mit Aufzeichnung (3 von 5 nötig)". Umschalter für die Sortierung. Ein
 „neu laden"-Knopf wie bei den Vorschlägen. Fehlerfall: Knopf wieder benutzbar.
 
-- [ ] **Step 5: Einhängen, Styles, Fixture**
+- [x] **Step 5: Einhängen, Styles, Fixture**
 
 In `Stats.tsx` unter den Kartenvorschlägen einhängen. Styles ans Ende von `styles.css` im Stil der
 Nachbarabschnitte, ohne neue Farbvariablen. `web/fixtures/statboard-cards.json` mit einer `cardStats`-Antwort
@@ -438,7 +438,7 @@ für „Krenko Goblins": mindestens eine nie gewirkte Karte mit hohen `stuckGame
 `avgCastTurn`, eine nie gezogene. Echte Kartennamen und `imageKey`-Schreibweise wie in
 `fixtures/statboard-suggestions.json`, keine erfundenen Werte.
 
-- [ ] **Step 6: Prüfen, Screenshot, committen**
+- [x] **Step 6: Prüfen, Screenshot, committen**
 
 ```bash
 cd /home/kevin/projects/MTG-Player/web && npx tsc --noEmit && npx vitest run
@@ -479,33 +479,33 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 - Consumes: nichts Neues.
 - Produces: `TurnPoint.turn` bedeutet ab `v: 3` den eigenen Zug des Sitzes.
 
-- [ ] **Step 1: Test schreiben, der die Zählweise unterscheidet**
+- [x] **Step 1: Test schreiben, der die Zählweise unterscheidet**
 
 Ein Szenentest mit **mehr als zwei Sitzen**, in dem mindestens zwei eigene Züge eines Sitzes vergehen: die
 Zeitachse dieses Sitzes muss `turn` 1, 2, 3 … tragen, nicht 1, 4, 7 … Ohne mehr als zwei Sitze fallen beide
 Zählweisen zusammen und der Test würde nichts beweisen. Zusätzlich: `MatchRecord.VERSION` ist 3, und ein
 Datensatz trägt `v: 3`.
 
-- [ ] **Step 2: Test laufen lassen – er muss scheitern**
+- [x] **Step 2: Test laufen lassen – er muss scheitern**
 
 ```bash
 cd <worktree>/bridge && timeout 590 mvn -q -Dtest='mtgplayer.stats.*Test' -DfailIfNoSpecifiedTests=false test
 ```
 
-- [ ] **Step 3: Umstellen**
+- [x] **Step 3: Umstellen**
 
 `MatchRecorder.onTurnBegan` ruft `notePoint(turnOwner, turnOwner.ownTurns)` statt `e.turnNumber()` – der
 Zähler ist an dieser Stelle bereits erhöht, `landsByTurn` benutzt ihn direkt darüber genauso.
 `MatchRecord.VERSION` auf 3, Kommentar an `TurnPoint` und am Feld: ab v3 eigener Zug, darunter Partiezug.
 **Nicht** anfassen: `turns`, `eliminatedTurn` und alle Prüfungen der Form `v >= 2`.
 
-- [ ] **Step 4: Client beschriften**
+- [x] **Step 4: Client beschriften**
 
 `MatchTimeline.tsx` bekommt die Formatversion des Datensatzes und beschriftet die x-Achse: ab v3
 „Eigener Zug", darunter „Partiezug (alle Sitze)". Der Kommentar an `TurnPoint` in `protocol.ts` sagt
 dasselbe. Kein Umrechnen alter Datensätze.
 
-- [ ] **Step 5: Prüfen und committen**
+- [x] **Step 5: Prüfen und committen**
 
 ```bash
 cd <worktree>/bridge && timeout 590 mvn -q -Dtest='mtgplayer.stats.*Test,mtgplayer.server.*Test' -DfailIfNoSpecifiedTests=false test

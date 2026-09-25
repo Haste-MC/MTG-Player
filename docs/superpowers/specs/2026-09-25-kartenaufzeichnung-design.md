@@ -124,8 +124,13 @@ Vorschläge **erst auf Klick** (er liest Dateien, das soll nicht beim Durchblät
 
 - Kopfzeile: „Karten · 9 von 12 gewerteten Partien mit Aufzeichnung". Unter fünf Partien mit Daten steht
   stattdessen „Noch zu wenige Partien mit Aufzeichnung (9 von 5 nötig)" und die Tabelle bleibt zu.
-- Tabelle je Karte: Miniatur, Name, Manakosten, „6 von 9 Partien auf der Hand", „nie gewirkt" bzw.
-  „4× gewirkt, im Schnitt ab Zug 5", „5× ungenutzt liegen geblieben", „3× nie gezogen".
+- Tabelle je Karte: Miniatur, Name, Manakosten, ein Satz aus `cardLine` (`web/src/deckCards.ts`), z. B.
+  „6 von 9 Partien auf der Hand, in 4 von 9 Partien gewirkt (Ø ab Zug 5), 5 von 6 liegen geblieben." Eine
+  aus dem Friedhof oder Exil gewirkte Karte (nie auf der Hand, aber gewirkt – im Reanimator-Deck der
+  Normalfall) bekommt „nie gezogen, aber in 8 von 9 Partien gewirkt (Ø ab Zug 2)." statt komplett zu
+  verschwinden. Nur eine Karte, die WEDER gezogen noch gewirkt wurde, bekommt den eigenen kurzen Satz
+  „In keiner der 9 Partien mit Aufzeichnung gezogen." – keine „N× nie gezogen"-Zahl daneben, das wäre
+  dieselbe Aussage noch einmal.
 - Sortierung standardmäßig nach dem Handlungsbedarf: häufig auf der Hand, selten gewirkt zuerst
   (`stuckGames` absteigend, dann `handGames` absteigend, dann Name). Umschalter auf „Name" und auf
   „am häufigsten gewirkt".
@@ -138,7 +143,7 @@ Vorschläge **erst auf Klick** (er liest Dateien, das soll nicht beim Durchblät
 wenn `enough: false`). Die Rangfolge der Schnittkandidaten bekommt eine neue **erste** Stufe:
 
 1. Karte war in mindestens drei Partien auf der Hand und wurde **nie** gewirkt – Grund:
-   „in 9 Partien 6× auf der Hand, nie gewirkt".
+   „in 6 von 9 Partien auf der Hand, nie gewirkt".
 2. danach wie bisher: nicht bei EDHREC geführt, niedriger Anteil, teuerste Karte der Rolle.
 
 Der neue Grund sticht die bisherigen, weil er aus Kevins eigenen Partien kommt statt aus fremden Decks. Er
