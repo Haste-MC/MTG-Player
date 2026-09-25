@@ -99,7 +99,11 @@ public final class Suggestions {
                     if (chosen.contains(lname) || inDeck.contains(lname)) {
                         continue;
                     }
-                    PaperCard pc = StaticData.instance().getCommonCards().getCard(ec.name());
+                    // Befund 8: EDHREC fuehrt doppelseitige Karten unter ihrem vollen "Vorderseite //
+                    // Rueckseite"-Namen (wie schon Edhrec.slug() das fuer den Commander-Slug beruecksichtigt),
+                    // Forges Kartensuche kennt aber nur die Vorderseite - ohne den Schnitt liefe jede solche
+                    // Karte ins Leere und wuerde nie vorgeschlagen.
+                    PaperCard pc = StaticData.instance().getCommonCards().getCard(frontFace(ec.name()));
                     if (pc == null) {
                         continue;   // Forge kennt die Karte nicht - nicht mitzaehlen statt abstuerzen
                     }
@@ -361,6 +365,13 @@ public final class Suggestions {
             }
         }
         return true;
+    }
+
+    /** Nur die Vorderseite eines EDHREC-Kartennamens (Befund 8) - dieselbe Regel wie in {@link
+     *  Edhrec#slug}, dort schon fuer den Commander-Namen noetig. */
+    private static String frontFace(String name) {
+        int slash = name.indexOf("//");
+        return slash >= 0 ? name.substring(0, slash).trim() : name;
     }
 
     /** Vereinigung der Farbidentitaet aller Kommandeure; ohne Kommandeur gilt keine Einschraenkung. */

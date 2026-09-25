@@ -266,6 +266,16 @@ class SuggestionsTest {
     }
 
     @Test
+    void loestDoppelseitigenKandidatennamenAufDieVorderseiteAuf() {
+        // Befund 8: EDHREC fuehrt doppelseitige Karten unter ihrem vollen "Vorderseite // Rueckseite"-Namen
+        // (auf der echten Titania-Seite steht mindestens ein solcher Name) - Forges Kartensuche kennt nur
+        // die Vorderseite. Ohne den Schnitt an "//" liefe diese Karte nie in den Vorschlaegen auf.
+        Suggestions.Result r = Suggestions.of(deck(), List.of("recursion"), 4,
+                page(ec("Bala Ged Recovery // Bala Ged Sanctuary", 0.3)));
+        assertEquals(List.of("Bala Ged Recovery"), r.items().stream().map(Suggestions.Item::name).toList());
+    }
+
+    @Test
     void einzigerKandidatBekommtKeineSuperlativKlausel() {
         // Befund 2: mit nur einer Karte der Rolle im Deck ist "die teuerste Karte dieser Rolle" nichts, was
         // sich pruefen liesse (eine einelementige Liste ist immer ihr eigenes Maximum) - die Klausel darf
