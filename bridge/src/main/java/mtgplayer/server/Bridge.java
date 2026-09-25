@@ -104,8 +104,10 @@ public final class Bridge {
         this.ws = new WsServer(wsPort, this::handle, this::onClientConnected);
         // Der Lauf meldet Fortschritt und - je gespeicherter Partie - den Datensatz selbst; die
         // gedeckelte "matches"-Liste baut nur die Bridge (siehe matchesMsg()), deshalb hier die
-        // Umsetzung MatchRecord -> matches.
-        this.sparring = new SparringRun(store, matches, sparringRunner,
+        // Umsetzung MatchRecord -> matches. Derselbe CardStore wie oben (nicht CardStore.standard()) -
+        // Befund 4: SparringRun loescht damit die Kartendatei einer gekappten Partie ueber denselben
+        // Store, in den auch der Bridge-Sink (startGame) schreibt.
+        this.sparring = new SparringRun(store, matches, sparringRunner, cards,
                 o -> ws.send(o instanceof MatchRecord ? matchesMsg() : o));
         this.gui = new WebGuiGame(ws);
         // KI-only-Modus: HostedMatch.startGame holt sich bei einer leeren guis-Map (Zuschauer, kein
@@ -656,12 +658,25 @@ public final class Bridge {
         Consumer<MatchRecord> sink = r -> {
             // Der Sink laeuft im Guava-EventBus des Spiels (GameEventGameFinished): eine Ausnahme von
             // hier wuerde dort verschluckt, und niemand erfuehre, dass die Partie nicht gespeichert ist.
+            List<String> dropped;
             try {
-                matches.add(r);
+                dropped = matches.add(r);
             } catch (RuntimeException e) {
                 ws.send(new Messages.ErrorMsg("Partie konnte nicht gespeichert werden: "
                         + (e.getMessage() == null ? e.toString() : e.getMessage())));
                 return;
+            }
+            // Befund 4: eine gekappte Partie (MatchStore.MAX) verliert ihre matches.json-Zeile - ihre
+            // Kartendatei (CardStore) muss mit, sonst bleibt sie fuer immer verwaist liegen. Ein
+            // Loeschfehler darf die gerade erfolgreich gespeicherte Partie nicht als "nicht gespeichert"
+            // melden, deshalb ein eigener try/catch statt im obigen.
+            for (String droppedId : dropped) {
+                try {
+                    cards.delete(droppedId);
+                } catch (RuntimeException e) {
+                    CrashLog.note("Bridge", "Kartendatei der gekappten Partie " + droppedId
+                            + " nicht geloescht: " + e);
+                }
             }
             ws.send(matchesMsg());
         };
@@ -675,7 +690,10 @@ public final class Bridge {
             try {
                 cards.write(log);
             } catch (RuntimeException e) {
-                e.printStackTrace();
+                // Befund 8: ein stiller printStackTrace liesse "seit Wochen keine Kartendaten" nie
+                // auffallen - CrashLog.note schreibt wenigstens eine Zeile nach bridge.log (kein
+                // Browser-Text: die Partie selbst ist bereits gespeichert, nur ihre Kartenbiografie fehlt).
+                CrashLog.note("Bridge", "Kartendaten fuer " + log.id() + " nicht geschrieben: " + e);
             }
         };
         ui(() -> {

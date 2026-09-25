@@ -104,6 +104,18 @@ class MatchStoreTest {
         assertEquals("m" + (MatchStore.MAX + 4), all.get(all.size() - 1).id());
     }
 
+    /** Befund 4: add() muss die weggefallenen Ids zurueckgeben, sonst weiss der Aufrufer nie, wessen
+     *  Kartendatei ({@link CardStore}) verwaist zurueckbleibt. */
+    @Test
+    void addLiefertDieWeggefallenenIdsAeltesteZuerst(@TempDir Path dir) {
+        MatchStore store = new MatchStore(dir.resolve("matches.json"));
+        for (int i = 0; i < MatchStore.MAX; i++) {
+            assertTrue(store.add(record("m" + i)).isEmpty(), "unter dem Deckel faellt nichts weg");
+        }
+        assertEquals(List.of("m0"), store.add(record("mNeu1")), "genau eine Partie faellt raus");
+        assertEquals(List.of("m1"), store.add(record("mNeu2")), "danach die naechstaeltere");
+    }
+
     @Test
     void kaputteDateiLiefertLeereListeUndDanachFunktioniertAdd(@TempDir Path dir) throws Exception {
         Path file = dir.resolve("matches.json");

@@ -60,14 +60,25 @@ public final class MatchStore {
         }
     }
 
-    /** Haengt eine Partie an, kappt auf {@link #MAX} (die aeltesten fallen raus) und schreibt atomar. */
-    public synchronized void add(MatchRecord r) {
+    /**
+     * Haengt eine Partie an, kappt auf {@link #MAX} (die aeltesten fallen raus) und schreibt atomar.
+     *
+     * @return die Ids der deshalb weggefallenen Partien, aelteste zuerst (leer, wenn keine Kappung
+     *         noetig war). Befund 4: ihre Kartendatei ({@link CardStore}) faellt NICHT automatisch mit -
+     *         ohne dieses Rueckgabewert wusste der Aufrufer nie, welche Partie gerade aus der Wertung
+     *         gefallen ist, und die verwaiste {@code cards/<id>.json} blieb fuer immer liegen. Der
+     *         Aufrufer (siehe {@code mtgplayer.server.Bridge}, {@code mtgplayer.sparring.SparringRun})
+     *         muss deshalb selbst {@link CardStore#delete} fuer jede zurueckgegebene Id aufrufen.
+     */
+    public synchronized List<String> add(MatchRecord r) {
         List<MatchRecord> list = all();
         list.add(r);
+        List<String> dropped = new ArrayList<>();
         while (list.size() > MAX) {
-            list.remove(0);
+            dropped.add(list.remove(0).id());
         }
         write(list);
+        return dropped;
     }
 
     /** @throws IllegalArgumentException unbekannte Partie ("unbekannte Partie: &lt;id&gt;") */

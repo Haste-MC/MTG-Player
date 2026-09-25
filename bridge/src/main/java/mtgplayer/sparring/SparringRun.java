@@ -10,8 +10,10 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import mtgplayer.ai.AiConfig;
 import mtgplayer.decks.DeckStore;
+import mtgplayer.forge.CrashLog;
 import mtgplayer.match.AiMatch;
 import mtgplayer.protocol.Messages;
+import mtgplayer.stats.CardLog;
 import mtgplayer.stats.CardStore;
 import mtgplayer.stats.MatchRecord;
 import mtgplayer.stats.MatchStore;
@@ -40,15 +42,26 @@ public final class SparringRun {
     private final DeckStore decks;
     private final MatchStore matches;
     private final GameRunner runner;
+    /** Befund 4: die Kartendatei ({@link CardStore}) einer wegen {@link MatchStore#MAX} gekappten Partie
+     *  muss mit ihr verschwinden, sonst bleibt sie fuer immer verwaist liegen - siehe {@link #loop}. */
+    private final CardStore cards;
     private final Consumer<Object> out;
 
     private final AtomicBoolean running = new AtomicBoolean();
     private volatile boolean cancelled;
 
     public SparringRun(DeckStore decks, MatchStore matches, GameRunner runner, Consumer<Object> out) {
+        this(decks, matches, runner, CardStore.standard(), out);
+    }
+
+    /** Wie der 4-Parameter-Konstruktor, mit einem eigenen {@link CardStore} statt {@link
+     *  CardStore#standard()} - fuer Tests, denen wichtig ist, dass die Kartendatei einer gekappten
+     *  Partie tatsaechlich verschwindet (Befund 4), ohne Kevins echtes {@code ~/.mtg-player} zu treffen. */
+    public SparringRun(DeckStore decks, MatchStore matches, GameRunner runner, CardStore cards, Consumer<Object> out) {
         this.decks = decks;
         this.matches = matches;
         this.runner = runner;
+        this.cards = cards;
         this.out = out;
     }
 
@@ -123,7 +136,16 @@ public final class SparringRun {
                     if (r == null) {
                         throw new IllegalStateException("kein Ergebnis");
                     }
-                    matches.add(r);
+                    // Befund 4: eine gekappte Partie (MatchStore.MAX) verliert ihre matches.json-Zeile -
+                    // ihre Kartendatei muss mit, sonst bleibt sie fuer immer verwaist liegen.
+                    for (String droppedId : matches.add(r)) {
+                        try {
+                            cards.delete(droppedId);
+                        } catch (RuntimeException ex) {
+                            CrashLog.note("SparringRun", "Kartendatei der gekappten Partie " + droppedId
+                                    + " nicht geloescht: " + ex);
+                        }
+                    }
                     out.accept(r);
                 } catch (RuntimeException e) {
                     // Eine Partie darf den Lauf nicht beenden (Spec §3) - Grund vermerken, weiter.
@@ -186,8 +208,19 @@ public final class SparringRun {
         AtomicReference<MatchRecord> record = new AtomicReference<>();
         Set<String> ownDecks = Set.copyOf(store.names());
         CardStore cards = CardStore.standard();
+        // Befund 8: cards::write direkt als cardSink war im Kindprozess GAR NICHT gekapselt (anders als
+        // im Elternprozess, Bridge.cardSink) - ein Schreibfehler wuerde hier unkontrolliert nach oben
+        // durchschlagen. CrashLog.note schreibt wenigstens eine Zeile nach bridge.log, ohne die Partie
+        // selbst zu gefaehrden (die ist zu diesem Zeitpunkt bereits fertig).
+        Consumer<CardLog> cardSink = cardLog -> {
+            try {
+                cards.write(cardLog);
+            } catch (RuntimeException e) {
+                CrashLog.note("SparringRun", "Kartendaten fuer " + cardLog.id() + " nicht geschrieben: " + e);
+            }
+        };
         AiMatch.play(table, names, List.of(ai, ai), job.timeout(), job.maxTurns(), log, record::set,
-                ownDecks, cards::write);
+                ownDecks, cardSink);
         MatchRecord r = record.get();
         if (r == null) {
             throw new IllegalStateException("Partie lieferte keinen Datensatz");

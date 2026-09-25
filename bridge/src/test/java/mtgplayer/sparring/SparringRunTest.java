@@ -20,6 +20,8 @@ import mtgplayer.decks.DeckStore;
 import mtgplayer.forge.ForgeBoot;
 import mtgplayer.forge.Precons;
 import mtgplayer.protocol.Messages;
+import mtgplayer.stats.CardLog;
+import mtgplayer.stats.CardStore;
 import mtgplayer.stats.MatchRecord;
 import mtgplayer.stats.MatchStore;
 import org.junit.jupiter.api.BeforeAll;
@@ -113,6 +115,33 @@ class SparringRunTest {
         assertTrue(ps.stream().allMatch(p -> p.errors().isEmpty()), ps.toString());
         assertEquals(2, out.stream().filter(MatchRecord.class::isInstance).count(),
                 "jeder gespeicherte Datensatz wird gemeldet");
+    }
+
+    /** Befund 4: {@link MatchStore#add} kappt bei {@link MatchStore#MAX} - die Kartendatei der dabei
+     *  herausfallenden, aeltesten Partie muss SparringRun (genau wie {@code Bridge.startGame}) selbst
+     *  mitloeschen, sonst bleibt sie fuer immer verwaist liegen. Der 5-Parameter-Konstruktor gibt dafuer
+     *  einen eigenen {@link CardStore} mit, statt {@link CardStore#standard()} zu treffen. */
+    @Test
+    @Timeout(value = 1, unit = TimeUnit.MINUTES)
+    void gekapptePartieLoeschtIhreKartendateiMit(@TempDir Path dir) throws Exception {
+        DeckStore decks = storeWith(dir.resolve("decks"), "Mein Deck", "Gegner A");
+        MatchStore matches = new MatchStore(dir.resolve("matches.json"));
+        CardStore cards = new CardStore(dir.resolve("cards"));
+        for (int i = 0; i < MatchStore.MAX; i++) {
+            matches.add(record("Gegner A"));
+        }
+        String oldestId = matches.all().get(0).id();
+        cards.write(new CardLog(oldestId, List.of()));
+        assertTrue(cards.read(oldestId).isPresent(), "Vorbedingung: die Kartendatei der aeltesten Partie existiert");
+
+        List<Object> out = Collections.synchronizedList(new ArrayList<>());
+        SparringRun run = new SparringRun(decks, matches, (a, opponent, seed) -> record(opponent), cards, out::add);
+
+        run.start(args(1));
+        awaitDone(run);
+
+        assertEquals(MatchStore.MAX, matches.all().size(), "der Deckel bleibt bei MAX");
+        assertTrue(cards.read(oldestId).isEmpty(), "die Kartendatei der gekappten, aeltesten Partie ist mitgeloescht");
     }
 
     @Test
