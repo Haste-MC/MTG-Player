@@ -49,7 +49,7 @@ public final class Bridge {
     private final DeckSource decks;
     private final MatchStore matches;
     /** Kartenvorschlaege (Stueck 2): EDHREC-Anreicherung, siehe {@link #suggestCards}. */
-    private final Edhrec edhrec = new Edhrec();
+    private final Edhrec edhrec;
     /** Sparring (Stueck 3): genau ein Lauf zur Zeit, siehe {@link SparringRun}. */
     private final SparringRun sparring;
     /** Genau ein archidektImport-Lauf zur Zeit (siehe handle, "archidektImport"). */
@@ -69,12 +69,22 @@ public final class Bridge {
     }
 
     /** Fuer Tests, die Sparring ueber das Protokoll pruefen (siehe BridgeSparringTest): der
-     *  {@link GameRunner} ist dort eine Attrappe, damit kein echtes Spiel und kein Kindprozess anlaeuft. */
+     *  {@link GameRunner} ist dort eine Attrappe, damit kein echtes Spiel und kein Kindprozess anlaeuft.
+     *  Edhrec bleibt die echte (kein Netz, solange kein Test suggestCards anfragt). */
     Bridge(int wsPort, DeckStore store, Archidekt archidekt, MatchStore matches, GameRunner sparringRunner) {
+        this(wsPort, store, archidekt, matches, sparringRunner, new Edhrec());
+    }
+
+    /** Fuer Tests, die suggestCards ueber das Protokoll pruefen (siehe BridgeSuggestCardsTest): eigene
+     *  Edhrec-Quelle/-Zwischenspeicher (wie {@link Edhrec#Edhrec(java.util.function.Function, java.nio.file.Path)}),
+     *  damit kein Test den echten EDHREC-Abruf ausloest oder nach ~/.mtg-player schreibt. */
+    Bridge(int wsPort, DeckStore store, Archidekt archidekt, MatchStore matches, GameRunner sparringRunner,
+           Edhrec edhrec) {
         this.store = store;
         this.archidekt = archidekt;
         this.decks = new DeckSource(store, archidekt);
         this.matches = matches;
+        this.edhrec = edhrec;
         this.ws = new WsServer(wsPort, this::handle, this::onClientConnected);
         // Der Lauf meldet Fortschritt und - je gespeicherter Partie - den Datensatz selbst; die
         // gedeckelte "matches"-Liste baut nur die Bridge (siehe matchesMsg()), deshalb hier die
@@ -292,7 +302,8 @@ public final class Bridge {
             } catch (RuntimeException e) {
                 // wie bei "concede": sonst stirbt der Fehler still auf dem Hintergrund-Thread
                 e.printStackTrace();
-                ws.send(new Messages.ErrorMsg("Kartenvorschläge " + name + ": " + e));
+                ws.send(new Messages.ErrorMsg("Kartenvorschläge " + name + ": "
+                        + (e instanceof IllegalArgumentException ? e.getMessage() : e.toString())));
             }
         });
     }
