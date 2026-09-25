@@ -5,6 +5,8 @@ import forge.deck.Deck;
 import forge.gui.GuiBase;
 import forge.item.PaperCard;
 import mtgplayer.ai.AiConfig;
+import mtgplayer.app.UpdateCheck;
+import mtgplayer.app.Version;
 import mtgplayer.decks.Archidekt;
 import mtgplayer.decks.DeckAnalysis;
 import mtgplayer.decks.DeckSource;
@@ -58,14 +60,36 @@ public final class Bridge {
     private final Edhrec edhrec;
     /** Sparring (Stueck 3): genau ein Lauf zur Zeit, siehe {@link SparringRun}. */
     private final SparringRun sparring;
+    /** App-Paket, Task 4: Fassungsabgleich gegen GitHub, siehe {@link #checkVersion()}. */
+    private final UpdateCheck updateCheck;
+    /** Ergebnis von {@link #checkVersion()}, sobald (und nur wenn) es tatsaechlich etwas Neueres
+     *  gibt - {@code null} bis dahin bzw. dauerhaft ohne Update. Ein Client, der sich VOR dem Ende
+     *  der Pruefung verbindet, bekaeme die Nachricht sonst nie: {@link #onClientConnected()} schickt
+     *  sie zusaetzlich beim (Re-)Verbinden nach, wenn sie inzwischen vorliegt. */
+    private volatile Messages.VersionMsg versionMsg;
     /** Genau ein archidektImport-Lauf zur Zeit (siehe handle, "archidektImport"). */
     private final AtomicBoolean importRunning = new AtomicBoolean();
     /** Deckel der "matches"-Liste zum Client (Task 3) - siehe {@link #matchesMsg()}. */
     private static final int LIST_MAX = 300;
 
     public Bridge(int wsPort) {
-        this(wsPort, DeckStore.standard(), Archidekt.standard(), MatchStore.standard());
+        // Entpackt bewusst die ganze Vorgabe-Kette (statt nur DeckStore.standard()/Archidekt.standard()/
+        // MatchStore.standard() an den 4-Parameter-Konstruktor zu reichen): nur HIER, am einzigen
+        // oeffentlichen Konstruktor, soll das ECHTE UpdateCheck (mit echtem Netzabruf) landen - siehe
+        // Kommentar bei NO_UPDATE_CHECK, warum die Testkonstruktoren darunter etwas anderes vorgeben.
+        this(wsPort, DeckStore.standard(), Archidekt.standard(), MatchStore.standard(),
+                new SubprocessGameRunner(), new Edhrec(), CardStore.standard(), new UpdateCheck());
     }
+
+    /** Sichere Vorgabe fuer jeden Testkonstruktor unten, der kein eigenes {@link UpdateCheck} angibt:
+     *  die Quelle wirft sofort, ohne je ins Netz zu gehen. Anders als {@link Edhrec} (dort ist der
+     *  Zugriff traege - nur auf ausdrueckliche Anfrage ueber "suggestCards") ruft {@link #start()}
+     *  {@link #checkVersion()} IMMER auf. Ein "echtes" {@code new UpdateCheck()} als Vorgabe wuerde
+     *  also jeden bestehenden Bridge-Test, der {@code start()} aufruft, unbemerkt ins Netz schicken -
+     *  genau das verbietet Task 4 ("kein Test geht ins Netz"). */
+    private static final UpdateCheck NO_UPDATE_CHECK = new UpdateCheck(url -> {
+        throw new RuntimeException("Test-Bridge ohne eingesetztes UpdateCheck - siehe NO_UPDATE_CHECK");
+    });
 
     /** Fuer Tests (siehe BridgeArchidektImportTest/BridgeEndToEndTest): eigenes Deck-Verzeichnis,
      *  Archidekt ohne Netz und eigener Partien-Speicher - Kevins ~/.mtg-player bleibt unberuehrt.
@@ -95,12 +119,21 @@ public final class Bridge {
      *  {@code target/test-data}, das sich alle Testklassen im selben Fork teilen. */
     Bridge(int wsPort, DeckStore store, Archidekt archidekt, MatchStore matches, GameRunner sparringRunner,
            Edhrec edhrec, CardStore cards) {
+        this(wsPort, store, archidekt, matches, sparringRunner, edhrec, cards, NO_UPDATE_CHECK);
+    }
+
+    /** Fuer Tests, die die Fassungspruefung ueber das Protokoll pruefen (siehe VersionMsg/checkVersion):
+     *  eigener {@link UpdateCheck} mit eingesetzter Quelle, damit kein Test den echten GitHub-Abruf
+     *  ausloest (Task 4 - "kein Test geht ins Netz"). */
+    Bridge(int wsPort, DeckStore store, Archidekt archidekt, MatchStore matches, GameRunner sparringRunner,
+           Edhrec edhrec, CardStore cards, UpdateCheck updateCheck) {
         this.store = store;
         this.archidekt = archidekt;
         this.decks = new DeckSource(store, archidekt);
         this.matches = matches;
         this.cards = cards;
         this.edhrec = edhrec;
+        this.updateCheck = updateCheck;
         this.ws = new WsServer(wsPort, this::handle, this::onClientConnected);
         // Der Lauf meldet Fortschritt und - je gespeicherter Partie - den Datensatz selbst; die
         // gedeckelte "matches"-Liste baut nur die Bridge (siehe matchesMsg()), deshalb hier die
@@ -122,6 +155,25 @@ public final class Bridge {
         // Abbrueche des Spiel-Threads (Forge-BugReporter, uncaught) als Fehlerzeile in den Browser.
         CrashLog.setListener(text -> ws.send(new Messages.ErrorMsg(text)));
         ws.start();
+        checkVersion();
+    }
+
+    /** Task 4 (App-Paket): einmal beim Start im Hintergrund pruefen, ob es bei GitHub eine neuere
+     *  Fassung gibt. {@link UpdateCheck#latest()} verschluckt jeden Fehlschlag schon selbst (kein
+     *  Netz, kaputte Antwort, Zeitueberschreitung) - hier bleibt nur noch der Vergleich gegen die
+     *  eigene Fassung. Ergebnis wird zwischengespeichert ({@link #versionMsg}) UND sofort an bereits
+     *  verbundene Clients geschickt; {@link #onClientConnected()} holt Nachzuegler nach. */
+    private void checkVersion() {
+        GuiBase.getInterface().runBackgroundTask("version-check", () -> {
+            String current = Version.current();
+            updateCheck.latest()
+                    .filter(release -> Version.isNewer(release.tag(), current))
+                    .ifPresent(release -> {
+                        Messages.VersionMsg msg = new Messages.VersionMsg(current, release);
+                        versionMsg = msg;
+                        ws.send(msg);
+                    });
+        });
     }
 
     /** Fuer Tests (siehe BridgeSpectatorTest): Zugriff auf das HumanMatch, z. B. um nach dem
@@ -141,6 +193,11 @@ public final class Bridge {
     private void onClientConnected() {
         ws.send(new Messages.Lobby(Precons.infos(), store.infos()));
         ws.send(matchesMsg());
+        // Nachzuegler: die Pruefung aus checkVersion() lief evtl. noch, als dieser Client sich
+        // verband (Netzabruf), oder verbindet sich erst jetzt neu - liegt inzwischen ein Ergebnis
+        // vor, bekommt er es hier nachgereicht statt nie.
+        Messages.VersionMsg vm = versionMsg;
+        if (vm != null) ws.send(vm);
         // state vor choice: beides in EINEM Runnable, sonst kann pending() vor pushState() beim Client ankommen
         GuiBase.getInterface().invokeInEdtLater(() -> {
             gui.pushState();

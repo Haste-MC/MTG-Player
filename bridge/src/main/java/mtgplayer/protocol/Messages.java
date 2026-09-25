@@ -1,6 +1,7 @@
 package mtgplayer.protocol;
 
 import mtgplayer.ai.AiConfig;
+import mtgplayer.app.UpdateCheck;
 import mtgplayer.decks.DeckAnalysis;
 import mtgplayer.decks.Suggestions;
 import mtgplayer.stats.CardStats;
@@ -177,6 +178,19 @@ public final class Messages {
                                List<CardStats.Card> cards) {
         public CardStatsMsg(String deck, CardStats stats) {
             this("cardStats", deck, stats.games(), stats.withCardData(), stats.enough(), stats.cards());
+        }
+    }
+
+    /**
+     * Einmalig beim Start geschickt (siehe {@link mtgplayer.server.Bridge}), NUR wenn
+     * {@link mtgplayer.app.Version#isNewer} eine echte neuere Fassung erkennt (Spec §6) - ohne
+     * Update kommt gar keine Nachricht. {@code current}: die eigene Fassung. {@code latest}/{@code url}/
+     * {@code sha256}: aus {@link UpdateCheck.Release}. Das Anwenden ist Aufgabe 5, hier geht es nur um
+     * die Erkennung und die Meldung an den Client.
+     */
+    public record VersionMsg(String type, String current, String latest, String url, String sha256) {
+        public VersionMsg(String current, UpdateCheck.Release release) {
+            this("version", current, release.tag(), release.url(), release.sha256());
         }
     }
 }
