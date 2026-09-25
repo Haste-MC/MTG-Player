@@ -2,6 +2,7 @@ package mtgplayer.protocol;
 
 import mtgplayer.ai.AiConfig;
 import mtgplayer.decks.DeckAnalysis;
+import mtgplayer.decks.Suggestions;
 import mtgplayer.stats.MatchRecord;
 
 import java.util.List;
@@ -121,6 +122,14 @@ public final class Messages {
      */
     public record DeckAnalysisMsg(String type, String deck, DeckAnalysis analysis) {
         public DeckAnalysisMsg(String deck, DeckAnalysis analysis) { this("deckAnalysis", deck, analysis); }
+    }
+
+    /** Antwort auf {"type":"suggestCards"} (Spec 2026-09-25-kartenvorschlaege §2). */
+    public record CardSuggestionsMsg(String type, String deck, String source, String note,
+                                     List<Suggestions.Item> suggestions) {
+        public CardSuggestionsMsg(String deck, Suggestions.Result r) {
+            this("cardSuggestions", deck, r.source(), r.note(), r.items());
+        }
     }
 
     /**

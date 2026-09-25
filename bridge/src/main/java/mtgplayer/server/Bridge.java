@@ -3,11 +3,14 @@ package mtgplayer.server;
 import com.fasterxml.jackson.databind.JsonNode;
 import forge.deck.Deck;
 import forge.gui.GuiBase;
+import forge.item.PaperCard;
 import mtgplayer.ai.AiConfig;
 import mtgplayer.decks.Archidekt;
 import mtgplayer.decks.DeckAnalysis;
 import mtgplayer.decks.DeckSource;
 import mtgplayer.decks.DeckStore;
+import mtgplayer.decks.Edhrec;
+import mtgplayer.decks.Suggestions;
 import mtgplayer.forge.CrashLog;
 import mtgplayer.forge.Precons;
 import mtgplayer.forge.WebGuiBase;
@@ -25,8 +28,10 @@ import mtgplayer.stats.MatchStore;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 /**
  * Verdrahtet WebSocket ↔ WebGuiGame/HumanMatch. Eingaben, die Forges Input-System berühren,
@@ -43,6 +48,8 @@ public final class Bridge {
     private final Archidekt archidekt;
     private final DeckSource decks;
     private final MatchStore matches;
+    /** Kartenvorschlaege (Stueck 2): EDHREC-Anreicherung, siehe {@link #suggestCards}. */
+    private final Edhrec edhrec = new Edhrec();
     /** Sparring (Stueck 3): genau ein Lauf zur Zeit, siehe {@link SparringRun}. */
     private final SparringRun sparring;
     /** Genau ein archidektImport-Lauf zur Zeit (siehe handle, "archidektImport"). */
@@ -215,6 +222,7 @@ public final class Bridge {
                 });
             }
             case "analyzeDeck" -> analyzeDeck(msg.path("deck").asText());
+            case "suggestCards" -> suggestCards(msg.path("deck").asText(), roles(msg.path("roles")));
             case "archidektList" -> archidektList(msg.path("username").asText(""));
             case "archidektImport" -> archidektImport(msg.path("ids"));
             case "deleteMatch" -> deleteMatch(msg.path("id").asText());
@@ -263,6 +271,51 @@ public final class Bridge {
         } catch (IllegalArgumentException ignored) {
             return null;
         }
+    }
+
+    /**
+     * {"type":"suggestCards","deck":"&lt;Name&gt;","roles":[…]} → {@link Messages.CardSuggestionsMsg} oder
+     * error "Kartenvorschläge &lt;name&gt;: unbekanntes Deck". Hintergrund-Task wie analyzeDeck: der
+     * EDHREC-Abruf und der Rückfall über die ganze Kartendatenbank haben auf dem UI-Thread nichts verloren.
+     */
+    private void suggestCards(String name, List<String> roles) {
+        GuiBase.getInterface().runBackgroundTask("suggest-cards", () -> {
+            try {
+                Deck deck = forAnalysis(name);
+                if (deck == null) {
+                    ws.send(new Messages.ErrorMsg("Kartenvorschläge " + name + ": unbekanntes Deck"));
+                    return;
+                }
+                Edhrec.Page page = edhrec.page(commanderNames(deck)).orElse(null);
+                ws.send(new Messages.CardSuggestionsMsg(name,
+                        Suggestions.of(deck, roles, store.bracket(name), page)));
+            } catch (RuntimeException e) {
+                // wie bei "concede": sonst stirbt der Fehler still auf dem Hintergrund-Thread
+                e.printStackTrace();
+                ws.send(new Messages.ErrorMsg("Kartenvorschläge " + name + ": " + e));
+            }
+        });
+    }
+
+    /** Kommandeurnamen fuer {@link Edhrec#page}: Forge liefert PaperCard, getName() ist nie null. */
+    private static List<String> commanderNames(Deck deck) {
+        return deck.getCommanders().stream().map(PaperCard::getName).toList();
+    }
+
+    /**
+     * Wandelt das JSON-Array aus "roles" in eine Liste bekannter Rollennamen (siehe
+     * {@link DeckAnalysis#rules()}) - unbekannte Namen fallen weg, der Client darf nichts erfinden.
+     */
+    private static List<String> roles(JsonNode rolesNode) {
+        Set<String> known = DeckAnalysis.rules().stream().map(DeckAnalysis.Rule::name).collect(Collectors.toSet());
+        List<String> out = new ArrayList<>();
+        for (JsonNode n : rolesNode) {
+            String role = n.asText("");
+            if (known.contains(role)) {
+                out.add(role);
+            }
+        }
+        return out;
     }
 
     /**

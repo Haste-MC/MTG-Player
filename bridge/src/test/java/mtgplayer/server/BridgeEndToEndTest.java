@@ -444,4 +444,20 @@ class BridgeEndToEndTest {
         JsonNode err = await("error", n -> n.path("text").asText().startsWith("Bracket gibt es nicht:"), 10);
         assertTrue(err.path("text").asText().contains("gibt es nicht"), err.toString());
     }
+
+    /**
+     * suggestCards mit unbekanntem Namen: "error" statt still zu bleiben - wie analyzeDeck. Bewusst NUR
+     * der Fehlerpfad: forAnalysis(name) liefert dort null, BEVOR suggestCards() Edhrec#page() aufruft -
+     * dieser Test loest also keinen echten EDHREC-Abruf aus. Ein Erfolgspfad ueber diese laufende Bridge
+     * wuerde echtes edhrec (Feld in Bridge, echtes ~/.mtg-player als Zwischenspeicher) treffen; das ist
+     * hier bewusst nicht getestet (siehe MessagesTest fuer die Nachrichtenform selbst).
+     */
+    @Test
+    @Order(13)
+    @Timeout(value = 1, unit = TimeUnit.MINUTES)
+    void suggestCardsUnbekanntesDeckLiefertError() throws Exception {
+        send("{\"type\":\"suggestCards\",\"deck\":\"gibt es nicht\",\"roles\":[\"ramp\"]}");
+        JsonNode err = await("error", n -> n.path("text").asText().startsWith("Kartenvorschläge gibt es nicht:"), 10);
+        assertEquals("Kartenvorschläge gibt es nicht: unbekanntes Deck", err.path("text").asText());
+    }
 }
