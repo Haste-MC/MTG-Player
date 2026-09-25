@@ -2,7 +2,6 @@ package mtgplayer.decks;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
@@ -13,6 +12,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -33,6 +33,31 @@ class EdhrecTest {
         assertEquals("titania-protector-of-argoth", Edhrec.slug(List.of("Titania, Protector of Argoth")));
         assertEquals("ms-bumbleflower", Edhrec.slug(List.of("Ms. Bumbleflower")));
         assertEquals("kaalia-of-the-vast", Edhrec.slug(List.of("Kaalia of the Vast")));
+        // Apostroph mitten im Wort - wird ersatzlos gestrichen, nicht durch "-" ersetzt
+        assertEquals("krrik-son-of-yawgmoth", Edhrec.slug(List.of("K'rrik, Son of Yawgmoth")));
+        // Apostroph am Wortende ("tiger's" -> "tigers"): "yuriko-the-tiger-s-shadow" liefert bei EDHREC 403
+        assertEquals("yuriko-the-tigers-shadow", Edhrec.slug(List.of("Yuriko, the Tiger's Shadow")));
+        assertEquals("kroxa-titan-of-deaths-hunger", Edhrec.slug(List.of("Kroxa, Titan of Death's Hunger")));
+        // doppelseitige Karte: nur die Vorderseite zaehlt, der Slug mit beiden Seiten liefert 403
+        assertEquals("esika-god-of-the-tree",
+                Edhrec.slug(List.of("Esika, God of the Tree // The Prismatic Bridge")));
+    }
+
+    /** Wichtiger Befund (Nachtrag): eine Namensliste mit einem {@code null}-Eintrag darf slug() nicht mit
+     *  einer NullPointerException abschiessen - null und leere Namen werden uebersprungen. */
+    @Test
+    void slugUeberspringtNullUndLeereNamen() {
+        assertEquals("titania-protector-of-argoth",
+                Edhrec.slug(Arrays.asList("Titania, Protector of Argoth", null, "")));
+        assertEquals("", Edhrec.slug(Arrays.asList(null, "")));
+    }
+
+    /** Dieselbe Situation ueber page(): auch dort nie werfen, sondern leeres Optional (Aufrufer wie
+     *  Suggestions duerfen sich darauf verlassen). */
+    @Test
+    void pageWirftNichtBeiNullInDerNamensliste(@TempDir Path dir) {
+        Edhrec e = new Edhrec(url -> { throw new RuntimeException("kein Netz"); }, dir);
+        assertTrue(e.page(Arrays.asList((String) null)).isEmpty());
     }
 
     /** Partner: EDHREC fuehrt sie unter einem gemeinsamen Slug in alphabetischer Reihenfolge - die

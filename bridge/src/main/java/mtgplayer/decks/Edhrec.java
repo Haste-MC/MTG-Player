@@ -62,7 +62,8 @@ public final class Edhrec {
     }
 
     private static final HttpClient CLIENT = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(10)).build();
+            .connectTimeout(Duration.ofSeconds(10))
+            .followRedirects(HttpClient.Redirect.NORMAL).build();
 
     /** Selbe Werte wie {@link Archidekt#standard()}: 10 s Verbindung, 20 s Antwort, eigener User-Agent. */
     private static String fetch(String url) {
@@ -86,14 +87,26 @@ public final class Edhrec {
     }
 
     /** EDHREC-Slug fuer einen (Partner-)Commander. Bei mehreren Namen in alphabetischer Reihenfolge -
-     *  EDHREC selbst fuehrt Partner so, unabhaengig davon, wer im Deck an erster Stelle steht. */
+     *  EDHREC selbst fuehrt Partner so, unabhaengig davon, wer im Deck an erster Stelle steht.
+     *  {@code null}-Eintraege und leere Namen werden uebersprungen statt zu werfen (Aufrufer wie
+     *  {@link #page} bekommen sonst nie ihr leeres {@code Optional}, sondern eine Ausnahme). */
     public static String slug(List<String> commanderNames) {
-        if (commanderNames.isEmpty()) return "";
-        List<String> sorted = new ArrayList<>(commanderNames);
-        sorted.sort(String::compareToIgnoreCase);
+        List<String> names = new ArrayList<>();
+        for (String n : commanderNames) {
+            if (n != null && !n.isBlank()) names.add(n);
+        }
+        if (names.isEmpty()) return "";
+        names.sort(String::compareToIgnoreCase);
         List<String> parts = new ArrayList<>();
-        for (String name : sorted) {
-            String part = name.toLowerCase(Locale.ROOT)
+        for (String name : names) {
+            // doppelseitige Karten laufen bei EDHREC unter ihrer Vorderseite
+            int slash = name.indexOf("//");
+            String front = (slash >= 0 ? name.substring(0, slash) : name).trim();
+            // Apostroph ist der einzige Sonderfall, der NICHT zum Trennzeichen wird - sonst waere jeder
+            // Commander mit Apostroph im Namen (Yuriko, K'rrik, ...) dauerhaft ohne Vorschlaege, weil der
+            // EDHREC-Slug den Apostroph ersatzlos streicht statt ihn durch "-" zu ersetzen.
+            String part = front.toLowerCase(Locale.ROOT)
+                    .replaceAll("['’]", "")
                     .replaceAll("[^a-z0-9]+", "-")
                     .replaceAll("^-+|-+$", "");
             if (!part.isEmpty()) parts.add(part);
