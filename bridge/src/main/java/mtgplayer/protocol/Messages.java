@@ -185,12 +185,13 @@ public final class Messages {
      * Einmalig beim Start geschickt (siehe {@link mtgplayer.server.Bridge}), NUR wenn
      * {@link mtgplayer.app.Version#isNewer} eine echte neuere Fassung erkennt (Spec §6) - ohne
      * Update kommt gar keine Nachricht. {@code current}: die eigene Fassung. {@code latest}/{@code url}/
-     * {@code sha256}: aus {@link UpdateCheck.Release}. Das Anwenden ist Aufgabe 5, hier geht es nur um
-     * die Erkennung und die Meldung an den Client.
+     * {@code sha256}/{@code notes}: aus {@link UpdateCheck.Release} ({@code notes}: der Release-Text,
+     * leer wenn keiner da ist - fuer die Lobby in Aufgabe 6, "was ist neu"). Das Anwenden ist
+     * Aufgabe 5, hier geht es nur um die Erkennung und die Meldung an den Client.
      */
-    public record VersionMsg(String type, String current, String latest, String url, String sha256) {
+    public record VersionMsg(String type, String current, String latest, String url, String sha256, String notes) {
         public VersionMsg(String current, UpdateCheck.Release release) {
-            this("version", current, release.tag(), release.url(), release.sha256());
+            this("version", current, release.tag(), release.url(), release.sha256(), release.notes());
         }
     }
 }

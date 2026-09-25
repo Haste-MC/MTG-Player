@@ -35,7 +35,9 @@ public final class UpdateCheck {
     private static final String LATEST_URL = "https://api.github.com/repos/Haste-MC/MTG-Player/releases/latest";
     private static final Pattern HEX64 = Pattern.compile("\\b[0-9a-fA-F]{64}\\b");
 
-    public record Release(String tag, String url, String sha256) { }
+    /** notes: der Release-Text ("body" in der GitHub-Antwort), leer wenn keiner da ist - Aufgabe 6
+     *  zeigt ihn in der Lobby ("was ist neu"), siehe Spec §6. */
+    public record Release(String tag, String url, String sha256, String notes) { }
 
     private final Function<String, String> source;
 
@@ -106,11 +108,12 @@ public final class UpdateCheck {
             }
             if (zipUrl == null) return Optional.empty();
 
+            String notes = root.path("body").asText("");
             String sha256 = shaAssetUrl != null ? shaFromAsset(shaAssetUrl, zipName) : null;
-            if (sha256 == null) sha256 = shaFromBody(root.path("body").asText(""));
+            if (sha256 == null) sha256 = shaFromBody(notes);
             if (sha256 == null) return Optional.empty();
 
-            return Optional.of(new Release(tag, zipUrl, sha256));
+            return Optional.of(new Release(tag, zipUrl, sha256, notes));
         } catch (RuntimeException kaputteAntwort) {
             return Optional.empty();
         }

@@ -37,6 +37,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 /**
@@ -62,6 +63,10 @@ public final class Bridge {
     private final SparringRun sparring;
     /** App-Paket, Task 4: Fassungsabgleich gegen GitHub, siehe {@link #checkVersion()}. */
     private final UpdateCheck updateCheck;
+    /** Die eigene Fassung fuer {@link #checkVersion()} - wie {@link #updateCheck} eine einsetzbare
+     *  Naht (Vorgabe {@link Version#current()}), damit ein Test den Erfolgszweig (eine ECHTE neuere
+     *  Fassung) durchspielen kann, ohne ein echtes {@code version.txt}/Jar-Manifest vorzutaeuschen. */
+    private final Supplier<String> currentVersion;
     /** Ergebnis von {@link #checkVersion()}, sobald (und nur wenn) es tatsaechlich etwas Neueres
      *  gibt - {@code null} bis dahin bzw. dauerhaft ohne Update. Ein Client, der sich VOR dem Ende
      *  der Pruefung verbindet, bekaeme die Nachricht sonst nie: {@link #onClientConnected()} schickt
@@ -124,9 +129,22 @@ public final class Bridge {
 
     /** Fuer Tests, die die Fassungspruefung ueber das Protokoll pruefen (siehe VersionMsg/checkVersion):
      *  eigener {@link UpdateCheck} mit eingesetzter Quelle, damit kein Test den echten GitHub-Abruf
-     *  ausloest (Task 4 - "kein Test geht ins Netz"). */
+     *  ausloest (Task 4 - "kein Test geht ins Netz"). Die eigene Fassung kommt weiterhin aus
+     *  {@link Version#current()} - in jeder Testumgebung "dev" (siehe dort), pruefbar ueber den
+     *  9-Parameter-Konstruktor darunter. */
     Bridge(int wsPort, DeckStore store, Archidekt archidekt, MatchStore matches, GameRunner sparringRunner,
            Edhrec edhrec, CardStore cards, UpdateCheck updateCheck) {
+        this(wsPort, store, archidekt, matches, sparringRunner, edhrec, cards, updateCheck, Version::current);
+    }
+
+    /** Fuer Tests, die den ERFOLGSZWEIG von checkVersion() pruefen (siehe BridgeVersionTest): eine
+     *  eingesetzte "eigene Fassung" statt {@link Version#current()} - dieselbe Idee wie bei
+     *  {@code updateCheck}, nur fuer die andere Haelfte des Vergleichs. Ohne diese Naht liefert
+     *  {@code Version.current()} im Testlauf IMMER "dev" (kein {@code version.txt}, keine gepackte
+     *  Jar), und der Erfolgspfad ("es kommt tatsaechlich eine 'version'-Nachricht an") waere nie
+     *  durchspielbar. */
+    Bridge(int wsPort, DeckStore store, Archidekt archidekt, MatchStore matches, GameRunner sparringRunner,
+           Edhrec edhrec, CardStore cards, UpdateCheck updateCheck, Supplier<String> currentVersion) {
         this.store = store;
         this.archidekt = archidekt;
         this.decks = new DeckSource(store, archidekt);
@@ -134,6 +152,7 @@ public final class Bridge {
         this.cards = cards;
         this.edhrec = edhrec;
         this.updateCheck = updateCheck;
+        this.currentVersion = currentVersion;
         this.ws = new WsServer(wsPort, this::handle, this::onClientConnected);
         // Der Lauf meldet Fortschritt und - je gespeicherter Partie - den Datensatz selbst; die
         // gedeckelte "matches"-Liste baut nur die Bridge (siehe matchesMsg()), deshalb hier die
@@ -162,10 +181,21 @@ public final class Bridge {
      *  Fassung gibt. {@link UpdateCheck#latest()} verschluckt jeden Fehlschlag schon selbst (kein
      *  Netz, kaputte Antwort, Zeitueberschreitung) - hier bleibt nur noch der Vergleich gegen die
      *  eigene Fassung. Ergebnis wird zwischengespeichert ({@link #versionMsg}) UND sofort an bereits
-     *  verbundene Clients geschickt; {@link #onClientConnected()} holt Nachzuegler nach. */
+     *  verbundene Clients geschickt; {@link #onClientConnected()} holt Nachzuegler nach.
+     *
+     *  <p>Review-Befund (kritisch): eine unbekannte/Entwicklungsfassung ({@link Version#DEV}) fragt
+     *  GAR NICHT erst nach - nicht nur im App-Modus, sondern bei JEDEM {@link #start()}, also auch
+     *  in Kevins Entwicklungs-Bridge ({@code mvn exec:java} ohne {@code -Dmtgplayer.app}). Ohne diese
+     *  Sperre haette {@code start()} dort bei jedem Neustart einen echten, wenn auch folgenlosen
+     *  ({@link Version#isNewer} liefert fuer "dev" ohnehin immer {@code false}) Netzabruf ausgeloest -
+     *  reiner Leerlauf, der trotzdem wirklich ins Netz geht. Die Regel "current == dev" ist schaerfer
+     *  als "nur im App-Modus prüfen": sie deckt auch einen App-Modus-Lauf direkt aus dem Quellbaum ab
+     *  (kein {@code version.txt}, keine gepackte Jar - {@link Version#current()} liefert dann
+     *  ebenfalls "dev").</p> */
     private void checkVersion() {
+        String current = currentVersion.get();
+        if (Version.DEV.equals(current)) return;
         GuiBase.getInterface().runBackgroundTask("version-check", () -> {
-            String current = Version.current();
             updateCheck.latest()
                     .filter(release -> Version.isNewer(release.tag(), current))
                     .ifPresent(release -> {

@@ -53,6 +53,23 @@ class UpdateCheckTest {
         assertEquals("1.3.0", r.get().tag(), "das fuehrende 'v' des Tags gehoert nicht in die Fassung");
         assertEquals(ZIP_URL, r.get().url());
         assertEquals(HASH, r.get().sha256());
+        assertEquals("Release-Notizen", r.get().notes(), "notes: der Release-Text aus \"body\"");
+    }
+
+    @Test
+    void notesIstLeerWennDerReleaseTextFehlt() {
+        String assets = asset("MTG-Player-1.3.0-win.zip", ZIP_URL) + "," + asset("SHA256SUMS", SHA_URL);
+        // Kein "body"-Feld in der Antwort ueberhaupt (nicht nur ein leerer String) - asText("") muss
+        // trotzdem einen leeren, nie einen null-notes liefern.
+        Map<String, String> antworten = Map.of(
+                LATEST_URL, "{\"tag_name\":\"v1.3.0\",\"assets\":[" + assets + "]}",
+                SHA_URL, HASH + "  MTG-Player-1.3.0-win.zip\n");
+        UpdateCheck check = new UpdateCheck(source(antworten));
+
+        Optional<UpdateCheck.Release> r = check.latest();
+
+        assertTrue(r.isPresent());
+        assertEquals("", r.get().notes());
     }
 
     @Test
