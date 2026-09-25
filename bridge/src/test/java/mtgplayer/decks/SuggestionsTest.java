@@ -264,4 +264,42 @@ class SuggestionsTest {
         List<Integer> cmcs = r.items().stream().map(Suggestions.Item::cmc).toList();
         assertEquals(cmcs.stream().sorted().toList(), cmcs, cmcs.toString());
     }
+
+    @Test
+    void einzigerKandidatBekommtKeineSuperlativKlausel() {
+        // Befund 2: mit nur einer Karte der Rolle im Deck ist "die teuerste Karte dieser Rolle" nichts, was
+        // sich pruefen liesse (eine einelementige Liste ist immer ihr eigenes Maximum) - die Klausel darf
+        // dann nicht angehaengt werden, auch wenn der (dann einzige) Kandidat sie frueher immer bekam.
+        Suggestions.Result r = Suggestions.of(deck("Rampant Growth"), List.of("ramp"), 4,
+                page(ec("Llanowar Elves", 0.4), ec("Rampant Growth", 0.04)));
+        Suggestions.Cut cut = r.items().get(0).cut();
+        assertNotNull(cut, "ohne Schnittkandidat: " + r.items());
+        assertEquals("Rampant Growth", cut.name());
+        assertEquals("spielt in vergleichbaren Decks fast niemand (4 %)", cut.reason(),
+                "kein einziger Kandidat darf zusaetzlich als \"teuerste Karte\" durchgehen");
+    }
+
+    @Test
+    void zweiterSchnittDerselbenRolleBehauptetKeinenFalschenNiedrigstenAnteil() {
+        // Befund 1, das im Review gemeldete Fixture-Beispiel nachgebaut: zwei Vorschlaege derselben Rolle,
+        // das Deck hat zwei ramp-Karten (Elvish Mystic 4 %, Kodama's Reach 31 %). Der erste Schnitt nimmt
+        // die mit dem niedrigsten Anteil (Elvish Mystic). Der zweite Schnitt kann sie nicht mehr nehmen
+        // (Regel 5) und landet bei Kodama's Reach - die darf dann aber NICHT als "niedrigster Anteil"
+        // durchgehen, denn Elvish Mystic (4 %) steht ja weiterhin im Deck.
+        Suggestions.Result r = Suggestions.of(deck("Elvish Mystic", "Kodama's Reach"), List.of("ramp"), 4,
+                page(ec("Llanowar Elves", 0.9), ec("Cultivate", 0.8),
+                     ec("Elvish Mystic", 0.04), ec("Kodama's Reach", 0.31)));
+        List<Suggestions.Item> ramp = r.items().stream().filter(i -> i.role().equals("ramp")).toList();
+        assertEquals(2, ramp.size(), ramp.toString());
+        Suggestions.Cut firstCut = ramp.get(0).cut();
+        assertNotNull(firstCut, "ohne ersten Schnitt: " + ramp);
+        assertEquals("Elvish Mystic", firstCut.name());
+        Suggestions.Cut secondCut = ramp.get(1).cut();
+        assertNotNull(secondCut, "ohne zweiten Schnitt: " + ramp);
+        assertEquals("Kodama's Reach", secondCut.name());
+        assertFalse(secondCut.reason().contains("niedrigsten Anteil"),
+                "Kodama's Reach ist NICHT der niedrigste Anteil - Elvish Mystic (4 %) steht noch im Deck: "
+                        + secondCut.reason());
+        assertEquals("ist mit 2 {G} die teuerste Karte dieser Rolle", secondCut.reason());
+    }
 }

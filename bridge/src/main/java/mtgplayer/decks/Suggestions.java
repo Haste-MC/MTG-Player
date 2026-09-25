@@ -225,40 +225,57 @@ public final class Suggestions {
      * Schnittkandidat fuer einen Vorschlag der Rolle {@code role} (Spec §7, Regeln 1-4): zuerst Karten der
      * Hauptsektion mit derselben Rolle, sonst Karten, die keine der neun Rollen treffen, jeweils ohne
      * Laender/Commander (schon durch {@code mainCards}) und ohne bereits vergebene Karten.
+     * <p>Befund 1: {@code pickPool} (wonach gewaehlt wird) und {@code reasonBasis} (woran die Begruendung
+     * ihre Superlative misst) sind bewusst zwei verschiedene Listen. Die Wahl selbst MUSS die schon als
+     * anderer Schnitt vergebenen Karten ausschliessen (Regel 5: jeder Kandidat hoechstens einmal), die
+     * Begruendung darf das nicht - "hat den niedrigsten Anteil der Karten dieser Rolle in deinem Deck"
+     * ist eine Aussage ueber das ganze Deck, nicht nur ueber das, was gerade noch uebrig ist.</p>
      */
     private static Cut cutCandidate(List<PaperCard> mainCards, String role, Edhrec.Page page,
                                      Set<String> cutChosen) {
-        List<PaperCard> sameRole = new ArrayList<>();
-        List<PaperCard> noRole = new ArrayList<>();
+        List<PaperCard> sameRoleAll = new ArrayList<>();
+        List<PaperCard> noRoleAll = new ArrayList<>();
         for (PaperCard pc : mainCards) {
-            if (cutChosen.contains(pc.getName().toLowerCase(Locale.ROOT))) {
-                continue;
-            }
             List<String> cats = DeckAnalysis.categoriesOf(pc.getRules());
             if (cats.contains(role)) {
-                sameRole.add(pc);
+                sameRoleAll.add(pc);
             } else if (cats.isEmpty()) {
-                noRole.add(pc);
+                noRoleAll.add(pc);
             }
         }
-        Cut cut = pickCut(sameRole, page, false);
+        Cut cut = pickCut(available(sameRoleAll, cutChosen), sameRoleAll, page, false);
         if (cut != null) {
             return cut;
         }
-        return pickCut(noRole, page, true);
+        List<PaperCard> noRoleAvailable = available(noRoleAll, cutChosen);
+        return pickCut(noRoleAvailable, noRoleAvailable, page, true);
+    }
+
+    /** {@code cards} ohne die schon als Schnitt vergebenen (Regel 5) - die Auswahlgrundlage, nicht die
+     *  Vergleichsgrundlage der Begruendung (siehe {@link #cutCandidate}). */
+    private static List<PaperCard> available(List<PaperCard> cards, Set<String> cutChosen) {
+        List<PaperCard> out = new ArrayList<>();
+        for (PaperCard pc : cards) {
+            if (!cutChosen.contains(pc.getName().toLowerCase(Locale.ROOT))) {
+                out.add(pc);
+            }
+        }
+        return out;
     }
 
     /**
-     * Waehlt aus {@code candidates} den Schnitt (Spec §7 Regel 2): mit EDHREC-Seite zuerst Karten, die die
+     * Waehlt aus {@code pickPool} den Schnitt (Spec §7 Regel 2): mit EDHREC-Seite zuerst Karten, die die
      * Seite gar nicht fuehrt, dann aufsteigender share, dann absteigende Manakosten, dann Name; ohne Seite
      * absteigende Manakosten, dann Name. {@code noRoleCase} steuert nur die Begruendung (Regel 3).
+     * {@code reasonBasis} ist die unreduzierte Rollenliste des Decks fuer {@link #cutReason} (Befund 1).
      */
-    private static Cut pickCut(List<PaperCard> candidates, Edhrec.Page page, boolean noRoleCase) {
-        if (candidates.isEmpty()) {
+    private static Cut pickCut(List<PaperCard> pickPool, List<PaperCard> reasonBasis, Edhrec.Page page,
+                                boolean noRoleCase) {
+        if (pickPool.isEmpty()) {
             return null;
         }
         Map<String, Edhrec.Card> byName = page == null ? Map.of() : page.byName();
-        List<PaperCard> sorted = new ArrayList<>(candidates);
+        List<PaperCard> sorted = new ArrayList<>(pickPool);
         sorted.sort((a, b) -> {
             if (page != null) {
                 boolean aListed = byName.containsKey(a.getName().toLowerCase(Locale.ROOT));
@@ -281,38 +298,69 @@ public final class Suggestions {
             return a.getName().compareTo(b.getName());
         });
         PaperCard winner = sorted.get(0);
-        return new Cut(winner.getName(), cutReason(winner, candidates, page, noRoleCase));
+        return new Cut(winner.getName(), cutReason(winner, reasonBasis, page, noRoleCase));
     }
 
     /** Begruendung aus nur Geprueftem zusammengesetzt (Spec §7 Regel 6). Die Karte trifft entweder keine
      *  Rolle (dann steht das allein - "teuerste Karte dieser Rolle" waere unsinnig ohne Rolle) oder sie
      *  trifft dieselbe Rolle wie der Vorschlag; dort haengt der Satz an der tatsaechlichen Zahl: unter der
      *  Schwelle spielt sie fast niemand, darueber ist sie nur die schwaechste eines starken Feldes - ein
-     *  hoher Anteil darf nie als "fast niemand" erscheinen. */
-    private static String cutReason(PaperCard winner, List<PaperCard> candidates, Edhrec.Page page,
+     *  hoher Anteil darf nie als "fast niemand" erscheinen.
+     * <p>Befund 1+2: beide Superlative ("niedrigster Anteil", "teuerste Karte") gelten fuer
+     * {@code reasonBasis} - die unreduzierte Rollenliste des Decks, nicht nur die noch nicht als anderer
+     * Schnitt vergebenen Karten - und nur, wenn dort ueberhaupt mindestens zwei Karten stehen. Mit nur
+     * einer Karte in der Rolle ist "niedrigster"/"teuerste" nichts, was sich pruefen liesse.</p>
+     */
+    private static String cutReason(PaperCard winner, List<PaperCard> reasonBasis, Edhrec.Page page,
                                      boolean noRoleCase) {
         if (noRoleCase) {
             return "trifft keine der neun Rollen";
         }
+        boolean comparable = reasonBasis.size() >= 2;
         List<String> clauses = new ArrayList<>();
+        Map<String, Edhrec.Card> byName = page == null ? Map.of() : page.byName();
         if (page != null) {
-            Edhrec.Card ec = page.byName().get(winner.getName().toLowerCase(Locale.ROOT));
+            Edhrec.Card ec = byName.get(winner.getName().toLowerCase(Locale.ROOT));
             if (ec == null) {
                 clauses.add("führt EDHREC für diesen Commander gar nicht");
             } else {
                 long percent = Math.round(ec.share() * 100);
-                clauses.add(ec.share() < LOW_SHARE_THRESHOLD
-                        ? "spielt in vergleichbaren Decks fast niemand (" + percent + " %)"
-                        : "hat mit " + percent + " % den niedrigsten Anteil der Karten dieser Rolle in deinem Deck");
+                // Befund 5: gegen denselben gerundeten Wert pruefen, der im Satz steht - sonst behauptet
+                // ein Randfall wie 9,51 % ("10 %" im Text) trotzdem "fast niemand".
+                if (percent < Math.round(LOW_SHARE_THRESHOLD * 100)) {
+                    clauses.add("spielt in vergleichbaren Decks fast niemand (" + percent + " %)");
+                } else if (comparable && isLowestShare(winner, ec.share(), reasonBasis, byName)) {
+                    clauses.add("hat mit " + percent + " % den niedrigsten Anteil der Karten dieser Rolle in deinem Deck");
+                }
             }
         }
-        int maxCmc = candidates.stream().mapToInt(pc -> pc.getRules().getManaCost().getCMC())
-                .max().orElse(Integer.MIN_VALUE);
-        if (winner.getRules().getManaCost().getCMC() == maxCmc) {
-            clauses.add("ist mit " + winner.getRules().getManaCost().getShortString()
-                    + " die teuerste Karte dieser Rolle");
+        if (comparable) {
+            int maxCmc = reasonBasis.stream().mapToInt(pc -> pc.getRules().getManaCost().getCMC())
+                    .max().orElse(Integer.MIN_VALUE);
+            if (winner.getRules().getManaCost().getCMC() == maxCmc) {
+                clauses.add("ist mit " + winner.getRules().getManaCost().getShortString()
+                        + " die teuerste Karte dieser Rolle");
+            }
         }
         return String.join(" und ", clauses);
+    }
+
+    /** Ob {@code winnerShare} wirklich der niedrigste EDHREC-Anteil unter {@code reasonBasis} ist - nur
+     *  Karten, die die Seite ueberhaupt fuehrt, zaehlen mit (unlisted Karten haben keinen Anteil, mit dem
+     *  sich vergleichen liesse; siehe cutReason "führt EDHREC ... gar nicht" fuer diesen Fall). */
+    private static boolean isLowestShare(PaperCard winner, double winnerShare, List<PaperCard> reasonBasis,
+                                          Map<String, Edhrec.Card> byName) {
+        String winnerName = winner.getName().toLowerCase(Locale.ROOT);
+        for (PaperCard pc : reasonBasis) {
+            if (pc.getName().toLowerCase(Locale.ROOT).equals(winnerName)) {
+                continue;
+            }
+            Edhrec.Card ec = byName.get(pc.getName().toLowerCase(Locale.ROOT));
+            if (ec != null && ec.share() < winnerShare) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /** Vereinigung der Farbidentitaet aller Kommandeure; ohne Kommandeur gilt keine Einschraenkung. */
