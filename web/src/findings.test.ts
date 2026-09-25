@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   COUNTERED_MAX, ELIMINATION_SHARE_MIN, FLOOD_MAX, FLYER_DEFENSE_MAX, FLYING_SHARE_MAX, MANA_SCREW_MAX,
-  MIN_ELIMINATIONS, MIN_GAMES, MULLIGAN_MAX, SWEEP_GAMES_MAX, TURN_CAPPED_MAX, findings,
+  MIN_ELIMINATIONS, MIN_GAMES, MULLIGAN_MAX, SWEEP_GAMES_MAX, TURN_CAPPED_MAX, findings, roleGaps,
+  type Finding,
 } from "./findings";
 import type { DeckSummary } from "./matchStats";
 import type { DeckAnalysis } from "./protocol";
@@ -123,6 +124,11 @@ describe("Regel: Mana-Screw", () => {
     expect(f?.level).toBe("warn");
     expect(f?.needs).toBeUndefined();
   });
+
+  it("traegt die Rolle ramp", () => {
+    const f = findings(summary({ manaScrewRate: 0.5 }), analysis(), "all").find((x) => x.title === "Mana-Screw");
+    expect(f?.role).toBe("ramp");
+  });
 });
 
 describe("Regel: Landflut", () => {
@@ -141,6 +147,11 @@ describe("Regel: Landflut", () => {
     const s = summary({ floodRate: 0.6, v2Games: 0, manaScrewRate: undefined, avgOpeningLands: undefined });
     expect(titles(s, analysis(), "all")).toContain("Landflut");
   });
+
+  it("traegt die Rolle draw", () => {
+    const f = findings(summary({ floodRate: FLOOD_MAX + 0.01 }), analysis(), "all").find((x) => x.title === "Landflut");
+    expect(f?.role).toBe("draw");
+  });
 });
 
 describe("Regel: Mulligans", () => {
@@ -158,6 +169,12 @@ describe("Regel: Mulligans", () => {
   it("zaehlt auch ohne v2-Partien (die Mulligan-Quote stand schon in v1)", () => {
     const s = summary({ mulliganRate: 0.8, v2Games: 0, avgOpeningLands: undefined });
     expect(titles(s, analysis(), "all")).toContain("Viele Mulligans");
+  });
+
+  it("traegt keine Rolle (kein Deckbezug, an dem man ansetzen koennte)", () => {
+    const f = findings(summary({ mulliganRate: MULLIGAN_MAX + 0.01 }), analysis(), "all")
+      .find((x) => x.title === "Viele Mulligans");
+    expect(f?.role).toBeUndefined();
   });
 });
 
@@ -199,6 +216,12 @@ describe("Regel: Massenentfernung", () => {
     const s = summary({ v2Games: 10, sweepGames: 6 });
     expect(titles(s, undefined, "all")).not.toContain("Massenentfernung");
   });
+
+  it("traegt die Rolle wipeProtection", () => {
+    const s = summary({ v2Games: 10, sweepGames: 4 });
+    const f = findings(s, analysis({ wipeProtection: 0 }), "all").find((x) => x.title === "Massenentfernung");
+    expect(f?.role).toBe("wipeProtection");
+  });
 });
 
 describe("Regel: Flieger", () => {
@@ -229,6 +252,12 @@ describe("Regel: Flieger", () => {
     expect(titles(summary({ flyingShare: 0.8 }), analysis({ flyerDefense: FLYER_DEFENSE_MAX + 1 }), "all"))
       .not.toContain("Flieger");
   });
+
+  it("traegt die Rolle flyerDefense", () => {
+    const f = findings(summary({ flyingShare: 0.8 }), analysis({ flyerDefense: 1 }), "all")
+      .find((x) => x.title === "Flieger");
+    expect(f?.role).toBe("flyerDefense");
+  });
 });
 
 describe("Regel: gekonterte Zauber", () => {
@@ -247,6 +276,12 @@ describe("Regel: gekonterte Zauber", () => {
     expect(titles(summary({ counteredRate: 0.5 }), analysis({ counters: 1 }), "all"))
       .not.toContain("Gekonterte Zauber");
   });
+
+  it("traegt die Rolle counters", () => {
+    const f = findings(summary({ counteredRate: COUNTERED_MAX + 0.01 }), analysis({ counters: 0 }), "all")
+      .find((x) => x.title === "Gekonterte Zauber");
+    expect(f?.role).toBe("counters");
+  });
 });
 
 describe("Regel: Zugdeckel", () => {
@@ -259,6 +294,12 @@ describe("Regel: Zugdeckel", () => {
   it("unter der Schwelle -> kein Befund", () => {
     expect(titles(summary({ turnCappedRate: TURN_CAPPED_MAX, turnCappedGames: 2 }), analysis(), "all"))
       .not.toContain("Zugdeckel");
+  });
+
+  it("traegt keine Rolle (kein Deckbezug, an dem man ansetzen koennte)", () => {
+    const f = findings(summary({ turnCappedRate: TURN_CAPPED_MAX + 0.01, turnCappedGames: 3 }), analysis(), "all")
+      .find((x) => x.title === "Zugdeckel");
+    expect(f?.role).toBeUndefined();
   });
 });
 
@@ -297,6 +338,12 @@ describe("Regel: frueh raus (nur im Pod)", () => {
     expect(titles(s, analysis(), "duel")).not.toContain("Früh raus");
     expect(titles(s, analysis(), "all")).not.toContain("Früh raus");
   });
+
+  it("traegt die Rolle removal", () => {
+    const f = findings(summary({ avgEliminationShare: ELIMINATION_SHARE_MIN - 0.01 }), analysis(), "pod")
+      .find((x) => x.title === "Früh raus");
+    expect(f?.role).toBe("removal");
+  });
 });
 
 describe("nichts Auffaelliges", () => {
@@ -311,6 +358,38 @@ describe("nichts Auffaelliges", () => {
   it("schlaegt eine Regel an, faellt der 'nichts Auffaelliges'-Befund weg", () => {
     const t = titles(summary({ mulliganRate: 0.9 }), analysis(), "all");
     expect(t).not.toContain("Nichts Auffälliges");
+  });
+});
+
+describe("roleGaps", () => {
+  it("nimmt zuerst die Rollen aus den Auffaelligkeiten", () => {
+    const found: Finding[] = [
+      { level: "warn", title: "Massenentfernung", text: "", role: "wipeProtection" },
+      { level: "warn", title: "Flieger", text: "", role: "flyerDefense" },
+    ];
+    expect(roleGaps(analysis({ ramp: 0 }), found)).toEqual(["wipeProtection", "flyerDefense", "ramp"]);
+  });
+
+  it("fuellt aus den Richtwerten auf, ohne zu doppeln", () => {
+    const found: Finding[] = [{ level: "warn", title: "Mana-Screw", text: "", role: "ramp" }];
+    const gaps = roleGaps(analysis({ ramp: 0, draw: 0 }), found);
+    expect(gaps[0]).toBe("ramp");
+    expect(gaps.filter((r) => r === "ramp")).toHaveLength(1);
+    expect(gaps).toContain("draw");
+  });
+
+  it("nennt hoechstens drei Rollen", () => {
+    expect(roleGaps(analysis({ ramp: 0, draw: 0, removal: 0, wipes: 0 }), []).length).toBeLessThanOrEqual(3);
+  });
+
+  it("ist leer, wenn das Deck alle Richtwerte erfuellt und nichts auffaellt", () => {
+    expect(roleGaps(analysis({ ramp: 12, draw: 10, removal: 10, wipes: 3, flyerDefense: 6, wipeProtection: 3 }), []))
+      .toEqual([]);
+  });
+
+  it("kommt ohne Deckanalyse aus", () => {
+    const found: Finding[] = [{ level: "warn", title: "Flieger", text: "", role: "flyerDefense" }];
+    expect(roleGaps(undefined, found)).toEqual(["flyerDefense"]);
   });
 });
 

@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { ArchidektEntry, ArchidektProgress, Choice, DeckAnalysis, DeckInfo, Inbound, MatchRecord, Snapshot, StartGame } from "./protocol";
+import type { ArchidektEntry, ArchidektProgress, CardSuggestionsMsg, Choice, DeckAnalysis, DeckInfo, Inbound, MatchRecord, Snapshot, StartGame } from "./protocol";
 import { recordResult, type Series, startSeries } from "./series";
 import { send } from "./ws";
 
@@ -100,6 +100,10 @@ export interface AppState {
   /** Deckanalysen je Deckname (analyzeDeck/deckAnalysis) - sie haengen am Deckinhalt, nicht an Partien,
    *  und werden darum ueber die ganze Sitzung gemerkt. */
   deckAnalyses: Record<string, DeckAnalysis>;
+  /** Kartenvorschlaege je Deckname (suggestCards/cardSuggestions, Stueck 2) - dasselbe Muster wie
+   *  deckAnalyses: sie haengen am Deckinhalt und den fehlenden Rollen, nicht an einer einzelnen Partie,
+   *  und bleiben darum ueber die ganze Sitzung gemerkt. Die Anzeige selbst folgt erst noch. */
+  suggestions: Record<string, CardSuggestionsMsg>;
   /** Angefragt, aber noch ohne Antwort: verhindert, dass dieselbe Partie bzw. dasselbe Deck bei jedem
    *  Klick erneut angefragt wird. Ein error der Bridge raeumt beide Listen leer (welche Anfrage
    *  fehlschlug, sagt die Fehlermeldung nicht) - der naechste Versuch darf sonst nie mehr fragen. */
@@ -115,7 +119,7 @@ export const initialState: AppState = {
   screen: "lobby", precons: [], decks: [], choices: [], log: [], hiddenKinds: ["MANA", "PHASE"], lastLogId: 0,
   aiModes: ["standard", "hybrid", "sim"], aiProfiles: ["Default"], aiTimeout: 5, bestOf: 0, expectNewMatch: false,
   archidekt: { loading: false }, matches: [], matchesTotal: 0, matchDetails: {}, deckAnalyses: {},
-  pendingMatch: [], pendingAnalysis: [],
+  suggestions: {}, pendingMatch: [], pendingAnalysis: [],
 };
 
 const LOG_MAX = 500;
@@ -227,6 +231,10 @@ export function reduce(s: AppState, m: Inbound): AppState {
         ...s, deckAnalyses: { ...s.deckAnalyses, [m.deck]: m.analysis },
         pendingAnalysis: s.pendingAnalysis.filter((deck) => deck !== m.deck),
       };
+    case "cardSuggestions":
+      // Schluessel ist der Deckname, nicht die Rolle: das Board haelt so mehrere Decks nebeneinander,
+      // und eine neue Anfrage fuer dasselbe Deck ersetzt den alten Stand komplett (wie bei deckAnalysis).
+      return { ...s, suggestions: { ...s.suggestions, [m.deck]: m } };
     default:
       return s;
   }

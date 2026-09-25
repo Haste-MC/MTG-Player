@@ -303,7 +303,27 @@ export interface DeckAnalysis {
 /** Antwort auf analyzeDeck; deck ist der angefragte Deckname (Precon- oder Speichername). */
 export interface DeckAnalysisMsg { type: "deckAnalysis"; deck: string; analysis: DeckAnalysis }
 
-export type Inbound = Snapshot | Choice | Lobby | LogLine | Thinking | GameOver | ErrorMsg | ArchidektDecks | ArchidektProgress | Matches | MatchMsg | DeckAnalysisMsg | SparringProgress;
+/** Eine Karte, die im Schnitt fuer den Vorschlag weichen wuerde - nur als Denkanstoss, keine Aufforderung
+ *  (siehe CardSuggestion.cut). */
+export interface CardCut { name: string; reason: string }
+
+/** Ein Kartenvorschlag der Bridge (Stueck 2, mtgplayer.decks.Suggestions). Jackson laesst fehlende Werte
+ *  komplett weg (NON_NULL) - sie kommen also nie als null an, sondern fehlen als Property. */
+export interface CardSuggestion {
+  name: string; role: string; manaCost?: string; cmc: number;
+  /** Anteil der vergleichbaren Decks auf EDHREC (0..1); fehlt ohne EDHREC-Daten (Quelle "db"). */
+  share?: number;
+  gameChanger?: boolean; imageKey?: string; text?: string; cut?: CardCut;
+}
+
+/** Antwort auf suggestCards. source unterscheidet den EDHREC-Fall (mit share/cut) vom Datenbank-Rueckfall
+ *  ohne Netz; note traegt eine Erklaerung dazu (z. B. "EDHREC nicht erreichbar"), wenn es sie gibt. */
+export interface CardSuggestionsMsg {
+  type: "cardSuggestions"; deck: string; source: "edhrec" | "db"; note?: string;
+  suggestions: CardSuggestion[];
+}
+
+export type Inbound = Snapshot | Choice | Lobby | LogLine | Thinking | GameOver | ErrorMsg | ArchidektDecks | ArchidektProgress | Matches | MatchMsg | DeckAnalysisMsg | SparringProgress | CardSuggestionsMsg;
 
 export type Outbound =
   // humanDeck fehlt bei spectate:true (KI-only-Modus, kein eigener Sitz - siehe lobbyPayload.ts)

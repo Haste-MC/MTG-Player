@@ -51,9 +51,25 @@ export const NOTHING_TITLE = "Nichts Auffälliges";
  * gehoeren nicht in die Regeln. */
 export const SUGGESTIONS_HINT = "Kartenvorschläge folgen.";
 
+/** Die neun Kategorien aus DeckAnalysis.categories - dieselben Namen wie auf der Bridge-Seite
+ * (mtgplayer.decks.DeckAnalysis), damit ein Befund und ein Deckcheck ohne Uebersetzung zusammenpassen. */
+export type Role = "ramp" | "draw" | "removal" | "wipes" | "counters"
+  | "flyerDefense" | "wipeProtection" | "recursion" | "tutors";
+
+/** Richtwerte fuer den Deckcheck ohne Partien (Spec §1). counters/recursion/tutors haben bewusst keinen:
+ *  sie sind Deckabsicht, kein Mangel - ein blaues Deck ohne Gegenzauber ist eine Entscheidung. */
+export const ROLE_TARGETS: Partial<Record<Role, number>> = {
+  ramp: 10, draw: 8, removal: 8, wipes: 2, flyerDefense: 4, wipeProtection: 2,
+};
+
+/** Hoechstens so viele Luecken liefert roleGaps() - mehr Kartenvorschlaege auf einmal waeren keine
+ *  Prioritaet mehr, sondern eine zweite Deckliste. */
+export const MAX_GAPS = 3;
+
 /** Ein Befund: Stufe, kurzer Titel, ein Satz mit Zahl und Stichprobe und - wenn die Deckanalyse vorliegt
- * und etwas dazu sagt - der Bezug zum Deckinhalt in `needs`. */
-export interface Finding { level: "info" | "warn"; title: string; text: string; needs?: string }
+ * und etwas dazu sagt - der Bezug zum Deckinhalt in `needs`. `role` zeigt, wo im Deck angesetzt werden
+ * koennte - nur bei Regeln, die tatsaechlich eine Kategorie meinen (nicht bei Mulligans/Zugdeckel). */
+export interface Finding { level: "info" | "warn"; title: string; text: string; needs?: string; role?: Role }
 
 /** Was eine Regel zu sehen bekommt. `incident` gibt eine Vorfall-Kennzahl nur heraus, wenn genug
  * v2-Partien dahinterstehen - der einzige Ort, an dem diese Bedingung steht. */
@@ -78,6 +94,7 @@ const manaScrew: Rule = ({ s, deck, incident }) => {
     text: `In ${pct(rate)} der ${games} Partien, die deinen 3. eigenen Zug überhaupt erreicht haben,`
       + " standen dort höchstens 2 Länder.",
     needs: deck && `Das Deck hat ${deck.lands} Länder bei Ø CMC ${num(deck.avgCmc)}.`,
+    role: "ramp",
   };
 };
 
@@ -90,6 +107,7 @@ const flood: Rule = ({ s, deck }) => {
     text: `In ${pct(s.floodRate)} der ${s.games} gewerteten Partien lagen ${FLOOD_LANDS} Länder oder mehr`
       + ` und es kamen höchstens ${FLOOD_MAX_SPELLS} Zauber dazu.`,
     needs: deck && `Das Deck hat ${deck.lands} Länder bei Ø CMC ${num(deck.avgCmc)}.`,
+    role: "draw",
   };
 };
 
@@ -122,6 +140,7 @@ const sweeps: Rule = ({ s, deck, incident }) => {
     text: `In ${games} von ${s.v2Games} Partien mit Vorfall-Daten (${pct(rate)}) hat dich eine Massenentfernung getroffen`
       + (size !== undefined ? `, dabei im Schnitt ${num(size)} eigene bleibende Karten auf einmal.` : "."),
     needs: `Das Deck hat ${cards(0)}, die eine Massenentfernung überstehen (Unzerstörbar, Fluchsicher, Rückholer).`,
+    role: "wipeProtection",
   };
 };
 
@@ -135,6 +154,7 @@ const flyers: Rule = ({ s, deck, incident }) => {
     text: `${pct(share)} des erlittenen Kampfschadens kam in ${s.v2Games} Partien mit Vorfall-Daten von fliegenden Kreaturen.`,
     needs: `Das Deck hat ${cards(deck.categories.flyerDefense)}, die Flieger aufhalten`
       + `${deck.categories.flyerDefense === 1 ? " kann" : " können"} (Fliegen, Reichweite).`,
+    role: "flyerDefense",
   };
 };
 
@@ -148,6 +168,7 @@ const countered: Rule = ({ s, deck, incident }) => {
     level: "info", title: "Gekonterte Zauber",
     text: `${pct(rate)} deiner Zauber wurden in ${s.v2Games} Partien mit Vorfall-Daten gekontert.`,
     needs: "Das Deck hat selbst 0 Konterzauber.",
+    role: "counters",
   };
 };
 
@@ -177,6 +198,7 @@ const earlyOut: Rule = ({ s, format, incident }) => {
     level: "info", title: "Früh raus",
     text: `Du bist im Schnitt nach ${pct(share)} der Partiedauer ausgeschieden`
       + ` (${games} Partien, in denen du überhaupt ausgeschieden bist).`,
+    role: "removal",
   };
 };
 
@@ -209,6 +231,28 @@ export function findings(s: DeckSummary | undefined, deck: DeckAnalysis | undefi
     }];
   }
   return [...found.filter((f) => f.level === "warn"), ...found.filter((f) => f.level === "info")];
+}
+
+/** Welche Rollen fehlen dem Deck am ehesten - Grundlage fuer die Kartenvorschlaege (Stueck 2). Erst die
+ *  Rollen der Befunde (sie sind bereits durch echte Partien belegt, also die staerkste Evidenz), in ihrer
+ *  Reihenfolge; danach fuellen die Richtwerte auf, sortiert nach der groessten Unterschreitung - bei
+ *  Gleichstand entscheidet die Reihenfolge von ROLE_TARGETS. Ohne Deckanalyse gibt es keinen Deckcheck,
+ *  also bleiben nur die Rollen der Befunde. Keine Dopplungen, hoechstens MAX_GAPS. */
+export function roleGaps(deck: DeckAnalysis | undefined, found: Finding[]): Role[] {
+  const gaps: Role[] = [];
+  for (const f of found) {
+    if (f.role && !gaps.includes(f.role)) gaps.push(f.role);
+  }
+  if (deck) {
+    const shortfalls = (Object.entries(ROLE_TARGETS) as [Role, number][])
+      .map(([role, target]) => ({ role, deficit: target - deck.categories[role] }))
+      .filter((x) => x.deficit > 0)
+      .sort((a, b) => b.deficit - a.deficit);
+    for (const { role } of shortfalls) {
+      if (!gaps.includes(role)) gaps.push(role);
+    }
+  }
+  return gaps.slice(0, MAX_GAPS);
 }
 
 /** " im Duell" / " im Pod" - in "Alle" bleibt der Satz ohne Zusatz. */
