@@ -48,4 +48,22 @@ class CardLogTest {
     void ohneZeilenLeereListe() {
         assertTrue(CardLog.merge(List.of()).isEmpty());
     }
+
+    // -- Befund 5: eine fehlende Liste (formfremdes, aber gueltiges JSON) darf nie zu einer
+    // NullPointerException in der Auswertung fuehren - der kanonische Konstruktor normalisiert sie hier
+    // direkt am Record, nicht erst irgendwo tiefer in CardStats. --------------------------------------
+
+    @Test
+    void fehlendeSeatsListeWirdImKanonischenKonstruktorZuLeererListe() {
+        // So kommt ein {"v":1,"id":"m3"} (kein "seats"-Feld) bei Jackson an: der kanonische Konstruktor
+        // bekommt null.
+        CardLog log = new CardLog(1, "m3", null);
+        assertEquals(List.of(), log.seats());
+    }
+
+    @Test
+    void fehlendeCardsListeInSeatCardsWirdImKanonischenKonstruktorZuLeererListe() {
+        CardLog.SeatCards seat = new CardLog.SeatCards(0, "Mein Deck", null);
+        assertEquals(List.of(), seat.cards());
+    }
 }

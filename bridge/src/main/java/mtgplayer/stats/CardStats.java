@@ -73,8 +73,14 @@ public record CardStats(int games, int withCardData, boolean enough, List<Card> 
                 continue;
             }
             Map<String, CardLog.Card> byName = new LinkedHashMap<>();
-            for (CardLog.Card card : seatCards.cards()) {
-                byName.put(card.name(), card);
+            // Befund 5: seatCards.cards() ist seit dem kanonischen Konstruktor von CardLog.SeatCards nie
+            // mehr null - die Pruefung bleibt trotzdem stehen (Belt-and-Suspenders, wie im Review
+            // gefordert), falls ein Datensatz je auf einem anderen Weg als Json.mapper() entsteht.
+            List<CardLog.Card> rows = seatCards.cards();
+            if (rows != null) {
+                for (CardLog.Card card : rows) {
+                    byName.put(card.name(), card);
+                }
             }
             perGame.add(byName);
         }
@@ -178,7 +184,14 @@ public record CardStats(int games, int withCardData, boolean enough, List<Card> 
     }
 
     private static CardLog.SeatCards findSeat(CardLog log, int seatIndex) {
-        for (CardLog.SeatCards seatCards : log.seats()) {
+        // Befund 5: log.seats() ist seit dem kanonischen Konstruktor von CardLog nie mehr null (eine
+        // formfremde Datei wie {"v":1,"id":"m3"} liest sich als leere Liste) - die Pruefung bleibt
+        // trotzdem stehen, siehe CardStats#of.
+        List<CardLog.SeatCards> seats = log.seats();
+        if (seats == null) {
+            return null;
+        }
+        for (CardLog.SeatCards seatCards : seats) {
             if (seatCards.seat() == seatIndex) {
                 return seatCards;
             }

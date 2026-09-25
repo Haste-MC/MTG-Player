@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -127,6 +128,24 @@ class CardStatsTest {
     }
 
     @Test
+    void formfremdeAberGueltigeDateiCrashtDieAuswertungNicht(@TempDir Path dir) throws Exception {
+        // Befund 5: {"v":1,"id":"m3"} ist gueltiges JSON, entspricht aber nicht dem CardLog-Schema (kein
+        // "seats"-Feld) - vor der Normalisierung im kanonischen Konstruktor (siehe CardLogTest) ergab das
+        // seats == null und eine NullPointerException hier, statt "keine Daten" fuer diese eine Partie.
+        CardStore store = new CardStore(dir);
+        MatchRecord m1 = match("m1", true, seat("Du", "Mein Deck", true));
+        MatchRecord m3 = match("m3", true, seat("Du", "Mein Deck", true));
+        store.write(cardLog("m1", 0, "Mein Deck", row("Sol Ring", 1, 1, 1, null, null)));
+        Files.writeString(dir.resolve("m3.json"), "{\"v\":1,\"id\":\"m3\"}");
+
+        CardStats stats = CardStats.of("Mein Deck", List.of(m1, m3), store);
+
+        assertEquals(2, stats.games(), "beide gewerteten Partien zaehlen");
+        assertEquals(1, stats.withCardData(), "m3 hat keine lesbare Sitz-Zeile - zaehlt wie eine fehlende Datei");
+        assertFalse(stats.cards().isEmpty());
+    }
+
+    @Test
     void stuckZaehltHandOhneWirkungNieGezogenZaehltFehlendeZeile(@TempDir Path dir) {
         CardStore store = new CardStore(dir);
         MatchRecord m1 = match("m1", true, seat("Du", "Mein Deck", true));
@@ -142,6 +161,28 @@ class CardStatsTest {
         assertEquals(0, solRing.castGames());
         assertEquals(1, solRing.stuckGames(), "in m1 auf der Hand, nie gewirkt");
         assertEquals(1, solRing.neverDrawnGames(), "in m2 keine Zeile - nie gezogen");
+    }
+
+    @Test
+    void gekontertUndVerlorenZaehlenPartienNichtEreignisse(@TempDir Path dir) {
+        // Befund 6: counteredGames/lostGames waren von keinem Test beruehrt. Hier zusaetzlich load-
+        // bearing fuer Befund 2 (Partien- statt Ereigniszaehlung): m1 zeigt die Karte zweimal gekontert
+        // UND zweimal verloren (mehrere Kopien derselben Partie, siehe CardLog.merge) - das darf nicht
+        // als 2 Partien durchgehen, es ist immer noch nur EINE.
+        CardStore store = new CardStore(dir);
+        MatchRecord m1 = match("m1", true, seat("Du", "Mein Deck", true));
+        MatchRecord m2 = match("m2", true, seat("Du", "Mein Deck", true));
+        store.write(cardLog("m1", 0, "Mein Deck",
+                new CardLog.Card("Rite of Replication", 2, 2, 1, 3, 2, 2, "graveyard")));
+        store.write(cardLog("m2", 0, "Mein Deck", row("Rite of Replication", 1, 1, 4, null, 1)));
+
+        CardStats stats = CardStats.of("Mein Deck", List.of(m1, m2), store);
+
+        CardStats.Card rite = cardNamed(stats, "Rite of Replication");
+        assertEquals(2, rite.handGames());
+        assertEquals(2, rite.castGames());
+        assertEquals(1, rite.counteredGames(), "nur in m1 gekontert (auch wenn dort zweimal), macht 1 Partie");
+        assertEquals(2, rite.lostGames(), "in m1 UND m2 verloren, macht 2 Partien");
     }
 
     @Test

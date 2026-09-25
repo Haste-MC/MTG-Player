@@ -23,6 +23,19 @@ public record CardLog(int v, String id, List<SeatCards> seats) {
     /** Aktuelle Formatversion; eigenes Format, siehe Klassenkommentar. */
     public static final int VERSION = 1;
 
+    /**
+     * Kanonischer Konstruktor: eine fehlende Sitzliste wird zu einer leeren Liste. Befund 5: eine
+     * gueltige, aber formfremde Datei wie {@code {"v":1,"id":"m3"}} (kein {@code "seats"}-Feld) las sich
+     * vorher als {@code seats == null} und riss ueber eine {@code NullPointerException} die ganze
+     * Auswertung (Kartentabelle UND Kartenvorschlaege) des betroffenen Decks mit - die Spec verspricht
+     * fuer eine kaputte Datei "keine Daten", nie eine Ausnahme. Mit der leeren Liste liefert
+     * {@code CardStats.findSeat} fuer diese Partie konsequent keinen Treffer, genau wie bei einer Datei
+     * ohne den angefragten Sitz.
+     */
+    public CardLog {
+        seats = seats == null ? List.of() : seats;
+    }
+
     /** Neuer Datensatz in der aktuellen Version. */
     public CardLog(String id, List<SeatCards> seats) {
         this(VERSION, id, seats);
@@ -33,7 +46,13 @@ public record CardLog(int v, String id, List<SeatCards> seats) {
      * (nicht wiederholt fuer jede Karte, sondern einmal je Sitz). {@code deck}: der Deckname, unter dem
      * aufgezeichnet wurde (siehe {@code MatchRecorder.Seat#deckName}).
      */
-    public record SeatCards(int seat, String deck, List<Card> cards) { }
+    public record SeatCards(int seat, String deck, List<Card> cards) {
+        /** Dieselbe Normalisierung wie am kanonischen Konstruktor von {@link CardLog} (Befund 5): eine
+         *  fehlende Kartenliste wird zu einer leeren Liste statt {@code null}. */
+        public SeatCards {
+            cards = cards == null ? List.of() : cards;
+        }
+    }
 
     /**
      * Eine Kartenzeile, nach {@link #merge} bereits je Name zusammengefasst. {@code copies}: Anzahl der
@@ -45,9 +64,12 @@ public record CardLog(int v, String id, List<SeatCards> seats) {
      * in dem die erste der zusammengefassten Kopien gewirkt wurde, {@code null} wenn die Karte nie
      * gewirkt wurde. {@code end}: die Endzone
      * kleingeschrieben ({@code hand}, {@code library}, {@code graveyard}, {@code exile},
-     * {@code battlefield}, {@code command}, {@code stack}, ...) der zuletzt zusammengefassten Kopie, oder
-     * {@code none}, wenn die Karten-Id am Partieende nicht mehr aufloesbar war (siehe
-     * {@code MatchRecorder.finish}).
+     * {@code battlefield}, {@code command}, {@code stack}, ...) der zuletzt zusammengefassten Kopie in
+     * {@code rows} - Befund 9: NICHT die chronologisch letzte Kopie, sondern die Kopie, die in der
+     * internen Kartenzaehlung ({@code MatchRecorder.Seat#byCardId}, einer {@code HashMap}) zuletzt an
+     * der Reihe war, also eine beliebige unter mehreren tatsaechlichen Kopien. Bei nur einer Kopie ist
+     * das immer ihre eigene Zone; bei mehreren siehe {@link #merge} fuer die Einordnung. {@code none},
+     * wenn die Karten-Id am Partieende nicht mehr aufloesbar war (siehe {@code MatchRecorder.finish}).
      */
     public record Card(String name, Integer copies, Integer hand, Integer cast, Integer castTurn,
                         Integer countered, Integer lost, String end) { }
