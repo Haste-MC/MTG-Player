@@ -52,10 +52,17 @@ Rollen er braucht; die Bridge antwortet mit Karten.
 ## 3. EDHREC als Quelle (`mtgplayer.decks.Edhrec`)
 
 - Adresse: `https://json.edhrec.com/pages/commanders/<slug>.json`.
-- Slug: Commandernamen alphabetisch sortieren, je Name kleinschreiben, alles außer `a-z0-9` durch `-`
-  ersetzen, Mehrfach-`-` zusammenziehen, Ränder trimmen, mit `-` verbinden. Geprüft: „Titania, Protector of
-  Argoth" → `titania-protector-of-argoth`, „Ms. Bumbleflower" → `ms-bumbleflower`,
-  Thrasios + Tymna → `thrasios-triton-hero-tymna-the-weaver` (alle 200).
+- Slug: Commandernamen alphabetisch sortieren; je Name alles ab `//` abschneiden (doppelseitige Karten
+  laufen bei EDHREC unter ihrer Vorderseite), kleinschreiben, **Apostrophe (`'` und `’`) ersatzlos
+  entfernen**, dann alles außer `a-z0-9` durch `-` ersetzen, Mehrfach-`-` zusammenziehen, Ränder trimmen,
+  mit `-` verbinden. Gegen EDHREC geprüft (200 gegen 403):
+  „Titania, Protector of Argoth" → `titania-protector-of-argoth`, „Ms. Bumbleflower" → `ms-bumbleflower`,
+  „Yuriko, the Tiger's Shadow" → `yuriko-the-tigers-shadow` (nicht `yuriko-the-tiger-s-shadow`, das ist
+  403), „K'rrik, Son of Yawgmoth" → `krrik-son-of-yawgmoth`,
+  „Esika, God of the Tree // The Prismatic Bridge" → `esika-god-of-the-tree`,
+  Thrasios + Tymna → `thrasios-triton-hero-tymna-the-weaver`.
+  Ein Apostroph ist damit der einzige Sonderfall, der **nicht** zum Trennzeichen wird – jeder Commander mit
+  Apostroph im Namen wäre sonst dauerhaft ohne Vorschläge.
 - Gelesen wird `container.json_dict.cardlists`: je Eintrag `header` und `cardviews` mit `name`, `num_decks`,
   `potential_decks`. `share = num_decks / potential_decks`. Die Liste mit `header == "Game Changers"`
   markiert die entsprechenden Karten.
