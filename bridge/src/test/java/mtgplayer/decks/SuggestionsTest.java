@@ -142,4 +142,52 @@ class SuggestionsTest {
         assertFalse(i.imageKey().isBlank());
         assertFalse(i.text().isBlank());
     }
+
+    @Test
+    void schlaegtEinenSchnittMitBegruendungVor() {
+        // Overrun ist gruen, teuer und trifft dieselbe Rolle wie der Vorschlag (Kampftrick/Pump).
+        Suggestions.Result r = Suggestions.of(deck("Overrun"), List.of("ramp"), 4,
+                page(ec("Llanowar Elves", 0.4)));
+        Suggestions.Cut cut = r.items().get(0).cut();
+        assertNotNull(cut, "ohne Schnittkandidat: " + r.items());
+        assertEquals("Overrun", cut.name());
+        assertFalse(cut.reason().isBlank());
+    }
+
+    @Test
+    void schneidetJedeKarteHoechstensEinmal() {
+        Suggestions.Result r = Suggestions.of(deck("Cultivate"), List.of("ramp"), 4,
+                page(ec("Llanowar Elves", 0.9), ec("Rampant Growth", 0.8)));
+        List<String> cuts = r.items().stream().map(i -> i.cut() == null ? null : i.cut().name()).toList();
+        assertEquals(1, cuts.stream().filter(java.util.Objects::nonNull).distinct().count(), cuts.toString());
+        assertTrue(cuts.contains(null), "der zweite Vorschlag haette keinen Schnitt mehr: " + cuts);
+    }
+
+    @Test
+    void schneidetNieLandOderCommander() {
+        Suggestions.Result r = Suggestions.of(deck(), List.of("ramp"), 4, page(ec("Llanowar Elves", 0.9)));
+        Suggestions.Cut cut = r.items().get(0).cut();
+        if (cut != null) {
+            assertFalse(cut.name().equals("Forest") || cut.name().equals("Titania, Protector of Argoth"),
+                    "Land oder Commander als Schnitt: " + cut);
+        }
+    }
+
+    @Test
+    void ohneEdhrecKommenVorschlaegeAusDerDatenbank() {
+        Suggestions.Result r = Suggestions.of(deck(), List.of("wipeProtection"), 4, null);
+        assertEquals("db", r.source());
+        assertFalse(r.items().isEmpty(), "auch ohne EDHREC muss die Datenbank etwas liefern");
+        assertTrue(r.items().stream().allMatch(i -> i.share() == null), "ohne EDHREC gibt es keinen Anteil");
+        assertNotNull(r.note());
+        // Farbidentitaet gilt auch hier.
+        assertTrue(r.items().stream().noneMatch(i -> i.name().equals("Teferi's Protection")));
+    }
+
+    @Test
+    void datenbankRueckfallSortiertNachKosten() {
+        Suggestions.Result r = Suggestions.of(deck(), List.of("ramp"), 4, null);
+        List<Integer> cmcs = r.items().stream().map(Suggestions.Item::cmc).toList();
+        assertEquals(cmcs.stream().sorted().toList(), cmcs, cmcs.toString());
+    }
 }
