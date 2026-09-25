@@ -62,6 +62,40 @@ class EdhrecTest {
         assertEquals(page.cards().size(), page.byName().size(), "doppelte Namen in der Liste");
     }
 
+    /** Baut selbst ein JSON mit derselben Karte in zwei Listen - "Game Changers" mit dem niedrigeren
+     *  Anteil, "Creatures" mit dem hoeheren. Der echte Pruefstein (edhrec-titania.json) enthaelt zufaellig
+     *  keine solche Dopplung, deckt die Zusammenfuehrung in parse() also nicht ab. */
+    private static String zweiListenJson(boolean gameChangersZuerst) {
+        String gameChangers = "{\"header\":\"Game Changers\",\"cardviews\":["
+                + "{\"name\":\"Sol Ring\",\"num_decks\":10,\"potential_decks\":100}]}";
+        String creatures = "{\"header\":\"Creatures\",\"cardviews\":["
+                + "{\"name\":\"Sol Ring\",\"num_decks\":90,\"potential_decks\":100}]}";
+        String lists = gameChangersZuerst ? gameChangers + "," + creatures : creatures + "," + gameChangers;
+        return "{\"container\":{\"json_dict\":{\"cardlists\":[" + lists + "]}}}";
+    }
+
+    private static void pruefeZusammenfuehrung(String json) {
+        Edhrec.Page page = Edhrec.parse("x", json, Instant.now());
+        long count = page.cards().stream().filter(c -> c.name().equalsIgnoreCase("Sol Ring")).count();
+        assertEquals(1, count, "Sol Ring darf nur einmal in cards() stehen");
+        Edhrec.Card sol = page.byName().get("sol ring");
+        assertEquals(0.9, sol.share(), 1e-9, "der hoehere Anteil (aus \"Creatures\") muss gewinnen");
+        assertTrue(sol.gameChanger(), "die Game-Changer-Marke aus der anderen Liste darf nicht verloren gehen");
+    }
+
+    /** Zusammenfuehrung, "Game Changers" (niedrigerer Anteil) steht zuerst im JSON. */
+    @Test
+    void parseUebernimmtHoeherenAnteilUndBehaeltMarkeGameChangerZuerst() {
+        pruefeZusammenfuehrung(zweiListenJson(true));
+    }
+
+    /** Dieselbe Zusammenfuehrung mit vertauschter Listenreihenfolge ("Game Changers" zuletzt) - das
+     *  Ergebnis darf nicht davon abhaengen, welche Liste im JSON zuerst kommt. */
+    @Test
+    void parseUebernimmtHoeherenAnteilUndBehaeltMarkeGameChangerZuletzt() {
+        pruefeZusammenfuehrung(zweiListenJson(false));
+    }
+
     @Test
     void abrufWirdZwischengespeichert(@TempDir Path dir) throws Exception {
         AtomicInteger calls = new AtomicInteger();
