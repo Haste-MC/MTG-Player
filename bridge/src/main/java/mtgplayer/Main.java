@@ -1,6 +1,7 @@
 package mtgplayer;
 
 import forge.deck.Deck;
+import mtgplayer.app.AppMode;
 import mtgplayer.bench.Bench;
 import mtgplayer.bench.BenchArgs;
 import mtgplayer.bench.GameRecord;
@@ -16,6 +17,7 @@ import mtgplayer.sparring.SparringRun;
 import mtgplayer.server.HttpStatic;
 import mtgplayer.stats.MatchRecord;
 
+import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -39,6 +41,19 @@ public final class Main {
 
     public static void main(String[] args) throws Exception {
         long t0 = System.currentTimeMillis();
+
+        // App-Modus (-Dmtgplayer.app=true, siehe AppMode): Schreibpruefung vor ForgeBoot.init(),
+        // damit die Meldung kommt, bevor Forge eine halbe Minute lang Kartenskripte laedt. Ohne
+        // die Property bleibt dieser Zweig weg - Kevins Entwicklungs-Bridge nimmt den Weg von
+        // heute unveraendert.
+        if (AppMode.enabled()) {
+            String problem = AppMode.writableOrNull(ForgeBoot.assetsDir());
+            if (problem != null) {
+                System.err.println(problem);
+                return;
+            }
+        }
+
         ForgeBoot.init();
         System.out.printf("%d Karten geladen in %.1f s%n", ForgeBoot.cardCount(), (System.currentTimeMillis() - t0) / 1000.0);
 
@@ -81,11 +96,45 @@ public final class Main {
             return;
         }
 
-        int wsPort = Integer.getInteger("mtgplayer.wsPort", 8081);
-        int httpPort = Integer.getInteger("mtgplayer.httpPort", 8080);
-        Path web = Paths.get(System.getProperty("mtgplayer.web", "../web/dist")).toAbsolutePath().normalize();
+        int wsWunsch = Integer.getInteger("mtgplayer.wsPort", 8081);
+        int httpWunsch = Integer.getInteger("mtgplayer.httpPort", 8080);
+        int wsPort;
+        int httpPort;
+        Path web;
+        if (AppMode.enabled()) {
+            // Mehrere App-Starts (oder ein belegter Standardport) sollen sich nicht gegenseitig
+            // blockieren - AppMode.freePort weicht dann auf einen freien Port aus.
+            try {
+                wsPort = AppMode.freePort(wsWunsch);
+                httpPort = AppMode.freePort(httpWunsch);
+            } catch (IOException e) {
+                System.err.println("Kein freier Port gefunden: " + e.getMessage());
+                return;
+            }
+            // Vorgabe fuer web/dist im App-Modus: app/web relativ zum App-Ordner (kommt aus
+            // mtgplayer.assets) statt dem Entwickler-Pfad ../web/dist - weiter ueberschreibbar.
+            String webOverride = System.getProperty("mtgplayer.web");
+            web = webOverride != null ? Paths.get(webOverride) : ForgeBoot.assetsDir().resolve("app").resolve("web");
+        } else {
+            wsPort = wsWunsch;
+            httpPort = httpWunsch;
+            web = Paths.get(System.getProperty("mtgplayer.web", "../web/dist"));
+        }
+        web = web.toAbsolutePath().normalize();
 
-        HttpStatic http = new HttpStatic(httpPort, web);
+        HttpStatic http;
+        if (AppMode.enabled()) {
+            // Trotz freePort bleibt ein kleines Rennfenster (siehe AppMode.freePort) - ein
+            // Bindefehler hier ist dann ein gemeldeter Fehler, kein Absturz mit Stacktrace.
+            try {
+                http = new HttpStatic(httpPort, web);
+            } catch (IOException e) {
+                System.err.println("HTTP-Server konnte Port " + httpPort + " nicht binden: " + e.getMessage());
+                return;
+            }
+        } else {
+            http = new HttpStatic(httpPort, web);
+        }
         http.addContext("/img/", new ImageHandler(ImageCache.standard()));
         http.start();
         Bridge bridge = new Bridge(wsPort);
@@ -96,6 +145,9 @@ public final class Main {
             throw e;
         }
         System.out.println("Bereit. Browser: http://localhost:" + httpPort + "  (Dev: http://localhost:5173)");
+        if (AppMode.enabled()) {
+            AppMode.openWindow("http://localhost:" + httpPort);
+        }
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             http.stop();
             try { bridge.stop(); } catch (InterruptedException ignored) { }
