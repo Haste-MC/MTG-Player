@@ -8,9 +8,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import forge.game.card.Card;
 import forge.game.event.GameEventLandPlayed;
 import forge.game.event.GameEventSpellAbilityCast;
+import forge.game.event.GameEventSpellRemovedFromStack;
 import forge.game.event.GameEventTurnBegan;
 import forge.game.player.Player;
 import forge.game.player.RegisteredPlayer;
+import forge.game.spellability.SpellAbility;
 import forge.game.spellability.SpellAbilityView;
 import forge.game.zone.ZoneType;
 import mtgplayer.ai.AiConfig;
@@ -127,5 +129,98 @@ class CardRecordingTest {
 
         assertTrue(seatA.cards().stream().noneMatch(c -> c.name().contains("Bird")),
                 "ein Spielstein taucht in keiner Zeile auf: " + seatA.cards());
+    }
+
+    /**
+     * Befund 3: {@code Player.getAllCards()} ({@link MatchRecorder#resolveEndZones}) und die laufenden
+     * Zonenwechsel-Ereignisse ({@link MatchRecorder#cardTally}) ordnen ein Permanent nach dem BEHERRSCHER
+     * zu, nicht nach dem Besitzer - ein von A gestohlenes Permanent aus B's Deck sitzt dafuer buchstaeblich
+     * in A's eigenen Zonenobjekten. Ohne den Besitzer-Filter bekaeme es trotzdem eine Zeile in A's
+     * Kartentabelle: entweder ueber die Endzonen-Auflösung (bleibt bis Partieende auf dem Schlachtfeld
+     * stehen) oder ueber die laufende Zaehlung (stirbt waehrend A es kontrolliert - zaehlt sonst als A's
+     * eigener Verlust).
+     */
+    @Test
+    @Timeout(value = 3, unit = TimeUnit.MINUTES)
+    void gestohleneKartenLandenNichtInDerEigenenKartentabelle() {
+        Scene s = Scene.twoPlayers(AiConfig.DEFAULT, AiConfig.DEFAULT);
+        Player a = s.player(0), b = s.player(1);
+        RegisteredPlayer rpA = a.getRegisteredPlayer(), rpB = b.getRegisteredPlayer();
+
+        // B's Sol Ring, gestohlen von A: bleibt bis Partieende unter A's Kontrolle, ohne zu sterben -
+        // trifft die Endzonen-Auflösung.
+        Card stolenPermanent = s.card("Sol Ring", b, ZoneType.Battlefield);
+        b.getZone(ZoneType.Battlefield).remove(stolenPermanent);
+        a.getZone(ZoneType.Battlefield).add(stolenPermanent);
+        stolenPermanent.setController(a, s.game().getNextTimestamp());
+
+        // B's Grizzly Bears, ebenfalls gestohlen, stirbt aber noch waehrend A sie kontrolliert - trifft
+        // die laufende Zaehlung (onCardChangeZone -> cardTally).
+        Card stolenAndDies = s.card("Grizzly Bears", b, ZoneType.Battlefield);
+        b.getZone(ZoneType.Battlefield).remove(stolenAndDies);
+        a.getZone(ZoneType.Battlefield).add(stolenAndDies);
+        stolenAndDies.setController(a, s.game().getNextTimestamp());
+
+        MatchRecorder rec = new MatchRecorder(s.game(), "live", null,
+                Map.of(rpA, DECK_A, rpB, DECK_B), Set.of(DECK_A), null, null);
+
+        s.game().getAction().moveTo(ZoneType.Graveyard, stolenAndDies, null, null);
+
+        rec.finish();
+        CardLog log = rec.cardLog();
+        CardLog.SeatCards seatA = seatCards(log, 0);
+
+        assertNotNull(seatA, "Sitz A wird aufgezeichnet");
+        assertTrue(seatA.cards().stream().noneMatch(c -> c.name().equals("Sol Ring")),
+                "ein auf dem Schlachtfeld gestohlenes Permanent darf am Partieende keine Zeile bekommen: "
+                        + seatA.cards());
+        assertTrue(seatA.cards().stream().noneMatch(c -> c.name().equals("Grizzly Bears")),
+                "ein gestohlenes Permanent, das unter A's Kontrolle stirbt, darf nicht als A's eigener "
+                        + "Verlust zaehlen: " + seatA.cards());
+    }
+
+    /**
+     * Befund 6: {@code counteredGames}/{@code lostGames} (CardStats) und damit die zugrundeliegenden
+     * {@code CardLog.Card}-Felder {@code countered}/{@code lost} waren von KEINEM Test beruehrt. Aufbau
+     * des Konters wie {@code MatchRecorderTest.gekonterterZauberZaehltBeimZaubernden} (echter Stapel,
+     * kein manuell gebautes Ereignis), der Verlust wie {@code ziehenAbwerfenUndMillenAusEchtenZonenwechseln}
+     * (echter {@code GameAction.moveTo}).
+     */
+    @Test
+    @Timeout(value = 3, unit = TimeUnit.MINUTES)
+    void gekonterterZauberUndSterbendesPermanentTragenCounteredUndLost() {
+        Scene s = Scene.twoPlayers(AiConfig.DEFAULT, AiConfig.DEFAULT);
+        Player a = s.player(0), b = s.player(1);
+        RegisteredPlayer rpA = a.getRegisteredPlayer(), rpB = b.getRegisteredPlayer();
+
+        Card bears = s.card("Grizzly Bears", a, ZoneType.Hand);           // wird gewirkt und gekontert
+        Card counter = s.card("Counterspell", b, ZoneType.Hand);
+        Card giant = s.card("Hill Giant", a, ZoneType.Battlefield);       // stirbt noch waehrend der Partie
+
+        SpellAbility bearsSa = bears.getFirstSpellAbility();
+        bearsSa.setActivatingPlayer(a);
+        SpellAbility counterSa = counter.getFirstSpellAbility();
+        counterSa.setActivatingPlayer(b);
+
+        MatchRecorder rec = new MatchRecorder(s.game(), "live", null,
+                Map.of(rpA, DECK_A, rpB, DECK_B), Set.of(DECK_A), null, null);
+
+        s.game().getStack().add(bearsSa);
+        counterSa.getTargets().add(bearsSa);          // ohne Ziel legt Forge ihn gar nicht erst
+        s.game().getStack().add(counterSa);
+        // Forge entfernt einen gekonterten Zauber ohne vorheriges GameEventSpellResolved vom Stapel.
+        s.game().fireEvent(new GameEventSpellRemovedFromStack(SpellAbilityView.get(bearsSa)));
+        s.game().getAction().moveTo(ZoneType.Graveyard, giant, null, null);
+
+        rec.finish();
+        CardLog log = rec.cardLog();
+        CardLog.SeatCards seatA = seatCards(log, 0);
+
+        CardLog.Card gekontert = card(seatA, "Grizzly Bears");
+        assertEquals(1, gekontert.countered(), "A's Baeren wurden gekontert: " + gekontert);
+
+        CardLog.Card gestorben = card(seatA, "Hill Giant");
+        assertEquals(1, gestorben.lost(), "der Riese starb: " + gestorben);
+        assertEquals("graveyard", gestorben.end(), "landet im Friedhof: " + gestorben);
     }
 }

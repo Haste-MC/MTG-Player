@@ -922,10 +922,17 @@ public final class MatchRecorder {
      * nicht mehr auftaucht (Ersatz durch eine andere Karte, Sonderfall), behaelt den zuletzt in einem
      * Ereignis gesehenen Namen; ihre Endzone bleibt {@code null} und wird beim Bauen der Zeile
      * (siehe {@link #buildCardLog}) zu {@code "none"}.
+     *
+     * <p>Befund 3: {@code Player.getAllCards()} liefert Karten nach BEHERRSCHER (eigene Zonenobjekte je
+     * Spieler, siehe Forges {@code PlayerZoneBattlefield}), nicht nach Besitzer - ein gestohlenes
+     * gegnerisches Permanent stuende hier sonst mit einer eigenen Zeile im Deck des Diebes, obwohl es nie
+     * darin war. Nur Karten, deren {@code getOwner()} tatsaechlich {@code s.player} ist, bekommen eine
+     * Zeile; alles andere ueberspringt diese Methode wortlos - dasselbe gilt laufend in {@link
+     * #cardTally}, das aus demselben Grund filtert.</p>
      */
     private void resolveEndZones(Seat s) {
         for (Card c : s.player.getAllCards()) {
-            if (c.isToken()) {
+            if (c.isToken() || !s.player.equals(c.getOwner())) {
                 continue;
             }
             CardTally t = s.byCardId.computeIfAbsent(c.getId(), id -> new CardTally());
@@ -943,13 +950,18 @@ public final class MatchRecorder {
     /**
      * Der laufende Zaehler dieser Karte am aufgezeichneten Sitz, angelegt bei der ersten Beruehrung
      * (Id, nicht Name - siehe Klassenkommentar "Kartenbiografie"). {@code null} ohne Kartenbiografie an
-     * diesem Sitz oder bei einem Spielstein: ein Spielstein steht in keinem Deck und darf in keiner
-     * Zeile auftauchen (Spec §2), er muss also schon hier ausfallen, nicht erst in
-     * {@link #resolveEndZones} - sonst bekaeme er ueber einen Zonenwechsel waehrend der Partie
-     * trotzdem eine Zaehlung, die {@link #resolveEndZones} beim Ausfiltern nie zu Gesicht bekommt.
+     * diesem Sitz, bei einem Spielstein (ein Spielstein steht in keinem Deck und darf in keiner Zeile
+     * auftauchen, Spec §2 - er muss also schon hier ausfallen, nicht erst in {@link #resolveEndZones},
+     * sonst bekaeme er ueber einen Zonenwechsel waehrend der Partie trotzdem eine Zaehlung, die {@link
+     * #resolveEndZones} beim Ausfiltern nie zu Gesicht bekommt) - oder bei einer Karte, die {@code s}
+     * nicht BESITZT (Befund 3): {@code onLandPlayed}/{@code onSpellCast}/{@code onCardChangeZone} etc.
+     * ordnen jedes Ereignis dem BEHERRSCHER zu (wer eine Karte spielt oder verliert, ist meist ihr
+     * Besitzer - aber nicht, wenn er sie gerade gestohlen hat). Ohne diesen Filter wuerde ein gestohlenes
+     * gegnerisches Permanent, das unter der Kontrolle des Diebes stirbt, dessen eigene Kartentabelle als
+     * "verloren" fuehren, obwohl es nie sein Deck war - dieselbe Regel wie in {@link #resolveEndZones}.
      */
     private CardTally cardTally(Seat s, CardView card) {
-        if (s.byCardId == null || card == null || card.isToken()) {
+        if (s.byCardId == null || card == null || card.isToken() || seat(card.getOwner()) != s) {
             return null;
         }
         return s.byCardId.computeIfAbsent(card.getId(), id -> new CardTally());
