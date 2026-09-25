@@ -36,7 +36,7 @@ den bereits abonnierten Ereignissen:
 |---|---|
 | `hand` | `GameEventCardChangeZone`, Bibliothek → Hand (Starthand und Nachziehen; nach einem Mulligan zählt die neue Hand erneut) |
 | `cast` | `GameEventSpellAbilityCast` (Zauber, Ursprungskarte) und `GameEventLandPlayed` (Länder werden nicht gewirkt) |
-| `castTurn` | Zug des **ersten** `cast`, aus dem laufenden Zugzähler des Recorders |
+| `castTurn` | **eigener** Zug des ersten `cast` (`ownTurns` des Sitzes, mindestens 1) – dieselbe Zählweise wie `firstCommanderTurn` und `firstMissedLandDrop`; der globale Zugzähler wäre in einer 4er-Runde das Vierfache und mit einem Duell nicht vergleichbar |
 | `countered` | `GameEventSpellRemovedFromStack` ohne vorherige Auflösung – dieselbe Erkennung wie `spellsCountered` |
 | `lost` | `GameEventCardChangeZone`, Spielfeld → Friedhof/Exil |
 
