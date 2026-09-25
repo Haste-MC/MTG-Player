@@ -21,8 +21,20 @@ public record MatchRecord(int v, String id, String startedAt, String endedAt, lo
      * v2 (Runde B) hat die Vorfall-Kennzahlen je Sitz dazubekommen - rein additiv, ein v1-Datensatz
      * bleibt lesbar. Die Auswertung muss die neuen Felder in einem v1-Datensatz als "keine Daten"
      * behandeln, nicht als "0" - dort wurde nie gezaehlt.
+     *
+     * <p>v3 aendert die Bedeutung von {@link TurnPoint#turn()}: Forge zaehlt Zuege global (in einer
+     * Vierer-Runde liegt ein Sitz bei 1, 5, 9 ..., der naechste bei 2, 6, 10 ... - die Kurven zweier
+     * Sitze lagen dadurch versetzt statt uebereinander). Ab v3 steht dort der EIGENE Zug des Sitzes,
+     * genau wie es {@code landsByTurn} schon immer gehalten hat. {@code turns} und
+     * {@code eliminatedTurn} bleiben ABSICHTLICH Forges globale Zugnummer (Partiedauer bzw. ein
+     * Verhaeltnis zu {@code turns}, in dem sich die Zaehlweise herauskuerzt) - nur {@code TurnPoint}
+     * wechselt. Alte Datensaetze (v1/v2) werden NICHT umgerechnet (eine Division durch die Sitzzahl
+     * waere geraten, sobald ein Sitz vor Partieende ausschied) - ihre Zeitachse behaelt die globale
+     * Zaehlung, der Client unterscheidet daran und beschriftet entsprechend (siehe
+     * {@code protocol.TurnPoint} und {@code MatchTimeline.tsx}). Jede vorhandene Pruefung der Form
+     * {@code v >= 2} gilt unveraendert weiter fuer {@code v: 3}.
      */
-    public static final int VERSION = 2;
+    public static final int VERSION = 3;
 
     /**
      * Ein fehlendes {@code v} (Jackson liefert dann 0) heisst v1: so liest {@link MatchStore} die vor
@@ -177,10 +189,13 @@ public record MatchRecord(int v, String id, String startedAt, String endedAt, lo
     }
 
     /**
-     * Ein Punkt der Zeitachse: Stand zu Beginn eines eigenen Zuges. {@code turn} ist Forges GLOBALE
-     * Zugnummer (wie {@code turns} und {@code eliminatedTurn}), nicht der wievielte eigene Zug es war
-     * - den gibt die Position in der Liste ohnehin her, die globale Nummer dagegen erlaubt es, die
-     * Kurven mehrerer Sitze und den Zeitpunkt des Ausscheidens nebeneinander zu legen.
+     * Ein Punkt der Zeitachse: Stand zu Beginn eines eigenen Zuges. {@code turn} bedeutet ab
+     * {@link #VERSION} 3 den EIGENEN Zug des Sitzes (1, 2, 3 ... - wie {@code landsByTurn}, genau
+     * {@code ownTurns} Punkte), nicht mehr Forges globale Zugnummer: in einer Vierer-Runde lagen die
+     * Punkte eines Sitzes sonst bei 1, 5, 9 ... und die des naechsten bei 2, 6, 10 ... - die Kurven
+     * zweier Sitze lagen damit versetzt statt uebereinander. In einem v1/v2-Datensatz (vor dieser
+     * Aenderung geschrieben) steht hier WEITERHIN Forges globale Zugnummer (wie {@code turns} und
+     * {@code eliminatedTurn}) - alte Datensaetze werden nicht umgerechnet, siehe {@link #VERSION}.
      * {@code lands}/{@code creatures} sind die eigenen Laender bzw. Kreaturen IM SPIEL (Bestand,
      * nicht kumulierte Abgaben - dafuer gibt es {@code landsByTurn}), {@code life} das Leben und
      * {@code hand} die Zahl der Handkarten.

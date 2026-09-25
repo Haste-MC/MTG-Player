@@ -344,7 +344,8 @@ class MatchRecorderCombatTest {
 
     // ---------------------------------------------------------------- Zeitachse
 
-    /** Je eigenem Zug ein Punkt mit dem Stand zu Zugbeginn; die Zugnummer ist Forges globale. */
+    /** Je eigenem Zug ein Punkt mit dem Stand zu Zugbeginn; die Zugnummer (ab v3) ist der eigene Zug
+     *  des Sitzes, nicht Forges globale Zugnummer - siehe {@link #zeitachseZaehltDenEigenenZugNichtDenGlobalen}. */
     @Test
     @Timeout(value = 3, unit = TimeUnit.MINUTES)
     void zeitachseHaeltDenStandJedesEigenenZugesFest() {
@@ -365,8 +366,42 @@ class MatchRecorderCombatTest {
         List<MatchRecord.TurnPoint> tl = seat(r, "A").timeline();
         assertEquals(2, tl.size(), "zwei eigene Zuege, zwei Punkte: " + tl);
         assertEquals(new MatchRecord.TurnPoint(1, 2, 1, 20, 3, 0), tl.get(0));
-        assertEquals(new MatchRecord.TurnPoint(3, 3, 1, 17, 3, 0), tl.get(1));
-        assertEquals(List.of(new MatchRecord.TurnPoint(2, 0, 0, 20, 0, 0)), seat(r, "B").timeline());
+        assertEquals(new MatchRecord.TurnPoint(2, 3, 1, 17, 3, 0), tl.get(1), "A's ZWEITER eigener Zug, nicht Forges globaler Zug 3");
+        assertEquals(List.of(new MatchRecord.TurnPoint(1, 0, 0, 20, 0, 0)), seat(r, "B").timeline(),
+                "B's ERSTER eigener Zug, nicht Forges globaler Zug 2");
+    }
+
+    /**
+     * Der eigentliche Beweis fuer die Zaehlweise ab v3: eine Szene mit DREI Sitzen, in der zwei
+     * eigene Zuege von A vergehen. In einer Zweispieler-Szene liesse sich eigener Zug und globaler
+     * Zug leicht verwechseln (ungeschicktes Test-Design); erst ab drei Sitzen liegen globale
+     * Zugnummer (1, 4, 7 - jeder Sitz kommt nur an jedem dritten globalen Zug dran) und eigene
+     * Zugnummer (1, 2, 3) so weit auseinander, dass ein Test, der die falsche Zahl liest, sicher
+     * durchfaellt. Die Gegenprobe steht in {@code MatchRecorder.onTurnBegan}: dreht man den
+     * {@code notePoint}-Aufruf dort auf {@code e.turnNumber()} zurueck (den Stand vor dieser
+     * Aenderung), faellt genau dieser Test - assertEquals(List.of(1, 2, 3), ...) wird dann mit
+     * [1, 4, 7] verglichen.
+     */
+    @Test
+    @Timeout(value = 3, unit = TimeUnit.MINUTES)
+    void zeitachseZaehltDenEigenenZugNichtDenGlobalen() {
+        Scene s = Scene.threePlayers(AiConfig.DEFAULT, AiConfig.DEFAULT, AiConfig.DEFAULT);
+        Player a = s.player(0), b = s.player(1), c = s.player(2);
+        MatchRecorder rec = new MatchRecorder(s.game(), "live", null);
+
+        s.game().fireEvent(new GameEventTurnBegan(a.getView(), 1));   // A's 1. eigener Zug
+        s.game().fireEvent(new GameEventTurnBegan(b.getView(), 2));
+        s.game().fireEvent(new GameEventTurnBegan(c.getView(), 3));
+        s.game().fireEvent(new GameEventTurnBegan(a.getView(), 4));   // A's 2. eigener Zug
+        s.game().fireEvent(new GameEventTurnBegan(b.getView(), 5));
+        s.game().fireEvent(new GameEventTurnBegan(c.getView(), 6));
+        s.game().fireEvent(new GameEventTurnBegan(a.getView(), 7));   // A's 3. eigener Zug
+
+        MatchRecord r = rec.finish();
+        assertEquals(3, r.v(), "Formatversion 3 - ab hier zaehlt die Zeitachse eigene Zuege");
+        List<Integer> turnsA = seat(r, "A").timeline().stream().map(MatchRecord.TurnPoint::turn).toList();
+        assertEquals(List.of(1, 2, 3), turnsA,
+                "A's eigene Zuege 1, 2, 3 - NICHT Forges globale Zugnummern 1, 4, 7 (drei Sitze am Tisch): " + turnsA);
     }
 
     /** Lange Partien duerfen den Datensatz nicht aufblaehen - der Deckel greift bei 60 Punkten. */

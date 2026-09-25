@@ -89,7 +89,7 @@ class MatchRecorderAiTest {
             pruefeVorfallKennzahlen(s);
         }
         assertTrue(lands > 0, "in vier Zuegen sollte mindestens ein Land liegen");
-        assertEquals(2, rec.v(), "Runde B schreibt Formatversion 2");
+        assertEquals(MatchRecord.VERSION, rec.v(), "traegt die aktuelle Formatversion");
         pruefeRobustheitsMeldung();
         System.out.println("[MatchRecorderAiTest] " + rec);
     }

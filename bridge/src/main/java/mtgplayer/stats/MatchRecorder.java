@@ -296,7 +296,7 @@ public final class MatchRecorder {
         if (turnOwner != null) {
             turnOwner.ownTurns++;
             turnOwner.landsByTurn.add(turnOwner.lands);
-            notePoint(turnOwner, e.turnNumber());
+            notePoint(turnOwner, turnOwner.ownTurns);   // ab v3 der eigene Zug, nicht e.turnNumber() (Forges globaler)
         }
     }
 
@@ -996,8 +996,9 @@ public final class MatchRecorder {
     /**
      * Haengt den Stand zu Beginn dieses eigenen Zuges an die Zeitachse: Laender und Kreaturen im
      * Spiel, Leben und Handkarten. Ab {@link #TIMELINE_MAX} Punkten faellt jeder weitere Zug weg.
-     * {@code turn} ist Forges globale Zugnummer, damit sich die Kurven mehrerer Sitze und der
-     * Zeitpunkt des Ausscheidens nebeneinander legen lassen.
+     * {@code turn} ist ab {@code MatchRecord.VERSION} 3 der eigene Zug des Sitzes (der Aufrufer
+     * uebergibt {@code turnOwner.ownTurns}, denselben Zaehler wie {@code landsByTurn}), nicht mehr
+     * Forges globale Zugnummer - siehe {@link MatchRecord.TurnPoint}.
      */
     private void notePoint(Seat s, int turn) {
         try {
