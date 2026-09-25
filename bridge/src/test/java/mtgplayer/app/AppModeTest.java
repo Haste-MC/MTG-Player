@@ -42,8 +42,12 @@ class AppModeTest {
     }
 
     @Test
-    void writableOrNullLiefertNullFuerBeschreibbaresVerzeichnis() {
+    void writableOrNullLiefertNullFuerBeschreibbaresVerzeichnisUndRaeumtDieProbeDateiWeg() throws IOException {
         assertNull(AppMode.writableOrNull(tmp));
+        try (var eintraege = Files.list(tmp)) {
+            assertEquals(List.of(), eintraege.toList(),
+                    "die Probe-Datei der Schreibpruefung darf im Erfolgsfall nicht liegen bleiben: " + tmp);
+        }
     }
 
     /**

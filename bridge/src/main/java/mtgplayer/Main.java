@@ -41,12 +41,13 @@ public final class Main {
 
     public static void main(String[] args) throws Exception {
         long t0 = System.currentTimeMillis();
+        boolean appMode = AppMode.enabled();
 
         // App-Modus (-Dmtgplayer.app=true, siehe AppMode): Schreibpruefung vor ForgeBoot.init(),
         // damit die Meldung kommt, bevor Forge eine halbe Minute lang Kartenskripte laedt. Ohne
         // die Property bleibt dieser Zweig weg - Kevins Entwicklungs-Bridge nimmt den Weg von
         // heute unveraendert.
-        if (AppMode.enabled()) {
+        if (appMode) {
             String problem = AppMode.writableOrNull(ForgeBoot.assetsDir());
             if (problem != null) {
                 System.err.println(problem);
@@ -101,7 +102,7 @@ public final class Main {
         int wsPort;
         int httpPort;
         Path web;
-        if (AppMode.enabled()) {
+        if (appMode) {
             // Mehrere App-Starts (oder ein belegter Standardport) sollen sich nicht gegenseitig
             // blockieren - AppMode.freePort weicht dann auf einen freien Port aus.
             try {
@@ -111,10 +112,13 @@ public final class Main {
                 System.err.println("Kein freier Port gefunden: " + e.getMessage());
                 return;
             }
-            // Vorgabe fuer web/dist im App-Modus: app/web relativ zum App-Ordner (kommt aus
-            // mtgplayer.assets) statt dem Entwickler-Pfad ../web/dist - weiter ueberschreibbar.
+            // Vorgabe fuer web/dist im App-Modus: <App-Ordner>/app/web. mtgplayer.assets zeigt auf
+            // <App-Ordner>/assets (Spec "App-Paket" §2: assets/ und app/web/ liegen im App-Ordner
+            // nebeneinander) - darum hier der Elternordner von assetsDir(), NICHT assetsDir()
+            // selbst, sonst landet man eine Ebene zu tief unter assets/app/web statt app/web.
+            Path appDir = ForgeBoot.assetsDir().getParent();
             String webOverride = System.getProperty("mtgplayer.web");
-            web = webOverride != null ? Paths.get(webOverride) : ForgeBoot.assetsDir().resolve("app").resolve("web");
+            web = webOverride != null ? Paths.get(webOverride) : appDir.resolve("app").resolve("web");
         } else {
             wsPort = wsWunsch;
             httpPort = httpWunsch;
@@ -123,13 +127,14 @@ public final class Main {
         web = web.toAbsolutePath().normalize();
 
         HttpStatic http;
-        if (AppMode.enabled()) {
+        if (appMode) {
             // Trotz freePort bleibt ein kleines Rennfenster (siehe AppMode.freePort) - ein
-            // Bindefehler hier ist dann ein gemeldeter Fehler, kein Absturz mit Stacktrace.
+            // Bindefehler hier ist dann ein gemeldeter Fehler, kein Absturz mit Stacktrace, wie
+            // ihn ein Nutzer der gepackten App nie zu sehen bekommen soll.
             try {
                 http = new HttpStatic(httpPort, web);
             } catch (IOException e) {
-                System.err.println("HTTP-Server konnte Port " + httpPort + " nicht binden: " + e.getMessage());
+                System.err.println("Port " + httpPort + " ist belegt; laeuft MTG-Player schon?");
                 return;
             }
         } else {
@@ -142,10 +147,18 @@ public final class Main {
             bridge.start();
         } catch (RuntimeException e) {
             http.stop();
+            if (appMode) {
+                // Gleiches Rennfenster wie beim HTTP-Server oben - WsServer.start() (siehe dort)
+                // wirft eine IllegalStateException, wenn das Binden scheitert (z.B. zweiter
+                // App-Start auf demselben Port). Ohne diesen Zweig wuerde die Exception bis nach
+                // main() durchschlagen und der Nutzer saehe einen rohen Java-Stacktrace.
+                System.err.println("Port " + wsPort + " ist belegt; laeuft MTG-Player schon?");
+                return;
+            }
             throw e;
         }
         System.out.println("Bereit. Browser: http://localhost:" + httpPort + "  (Dev: http://localhost:5173)");
-        if (AppMode.enabled()) {
+        if (appMode) {
             AppMode.openWindow("http://localhost:" + httpPort);
         }
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {

@@ -118,10 +118,19 @@ public final class AppMode {
         try {
             Files.deleteIfExists(probe);
             Files.createFile(probe);
-            Files.delete(probe);
-            return null;
         } catch (IOException nichtBeschreibbar) {
             return "Bitte den Ordner an eine Stelle entpacken, an der du schreiben darfst (nicht C:\\Programme).";
         }
+        // Anlegen hat geklappt - der Ordner ist beschreibbar. Scheitert nur noch das Aufraeumen
+        // (z.B. ein Virenscanner haelt die Datei kurz fest), ist das kein Grund, den Ordner als
+        // nicht beschreibbar zu melden - vorher landete ein solcher Fehler im selben catch-Block
+        // und meldete faelschlich "nicht beschreibbar", obwohl das Schreiben laengst geklappt hatte.
+        try {
+            Files.delete(probe);
+        } catch (IOException aufraeumenFehlgeschlagen) {
+            System.err.println("Probe-Datei " + probe + " konnte nicht geloescht werden: "
+                    + aufraeumenFehlgeschlagen.getMessage());
+        }
+        return null;
     }
 }
