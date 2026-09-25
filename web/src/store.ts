@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { ArchidektEntry, ArchidektProgress, CardSuggestionsMsg, Choice, DeckAnalysis, DeckInfo, Inbound, MatchRecord, Snapshot, StartGame } from "./protocol";
+import type { ArchidektEntry, ArchidektProgress, CardStatsMsg, CardSuggestionsMsg, Choice, DeckAnalysis, DeckInfo, Inbound, MatchRecord, Snapshot, StartGame } from "./protocol";
 import { recordResult, type Series, startSeries } from "./series";
 import { send } from "./ws";
 
@@ -104,6 +104,10 @@ export interface AppState {
    *  deckAnalyses: sie haengen am Deckinhalt und den fehlenden Rollen, nicht an einer einzelnen Partie,
    *  und bleiben darum ueber die ganze Sitzung gemerkt. Die Anzeige selbst folgt erst noch. */
   suggestions: Record<string, CardSuggestionsMsg>;
+  /** Kartentabelle je Deckname (deckCards/cardStats, Stueck 6) - dasselbe Muster wie suggestions: haengt
+   *  am Deckinhalt und den gespeicherten Partien, nicht an einer einzelnen Partie, und bleibt darum ueber
+   *  die ganze Sitzung gemerkt. */
+  cardStats: Record<string, CardStatsMsg>;
   /** Angefragt, aber noch ohne Antwort: verhindert, dass dieselbe Partie bzw. dasselbe Deck bei jedem
    *  Klick erneut angefragt wird. Ein error der Bridge raeumt beide Listen leer (welche Anfrage
    *  fehlschlug, sagt die Fehlermeldung nicht) - der naechste Versuch darf sonst nie mehr fragen. */
@@ -114,6 +118,10 @@ export interface AppState {
    *  Ausnahme auf der Bridge) fuer immer auf "lädt …" stehen, weil das vorher rein lokale useState eine
    *  fehlgeschlagene Anfrage nicht von einer noch offenen unterscheiden konnte. */
   pendingSuggestions: string[];
+  /** Angefragt, aber noch ohne Antwort (deckCards, Stueck 6) - dasselbe Muster wie pendingSuggestions:
+   *  ein error der Bridge muss den Eintrag hier raeumen, sonst haengt der Knopf in DeckCards.tsx fuer
+   *  immer auf "lädt …" (derselbe Fehler wie einst Befund 3 bei den Kartenvorschlaegen). */
+  pendingCards: string[];
   /** Laufendes bzw. zuletzt gelaufenes Sparring (Statistik-Board). undefined, solange in dieser Sitzung
    *  keines gestartet wurde und keine Fortschrittsmeldung kam; nach dem Lauf bleibt der letzte Stand mit
    *  running: false stehen (Partienzahl und Fehlerliste sind dann das Ergebnis). */
@@ -124,7 +132,7 @@ export const initialState: AppState = {
   screen: "lobby", precons: [], decks: [], choices: [], log: [], hiddenKinds: ["MANA", "PHASE"], lastLogId: 0,
   aiModes: ["standard", "hybrid", "sim"], aiProfiles: ["Default"], aiTimeout: 5, bestOf: 0, expectNewMatch: false,
   archidekt: { loading: false }, matches: [], matchesTotal: 0, matchDetails: {}, deckAnalyses: {},
-  suggestions: {}, pendingMatch: [], pendingAnalysis: [], pendingSuggestions: [],
+  suggestions: {}, cardStats: {}, pendingMatch: [], pendingAnalysis: [], pendingSuggestions: [], pendingCards: [],
 };
 
 const LOG_MAX = 500;
@@ -198,7 +206,7 @@ export function reduce(s: AppState, m: Inbound): AppState {
       // Offene matchDetail-/analyzeDeck-/suggestCards-Anfragen gelten nach einem Fehler als erledigt: die
       // Meldung sagt nicht, welche gemeint war, und eine haengende Anfrage wuerde jeden weiteren Versuch
       // blockieren (Befund 3: genau das liess den "Vorschläge laden"-Knopf vorher auf "lädt …" haengen).
-      const pending = { pendingMatch: [], pendingAnalysis: [], pendingSuggestions: [] };
+      const pending = { pendingMatch: [], pendingAnalysis: [], pendingSuggestions: [], pendingCards: [] };
       // Ein Fehler zwischen Klick und erster Fortschrittsmeldung ("keine Gegner im Bracket 3",
       // "Sparring läuft noch") beendet den Startzustand - sonst stuende die Fortschrittszeile fuer
       // immer bei 0. Laeuft anderswo wirklich ein Lauf, stellt ihn die naechste Fortschrittsmeldung
@@ -244,6 +252,13 @@ export function reduce(s: AppState, m: Inbound): AppState {
         ...s, suggestions: { ...s.suggestions, [m.deck]: m },
         pendingSuggestions: s.pendingSuggestions.filter((deck) => deck !== m.deck),
       };
+    case "cardStats":
+      // Dasselbe Muster wie cardSuggestions: Schluessel ist der Deckname, eine neue Anfrage ersetzt den
+      // alten Stand komplett - so zeigt "neu laden" nach einer weiteren Partie die frischen Zahlen.
+      return {
+        ...s, cardStats: { ...s.cardStats, [m.deck]: m },
+        pendingCards: s.pendingCards.filter((deck) => deck !== m.deck),
+      };
     default:
       return s;
   }
@@ -280,6 +295,10 @@ interface Store extends AppState {
    *  duerfen, auch wenn suggestions[deck] noch den alten Stand traegt. Nur eine bereits laufende Anfrage
    *  fuer dasselbe Deck wird nicht doppelt geschickt. */
   requestCardSuggestions: (deck: string, roles: string[]) => void;
+  /** Fordert die Kartentabelle an (deckCards, Stueck 6) - dasselbe Muster wie requestCardSuggestions:
+   *  OHNE Sperre gegen einen schon vorliegenden Stand, damit "neu laden" nach einer weiteren Partie
+   *  erneut fragen darf. Nur eine bereits laufende Anfrage fuer dasselbe Deck wird nicht doppelt geschickt. */
+  requestDeckCards: (deck: string) => void;
   /** Startet ein Sparring (sparringStart) und setzt den Startzustand - die Bridge uebernimmt mit ihrer
    *  ersten Fortschrittsmeldung. KI, Bedenkzeit und Zugdeckel bleiben die Voreinstellung der Bridge. */
   startSparring: (deck: string, games: number) => void;
@@ -329,6 +348,12 @@ export const useStore = create<Store>((set, get) => ({
     if (s.pendingSuggestions.includes(deck)) return;
     set({ pendingSuggestions: [...s.pendingSuggestions, deck] });
     send({ type: "suggestCards", deck, roles });
+  },
+  requestDeckCards: (deck) => {
+    const s = get();
+    if (s.pendingCards.includes(deck)) return;
+    set({ pendingCards: [...s.pendingCards, deck] });
+    send({ type: "deckCards", deck });
   },
   startSparring: (deck, games) => {
     // Fehlerliste bewusst leer: der neue Lauf faengt bei null an, die Fehler des vorigen sind erledigt.

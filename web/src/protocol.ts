@@ -324,7 +324,27 @@ export interface CardSuggestionsMsg {
   suggestions: CardSuggestion[]; fetched?: string;
 }
 
-export type Inbound = Snapshot | Choice | Lobby | LogLine | Thinking | GameOver | ErrorMsg | ArchidektDecks | ArchidektProgress | Matches | MatchMsg | DeckAnalysisMsg | SparringProgress | CardSuggestionsMsg;
+/** Eine Kartenzeile der Deck-Auswertung (Stueck 6, Bridge: mtgplayer.stats.CardStats.Card). Alle Zaehler
+ *  beziehen sich auf CardStatsMsg.withCardData, NICHT auf games - die int-Felder kommen wegen Jackson
+ *  immer mit an (auch als 0), fehlen also nie. avgCastTurn fehlt, wenn die Karte nie gewirkt wurde
+ *  (Schnitt ueber 0 Werte waere sinnlos); imageKey/manaCost/cmc fehlen, wenn Forges Kartendatenbank den
+ *  Namen nicht kennt - die Zeile bleibt trotzdem stehen. */
+export interface CardStat {
+  name: string; handGames: number; castGames: number; avgCastTurn?: number; stuckGames: number;
+  neverDrawnGames: number; counteredGames: number; lostGames: number;
+  imageKey?: string; manaCost?: string; cmc?: number;
+}
+
+/** Antwort auf deckCards (Stueck 6). games: gewertete Partien des Decks; withCardData: davon die mit
+ *  lesbarer Kartendatei - die Aufzeichnung beginnt erst mit neuen Partien, alte haben keine Datei. Das
+ *  senkt NUR withCardData, nicht games. enough ist withCardData >= CardStats.MIN_GAMES (5) - darunter
+ *  zeigt das UI einen Hinweis statt der Tabelle. cards kommt bereits in der Reihenfolge an, die zuerst
+ *  zu zeigen ist (groesster Handlungsbedarf zuerst, siehe CardStats.of auf der Bridge). */
+export interface CardStatsMsg {
+  type: "cardStats"; deck: string; games: number; withCardData: number; enough: boolean; cards: CardStat[];
+}
+
+export type Inbound = Snapshot | Choice | Lobby | LogLine | Thinking | GameOver | ErrorMsg | ArchidektDecks | ArchidektProgress | Matches | MatchMsg | DeckAnalysisMsg | SparringProgress | CardSuggestionsMsg | CardStatsMsg;
 
 export type Outbound =
   // humanDeck fehlt bei spectate:true (KI-only-Modus, kein eigener Sitz - siehe lobbyPayload.ts)
@@ -369,7 +389,10 @@ export type Outbound =
   // roleGaps() in findings.ts. Dort ist Role ein enger String-Typ - hier bewusst string[], denn
   // protocol.ts haengt an keiner anderen Quelldatei (wie schon bei CardSuggestion.role oben). Die
   // Bridge antwortet mit cardSuggestions oder error.
-  | { type: "suggestCards"; deck: string; roles: string[] };
+  | { type: "suggestCards"; deck: string; roles: string[] }
+  // Kartentabelle eines Decks anfordern (Stueck 6, Bridge: mtgplayer.stats.CardStats). Die Bridge
+  // antwortet mit cardStats oder error.
+  | { type: "deckCards"; deck: string };
 
 export type StartGame = Extract<Outbound, { type: "startGame" }>;
 

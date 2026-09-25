@@ -1041,3 +1041,20 @@ button.match-toggle .icon { display: block; transition: transform .12s ease; }
 /* flex-basis statt fester Breite: die Begruendung darf umbrechen (Spec: "keine abgeschnittenen
    Begruendungen"), zieht sich bei wenig Platz aber unter Bild+Name statt sie zu stauchen. */
 .suggest-cut { flex: 1 1 220px; text-align: right; color: var(--muted); font-size: 11.5px; }
+
+/* Kartentabelle (Stueck 6, DeckCards.tsx unter den Kartenvorschlaegen): dieselbe Zeilenform wie dort
+   (Miniatur 34x48, Name mit Manakosten, darunter ein Satz statt Spaltenzahlen) - eine eigene, kurze
+   Regel je Karte liest sich schneller als eine Tabelle mit acht Zahlenspalten. Keine eigene Farbvariable:
+   .suggest-reload und .sb-chip kommen unveraendert von den Nachbarabschnitten. */
+.dc-source { margin: 0 0 10px; font-size: 12px; color: var(--muted); display: flex; align-items: center; flex-wrap: wrap; gap: 2px 6px; }
+.dc-sort { padding: 2px; margin-bottom: 8px; }
+.dc-sort button.sb-chip { padding: 4px 11px; }
+.dc-rows { display: flex; flex-direction: column; gap: 6px; }
+.dc-row { display: flex; align-items: center; gap: 9px; padding: 6px 9px; border-radius: var(--radius-sm); background: rgba(0, 0, 0, 0.2); border: 1px solid var(--line); }
+.dc-thumb { flex: none; width: 34px; height: 48px; border-radius: 4px; background: rgba(0, 0, 0, 0.35); overflow: hidden; }
+.dc-thumb .art { width: 100%; height: 100%; object-fit: cover; display: block; }
+.dc-thumb .pile-name { display: block; font-size: 7px; line-height: 1.1; padding: 2px; }
+.dc-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; font-size: 12.5px; }
+.dc-name { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; font-weight: 600; }
+.dc-name .cost { font-weight: 400; color: var(--muted); }
+.dc-line { color: var(--muted); font-size: 11.5px; }

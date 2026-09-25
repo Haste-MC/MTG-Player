@@ -1,0 +1,61 @@
+[
+ {
+  "type": "cardStats",
+  "deck": "Krenko Goblins",
+  "games": 12,
+  "withCardData": 9,
+  "enough": true,
+  "cards": [
+   {
+    "name": "Purphoros, God of the Forge",
+    "handGames": 7,
+    "castGames": 0,
+    "stuckGames": 7,
+    "neverDrawnGames": 2,
+    "counteredGames": 0,
+    "lostGames": 0,
+    "imageKey": "c:Purphoros, God of the Forge|C21|1",
+    "manaCost": "2 {R}{R}",
+    "cmc": 4
+   },
+   {
+    "name": "Krenko, Mob Boss",
+    "handGames": 9,
+    "castGames": 7,
+    "avgCastTurn": 3.0,
+    "stuckGames": 2,
+    "neverDrawnGames": 0,
+    "counteredGames": 1,
+    "lostGames": 2,
+    "imageKey": "c:Krenko, Mob Boss|C21|1",
+    "manaCost": "2 {R}",
+    "cmc": 3
+   },
+   {
+    "name": "Goblin Bombardment",
+    "handGames": 8,
+    "castGames": 6,
+    "avgCastTurn": 3.5,
+    "stuckGames": 2,
+    "neverDrawnGames": 1,
+    "counteredGames": 0,
+    "lostGames": 0,
+    "imageKey": "c:Goblin Bombardment|C21|1",
+    "manaCost": "{R}",
+    "cmc": 1
+   },
+   {
+    "name": "Warren Instigator",
+    "handGames": 0,
+    "castGames": 0,
+    "stuckGames": 0,
+    "neverDrawnGames": 9,
+    "counteredGames": 0,
+    "lostGames": 0,
+    "imageKey": "c:Warren Instigator|C21|1",
+    "manaCost": "1 {R}",
+    "cmc": 2
+   }
+  ]
+ }
+]
