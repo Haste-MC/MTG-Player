@@ -34,6 +34,8 @@ import java.util.Random;
  * {@code SubprocessRunner} - nicht fuer den direkten Gebrauch gedacht.
  * {@code --sparring-one <json>}: genau eine Sparring-Partie, fuer den internen Aufruf durch
  * {@code mtgplayer.sparring.SubprocessGameRunner} - nicht fuer den direkten Gebrauch gedacht.
+ * {@code --trimmed-check}: Kartenzahl, Precons und eine KI-Partie pruefen, fuer den internen Aufruf
+ * durch {@code mtgplayer.forge.TrimmedResTest} - nicht fuer den direkten Gebrauch gedacht.
  */
 public final class Main {
 
@@ -88,6 +90,24 @@ public final class Main {
             System.out.println("SPARRING_RESULT " + Json.mapper().writeValueAsString(record));
             // wie bei --bench-one: Forge/Swing koennen nicht-daemon Threads hinterlassen, die ein
             // blosses return ueberleben wuerden.
+            System.exit(0);
+            return;
+        }
+
+        if (args.length > 0 && args[0].equals("--trimmed-check")) {
+            // Von TrimmedResTest aufgerufen (eigener Kindprozess mit -Dmtgplayer.assets auf ein
+            // ausgeduenntes res-Verzeichnis, siehe scripts/trim-res.sh): belegt, dass Kartenladen,
+            // saemtliche Precons und eine volle KI-Partie auch mit dem ausgeduennten Umfang
+            // funktionieren - nicht fuer den direkten Gebrauch gedacht. Ergebniszeile als Klartext
+            // (kein eigener Record noetig fuer eine Handvoll Zahlen), von ChildJvm eingesammelt.
+            List<String> names = Precons.names();
+            for (String n : names) {
+                Precons.load(n); // wirft mit dem gesuchten Pfad, wenn ein Precon im ausgeduennten res fehlt
+            }
+            List<Deck> zweiDecks = List.of(Precons.load(names.get(0)), Precons.load(names.get(1)));
+            AiMatch.Result r = AiMatch.play(zweiDecks, List.of("KI 1", "KI 2"), 40, l -> { });
+            System.out.println("TRIMMED_RESULT cards=" + ForgeBoot.cardCount() + " precons=" + names.size()
+                    + " turns=" + r.turns() + " capped=" + r.turnCapped());
             System.exit(0);
             return;
         }
