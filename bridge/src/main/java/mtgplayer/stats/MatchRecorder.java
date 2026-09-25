@@ -126,6 +126,23 @@ import java.util.function.Consumer;
  * <p>Alle Ereignis-Methoden und {@link #finish()} laufen unter demselben Monitor. Forge feuert die
  * Ereignisse zwar alle auf dem Spiel-Thread, {@link #finish()} kann aber von aussen kommen (Test,
  * Abbruch) und {@link #markCrashed()} von einem beliebigen Thread mit einer uncaught exception.</p>
+ *
+ * <p><b>Kartenbiografie (Runde C, Stueck 1).</b> Zusaetzlich zu den Sitz-Kennzahlen zaehlt der Recorder
+ * je Sitz aus {@code ownDecks} ({@code Map<Integer, CardTally>}, siehe {@link Seat#byCardId}) mit, was
+ * JEDE einzelne Karte getan hat - Grundlage fuer den Schnittgrund "hat in deinen Partien nie gewirkt"
+ * (Spec {@code 2026-09-25-kartenaufzeichnung-design.md}). Gezaehlt wird je Karten-<b>Id</b>, nicht je
+ * Name: {@code CardView} traegt bei einer verdeckten Karte (Morph, Manifest) nicht ihren wahren Namen,
+ * nur die Id bleibt verlaesslich. Erst in {@link #finish()} loest {@code Player.getAllCards()} - echte
+ * {@code Card}-Objekte mit wahrem Namen - jede Id auf ihren endgueltigen Namen und ihre Endzone auf; das
+ * deckt auch Karten ab, die die ganze Partie unangetastet in einer Zone lagen (nie gezogen, nie
+ * gewirkt) und deshalb in keinem Ereignis vorkamen. Das Ergebnis geht ueber {@link CardLog#merge} je
+ * Name zusammengefasst an {@code cardSink} und steht ueber {@link #cardLog()} bereit. Wie beim
+ * {@link MatchRecord} selbst gilt: {@link #markCrashed()}, {@link #markAborted()} und
+ * {@link #markTurnCapped()} liefern KEINEN {@code CardLog} - eine halbe Aufzeichnung wuerde die
+ * Kartenauswertung verfaelschen, genau wie sie nicht in die Bilanz ({@code counted}) zaehlt. Eine "zu
+ * kurze" oder aufgegebene, aber sauber beendete Partie liefert dagegen sehr wohl einen {@code CardLog} -
+ * ihre Kartendaten sind vollstaendig, nur {@code CardStats} (ein spaeteres Stueck) filtert sie beim
+ * Auswerten ueber {@code MatchRecord.counted} heraus.</p>
  */
 public final class MatchRecorder {
 
@@ -159,7 +176,11 @@ public final class MatchRecorder {
     private final Integer aiTimeout;
     /** Deckname je {@link RegisteredPlayer}, vom Aufrufer gegeben; siehe der 5-arg-Konstruktor. */
     private final Map<RegisteredPlayer, String> deckNames;
+    /** Decknamen, die eine Kartenbiografie bekommen (siehe {@link Seat#byCardId}); leer ohne Kartensenke. */
+    private final Set<String> ownDecks;
     private final Consumer<MatchRecord> sink;
+    /** Bekommt die fertige {@link CardLog} genau einmal (aus {@link #finish()}); darf {@code null} sein. */
+    private final Consumer<CardLog> cardSink;
     private final Instant startedAt = Instant.now();
     private final List<Seat> seats = new ArrayList<>();
     private final Map<PlayerView, Seat> byView = new HashMap<>();
@@ -172,6 +193,8 @@ public final class MatchRecorder {
     private volatile boolean aborted;
     private volatile boolean turnCapped;
     private volatile MatchRecord finished;
+    /** Siehe {@link #cardLog()}; wird zusammen mit {@code finished} in {@link #build()} gesetzt. */
+    private CardLog cardLog;
     private int counterFailures;
     /** Die Eroeffnungshaende sind einmal je Partie zu zaehlen; siehe {@link #noteOpeningHands}. */
     private boolean openingTaken;
@@ -197,6 +220,15 @@ public final class MatchRecorder {
     }
 
     /**
+     * Ohne Kartenbiografie (leeres {@code ownDecks}, keine Kartensenke) - fuer Aufrufer, die Runde C
+     * noch nicht kennen; siehe den 7-arg-Konstruktor fuer die volle Beschreibung der Parameter.
+     */
+    public MatchRecorder(Game game, String source, Integer aiTimeout, Map<RegisteredPlayer, String> deckNames,
+                          Consumer<MatchRecord> sink) {
+        this(game, source, aiTimeout, deckNames, Set.of(), sink, null);
+    }
+
+    /**
      * @param game      das laufende Spiel; der Recorder meldet sich sofort an seinem Ereignisbus an
      * @param source    {@code "live"}, {@code "spectate"} oder {@code "sparring"}
      * @param aiTimeout Bedenkzeit je KI-Entscheidung in Sekunden, wie der Starter sie gesetzt hat
@@ -215,20 +247,31 @@ public final class MatchRecorder {
      *                  uebergeben hat. Fehlt ein Sitz in der Map (aeltere Aufrufer, Tests), faellt
      *                  {@link Seat#deckName()} auf Forges (womoeglich sanitierten) Namen zurueck - siehe
      *                  auch die anderen Konstruktoren. {@code null} wird wie eine leere Map behandelt.
+     * @param ownDecks  Decknamen (vergleichen wie {@link Seat#deckName()} sie liefert), fuer die eine
+     *                  Kartenbiografie gefuehrt wird - typischerweise Kevins eigene Decks aus dem
+     *                  {@code DeckStore}, siehe Klassenkommentar "Kartenbiografie". Ein Sitz mit einem
+     *                  Deck ausserhalb dieser Menge zaehlt keine einzige Karte und erzeugt am Ende auch
+     *                  keine {@code CardLog.SeatCards}-Zeile. {@code null} wird wie eine leere Menge
+     *                  behandelt.
      * @param sink      bekommt den fertigen Datensatz genau einmal (aus {@link #finish()}); darf
      *                  {@code null} sein (Tests, oder wenn der Aufrufer selbst abholt)
+     * @param cardSink  bekommt die fertige {@link CardLog} genau einmal (aus {@link #finish()}), oder
+     *                  gar nicht, wenn die Partie keine liefert (siehe Klassenkommentar); darf
+     *                  {@code null} sein wie {@code sink}
      */
     public MatchRecorder(Game game, String source, Integer aiTimeout, Map<RegisteredPlayer, String> deckNames,
-                          Consumer<MatchRecord> sink) {
+                          Set<String> ownDecks, Consumer<MatchRecord> sink, Consumer<CardLog> cardSink) {
         this.game = game;
         this.source = source;
         this.aiTimeout = aiTimeout;
         this.deckNames = deckNames == null ? Map.of() : deckNames;
+        this.ownDecks = ownDecks == null ? Set.of() : ownDecks;
         this.sink = sink;
+        this.cardSink = cardSink;
         // getRegisteredPlayers() statt getPlayers(): die Liste schrumpft nicht, wenn ein Sitz
         // ausscheidet - sonst fehlte am Ende genau der Sitz, dessen Niederlage wir festhalten wollen.
         for (Player p : game.getRegisteredPlayers()) {
-            Seat seat = new Seat(p, this.deckNames);
+            Seat seat = new Seat(p, this.deckNames, this.ownDecks);
             seats.add(seat);
             byView.put(p.getView(), seat);
         }
@@ -271,6 +314,22 @@ public final class MatchRecorder {
         if (s == turnOwner) {
             landsThisTurn++;
         }
+        // Kartenbiografie: ein Land wird nicht gewirkt, zaehlt hier aber als gespielt (Spec §2) -
+        // sonst fehlte jedes Land in der Kartentabelle, dabei ist "wann kommt mein Land" fuer Kevin
+        // genauso interessant wie ein Zauber.
+        try {
+            CardView land = e.land();
+            CardTally t = land == null ? null : cardTally(s, land);
+            if (t != null) {
+                t.name = land.getName();
+                t.cast++;
+                if (t.castTurn == null) {
+                    t.castTurn = Math.max(1, turns);
+                }
+            }
+        } catch (RuntimeException ex) {
+            counterFailures++;
+        }
     }
 
     @Subscribe
@@ -310,6 +369,15 @@ public final class MatchRecorder {
             ManaCost cost = host.getCurrentState() == null ? null : host.getCurrentState().getManaCost();
             if (cost != null) {
                 s.spellMana += cost.getCMC();
+            }
+            // Kartenbiografie (Spec §2): cast je Karten-Id, castTurn beim ersten Mal.
+            CardTally t = cardTally(s, host);
+            if (t != null) {
+                t.name = host.getName();
+                t.cast++;
+                if (t.castTurn == null) {
+                    t.castTurn = Math.max(1, turns);
+                }
             }
             classifyCast(sa, s);
             if (host.isCommander()) {
@@ -376,6 +444,12 @@ public final class MatchRecorder {
             Seat s = seatOfSpell(sa);
             if (s != null) {
                 s.spellsCountered++;
+                CardView host = sa.getHostCard();
+                CardTally t = host == null ? null : cardTally(s, host);
+                if (t != null) {
+                    t.name = host.getName();
+                    t.countered++;
+                }
             }
         } catch (RuntimeException ex) {
             counterFailures++;
@@ -432,6 +506,13 @@ public final class MatchRecorder {
             boolean gone = to.zoneType() == ZoneType.Graveyard || to.zoneType() == ZoneType.Exile;
             if (from.zoneType() == ZoneType.Library && to.zoneType() == ZoneType.Hand) {
                 s.cardsDrawn++;
+                // Kartenbiografie (Spec §2): Starthand und jedes Nachziehen zaehlen als "hand" - nach
+                // einem Mulligan zaehlt die neue Hand also erneut.
+                CardTally t = cardTally(s, card);
+                if (t != null) {
+                    t.name = card.getName();
+                    t.hand++;
+                }
             } else if (from.zoneType() == ZoneType.Hand && to.zoneType() == ZoneType.Graveyard) {
                 s.cardsDiscarded++;
             } else if (from.zoneType() == ZoneType.Library && gone) {
@@ -451,6 +532,12 @@ public final class MatchRecorder {
                     } else {
                         s.creaturesLostOther++;
                     }
+                }
+                // Kartenbiografie (Spec §2): vom Schlachtfeld weg in Friedhof/Exil ist "lost".
+                CardTally t = cardTally(s, card);
+                if (t != null) {
+                    t.name = card.getName();
+                    t.lost++;
                 }
             }
         } catch (RuntimeException ex) {
@@ -691,7 +778,20 @@ public final class MatchRecorder {
         if (sink != null) {
             sink.accept(built);
         }
+        if (cardSink != null && cardLog != null) {
+            cardSink.accept(cardLog);
+        }
         return built;
+    }
+
+    /**
+     * Die fertige Kartenbiografie der Partie (siehe Klassenkommentar "Kartenbiografie"), oder
+     * {@code null} vor dem Abschluss - und, anders als {@link #finish()}, dauerhaft {@code null}, wenn
+     * die Partie abgestuerzt, abgebrochen oder am Zugdeckel geendet ist. Fuer Aufrufer ohne eigene
+     * Kartensenke (Tests) und als zweiter Weg neben {@code cardSink}.
+     */
+    public synchronized CardLog cardLog() {
+        return cardLog;
     }
 
     /** @return der frisch gebaute Datensatz, oder {@code null}, wenn schon einer stand */
@@ -726,11 +826,23 @@ public final class MatchRecorder {
         String excludeReason = crashed ? "Absturz" : aborted ? "abgebrochen"
                 : turnCapped ? "Zugdeckel" : conceded ? "aufgegeben" : turns < MIN_TURNS ? "zu kurz" : null;
         Instant endedAt = Instant.now();
-        finished = new MatchRecord(newId(endedAt), iso(startedAt), iso(endedAt),
+        String id = newId(endedAt);
+        finished = new MatchRecord(id, iso(startedAt), iso(endedAt),
                 Math.max(0, endedAt.toEpochMilli() - startedAt.toEpochMilli()), source, aiTimeout, turns,
                 outcome == null ? "unbekannt" : String.valueOf(outcome.getWinCondition()),
                 !noWinners && (!anyWinner || (outcome != null && outcome.getWinCondition() == GameEndReason.Draw)),
                 excludeReason == null, excludeReason, List.copyOf(out));
+        // Kartenbiografie (Spec §2): dieselbe Ausschlussbedingung wie fuer die Bilanz eines Absturzes/
+        // Abbruchs/Zugdeckels (siehe Klassenkommentar) - NICHT dieselbe wie excludeReason insgesamt.
+        // Eine "zu kurze" oder aufgegebene, aber sauber beendete Partie liefert sehr wohl Kartendaten;
+        // nur die drei Flags stehen fuer eine unvollstaendige Aufzeichnung.
+        if (!crashed && !aborted && !turnCapped) {
+            try {
+                cardLog = buildCardLog(id);
+            } catch (RuntimeException ex) {
+                counterFailures++;
+            }
+        }
         try {
             reportCounterFailures();
         } catch (RuntimeException ex) {
@@ -764,10 +876,77 @@ public final class MatchRecorder {
                 + castsNotOnStack + " gewirkte Zauber beim Counterspell-Check nicht auf dem Stapel gefunden");
     }
 
+    /**
+     * Baut die Kartenbiografie der Partie aus der Id-Zaehlung jedes aufgezeichneten Sitzes (Spec §2).
+     * Ein Sitz ohne {@link Seat#byCardId} (sein Deck stand nicht in {@code ownDecks}) liefert GAR KEINE
+     * {@link CardLog.SeatCards}-Zeile - anders als eine leere Kartenliste, die "eigenes Deck ohne
+     * Karten" hiesse. Ein Fehler bei einem einzelnen Sitz darf die Kartendaten der anderen Sitze nicht
+     * kosten, deshalb ein eigener try/catch je Sitz statt einem gemeinsamen um die ganze Methode.
+     */
+    private CardLog buildCardLog(String matchId) {
+        List<CardLog.SeatCards> out = new ArrayList<>();
+        for (int i = 0; i < seats.size(); i++) {
+            Seat s = seats.get(i);
+            if (s.byCardId == null) {
+                continue;
+            }
+            try {
+                resolveEndZones(s);
+                List<CardLog.Card> rows = new ArrayList<>();
+                for (CardTally t : s.byCardId.values()) {
+                    rows.add(new CardLog.Card(t.name, 1, t.hand, t.cast, t.castTurn, t.countered, t.lost,
+                            t.end == null ? "none" : t.end));
+                }
+                out.add(new CardLog.SeatCards(i, s.deckName(), CardLog.merge(rows)));
+            } catch (RuntimeException ex) {
+                counterFailures++;
+            }
+        }
+        return new CardLog(matchId, List.copyOf(out));
+    }
+
+    /**
+     * Loest am Partieende Name und Endzone jeder gezaehlten Karten-Id auf: {@code Player.getAllCards()}
+     * liefert echte {@code Card}-Objekte mit wahrem Namen, auch fuer eine verdeckte Karte, deren
+     * {@code CardView} waehrend der Partie den Namen versteckt hat (Spec §2, siehe Klassenkommentar
+     * "Kartenbiografie"). Eine Karte, die die ganze Partie unangetastet in einer Zone lag (nie gezogen,
+     * nie gewirkt) und deshalb in {@link Seat#byCardId} noch gar nicht vorkam, bekommt hier ihre erste
+     * (leere) Zaehlung - genau das liefert die Zeile "nie gezogen". Spielsteine ({@code Card.isToken()})
+     * fallen raus, sie stehen in keinem Deck. Eine Id, die zwar waehrend der Partie zaehlte, hier aber
+     * nicht mehr auftaucht (Ersatz durch eine andere Karte, Sonderfall), behaelt den zuletzt in einem
+     * Ereignis gesehenen Namen; ihre Endzone bleibt {@code null} und wird beim Bauen der Zeile
+     * (siehe {@link #buildCardLog}) zu {@code "none"}.
+     */
+    private void resolveEndZones(Seat s) {
+        for (Card c : s.player.getAllCards()) {
+            if (c.isToken()) {
+                continue;
+            }
+            CardTally t = s.byCardId.computeIfAbsent(c.getId(), id -> new CardTally());
+            t.name = c.getName();
+            t.end = c.getZone() == null ? null : c.getZone().getZoneType().name().toLowerCase();
+        }
+    }
+
     // ------------------------------------------------------------------ Hilfen
 
     private Seat seat(PlayerView view) {
         return view == null ? null : byView.get(view);
+    }
+
+    /**
+     * Der laufende Zaehler dieser Karte am aufgezeichneten Sitz, angelegt bei der ersten Beruehrung
+     * (Id, nicht Name - siehe Klassenkommentar "Kartenbiografie"). {@code null} ohne Kartenbiografie an
+     * diesem Sitz oder bei einem Spielstein: ein Spielstein steht in keinem Deck und darf in keiner
+     * Zeile auftauchen (Spec §2), er muss also schon hier ausfallen, nicht erst in
+     * {@link #resolveEndZones} - sonst bekaeme er ueber einen Zonenwechsel waehrend der Partie
+     * trotzdem eine Zaehlung, die {@link #resolveEndZones} beim Ausfiltern nie zu Gesicht bekommt.
+     */
+    private CardTally cardTally(Seat s, CardView card) {
+        if (s.byCardId == null || card == null || card.isToken()) {
+            return null;
+        }
+        return s.byCardId.computeIfAbsent(card.getId(), id -> new CardTally());
     }
 
     private static PlayerView controllerOf(CardView c) {
@@ -1153,10 +1332,19 @@ public final class MatchRecorder {
         private int damageTaken;
         private int combatDamageTaken;
         private Integer eliminatedTurn;
+        /** Kartenbiografie je Karten-Id, nur angelegt, wenn dieser Sitz in {@code ownDecks} steht -
+         *  {@code null} ist das Zeichen "dieser Sitz wird nicht aufgezeichnet"; siehe
+         *  {@link MatchRecorder#cardTally} und die Klassenkommentar-Abschnitt "Kartenbiografie". */
+        private final Map<Integer, CardTally> byCardId;
 
-        private Seat(Player player, Map<RegisteredPlayer, String> deckNames) {
+        private Seat(Player player, Map<RegisteredPlayer, String> deckNames, Set<String> ownDecks) {
             this.player = player;
             this.deckNames = deckNames;
+            // deckName() kann theoretisch null liefern (kein RegisteredPlayer) - Set.of(...) wirft bei
+            // contains(null) eine NullPointerException, deshalb der explizite Vorbehalt statt direkt
+            // ownDecks.contains(deckName()).
+            String name = deckName();
+            this.byCardId = name != null && ownDecks.contains(name) ? new HashMap<>() : null;
         }
 
         /** @param noWinners Abbruch/Absturz: kein Sitz gilt als Sieger (siehe {@link MatchRecorder#build}) */
@@ -1216,5 +1404,22 @@ public final class MatchRecorder {
             }
             return tax;
         }
+    }
+
+    /**
+     * Laufende Zaehlung einer einzelnen Karte (per Id, siehe {@link Seat#byCardId}) waehrend der
+     * Partie; wird in {@link #buildCardLog} in eine {@link CardLog.Card}-Zeile umgegossen.
+     * {@code name} wird bei jeder Beruehrung neu gesetzt (zuletzt gesehener Name; bei einer verdeckten
+     * Karte womoeglich nicht der wahre - siehe {@link #resolveEndZones}, das ihn am Ende korrigiert).
+     * {@code end} bleibt {@code null}, bis {@link #resolveEndZones} sie aufloest.
+     */
+    private static final class CardTally {
+        String name;
+        int hand;
+        int cast;
+        Integer castTurn;
+        int countered;
+        int lost;
+        String end;
     }
 }
