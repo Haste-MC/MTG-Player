@@ -551,6 +551,38 @@ describe("store: Deckanalyse und Partie-Detail", () => {
     useStore.getState().requestMatchDetail("weg");
     expect(send).toHaveBeenCalledTimes(3);
   });
+
+  it("requestCardSuggestions fragt einmal je Deck und merkt sich die offene Anfrage", () => {
+    useStore.getState().requestCardSuggestions("Koma Ramp", ["ramp"]);
+    expect(send).toHaveBeenCalledWith({ type: "suggestCards", deck: "Koma Ramp", roles: ["ramp"] });
+    expect(useStore.getState().pendingSuggestions).toEqual(["Koma Ramp"]);
+    // Waehrend die Anfrage noch offen ist, schickt ein zweiter Klick nichts Neues.
+    useStore.getState().requestCardSuggestions("Koma Ramp", ["ramp"]);
+    expect(send).toHaveBeenCalledTimes(1);
+  });
+
+  it("cardSuggestions raeumt die offene Anfrage weg", () => {
+    useStore.getState().requestCardSuggestions("Koma Ramp", ["ramp"]);
+    useStore.getState().apply(suggestions("Koma Ramp"));
+    expect(useStore.getState().pendingSuggestions).toEqual([]);
+  });
+
+  it("ein vorliegender Stand haelt requestCardSuggestions NICHT ab (Befund 3: der \"neu laden\"-Knopf "
+    + "muss nach einem Reimport erneut fragen duerfen)", () => {
+    useStore.getState().apply(suggestions("Koma Ramp"));
+    useStore.getState().requestCardSuggestions("Koma Ramp", ["ramp"]);
+    expect(send).toHaveBeenCalledWith({ type: "suggestCards", deck: "Koma Ramp", roles: ["ramp"] });
+  });
+
+  it("ein Fehler der Bridge gibt eine offene suggestCards-Anfrage wieder frei (Befund 3)", () => {
+    useStore.getState().requestCardSuggestions("gibt es nicht", ["ramp"]);
+    expect(useStore.getState().pendingSuggestions).toEqual(["gibt es nicht"]);
+    useStore.getState().apply({ type: "error", text: "Kartenvorschläge gibt es nicht: unbekanntes Deck" });
+    expect(useStore.getState().pendingSuggestions).toEqual([]);
+    // Der Knopf darf danach wieder anfragen - vorher blieb er (rein lokaler useState) fuer immer auf "lädt …".
+    useStore.getState().requestCardSuggestions("gibt es nicht", ["ramp"]);
+    expect(send).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe("store: sparring", () => {

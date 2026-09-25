@@ -109,6 +109,11 @@ export interface AppState {
    *  fehlschlug, sagt die Fehlermeldung nicht) - der naechste Versuch darf sonst nie mehr fragen. */
   pendingMatch: string[];
   pendingAnalysis: string[];
+  /** Angefragt, aber noch ohne Antwort (suggestCards) - dasselbe Muster wie pendingMatch/pendingAnalysis
+   *  (Befund 3): ohne das blieb der Knopf in Suggestions.tsx nach einem Fehler (unbekanntes Deck, jede
+   *  Ausnahme auf der Bridge) fuer immer auf "lädt …" stehen, weil das vorher rein lokale useState eine
+   *  fehlgeschlagene Anfrage nicht von einer noch offenen unterscheiden konnte. */
+  pendingSuggestions: string[];
   /** Laufendes bzw. zuletzt gelaufenes Sparring (Statistik-Board). undefined, solange in dieser Sitzung
    *  keines gestartet wurde und keine Fortschrittsmeldung kam; nach dem Lauf bleibt der letzte Stand mit
    *  running: false stehen (Partienzahl und Fehlerliste sind dann das Ergebnis). */
@@ -119,7 +124,7 @@ export const initialState: AppState = {
   screen: "lobby", precons: [], decks: [], choices: [], log: [], hiddenKinds: ["MANA", "PHASE"], lastLogId: 0,
   aiModes: ["standard", "hybrid", "sim"], aiProfiles: ["Default"], aiTimeout: 5, bestOf: 0, expectNewMatch: false,
   archidekt: { loading: false }, matches: [], matchesTotal: 0, matchDetails: {}, deckAnalyses: {},
-  suggestions: {}, pendingMatch: [], pendingAnalysis: [],
+  suggestions: {}, pendingMatch: [], pendingAnalysis: [], pendingSuggestions: [],
 };
 
 const LOG_MAX = 500;
@@ -190,9 +195,10 @@ export function reduce(s: AppState, m: Inbound): AppState {
       // wuerde der naechste turn-0-Snapshot (Reconnect der alten Partie) faelschlich als Spielstart gelten.
       // Ein error beendet auch ein laufendes archidektList (unabhaengig davon, ob er davon stammt).
       const archidekt = { ...s.archidekt, loading: false };
-      // Offene matchDetail-/analyzeDeck-Anfragen gelten nach einem Fehler als erledigt: die Meldung sagt
-      // nicht, welche gemeint war, und eine haengende Anfrage wuerde jeden weiteren Versuch blockieren.
-      const pending = { pendingMatch: [], pendingAnalysis: [] };
+      // Offene matchDetail-/analyzeDeck-/suggestCards-Anfragen gelten nach einem Fehler als erledigt: die
+      // Meldung sagt nicht, welche gemeint war, und eine haengende Anfrage wuerde jeden weiteren Versuch
+      // blockieren (Befund 3: genau das liess den "Vorschläge laden"-Knopf vorher auf "lädt …" haengen).
+      const pending = { pendingMatch: [], pendingAnalysis: [], pendingSuggestions: [] };
       // Ein Fehler zwischen Klick und erster Fortschrittsmeldung ("keine Gegner im Bracket 3",
       // "Sparring läuft noch") beendet den Startzustand - sonst stuende die Fortschrittszeile fuer
       // immer bei 0. Laeuft anderswo wirklich ein Lauf, stellt ihn die naechste Fortschrittsmeldung
@@ -234,7 +240,10 @@ export function reduce(s: AppState, m: Inbound): AppState {
     case "cardSuggestions":
       // Schluessel ist der Deckname, nicht die Rolle: das Board haelt so mehrere Decks nebeneinander,
       // und eine neue Anfrage fuer dasselbe Deck ersetzt den alten Stand komplett (wie bei deckAnalysis).
-      return { ...s, suggestions: { ...s.suggestions, [m.deck]: m } };
+      return {
+        ...s, suggestions: { ...s.suggestions, [m.deck]: m },
+        pendingSuggestions: s.pendingSuggestions.filter((deck) => deck !== m.deck),
+      };
     default:
       return s;
   }
@@ -266,6 +275,11 @@ interface Store extends AppState {
   requestMatchDetail: (id: string) => void;
   /** Fordert die Deckanalyse an (analyzeDeck), wenn sie nicht schon vorliegt oder unterwegs ist. */
   requestDeckAnalysis: (deck: string) => void;
+  /** Fordert Kartenvorschlaege an (suggestCards, Befund 3) - anders als requestDeckAnalysis OHNE Sperre
+   *  gegen einen schon vorliegenden Stand: der "neu laden"-Knopf muss nach einem Reimport erneut fragen
+   *  duerfen, auch wenn suggestions[deck] noch den alten Stand traegt. Nur eine bereits laufende Anfrage
+   *  fuer dasselbe Deck wird nicht doppelt geschickt. */
+  requestCardSuggestions: (deck: string, roles: string[]) => void;
   /** Startet ein Sparring (sparringStart) und setzt den Startzustand - die Bridge uebernimmt mit ihrer
    *  ersten Fortschrittsmeldung. KI, Bedenkzeit und Zugdeckel bleiben die Voreinstellung der Bridge. */
   startSparring: (deck: string, games: number) => void;
@@ -309,6 +323,12 @@ export const useStore = create<Store>((set, get) => ({
     if (s.deckAnalyses[deck] || s.pendingAnalysis.includes(deck)) return;
     set({ pendingAnalysis: [...s.pendingAnalysis, deck] });
     send({ type: "analyzeDeck", deck });
+  },
+  requestCardSuggestions: (deck, roles) => {
+    const s = get();
+    if (s.pendingSuggestions.includes(deck)) return;
+    set({ pendingSuggestions: [...s.pendingSuggestions, deck] });
+    send({ type: "suggestCards", deck, roles });
   },
   startSparring: (deck, games) => {
     // Fehlerliste bewusst leer: der neue Lauf faengt bei null an, die Fehler des vorigen sind erledigt.
