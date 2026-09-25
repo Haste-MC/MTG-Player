@@ -29,8 +29,9 @@ MTG-Player/
 ```
 
 Aus Forges `res` (463 MB) kommt nur mit, was das Spiel benutzt: `cardsfolder`, `editions`, `tokenscripts`,
-`formats`, `lists`, `blockdata`, `effects`, `defaults`, `ai`, `setlookup`, `licenses` und – für die
-mitgelieferten Decks – `quest/commanderprecons`. Draußen bleiben `adventure` (154 MB), `quest` bis auf die
+`formats`, `lists`, `blockdata`, `effects`, `defaults`, `ai`, `setlookup`, `licenses`, die einzelne Datei
+`languages/en-US.properties` (Forges Localizer laedt dieses Bundle immer als Englisch-Rueckfall; ohne sie
+startet Forge gar nicht – im Bau nachgewiesen) und – für die mitgelieferten Decks – `quest/commanderprecons`. Draußen bleiben `adventure` (154 MB), `quest` bis auf die
 Precons (39 MB), `languages` (55 MB), `music`, `skins`, `sound`, `conquest`, `puzzle`, `draft`, `sealed`,
 `cube`, `geneticaidecks`, `deckgendecks`. **Diese Liste ist eine Annahme und muss im Bau geprüft werden**:
 Start mit ausgedünntem `res`, Kartenzahl vergleichen, alle Precons laden, eine KI-Partie bis zum Ende spielen.
