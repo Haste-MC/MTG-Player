@@ -12,9 +12,10 @@
     "cmc": 2,
     "share": 0.42,
     "imageKey": "c:Sakura-Tribe Elder|C21|1",
+    "text": "Sacrifice Sakura-Tribe Elder: Search your library for a basic land card, put that card onto the battlefield tapped, then shuffle.",
     "cut": {
      "name": "Rampant Growth",
-     "reason": "spielt in vergleichbaren Decks fast niemand (4 %) und ist mit 2 {G}{G}{G} die teuerste Karte dieser Rolle"
+     "reason": "spielt in vergleichbaren Decks fast niemand (4 %)"
     }
    },
    {
@@ -24,9 +25,10 @@
     "cmc": 3,
     "share": 0.35,
     "imageKey": "c:Cultivate|C21|1",
+    "text": "Search your library for up to two basic land cards, reveal those cards, put one onto the battlefield tapped and the other into your hand, then shuffle.",
     "cut": {
      "name": "Explosive Vegetation",
-     "reason": "hat mit 31 % den niedrigsten Anteil der Karten dieser Rolle in deinem Deck"
+     "reason": "führt EDHREC für diesen Commander gar nicht und ist mit 3 {G} die teuerste Karte dieser Rolle"
     }
    },
    {
@@ -35,8 +37,8 @@
     "manaCost": "2 {G}",
     "cmc": 3,
     "share": 0.51,
-    "gameChanger": true,
     "imageKey": "c:Beast Within|C21|1",
+    "text": "Destroy target permanent. Its controller creates a 3/3 green Beast creature token.",
     "cut": {
      "name": "Overrun",
      "reason": "trifft keine der neun Rollen"
@@ -49,6 +51,7 @@
     "cmc": 2,
     "share": 0.68,
     "imageKey": "c:Heroic Intervention|C21|1",
+    "text": "Permanents you control gain hexproof and indestructible until end of turn.",
     "cut": {
      "name": "Fog",
      "reason": "führt EDHREC für diesen Commander gar nicht"
