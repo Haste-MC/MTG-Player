@@ -144,14 +144,69 @@ class SuggestionsTest {
     }
 
     @Test
-    void schlaegtEinenSchnittMitBegruendungVor() {
-        // Overrun ist gruen, teuer und trifft dieselbe Rolle wie der Vorschlag (Kampftrick/Pump).
+    void schneidetUnklassifizierteKarteWennKeineRolleTrifft() {
+        // Overrun ist ein reiner Kampftrick/Pump-Zauber: kein "add" (ramp), kein "draw", keine Zerstoerung,
+        // kein Schutz- oder Friedhof-Text, keine Landsuche - DeckAnalysis.categoriesOf(Overrun) ist leer.
+        // Der Test deckt also Regel 3 ab (Rueckfall auf unklassifizierte Karten), nicht Regel 1 (gleiche
+        // Rolle) - dafuer gibt es eigene Tests weiter unten (fastNiemand/niedrigsterAnteil/undVerkettung).
+        assertTrue(DeckAnalysis.categoriesOf(card("Overrun").getRules()).isEmpty(),
+                "Testannahme verletzt: Overrun trifft jetzt doch eine Rolle");
         Suggestions.Result r = Suggestions.of(deck("Overrun"), List.of("ramp"), 4,
                 page(ec("Llanowar Elves", 0.4)));
         Suggestions.Cut cut = r.items().get(0).cut();
         assertNotNull(cut, "ohne Schnittkandidat: " + r.items());
         assertEquals("Overrun", cut.name());
-        assertFalse(cut.reason().isBlank());
+        assertEquals("trifft keine der neun Rollen", cut.reason());
+    }
+
+    @Test
+    void begruendetNiedrigenAnteilAlsFastNiemand() {
+        // Zwei Kandidaten derselben Rolle im Deck, beide auf der Seite gefuehrt: Elvish Mystic hat den
+        // niedrigeren (und niedrigen, <10%) Anteil und ist nicht die teuerste der beiden - reine Anteilsfrage.
+        Suggestions.Result r = Suggestions.of(deck("Elvish Mystic", "Rampant Growth"), List.of("ramp"), 4,
+                page(ec("Llanowar Elves", 0.4), ec("Elvish Mystic", 0.04), ec("Rampant Growth", 0.5)));
+        Suggestions.Cut cut = r.items().get(0).cut();
+        assertNotNull(cut, "ohne Schnittkandidat: " + r.items());
+        assertEquals("Elvish Mystic", cut.name());
+        assertEquals("spielt in vergleichbaren Decks fast niemand (4 %)", cut.reason());
+    }
+
+    @Test
+    void begruendetHohenAnteilAlsNiedrigstenDerRolle() {
+        // Beide Kandidaten haben einen hohen Anteil (>=10%); Elvish Mystic ist trotzdem der niedrigere der
+        // beiden und nicht die teuerste - "fast niemand" waere hier falsch, es ist nur der schwaechste
+        // Kandidat eines starken Feldes.
+        Suggestions.Result r = Suggestions.of(deck("Elvish Mystic", "Rampant Growth"), List.of("ramp"), 4,
+                page(ec("Llanowar Elves", 0.4), ec("Elvish Mystic", 0.85), ec("Rampant Growth", 0.9)));
+        Suggestions.Cut cut = r.items().get(0).cut();
+        assertNotNull(cut, "ohne Schnittkandidat: " + r.items());
+        assertEquals("Elvish Mystic", cut.name());
+        assertEquals("hat mit 85 % den niedrigsten Anteil der Karten dieser Rolle in deinem Deck", cut.reason());
+    }
+
+    @Test
+    void begruendetFehlendenEdhrecEintragOhneAnteil() {
+        // Elvish Mystic steht gar nicht auf der Seite, Rampant Growth schon - "nicht gefuehrt" gewinnt
+        // unabhaengig vom Anteil, und Elvish Mystic ist nicht die teuerste der beiden.
+        Suggestions.Result r = Suggestions.of(deck("Elvish Mystic", "Rampant Growth"), List.of("ramp"), 4,
+                page(ec("Llanowar Elves", 0.4), ec("Rampant Growth", 0.5)));
+        Suggestions.Cut cut = r.items().get(0).cut();
+        assertNotNull(cut, "ohne Schnittkandidat: " + r.items());
+        assertEquals("Elvish Mystic", cut.name());
+        assertEquals("führt EDHREC für diesen Commander gar nicht", cut.reason());
+    }
+
+    @Test
+    void verkettetZweiZutreffendeGruendeMitUnd() {
+        // Cultivate steht nicht auf der Seite UND ist mit {2}{G} die teuerste der beiden Kandidaten -
+        // beide Gruende treffen zu und muessen verkettet werden.
+        Suggestions.Result r = Suggestions.of(deck("Cultivate", "Rampant Growth"), List.of("ramp"), 4,
+                page(ec("Llanowar Elves", 0.4), ec("Rampant Growth", 0.5)));
+        Suggestions.Cut cut = r.items().get(0).cut();
+        assertNotNull(cut, "ohne Schnittkandidat: " + r.items());
+        assertEquals("Cultivate", cut.name());
+        assertEquals("führt EDHREC für diesen Commander gar nicht und ist mit 2 {G} die teuerste Karte dieser Rolle",
+                cut.reason());
     }
 
     @Test

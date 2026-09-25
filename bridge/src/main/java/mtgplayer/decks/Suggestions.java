@@ -30,6 +30,9 @@ public final class Suggestions {
     public static final int PER_ROLE = 5;
     /** Hoechstens so viele Vorschlaege insgesamt, egal wie viele Rollen angefragt sind. */
     public static final int MAX_ITEMS = 15;
+    /** Schwelle aus Spec §7 Regel 6: darunter ist eine Karte "fast niemandes" Wahl, darueber nur die
+     *  schwaechste eines insgesamt gut gespielten Feldes - beides verdient einen anderen Satz. */
+    private static final double LOW_SHARE_THRESHOLD = 0.10;
 
     /** Kartentext, den Kevin liest, wenn er den Vorschlag statt einer anderen Karte einbauen will;
      *  {@code reason} nennt nur, was tatsaechlich geprueft wurde (Spec §7). */
@@ -277,7 +280,11 @@ public final class Suggestions {
         return new Cut(winner.getName(), cutReason(winner, candidates, page, noRoleCase));
     }
 
-    /** Begruendung aus nur Geprueftem zusammengesetzt (Spec §7 Regel 5). */
+    /** Begruendung aus nur Geprueftem zusammengesetzt (Spec §7 Regel 6). Die Karte trifft entweder keine
+     *  Rolle (dann steht das allein - "teuerste Karte dieser Rolle" waere unsinnig ohne Rolle) oder sie
+     *  trifft dieselbe Rolle wie der Vorschlag; dort haengt der Satz an der tatsaechlichen Zahl: unter der
+     *  Schwelle spielt sie fast niemand, darueber ist sie nur die schwaechste eines starken Feldes - ein
+     *  hoher Anteil darf nie als "fast niemand" erscheinen. */
     private static String cutReason(PaperCard winner, List<PaperCard> candidates, Edhrec.Page page,
                                      boolean noRoleCase) {
         if (noRoleCase) {
@@ -290,7 +297,9 @@ public final class Suggestions {
                 clauses.add("führt EDHREC für diesen Commander gar nicht");
             } else {
                 long percent = Math.round(ec.share() * 100);
-                clauses.add("spielt in vergleichbaren Decks fast niemand (" + percent + " %)");
+                clauses.add(ec.share() < LOW_SHARE_THRESHOLD
+                        ? "spielt in vergleichbaren Decks fast niemand (" + percent + " %)"
+                        : "hat mit " + percent + " % den niedrigsten Anteil der Karten dieser Rolle in deinem Deck");
             }
         }
         int maxCmc = candidates.stream().mapToInt(pc -> pc.getRules().getManaCost().getCMC())
