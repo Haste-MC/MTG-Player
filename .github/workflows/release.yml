@@ -36,13 +36,23 @@ jobs:
       - name: Arbeitsverzeichnis festlegen
         run: echo "ZIEL=${{ runner.temp }}/paket" >> "$GITHUB_ENV"
 
+      # Ohne das legt git unter Windows fuer "bridge/assets/res" einen echten Verweis auf
+      # "../../forge/forge-gui/res" an. Dieser Verweis ist nur eine Bequemlichkeit fuer den Start aus
+      # dem Quellbaum - der Paketbau liest Forges Daten direkt (package.sh ruft trim-res.sh mit
+      # "forge/forge-gui/res" auf). Auf dem Laeufer ist er aber ein Stolperstein: jeder Schritt, der
+      # den Arbeitsbereich durchsucht (z. B. der Maven-Zwischenspeicher ueber "**/pom.xml"), faellt
+      # darueber mit "EPERM: operation not permitted, stat ...\bridge\assets\res". Mit
+      # core.symlinks=false legt git stattdessen eine kleine Textdatei an, ueber die niemand stolpert.
+      - name: Verweise unter Windows als Textdatei auschecken
+        run: git config --global core.symlinks false
+
       - name: Auschecken (mit Forge-Submodul)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           submodules: recursive
 
       - name: JDK 17 (Temurin) einrichten
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
@@ -52,7 +62,7 @@ jobs:
           cache: maven
 
       - name: Node einrichten
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: '20'
           cache: npm
@@ -172,7 +182,7 @@ jobs:
 
       - name: Probelauf - ZIP und Pruefsumme nur als Workflow-Artefakt anhaengen
         if: github.event_name == 'workflow_dispatch'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ${{ env.ZIP_NAME }}
           path: |
