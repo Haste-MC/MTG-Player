@@ -6,11 +6,12 @@ import forge.localinstance.properties.ForgePreferences.FPref;
 import forge.model.FModel;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
+import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Properties;
 
 /**
  * Einziger Ort, der Forge hochfährt. Reihenfolge ist zwingend:
@@ -111,13 +112,41 @@ public final class ForgeBoot {
     private static void writeProfile(Path assets) {
         Path user = dataDir().resolve("forge");
         Path cache = dataDir().resolve("cache");
-        String content = "userDir=" + user + "/\n" + "cacheDir=" + cache + "/\n";
         try {
             Files.createDirectories(user);
             Files.createDirectories(cache);
-            Files.writeString(assets.resolve("forge.profile.properties"), content, StandardCharsets.UTF_8);
+            writeProfileFile(assets.resolve("forge.profile.properties"), user, cache);
         } catch (IOException e) {
             throw new IllegalStateException("kann forge.profile.properties nicht schreiben", e);
+        }
+    }
+
+    /**
+     * Schreibt Forges Profildatei so, wie Forge sie LIEST: {@code ForgeProfileProperties.load} ruft
+     * {@code Properties.load(InputStream)} - ein Format mit eigenen Regeln, kein schlichter Text.
+     * Der Backslash ist dort das FLUCHTZEICHEN und der Strom wird als ISO-8859-1 mit Unicode-Escapes
+     * gelesen. Von Hand zusammengebaut ging das unter Windows zwangslaeufig schief: aus
+     * {@code C:\Users\kevin_\.mtg-player\forge} wurde beim Lesen {@code C:Userskevin_.mtg-playerorge}
+     * (jeder Backslash verschluckt, das {@code \f} von "forge" sogar zu einem Seitenvorschub), Forge legte
+     * sein Profil daraufhin als LAUFWERKS-RELATIVEN Pfad im App-Ordner an und scheiterte dort mit
+     * "cannot create profile directory" - die App startete beim Nutzer nie. Ein Benutzername mit Umlaut
+     * traf dieselbe Datei ueber die Kodierung (geschrieben UTF-8, gelesen ISO-8859-1).
+     *
+     * <p>{@link java.util.Properties#store(java.io.OutputStream, String)} ist die genaue Gegenseite von
+     * {@code load}: es verdoppelt Backslashes, schreibt ISO-8859-1 und setzt fuer alles darueber hinaus
+     * Unicode-Escapes. Deshalb hier die Bibliothek statt Handarbeit - ein eigenes Escaping waere nur die
+     * zweite Stelle, die dieselben Regeln kennen muss.</p>
+     *
+     * <p>Paketsichtbar statt privat, damit der Test den geschriebenen Inhalt genau so zurueckliest wie
+     * Forge (siehe {@code ForgeBootDataDirTest}).</p>
+     */
+    static void writeProfileFile(Path file, Path user, Path cache) throws IOException {
+        Properties props = new Properties();
+        // Das abschliessende "/" erwartet Forge: es haengt "decks" und Weiteres direkt an userDir an.
+        props.setProperty("userDir", user + "/");
+        props.setProperty("cacheDir", cache + "/");
+        try (OutputStream out = Files.newOutputStream(file)) {
+            props.store(out, "von MTG-Player erzeugt - siehe ForgeBoot.writeProfileFile");
         }
     }
 }

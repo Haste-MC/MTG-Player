@@ -3,8 +3,11 @@ package mtgplayer.forge;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.InputStream;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Properties;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -50,6 +53,36 @@ class ForgeBootDataDirTest {
         } finally {
             restoreProperty(vorher);
         }
+    }
+
+    /**
+     * Forge liest {@code forge.profile.properties} mit {@code Properties.load(InputStream)}
+     * ({@code ForgeProfileProperties.load}) - dort ist der Backslash das FLUCHTZEICHEN, und der Strom wird
+     * als ISO-8859-1 mit Unicode-Escapes gelesen. Ein Windows-Pfad, roh in die Datei geschrieben,
+     * kommt deshalb zerstoert wieder heraus: aus {@code C:\Users\kevin_\.mtg-player\forge} wurde
+     * {@code C:Userskevin_.mtg-playerorge} (jeder Backslash verschluckt, {@code \f} sogar zum
+     * Seitenvorschub) - Forge legte sein Profil daraufhin im App-Ordner an, scheiterte und die App
+     * startete nie. Ein Benutzername mit Umlaut traf dieselbe Datei ueber die Kodierung (wir schrieben
+     * UTF-8, gelesen wird ISO-8859-1).
+     *
+     * <p>Der Test laeuft auf JEDER Plattform: unter Linux ist der Backslash ein ganz gewoehnliches
+     * Zeichen im Dateinamen, der Windows-Pfad hier also eine voellig normale Zeichenkette - genau
+     * deshalb faellt der Fehler auch auf dem Entwicklungsrechner auf und nicht erst beim Nutzer.</p>
+     */
+    @Test
+    void profildateiUeberstehtWindowsPfadUndUmlaut(@TempDir Path tmp) throws Exception {
+        Path datei = tmp.resolve("forge.profile.properties");
+        Path user = Paths.get("C:\\Users\\Kevin M\u00fcller\\.mtg-player\\forge");
+        Path cache = Paths.get("C:\\Users\\Kevin M\u00fcller\\.mtg-player\\cache");
+
+        ForgeBoot.writeProfileFile(datei, user, cache);
+
+        Properties gelesen = new Properties();
+        try (InputStream in = Files.newInputStream(datei)) {
+            gelesen.load(in);   // genau so liest Forge die Datei
+        }
+        assertEquals(user + "/", gelesen.getProperty("userDir"), "userDir kommt unveraendert zurueck");
+        assertEquals(cache + "/", gelesen.getProperty("cacheDir"), "cacheDir kommt unveraendert zurueck");
     }
 
     /** {@code null} = beim Start war keine Property gesetzt, sonst der Wert, den z. B. {@code bridge/pom.xml}
