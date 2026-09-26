@@ -2,6 +2,7 @@ package mtgplayer;
 
 import forge.deck.Deck;
 import mtgplayer.app.AppMode;
+import mtgplayer.app.IdleExit;
 import mtgplayer.bench.Bench;
 import mtgplayer.bench.BenchArgs;
 import mtgplayer.bench.GameRecord;
@@ -221,6 +222,14 @@ public final class Main {
         printCardsLoaded(t0);
 
         Bridge bridge = new Bridge(wsPort);
+        if (appMode) {
+            // Das Fenster ist ein eigener Prozess (AppMode.openWindow) - ohne diese Regel liefe die
+            // Bridge nach dem Schliessen unbemerkt weiter, hielte ihren Port und den App-Ordner als
+            // Arbeitsverzeichnis fest (Windows verweigert dann dessen Loeschen), und der einzige
+            // Ausweg waere der Task-Manager. Die Schonfrist unterscheidet "Fenster zu" von einem
+            // blossen Neuladen der Seite, das die Verbindung genauso trennt.
+            bridge.watchForIdle(new IdleExit(FENSTER_ZU_SCHONFRIST, () -> beenden(bridge, http)));
+        }
         try {
             bridge.start();
         } catch (RuntimeException e) {
@@ -241,6 +250,22 @@ public final class Main {
             try { bridge.stop(); } catch (InterruptedException ignored) { }
         }));
         Thread.currentThread().join();
+    }
+
+    /** So lange darf das Fenster zu sein, bevor die App sich beendet - genug fuer ein Neuladen der
+     *  Seite, kurz genug, dass niemand einen Prozess im Hintergrund vergisst. */
+    private static final java.time.Duration FENSTER_ZU_SCHONFRIST = java.time.Duration.ofSeconds(15);
+
+    /** Geordnet beenden wie im Update-Weg (Bridge.realLaunch): erst Sparring/Match/WebSocket anhalten,
+     *  dann die JVM - Forge und Swing hinterlassen Threads, die ein blosses return ueberleben wuerden. */
+    private static void beenden(Bridge bridge, HttpStatic http) {
+        try {
+            bridge.stop();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        http.stop();
+        System.exit(0);
     }
 
     private static void printCardsLoaded(long t0) {

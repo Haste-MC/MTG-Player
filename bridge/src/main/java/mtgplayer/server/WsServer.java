@@ -24,13 +24,23 @@ public final class WsServer extends WebSocketServer implements Transport {
 
     private final Consumer<JsonNode> inbound;
     private final Runnable onOpen;
+    private final Runnable onClientGone;
     private volatile WebSocket client;
     private final CompletableFuture<Void> started = new CompletableFuture<>();
 
     public WsServer(int port, Consumer<JsonNode> inbound, Runnable onOpen) {
+        this(port, inbound, onOpen, () -> { });
+    }
+
+    /**
+     * @param onClientGone laeuft, wenn der EINZIGE Klient die Verbindung verliert (siehe {@link #onClose}) -
+     *                     im App-Modus das Signal, dass das Fenster zu ist (siehe {@code IdleExit}).
+     */
+    public WsServer(int port, Consumer<JsonNode> inbound, Runnable onOpen, Runnable onClientGone) {
         super(new InetSocketAddress(bindAddress(), port));
         this.inbound = inbound;
         this.onOpen = onOpen;
+        this.onClientGone = onClientGone;
         setReuseAddr(true);
     }
 
@@ -83,7 +93,17 @@ public final class WsServer extends WebSocketServer implements Transport {
 
     @Override
     public void onClose(WebSocket conn, int code, String reason, boolean remote) {
-        if (client == conn) client = null;
+        // Nur fuer den AKTUELLEN Klienten melden: wird ein alter von einem neuen abgeloest (siehe
+        // onOpen), traegt "client" laengst den neuen - dann ist niemand weg, nur einer ersetzt.
+        if (client == conn) {
+            client = null;
+            try {
+                onClientGone.run();
+            } catch (RuntimeException e) {
+                // wie onOpen/onMessage: kein Rueckruf darf den Socket-Thread mitreissen
+                e.printStackTrace();
+            }
+        }
     }
 
     @Override

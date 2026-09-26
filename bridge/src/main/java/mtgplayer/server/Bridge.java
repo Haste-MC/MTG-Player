@@ -14,6 +14,7 @@ import mtgplayer.decks.DeckSource;
 import mtgplayer.decks.DeckStore;
 import mtgplayer.decks.Edhrec;
 import mtgplayer.decks.Suggestions;
+import mtgplayer.app.IdleExit;
 import mtgplayer.forge.CrashLog;
 import mtgplayer.forge.ForgeBoot;
 import mtgplayer.forge.Precons;
@@ -197,7 +198,7 @@ public final class Bridge {
         this.updateApply = updateApply != null ? updateApply : new UpdateApply();
         this.launcher = launcher != null ? launcher : this::realLaunch;
         this.appDirForUpdate = appDirForUpdate != null ? appDirForUpdate : () -> ForgeBoot.assetsDir().getParent();
-        this.ws = new WsServer(wsPort, this::handle, this::onClientConnected);
+        this.ws = new WsServer(wsPort, this::handle, this::onClientConnected, this::onClientGone);
         // Der Lauf meldet Fortschritt und - je gespeicherter Partie - den Datensatz selbst; die
         // gedeckelte "matches"-Liste baut nur die Bridge (siehe matchesMsg()), deshalb hier die
         // Umsetzung MatchRecord -> matches. Derselbe CardStore wie oben (nicht CardStore.standard()) -
@@ -356,7 +357,29 @@ public final class Bridge {
         ws.stop(1000);
     }
 
+    /**
+     * Beendet die App, wenn das Fenster zu bleibt - gesetzt nur im App-Modus (siehe {@code Main}).
+     * {@code null} heisst: aus, die Bridge laeuft weiter, auch wenn gerade kein Browser verbunden ist
+     * (Entwicklung; dort beendet Strg+C sie).
+     */
+    private volatile IdleExit idleExit;
+
+    public void watchForIdle(IdleExit idle) {
+        this.idleExit = idle;
+    }
+
+    private void onClientGone() {
+        IdleExit idle = idleExit;
+        if (idle != null) {
+            idle.clientGone();
+        }
+    }
+
     private void onClientConnected() {
+        IdleExit idle = idleExit;
+        if (idle != null) {
+            idle.clientHere();
+        }
         ws.send(new Messages.Lobby(Precons.infos(), store.infos()));
         ws.send(matchesMsg());
         // Nachzuegler: die Pruefung aus checkVersion() lief evtl. noch, als dieser Client sich
