@@ -193,14 +193,24 @@ class BridgeApplyUpdateTest {
         assertTrue(gestartet.isEmpty(), "die appDir-Wache muss vor jedem Skriptstart greifen");
     }
 
+    /** Ein echter App-Ordner mit allen vier Merkmalen aus Spec §2 - dieselbe Wache wie in
+     *  UpdateApplyTest, jetzt fuer den Protokollweg (2. Review-Nachtrag: eine blosse version.txt
+     *  reicht der Wache nicht mehr). */
+    private static Path echterAppDir(Path dir, String eigeneVersion) throws IOException {
+        Files.createDirectories(dir.resolve("runtime"));
+        Files.createDirectories(dir.resolve("app"));
+        Files.writeString(dir.resolve("version.txt"), eigeneVersion);
+        Files.writeString(dir.resolve("MTG-Player.exe"), "alter-starter");
+        return dir;
+    }
+
     @Test
     @Timeout(value = 1, unit = TimeUnit.MINUTES)
     void erfolgreichesUpdateLaeuftUeberDieEingesetzteLauncherNahtStattEchtemProzessOderExit() throws Exception {
-        byte[] content = zip("MTG-Player", "version.txt", "1.3.0", "MTG-Player.exe", "starter-binaer");
+        byte[] content = zip("MTG-Player", "version.txt", "1.3.0", "MTG-Player.exe", "starter-binaer",
+                "runtime/release", "java-laufzeit", "app/bridge.jar", "hallo-welt");
         String hash = sha256Hex(content);
-        Path appDir = tmp.resolve("App");
-        Files.createDirectories(appDir);
-        Files.writeString(appDir.resolve("version.txt"), "1.2.0");
+        Path appDir = echterAppDir(tmp.resolve("App"), "1.2.0");
 
         Map<String, String> antworten = Map.of(
                 "https://api.github.com/repos/Haste-MC/MTG-Player/releases/latest",
@@ -242,5 +252,63 @@ class BridgeApplyUpdateTest {
         // damit diese Verbindung) unveraendert weiter - waere die echte Umsetzung gelaufen, haette sie
         // die gesamte Test-JVM beendet und dieser Code wuerde nie erreicht.
         assertTrue(client.isOpen());
+    }
+
+    /**
+     * 2. Review-Nachtrag, Befund 5: {@code applyUpdate} braucht dieselbe Wiedereintrittssperre wie
+     * {@code archidektImport} - zwei Klicks auf "Aktualisieren" duerfen nicht zwei Downloads und zwei
+     * Tauschskripte gleichzeitig anstossen. Die eingesetzte Quelle blockiert auf einem Latch, GENAU
+     * NACHDEM die erste "laden"-Meldung raus ist - das garantiert (statt auf Timing zu hoffen), dass
+     * der zweite Versuch wirklich waehrend des ersten Laufs ankommt.
+     */
+    @Test
+    @Timeout(value = 1, unit = TimeUnit.MINUTES)
+    void zweiterApplyUpdateWaehrendDesErstenLaeuftLiefertFehlerStattZweitenDownload() throws Exception {
+        byte[] content = zip("MTG-Player", "version.txt", "1.3.0", "MTG-Player.exe", "starter-binaer",
+                "runtime/release", "java-laufzeit", "app/bridge.jar", "hallo-welt");
+        String hash = sha256Hex(content);
+        Path appDir = echterAppDir(tmp.resolve("App"), "1.2.0");
+
+        Map<String, String> antworten = Map.of(
+                "https://api.github.com/repos/Haste-MC/MTG-Player/releases/latest",
+                releaseJsonMitShaAsset("v1.3.0", ZIP_URL, ZIP_NAME, "Neu"),
+                SHA_URL, hash + "  " + ZIP_NAME + "\n");
+        UpdateCheck updateCheck = new UpdateCheck(url -> {
+            String body = antworten.get(url);
+            if (body == null) throw new RuntimeException("keine eingesetzte Antwort fuer " + url);
+            return body;
+        });
+        java.util.concurrent.CountDownLatch quelleErreicht = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.CountDownLatch weiterlaufen = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.atomic.AtomicInteger downloadAufrufe = new java.util.concurrent.atomic.AtomicInteger();
+        UpdateApply blockierendeUpdateApply = new UpdateApply(url -> {
+            downloadAufrufe.incrementAndGet();
+            quelleErreicht.countDown();
+            try {
+                assertTrue(weiterlaufen.await(10, TimeUnit.SECONDS), "Test haette laengst freigegeben");
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            return content;
+        }, tmp.resolve("temp"));
+        List<Path> gestartet = new ArrayList<>();
+        start(updateCheck, "1.2.0", blockierendeUpdateApply, gestartet::add, appDir);
+
+        await("version", 20);
+        client.send("{\"type\":\"applyUpdate\"}");
+        assertEquals("laden", await("updateState", 10).get("state").asText());
+        assertTrue(quelleErreicht.await(10, TimeUnit.SECONDS), "der erste Lauf muss die Download-Quelle erreicht haben");
+
+        // Zweiter Versuch, waehrend der erste nachweislich noch in der Download-Quelle haengt.
+        client.send("{\"type\":\"applyUpdate\"}");
+        JsonNode err = await("error", 5);
+        assertTrue(err.get("text").asText().contains("laeuft schon"));
+
+        // Freigeben und den ersten Lauf regulaer zu Ende laufen lassen - genau EIN Download insgesamt.
+        weiterlaufen.countDown();
+        assertEquals("pruefen", await("updateState", 10).get("state").asText());
+        assertEquals("entpacken", await("updateState", 10).get("state").asText());
+        assertEquals("neustart", await("updateState", 10).get("state").asText());
+        assertEquals(1, downloadAufrufe.get(), "der zweite Versuch darf nie bis zur Download-Quelle kommen");
     }
 }

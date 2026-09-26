@@ -66,12 +66,14 @@ class UpdateApplyTest {
         return bos.toByteArray();
     }
 
-    /** Ein vollstaendiges, gueltiges Paket: version.txt und der Starter liegen im obersten Ordner
-     *  (siehe {@link UpdateApply#EXE_NAME}), wie {@link UpdateApply#validateAppContent} es verlangt. */
+    /** Ein vollstaendiges, gueltiges Paket: alle vier Merkmale aus Spec §2 (version.txt, Starter,
+     *  runtime/, app/) liegen im obersten Ordner, wie {@link UpdateApply#validateAppContent} es
+     *  verlangt (2. Review-Nachtrag: dieselben vier wie fuer den ALTEN Ordner, siehe {@link #appDir}). */
     private static byte[] gueltigesPaket(String topDir) throws IOException {
         return zip(topDir,
                 "version.txt", "1.3.0",
                 UpdateApply.EXE_NAME, "starter-binaer",
+                "runtime/release", "java-laufzeit",
                 "app/bridge.jar", "hallo-welt");
     }
 
@@ -87,12 +89,17 @@ class UpdateApplyTest {
         }
     }
 
-    /** App-Ordner mit einer version.txt anlegen, wie ihn eine echte Installation vorfindet - Name mit
-     *  Leerzeichen (Review-Befund: muss auch dann funktionieren). */
+    /** Ein echter App-Ordner mit allen vier Merkmalen aus Spec §2 (version.txt, Starter, runtime/,
+     *  app/), wie ihn eine echte Installation vorfindet - Name mit Leerzeichen (Review-Befund: muss
+     *  auch dann funktionieren). 2. Review-Nachtrag: eine blosse version.txt reicht der Wache nicht
+     *  mehr - sonst waere ein Downloads-Ordner mit einer zufaelligen version.txt darin schon "der
+     *  App-Ordner" (siehe {@link UpdateApply}-Klassenkommentar zur Wache). */
     private static Path appDir(Path root) throws IOException {
         Path dir = root.resolve("MTG Player App");
-        Files.createDirectories(dir);
+        Files.createDirectories(dir.resolve("runtime"));
+        Files.createDirectories(dir.resolve("app"));
         Files.writeString(dir.resolve("version.txt"), OLD_VERSION_TEXT);
+        Files.writeString(dir.resolve(UpdateApply.EXE_NAME), "alter-starter");
         return dir;
     }
 
@@ -101,7 +108,7 @@ class UpdateApplyTest {
         assertEquals(OLD_VERSION_TEXT, Files.readString(appDir.resolve("version.txt")),
                 "App-Ordner darf von run() nie direkt angefasst werden - der Tausch passiert erst im Skript, nach dieser JVM");
         try (var stream = Files.list(appDir)) {
-            assertEquals(1, stream.count(), "im App-Ordner darf nichts Neues aufgetaucht sein");
+            assertEquals(4, stream.count(), "im App-Ordner darf nichts Neues aufgetaucht sein (version.txt, Starter, runtime/, app/)");
         }
     }
 
@@ -172,9 +179,29 @@ class UpdateApplyTest {
         assertTrue(skriptText.contains(".old"), "das Skript muss den alten Ordner vor dem Tausch beiseite legen");
         assertTrue(skriptText.contains(":restore_old"), "es muss einen Rueckweg geben");
         long startCount = skriptText.lines().filter(l -> l.trim().toLowerCase(Locale.ROOT).startsWith("start \"\"")).count();
-        assertTrue(startCount >= 2, "die alte Fassung muss im Fehlerfall erneut gestartet werden, nicht nur die neue im Erfolgsfall");
+        assertTrue(startCount >= 3, "die alte Fassung muss in JEDEM Fehlerfall erneut gestartet werden (ren/move/start), nicht nur die neue im Erfolgsfall");
+        // Arbeitsverzeichnis fuer die gestartete App (2. Review-Nachtrag): ohne /d erbt "start" das
+        // Arbeitsverzeichnis DIESES Skripts (ein Ordner unter %TEMP%), nicht den App-Ordner.
+        assertTrue(skriptText.contains("start \"\" /d"), "start muss das Arbeitsverzeichnis der gestarteten App explizit setzen");
         // Aufraeumen des Zwischenordners (Review-Befund)
         assertTrue(skriptText.contains(":cleanup"));
+        // 2. Review-Nachtrag, Befund 1: beide Wartezeiten muessen bei Ablauf abbrechen, nicht in den
+        // Tausch hineinfallen.
+        assertTrue(skriptText.contains(":confirmtimeout"), "abgelaufene Bestaetigung muss abbrechen");
+        assertTrue(skriptText.contains(":waittimeout"), "abgelaufenes Warten muss abbrechen");
+        // 2. Review-Nachtrag, Befund 3: die Fehlermeldungen des Skripts muessen in eine Datei gehen,
+        // sonst sieht sie niemand (die Pipes sterben mit der bereits beendeten JVM).
+        assertTrue(skriptText.contains(":log"), "es muss eine Protokoll-Routine geben");
+        assertTrue(skriptText.contains("update.log"), "das Protokoll muss in eine eigene Datei gehen");
+        // 2. Review-Nachtrag, Entscheidung B: kein automatisches Loeschen des alten Ordners nach Erfolg -
+        // die EINZIGE verbleibende rmdir-Stelle fuer OLDDIR ist das Aufraeumen eines liegengebliebenen
+        // .old VOR dem naechsten Tausch, nicht ein automatisches Loeschen NACH diesem.
+        long oldRmdirCount = skriptText.lines()
+                .filter(l -> l.contains("rmdir") && l.contains("\"%OLDDIR%\"")).count();
+        assertEquals(1, oldRmdirCount,
+                "genau eine rmdir-Stelle fuer OLDDIR darf es geben (Aufraeumen VOR dem Tausch) - keine automatische nach Erfolg");
+        assertTrue(skriptText.contains("kann von Hand geloescht werden"),
+                "das Protokoll muss dem Nutzer sagen, dass .old von Hand geloescht werden kann");
 
         assertAppDirUnveraendert(appDir);
     }
@@ -307,7 +334,14 @@ class UpdateApplyTest {
             try (var stream = Files.list(tempDir)) {
                 assertEquals(0, stream.count(), "kein Zwischenordner darf liegen bleiben fuer: " + name);
             }
-            assertFalse(Files.exists(root.resolve("evil.txt")), "der Eintrag darf nie ausserhalb landen: " + name);
+            // Review-Befund: die alte Zusicherung prüfte "root/evil.txt" - ein Pfad, an dem selbst ein
+            // erfolgreicher Ausbruch dieser Vektoren nie landen wuerde (der Zwischenordner liegt tiefer
+            // als root), die Pruefung konnte also nie fehlschlagen. Stattdessen den GANZEN Baum unter
+            // root durchsuchen - so faellt ein Ausbruch unabhaengig von der genauen Verschachtelungstiefe auf.
+            try (var walk = Files.walk(root)) {
+                assertTrue(walk.noneMatch(p -> "evil.txt".equals(p.getFileName().toString())),
+                        "der Eintrag darf nie irgendwo im Baum landen: " + name);
+            }
             assertAppDirUnveraendert(appDir);
         }
     }
@@ -373,5 +407,58 @@ class UpdateApplyTest {
         assertEquals(List.of("fehler"), protokoll.zustaende);
         assertTrue(protokoll.texte.get(0).contains("Datenverzeichnis"));
         assertFalse(Files.exists(appDir), "die Wache darf appDir nicht einmal anlegen");
+    }
+
+    /** 2. Review-Nachtrag, der neue kritische Befund: das Datenverzeichnis kann auch UNTERHALB eines
+     *  appDir liegen (nicht nur umgekehrt) - z.B. wenn appDir versehentlich ein sehr hoher Ordner ist,
+     *  der zufaellig ~/.mtg-player enthaelt. Beide Richtungen muessen abgelehnt werden. Kein appDir wird
+     *  hier wirklich angelegt/berueht (die Pruefung ist ein reiner Pfadvergleich, kein Dateizugriff). */
+    @Test
+    void datenverzeichnisUnterhalbDesAppOrdnersWirdAbgelehnt() throws IOException {
+        Path data = ForgeBoot.dataDir().toAbsolutePath().normalize();
+        Path appDir = data.getParent();
+        assertNotNull(appDir, "target/test-data muss einen Elternordner haben");
+        UpdateCheck.Release release = new UpdateCheck.Release("1.3.0", URL, "a".repeat(64), "");
+        Protokoll protokoll = new Protokoll();
+        UpdateApply apply = new UpdateApply(url -> {
+            throw new AssertionError("appDir-Wache muss VOR jedem Netzzugriff greifen");
+        }, appDir.resolve("wird-nie-gebraucht"));
+
+        UpdateApply.Result result = apply.run(release, appDir, protokoll::add);
+
+        assertNull(result);
+        assertEquals(List.of("fehler"), protokoll.zustaende);
+        assertTrue(protokoll.texte.get(0).contains("Datenverzeichnis"));
+    }
+
+    /** 2. Review-Nachtrag, der neue kritische Befund (Entscheidung A): eine blosse version.txt reichte
+     *  bisher als Beweis fuer "das ist der App-Ordner" - entpackt jemand das Paket mit "hier entpacken"
+     *  z.B. nach Downloads, waere GENAU DAS der App-Ordner, und das Skript wuerde Downloads umbenennen.
+     *  Die Wache muss deshalb dieselben vier Merkmale wie fuer den NEUEN Ordner verlangen, nicht nur
+     *  version.txt. */
+    @Test
+    void appOrdnerOhneRuntimeUndAppVerzeichnisWirdAbgelehnt(@TempDir Path root) throws IOException {
+        // wie ein Downloads-Ordner, in den jemand nur die lose version.txt (z.B. aus einem alten Zip)
+        // kopiert hat - kein runtime/, kein app/, kein Starter.
+        Path appDir = root.resolve("Downloads");
+        Files.createDirectories(appDir);
+        Files.writeString(appDir.resolve("version.txt"), OLD_VERSION_TEXT);
+        UpdateCheck.Release release = new UpdateCheck.Release("1.3.0", URL, "a".repeat(64), "");
+        Protokoll protokoll = new Protokoll();
+        UpdateApply apply = new UpdateApply(url -> {
+            throw new AssertionError("appDir-Wache muss VOR jedem Netzzugriff greifen");
+        }, root.resolve("temp"));
+
+        UpdateApply.Result result = apply.run(release, appDir, protokoll::add);
+
+        assertNull(result);
+        assertEquals(List.of("fehler"), protokoll.zustaende);
+        assertTrue(protokoll.texte.get(0).contains("Starter"),
+                "version.txt ist da, aber der Starter fehlt - genau das muss die Wache jetzt auch pruefen");
+        // Der Downloads-Ordner selbst darf nicht angefasst worden sein.
+        assertTrue(Files.isDirectory(appDir));
+        try (var stream = Files.list(appDir)) {
+            assertEquals(1, stream.count(), "ausser der urspruenglichen version.txt darf nichts entstanden sein");
+        }
     }
 }

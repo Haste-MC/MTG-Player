@@ -95,6 +95,10 @@ public final class Bridge {
         void launch(Path script) throws IOException;
     }
     private final UpdateLauncher launcher;
+    /** Genau ein applyUpdate-Lauf zur Zeit (2. Review-Nachtrag, Befund 5) - selbes Muster wie
+     *  {@link #importRunning}: zwei Klicks auf "Aktualisieren" sollen nicht zwei Downloads und zwei
+     *  Tauschskripte gleichzeitig anstossen. */
+    private final AtomicBoolean updateRunning = new AtomicBoolean();
     /** Genau ein archidektImport-Lauf zur Zeit (siehe handle, "archidektImport"). */
     private final AtomicBoolean importRunning = new AtomicBoolean();
     /** Deckel der "matches"-Liste zum Client (Task 3) - siehe {@link #matchesMsg()}. */
@@ -252,6 +256,12 @@ public final class Bridge {
      * gehen als updateState raus. Ohne zuvor gemeldetes Update ({@link #versionMsg} noch
      * {@code null}) passiert nichts: ohne "version" haette der Client (Aufgabe 6) den
      * "Aktualisieren"-Knopf nie gezeigt, ein "applyUpdate" waere dann ein Client-Fehler.
+     *
+     * <p>Wiedereintrittssperre wie {@link #archidektImport} (2. Review-Nachtrag, Befund 5): zwei Klicks
+     * auf "Aktualisieren" (Doppelklick, zwei Browserfenster) sollen nicht zwei Downloads und zwei
+     * Tauschskripte gleichzeitig anstossen. Anders als {@code importRunning} muss das Flag im
+     * ERFOLGSFALL nicht zurueckgesetzt werden - der echte {@link #realLaunch} beendet die JVM ohnehin;
+     * das Flag lebt nur so lange wie diese eine Bridge.</p>
      */
     private void applyUpdate() {
         Messages.VersionMsg vm = versionMsg;
@@ -259,18 +269,35 @@ public final class Bridge {
             ws.send(new Messages.ErrorMsg("Update: keine neuere Fassung bekannt"));
             return;
         }
+        if (!updateRunning.compareAndSet(false, true)) {
+            ws.send(new Messages.ErrorMsg("Update: laeuft schon"));
+            return;
+        }
         UpdateCheck.Release release = new UpdateCheck.Release(vm.latest(), vm.url(), vm.sha256(), vm.notes());
         Path appDir = appDirForUpdate.get();
-        GuiBase.getInterface().runBackgroundTask("apply-update", () -> {
-            UpdateApply.Result result = updateApply.run(release, appDir,
-                    (state, text) -> ws.send(new Messages.UpdateStateMsg(state, text)));
-            if (result == null) return; // "fehler" ist schon raus, siehe UpdateApply.run
-            try {
-                launcher.launch(result.script());
-            } catch (IOException e) {
-                ws.send(new Messages.ErrorMsg("Update: Skript konnte nicht gestartet werden - " + e.getMessage()));
-            }
-        });
+        try {
+            GuiBase.getInterface().runBackgroundTask("apply-update", () -> {
+                try {
+                    UpdateApply.Result result = updateApply.run(release, appDir,
+                            (state, text) -> ws.send(new Messages.UpdateStateMsg(state, text)));
+                    if (result == null) return; // "fehler" ist schon raus, siehe UpdateApply.run
+                    try {
+                        launcher.launch(result.script());
+                    } catch (IOException e) {
+                        ws.send(new Messages.ErrorMsg("Update: Skript konnte nicht gestartet werden - " + e.getMessage()));
+                    }
+                } finally {
+                    // Laeuft die echte Umsetzung durch (realLaunch), beendet System.exit die JVM ohnehin
+                    // vorher - dieses set(false) erreicht dann niemanden mehr. Fuer jeden Fehlerpfad UND
+                    // fuer Tests mit eingesetztem UpdateLauncher (kein echtes Prozessende) ist es der
+                    // Unterschied zwischen "haengt fuer immer auf gesperrt" und einem neuen Versuch.
+                    updateRunning.set(false);
+                }
+            });
+        } catch (RuntimeException e) {
+            updateRunning.set(false);   // Task kam nie zum Laufen - Flag nicht haengen lassen
+            throw e;
+        }
     }
 
     /**

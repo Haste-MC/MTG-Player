@@ -203,7 +203,6 @@ public final class Messages {
      * Zustaende sprechen fuer sich, der Client formuliert die Anzeige selbst - Aufgabe 6).
      */
     public record UpdateStateMsg(String type, String state, String text) {
-        public UpdateStateMsg(String state) { this("updateState", state, null); }
         public UpdateStateMsg(String state, String text) { this("updateState", state, text); }
     }
 }

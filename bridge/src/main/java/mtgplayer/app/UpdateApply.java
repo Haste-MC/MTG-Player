@@ -175,23 +175,32 @@ public final class UpdateApply {
     }
 
     /**
-     * Zwei Bedingungen, BEVOR ueberhaupt etwas passiert (Review-Befund, kritisch): {@code appDir} darf
-     * nicht unter dem Datenverzeichnis ({@code ~/.mtg-player}, siehe {@link ForgeBoot#dataDir()})
-     * liegen, und {@code version.txt} muss wirklich darin liegen - ein Ordner ohne {@code version.txt}
-     * sieht nicht wie eine echte Installation aus. Heute schuetzt uns dafuer nur der Zufall, dass
-     * {@link Version#current()} in einer Entwicklungsumgebung {@value Version#DEV} liefert und
-     * {@code Bridge.checkVersion()} dann gar nicht erst fragt - diese Wache gilt unabhaengig davon.
+     * BEVOR ueberhaupt etwas passiert (2. Review-Nachtrag, der neue kritische Befund): eine
+     * {@code version.txt} allein reichte bisher als Beweis fuer "das ist der App-Ordner" - entpackt
+     * jemand das Paket aber mit "hier entpacken" direkt nach {@code C:\Users\...\Downloads}, waere
+     * GENAU DAS der App-Ordner, und das Skript wuerde {@code Downloads} umbenennen und (nach einem
+     * spaeteren Update) loeschen. Datenverlust auf dem Rechner eines Mitspielers. Diese Wache verlangt
+     * deshalb dieselben vier Merkmale wie {@link #validateAppContent} fuer den NEUEN Ordner (Starter,
+     * {@code runtime/}, {@code app/}, {@code version.txt}) VOLLSTAENDIG, nicht nur {@code version.txt}.
+     * Zusaetzlich in BEIDE Richtungen geprueft gegen das Datenverzeichnis ({@code ~/.mtg-player}, siehe
+     * {@link ForgeBoot#dataDir()}): weder darf appDir darunter liegen, noch darf das Datenverzeichnis
+     * darunter liegen (die erste Pruefung allein deckt nur eine Richtung ab). Heute schuetzt uns
+     * zusaetzlich nur der Zufall, dass {@link Version#current()} in einer Entwicklungsumgebung
+     * {@value Version#DEV} liefert und {@code Bridge.checkVersion()} dann gar nicht erst fragt - diese
+     * Wache gilt unabhaengig davon.
      *
      * @return eine Fehlermeldung, oder {@code null} wenn appDir in Ordnung ist
      */
     private static String appDirProblem(Path appDir) {
         Path abs = appDir.toAbsolutePath().normalize();
         Path data = ForgeBoot.dataDir().toAbsolutePath().normalize();
-        if (abs.equals(data) || abs.startsWith(data)) {
-            return "App-Ordner " + abs + " liegt unter dem Datenverzeichnis " + data + " - Abbruch vor jeder Aenderung.";
+        if (abs.startsWith(data) || data.startsWith(abs)) {
+            return "App-Ordner " + abs + " ueberschneidet sich mit dem Datenverzeichnis " + data
+                    + " - Abbruch vor jeder Aenderung.";
         }
-        if (!Files.isRegularFile(abs.resolve(VERSION_FILE))) {
-            return "App-Ordner " + abs + " enthaelt kein " + VERSION_FILE + " - sieht nicht wie eine echte Installation aus.";
+        String contentProblem = appContentProblem(abs);
+        if (contentProblem != null) {
+            return "App-Ordner " + abs + " " + contentProblem + " - sieht nicht wie eine echte Installation aus.";
         }
         return null;
     }
@@ -319,15 +328,43 @@ public final class UpdateApply {
      * Vor jeder Erfolgsmeldung (Review-Befund, kritisch): steckt im entpackten Ordner ueberhaupt eine
      * App? Ein kaputtes/unvollstaendiges Release-ZIP soll VOR dem Schreiben des Tauschskripts als
      * "fehler" enden, waehrend die alte Fassung noch unveraendert laeuft - nicht erst beim Tausch
-     * selbst auffallen, wenn der alte Ordner schon umbenannt ist.
+     * selbst auffallen, wenn der alte Ordner schon umbenannt ist. Dieselben vier Merkmale wie
+     * {@link #appDirProblem} fuer den ALTEN Ordner (2. Review-Nachtrag: beide muessen gleich streng
+     * sein, sonst waere z.B. ein Downloads-Ordner ohne {@code runtime/}/{@code app/} als "alt" akzeptabel
+     * gewesen, aber nicht als "neu" - das ergibt keinen Sinn, es geht um dieselbe Frage).
      */
     private static void validateAppContent(Path newDir) throws IOException {
-        if (!Files.isRegularFile(newDir.resolve(VERSION_FILE))) {
-            throw new IOException("entpackter Ordner enthaelt kein " + VERSION_FILE);
+        String problem = appContentProblem(newDir);
+        if (problem != null) {
+            throw new IOException("entpackter Ordner " + problem);
         }
-        if (!Files.isRegularFile(newDir.resolve(EXE_NAME))) {
-            throw new IOException("entpackter Ordner enthaelt keinen Starter (" + EXE_NAME + ")");
+    }
+
+    /**
+     * Die vier Merkmale einer echten Paket-Installation (Spec §2: {@code MTG-Player.exe}, {@code
+     * runtime/}, {@code app/}, {@code version.txt} liegen nebeneinander auf oberster Ebene) - gemeinsam
+     * genutzt von {@link #appDirProblem} (fuer den ALTEN Ordner) und {@link #validateAppContent} (fuer
+     * den NEUEN, entpackten Ordner). Absichtlich dieselbe, vollstaendige Pruefung fuer beide (2.
+     * Review-Nachtrag): eine einzelne {@code version.txt} reicht nicht als Beweis - die koennte auch in
+     * einem Downloads-Ordner liegen, in den jemand das ZIP nur ausgepackt, aber nie an seinen Zielort
+     * verschoben hat.
+     *
+     * @return eine Kurzbeschreibung des fehlenden Merkmals, oder {@code null} wenn alle vier da sind
+     */
+    private static String appContentProblem(Path dir) {
+        if (!Files.isRegularFile(dir.resolve(VERSION_FILE))) {
+            return "enthaelt kein " + VERSION_FILE;
         }
+        if (!Files.isRegularFile(dir.resolve(EXE_NAME))) {
+            return "enthaelt keinen Starter (" + EXE_NAME + ")";
+        }
+        if (!Files.isDirectory(dir.resolve("runtime"))) {
+            return "enthaelt kein runtime/-Verzeichnis";
+        }
+        if (!Files.isDirectory(dir.resolve("app"))) {
+            return "enthaelt kein app/-Verzeichnis";
+        }
+        return null;
     }
 
     /**
@@ -335,10 +372,17 @@ public final class UpdateApply {
      * {@code stagingRoot}). Reihenfolge im Skript ist die Sicherheit (Spec §5): erst bestaetigt es,
      * dass dieser Prozess (per PID) wirklich lief und dann beendet ist - vorher haelt Windows die
      * eigenen Dateien fest -, dann legt es den alten App-Ordner als {@code <Name>.old} beiseite,
-     * schiebt den neuen an seine Stelle, startet die neue Fassung und loescht {@code .old} erst NACH
-     * dem erfolgreichen Start. Scheitert ein Schritt, benennt es zurueck UND startet die alte Fassung
-     * erneut (Review-Befund: sonst ist die App nach einem Fehlschlag einfach weg) - nie beide Ordner
-     * gleichzeitig stehen lassen.
+     * schiebt den neuen an seine Stelle und startet die neue Fassung. Scheitert ein Schritt, benennt
+     * es zurueck UND startet die alte Fassung erneut (2. Review-Nachtrag: das galt bisher nicht fuer
+     * den wahrscheinlichsten Fehlschlag, den fehlgeschlagenen {@code ren}) - nie beide Ordner
+     * gleichzeitig stehen lassen, nie die App einfach verschwinden lassen.
+     *
+     * <p><b>{@code <Name>.old} wird NICHT automatisch geloescht</b> (2. Review-Nachtrag, Entscheidung
+     * B): ein {@code rmdir} auf einen Ordner, dessen Inhalt wir nur vermuten, ist das Risiko nicht
+     * wert. Er bleibt liegen; das Protokoll ({@code update.log}, siehe unten) nennt seinen Pfad, damit
+     * der Nutzer ihn von Hand loeschen kann. Ein liegengebliebenes {@code .old} aus einem FRUEHEREN,
+     * erfolgreichen Update darf beim NAECHSTEN Update ersetzt werden (erst ein erfolgreicher Lauf
+     * belegt, dass die neue Fassung wirklich lief).</p>
      */
     private static Path writeScript(Path stagingRoot, Path appDir, Path newDir, String name) throws IOException {
         Path script = stagingRoot.resolve("update.cmd");
@@ -350,6 +394,11 @@ public final class UpdateApply {
         // Ordners ist deshalb einfach der Nachbar von appDir mit der Endung ".old". Das hier in Java
         // auszurechnen (statt im Batch mit %~dp/%~nx zu hantieren) haelt das Skript selbst simpel.
         String oldAbs = appDir.resolveSibling(name + OLD_SUFFIX).toAbsolutePath().normalize().toString();
+        // update.log liegt im Datenverzeichnis (2. Review-Nachtrag, Befund 3): das Skript laeuft NACH
+        // dem Ende der JVM, seine echo-Ausgaben gehen an niemanden (die Pipes sterben mit dem Prozess,
+        // der sie angelegt hat) - ohne eigene Datei waere ein gescheitertes Update nie nachvollziehbar.
+        String dataDirAbs = ForgeBoot.dataDir().toAbsolutePath().normalize().toString();
+        String logAbs = ForgeBoot.dataDir().resolve("update.log").toAbsolutePath().normalize().toString();
 
         String content = """
                 @echo off
@@ -369,44 +418,65 @@ public final class UpdateApply {
                 set "NEWDIR=%s"
                 set "OLDDIR=%s"
                 set "STAGING=%s"
+                set "DATADIR=%s"
+                set "LOG=%s"
+
+                if not exist "%%DATADIR%%" mkdir "%%DATADIR%%" 2>nul
+                call :log "Update-Tausch gestartet (PID %%PID%%): %%NEWDIR%% -> %%APPDIR%%"
 
                 rem Erst bestaetigen, dass die alte MTG-Player.exe wirklich gesehen wurde (tasklist koennte
                 rem beim allerersten Versuch aus Zeitgruenden noch nichts liefern) - erst DANACH gilt "nicht
-                rem mehr gefunden" als Beweis, dass der Prozess wirklich beendet ist. Beide Schleifen sind
-                rem begrenzt, damit ein dauerhaft haengender tasklist-Aufruf nicht ewig blockiert.
-                set "SEEN=0"
+                rem mehr gefunden" als Beweis, dass der Prozess wirklich beendet ist. 2. Review-Nachtrag,
+                rem Befund 1: BEIDE Schleifen brechen bei Ablauf jetzt wirklich ab (exit /b 1, nichts
+                rem angefasst) statt stillschweigend in den Tausch hineinzufallen - haengt die App beim
+                rem Beenden oder liefert tasklist nie einen Treffer, waere sonst bei LAUFENDER App getauscht
+                rem worden.
                 set "TRIES=0"
                 :confirmloop
                 tasklist /fi "PID eq %%PID%%" 2>nul | find "%%PID%%" >nul
                 if errorlevel 1 goto confirmnotfound
-                set "SEEN=1"
                 goto waitstart
                 :confirmnotfound
                 set /a TRIES=%%TRIES%%+1
-                if %%TRIES%% GEQ 5 goto waitstart
+                if %%TRIES%% GEQ 5 goto confirmtimeout
                 ping -n 2 127.0.0.1 >nul
                 goto confirmloop
+                :confirmtimeout
+                call :log "Abbruch: alte Fassung (PID %%PID%%) konnte nicht bestaetigt werden - nichts geaendert."
+                call :cleanup
+                exit /b 1
 
                 :waitstart
-                if not "%%SEEN%%"=="1" goto waitdone
                 set "TRIES=0"
                 :waitloop
                 tasklist /fi "PID eq %%PID%%" 2>nul | find "%%PID%%" >nul
                 if errorlevel 1 goto waitdone
                 set /a TRIES=%%TRIES%%+1
-                if %%TRIES%% GEQ 300 goto waitdone
+                if %%TRIES%% GEQ 300 goto waittimeout
                 ping -n 2 127.0.0.1 >nul
                 goto waitloop
+                :waittimeout
+                call :log "Abbruch: Zeitlimit beim Warten auf das Ende der alten Fassung (PID %%PID%%) - nichts geaendert."
+                call :cleanup
+                exit /b 1
                 :waitdone
 
-                rem Ein liegengebliebener .old-Ordner aus einem abgebrochenen frueheren Versuch darf
-                rem kuenftige Updates nicht dauerhaft blockieren - bestmoeglich aufraeumen, bevor umbenannt wird.
-                if exist "%%OLDDIR%%" rmdir /s /q "%%OLDDIR%%" 2>nul
+                rem Ein liegengebliebener .old-Ordner aus einem FRUEHEREN, erfolgreichen Update darf das
+                rem naechste nicht dauerhaft blockieren - er gilt erst jetzt (ein neuer Tausch beginnt
+                rem gerade wirklich) als ersetzbar, nicht automatisch nach jedem Erfolg (Entscheidung B).
+                if exist "%%OLDDIR%%" (
+                    call :log "Vorhandenes %%OLDDIR%% (Rest eines frueheren Updates) wird vor dem Tausch entfernt."
+                    rmdir /s /q "%%OLDDIR%%" 2>nul
+                )
 
                 rem alten Ordner beiseite legen, bevor irgendetwas Neues an seine Stelle kommt
                 ren "%%APPDIR%%" "%%NAME%%.old"
                 if errorlevel 1 (
-                    echo Update fehlgeschlagen: alter Ordner liess sich nicht umbenennen.
+                    rem 2. Review-Nachtrag, Befund 2: der wahrscheinlichste Fehlschlag ueberhaupt - hier
+                    rem stand bisher NICHTS, das die App wieder startet. %%APPDIR%% hat sich nicht
+                    rem geaendert (ren ist fehlgeschlagen), die alte Fassung liegt also unveraendert dort.
+                    call :log "Update fehlgeschlagen: alter Ordner liess sich nicht umbenennen - alte Fassung wird erneut gestartet."
+                    start "" /d "%%APPDIR%%" "%%APPDIR%%\\%s"
                     call :cleanup
                     exit /b 1
                 )
@@ -414,50 +484,69 @@ public final class UpdateApply {
                 rem den entpackten neuen Stand an die Stelle des alten schieben
                 move /y "%%NEWDIR%%" "%%APPDIR%%"
                 if errorlevel 1 (
-                    echo Update fehlgeschlagen: neuer Ordner liess sich nicht verschieben - alter Stand kommt zurueck.
-                    goto restore_old
-                )
-
-                rem die neue Fassung starten
-                start "" "%%APPDIR%%\\%s"
-                if errorlevel 1 (
-                    echo Update fehlgeschlagen: neue Fassung startet nicht - alter Stand kommt zurueck.
+                    call :log "Update fehlgeschlagen: neuer Ordner liess sich nicht verschieben - alter Stand kommt zurueck."
+                    rem 2. Review-Nachtrag, Befund 4: ein gescheitertes move kann trotzdem einen
+                    rem Teilstand unter APPDIR hinterlassen (je nach Windows-Kopierstrategie) - genau wie
+                    rem im start-Fehlerzweig unten erst wegraeumen, sonst scheitert der Rueckweg am
+                    rem belegten Namen und es stehen am Ende BEIDE Ordner da.
                     if exist "%%APPDIR%%" rmdir /s /q "%%APPDIR%%" 2>nul
                     goto restore_old
                 )
 
-                rem Erfolg: der alte Stand wird nicht mehr gebraucht
-                rmdir /s /q "%%OLDDIR%%" 2>nul
+                rem die neue Fassung starten - /d setzt ihr Arbeitsverzeichnis explizit auf APPDIR (ohne
+                rem /d wuerde start das Arbeitsverzeichnis DIESES Skripts vererben, also einen Ordner
+                rem unter %%TEMP%%, siehe cd /d oben).
+                start "" /d "%%APPDIR%%" "%%APPDIR%%\\%s"
+                if errorlevel 1 (
+                    call :log "Update fehlgeschlagen: neue Fassung startet nicht - alter Stand kommt zurueck."
+                    if exist "%%APPDIR%%" rmdir /s /q "%%APPDIR%%" 2>nul
+                    goto restore_old
+                )
+
+                rem Erfolg: der alte Stand wird NICHT geloescht (Entscheidung B) - er bleibt unter
+                rem OLDDIR liegen, bis der Nutzer ihn von Hand entfernt oder das naechste Update ihn ersetzt.
+                call :log "Update erfolgreich. Alter Ordner bleibt erhalten unter %%OLDDIR%% - kann von Hand geloescht werden."
                 call :cleanup
                 exit /b 0
 
                 :restore_old
-                rem Bestmoegliche Wiederherstellung (Review-Befund, Blocker 2): scheitert das Zurueckbenennen
-                rem ebenfalls, existieren NICHT beide Ordner gleichzeitig weiter, sondern das Skript bricht
-                rem mit einer klaren Meldung ab, statt den verbotenen Zustand still zu hinterlassen.
+                rem Bestmoegliche Wiederherstellung (Blocker 2): scheitert das Zurueckbenennen ebenfalls,
+                rem existieren NICHT beide Ordner gleichzeitig weiter, sondern das Skript bricht mit
+                rem einer klaren Meldung ab, statt den verbotenen Zustand still zu hinterlassen.
                 if exist "%%APPDIR%%" (
-                    echo Update fehlgeschlagen: %%APPDIR%% ist noch belegt - Wiederherstellung nicht moeglich, bitte von Hand pruefen.
+                    call :log "Update fehlgeschlagen: %%APPDIR%% ist noch belegt - Wiederherstellung nicht moeglich, bitte von Hand pruefen."
                     call :cleanup
                     exit /b 1
                 )
                 ren "%%OLDDIR%%" "%%NAME%%"
                 if errorlevel 1 (
-                    echo Update fehlgeschlagen: alter Ordner liess sich nicht zurueckbenennen - bitte von Hand pruefen.
+                    call :log "Update fehlgeschlagen: alter Ordner liess sich nicht zurueckbenennen - bitte von Hand pruefen."
                     call :cleanup
                     exit /b 1
                 )
                 rem alte Fassung erneut starten - ein Fehlschlag darf nie "die App ist einfach weg" bedeuten.
-                start "" "%%APPDIR%%\\%s"
+                start "" /d "%%APPDIR%%" "%%APPDIR%%\\%s"
+                call :log "Alte Fassung nach fehlgeschlagenem Update erneut gestartet."
                 call :cleanup
                 exit /b 1
 
                 :cleanup
                 rem Den eigenen Zwischenordner (samt dieses Skripts) erst nach einer kurzen Verzoegerung in
                 rem einem eigenen, losgeloesten Prozess loeschen (Review-Befund, Aufraeumen): waehrend dieses
-                rem Skript noch laeuft, haelt cmd.exe seine eigene Datei fest.
+                rem Skript noch laeuft, haelt cmd.exe seine eigene Datei fest. update.log liegt NICHT hier
+                rem (siehe DATADIR oben), bleibt also erhalten.
                 start "" /min cmd /c "ping -n 3 127.0.0.1 >nul & rmdir /s /q ""%%STAGING%%"" 2>nul"
                 goto :eof
-                """.formatted(pid, name, appAbs, newAbs, oldAbs, stagingAbs, EXE_NAME, EXE_NAME);
+
+                :log
+                rem 2. Review-Nachtrag, Befund 3: eine einfache Konsolenausgabe reicht nicht - die Pipes
+                rem sterben mit der bereits beendeten JVM, niemand sieht sie je. Deshalb zusaetzlich in
+                rem eine eigene Datei im Datenverzeichnis schreiben, die den Neustart ueberlebt.
+                echo %%~1
+                >>"%%LOG%%" echo %%date%% %%time%% %%~1
+                goto :eof
+                """.formatted(pid, name, appAbs, newAbs, oldAbs, stagingAbs, dataDirAbs, logAbs,
+                EXE_NAME, EXE_NAME, EXE_NAME);
         // cmd.exe braucht CRLF-Zeilenenden (Review-Befund) - der Text-Block liefert reines "\n", sonst
         // brechen goto-Spruenge und die geklammerten if-Bloecke auf Windows.
         Files.writeString(script, content.replace("\n", "\r\n"), StandardCharsets.UTF_8);
