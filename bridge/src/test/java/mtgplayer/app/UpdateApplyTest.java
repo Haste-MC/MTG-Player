@@ -226,6 +226,85 @@ class UpdateApplyTest {
         assertTrue(skriptText.contains("kann von Hand geloescht werden"),
                 "das Protokoll muss dem Nutzer sagen, dass .old von Hand geloescht werden kann");
 
+        // 4. Review-Nachtrag, Blocker 5: verliert die Bestaetigungsschleife das Rennen (die alte
+        // Fassung ist schon weg, bevor tasklist sie einmal gesehen hat), muss GENAU DIESER Zweig die
+        // alte Fassung wieder starten - sonst ist die App einfach zu. Ueber Zeilen-Indizes geprueft
+        // (wie "loeschtOldprevErstNachErfolg" oben): zwischen ":confirmtimeout" und dem naechsten Label
+        // muss ein "start"-Befehl stehen.
+        int confirmtimeoutZeile = -1;
+        for (int i = 0; i < zeilen.size(); i++) {
+            if (zeilen.get(i).trim().equals(":confirmtimeout")) {
+                confirmtimeoutZeile = i;
+                break;
+            }
+        }
+        assertTrue(confirmtimeoutZeile >= 0, "es muss ein :confirmtimeout-Label geben");
+        boolean confirmtimeoutStartetAlteFassung = false;
+        for (int j = confirmtimeoutZeile + 1; j < zeilen.size() && !zeilen.get(j).trim().startsWith(":"); j++) {
+            if (zeilen.get(j).trim().toLowerCase(Locale.ROOT).startsWith("start \"\"")) {
+                confirmtimeoutStartetAlteFassung = true;
+                break;
+            }
+        }
+        assertTrue(confirmtimeoutStartetAlteFassung,
+                "ein verlorenes Rennen bei der Bestaetigung muss die alte Fassung erneut starten, statt die App einfach zu lassen");
+        // Blocker 5: mehr Versuche fuer die Bestaetigung (30 statt vorher 5) - der abweichende Wert
+        // fuer :waittimeout (GEQ 300) bleibt davon unberuehrt.
+        assertTrue(skriptText.contains("GEQ 30 goto confirmtimeout"), "die Bestaetigung braucht mehr Versuche als vorher (5)");
+        assertFalse(skriptText.contains("GEQ 5 goto confirmtimeout"), "der alte, zu knappe Versuchszaehler darf nicht mehr da sein");
+
+        // 4. Review-Nachtrag, Blocker 6: ren/move duerfen sich nicht mehr auf errorlevel verlassen,
+        // sondern muessen den tatsaechlichen Zustand pruefen (if exist) - sonst kann ein Fehlschlag, bei
+        // dem errorlevel faelschlich 0 bleibt, in einen verschachtelten Zustand hineinfallen.
+        // "if exist %APPDIR%" taucht auch anderswo auf (z.B. die Wache im Rueckweg "APPDIR ist noch
+        // belegt") - deshalb gezielt die Zeile direkt nach DIESEM ren gesucht, nicht bloss irgendwo im
+        // Text.
+        int renBeiseiteZeile = -1;
+        for (int i = 0; i < zeilen.size(); i++) {
+            if (zeilen.get(i).trim().equals("ren \"%APPDIR%\" \"%NAME%.old\"")) {
+                renBeiseiteZeile = i;
+                break;
+            }
+        }
+        assertTrue(renBeiseiteZeile >= 0, "der alte Ordner muss beiseite gelegt werden");
+        String naechsteNachRenBeiseite = null;
+        for (int j = renBeiseiteZeile + 1; j < zeilen.size(); j++) {
+            String z = zeilen.get(j).trim();
+            if (z.isEmpty() || z.toLowerCase(Locale.ROOT).startsWith("rem ")) continue;
+            naechsteNachRenBeiseite = z;
+            break;
+        }
+        assertEquals("if exist \"%APPDIR%\" (", naechsteNachRenBeiseite,
+                "das Umbenennen des alten Ordners muss anhand des Zustands geprueft werden (existiert APPDIR noch?), nicht anhand von errorlevel");
+        assertTrue(skriptText.contains("if not exist \"%APPDIR%\\" + UpdateApply.EXE_NAME + "\" ("),
+                "das Verschieben des neuen Ordners muss anhand des Zustands geprueft werden (liegt der Starter direkt unter APPDIR?), nicht anhand von errorlevel");
+        // Das "if exist %OLDDIR%" oben (Zeile ~491) prueft etwas anderes (ein VORHANDENES .old aus
+        // einem frueheren Update) - hier gezielt die Zeile direkt nach dem Zurueckbenennen im Rueckweg
+        // (":restore_old", "ren %OLDDIR% %NAME%") gesucht: die naechste Nicht-Kommentar-Zeile muss ein
+        // Zustandscheck sein, kein "if errorlevel 1" mehr.
+        int renZurueckZeile = -1;
+        for (int i = 0; i < zeilen.size(); i++) {
+            if (zeilen.get(i).trim().equals("ren \"%OLDDIR%\" \"%NAME%\"")) {
+                renZurueckZeile = i;
+                break;
+            }
+        }
+        assertTrue(renZurueckZeile >= 0, "der Rueckweg muss den alten Ordner zurueckbenennen");
+        String naechsteRelevanteZeile = null;
+        for (int j = renZurueckZeile + 1; j < zeilen.size(); j++) {
+            String z = zeilen.get(j).trim();
+            if (z.isEmpty() || z.toLowerCase(Locale.ROOT).startsWith("rem ")) continue;
+            naechsteRelevanteZeile = z;
+            break;
+        }
+        assertEquals("if exist \"%OLDDIR%\" (", naechsteRelevanteZeile,
+                "das Zurueckbenennen im Rueckweg muss anhand des Zustands (existiert OLDDIR noch?) geprueft werden, nicht anhand von errorlevel");
+
+        // Blocker 7: der aufraeumende Hintergrundprozess darf NICHT im eigenen Zwischenordner stehen
+        // (er kann sein eigenes Arbeitsverzeichnis nicht loeschen) - er braucht ein anderes Verzeichnis.
+        assertTrue(skriptText.contains("start \"\" /min /d \"%DATADIR%\" cmd /c"),
+                "der Aufraeum-Prozess muss ein eigenes Arbeitsverzeichnis (nicht den Zwischenordner) bekommen");
+
         assertAppDirUnveraendert(appDir);
     }
 

@@ -449,11 +449,22 @@ public final class UpdateApply {
                 goto waitstart
                 :confirmnotfound
                 set /a TRIES=%%TRIES%%+1
-                if %%TRIES%% GEQ 5 goto confirmtimeout
+                rem 4. Review-Nachtrag, Blocker 5: mehr Versuche (30 statt 5 - dieselbe knapp
+                rem einsekuendige ping-Wartezeit je Versuch, also rund 30s statt 5s) - der
+                rem wahrscheinlichste Grund fuer einen fruehen Fehlschlag ist reine Verzoegerung
+                rem (tasklist braucht selbst einen Moment, um anzulaufen), nicht ein wirklich schon
+                rem verschwundener Prozess.
+                if %%TRIES%% GEQ 30 goto confirmtimeout
                 ping -n 2 127.0.0.1 >nul
                 goto confirmloop
                 :confirmtimeout
-                call :log "Abbruch: alte Fassung (PID %%PID%%) konnte nicht bestaetigt werden - nichts geaendert."
+                rem 4. Review-Nachtrag, Blocker 5 (kritisch): verliert diese Schleife das Rennen (die
+                rem alte Fassung war schon weg, bevor tasklist sie auch nur einmal gesehen hat), ist
+                rem appDir noch vollkommen unangetastet - die alte Fassung ist aber trotzdem beendet,
+                rem also MUSS sie hier erneut gestartet werden. Ohne diese Zeile stand hier bisher
+                rem nichts, das die App wieder oeffnet - sie war nach einem verlorenen Rennen einfach zu.
+                call :log "Abbruch: alte Fassung (PID %%PID%%) konnte nicht bestaetigt werden - alte Fassung wird erneut gestartet, nichts geaendert."
+                start "" /d "%%APPDIR%%" "%%APPDIR%%\\%10$s"
                 call :cleanup
                 exit /b 1
 
@@ -485,26 +496,42 @@ public final class UpdateApply {
 
                 rem alten Ordner beiseite legen, bevor irgendetwas Neues an seine Stelle kommt
                 ren "%%APPDIR%%" "%%NAME%%.old"
-                if errorlevel 1 (
+                rem 4. Review-Nachtrag, Blocker 6 (kritisch): errorlevel nach "ren" ist NICHT
+                rem zuverlaessig genug, um sich allein darauf zu verlassen - bleibt es in manchen
+                rem Umgebungen bei 0, obwohl ren in Wahrheit nichts getan hat, faellt der Tausch
+                rem unten geradewegs in "move" - und move verschiebt den neuen Ordner dann HINEIN in
+                rem den immer noch vorhandenen alten (Windows-Semantik "Ziel existiert bereits als
+                rem Ordner"), meldet selbst wieder Erfolg, und der Nutzer hat ein stilles Nicht-Update
+                rem plus verschachtelten Muell. Der einzige verlaessliche Beweis: existiert %%APPDIR%%
+                rem immer noch unter seinem alten Namen, hat ren nicht gewirkt - unabhaengig davon, was
+                rem errorlevel sagt.
+                if exist "%%APPDIR%%" (
                     rem 2. Review-Nachtrag, Befund 2: der wahrscheinlichste Fehlschlag ueberhaupt - hier
                     rem stand bisher NICHTS, das die App wieder startet. %%APPDIR%% hat sich nicht
                     rem geaendert (ren ist fehlgeschlagen), die alte Fassung liegt also unveraendert dort.
                     call :log "Update fehlgeschlagen: alter Ordner liess sich nicht umbenennen - alte Fassung wird erneut gestartet."
                     rem das beiseitegeschobene .old zurueckholen - an diesem Tausch hat sich sonst nichts geaendert.
                     if exist "%%OLDPREV%%" ren "%%OLDPREV%%" "%%NAME%%.old"
-                    start "" /d "%%APPDIR%%" "%%APPDIR%%\\%s"
+                    start "" /d "%%APPDIR%%" "%%APPDIR%%\\%10$s"
                     call :cleanup
                     exit /b 1
                 )
 
                 rem den entpackten neuen Stand an die Stelle des alten schieben
                 move /y "%%NEWDIR%%" "%%APPDIR%%"
-                if errorlevel 1 (
-                    call :log "Update fehlgeschlagen: neuer Ordner liess sich nicht verschieben - alter Stand kommt zurueck."
-                    rem 2. Review-Nachtrag, Befund 4: ein gescheitertes move kann trotzdem einen
-                    rem Teilstand unter APPDIR hinterlassen (je nach Windows-Kopierstrategie) - genau wie
-                    rem im start-Fehlerzweig unten erst wegraeumen, sonst scheitert der Rueckweg am
-                    rem belegten Namen und es stehen am Ende BEIDE Ordner da.
+                rem 4. Review-Nachtrag, Blocker 6 (kritisch): auch hier nicht auf errorlevel verlassen -
+                rem existiert %%APPDIR%% zum Zeitpunkt des move schon als Ordner (siehe Kommentar oben:
+                rem genau der Fall, wenn der ren-Schritt in Wahrheit nicht gewirkt hatte), verschiebt
+                rem move %%NEWDIR%% HINEIN statt es zu ersetzen - der neue Starter liegt danach eine Ebene
+                rem zu tief (unter %%APPDIR%%\\Name-von-NEWDIR\\, nicht direkt unter %%APPDIR%%), und
+                rem errorlevel bleibt trotzdem 0. Der einzige verlaessliche Beweis fuer einen ECHTEN
+                rem Tausch: der neue Starter liegt DIREKT unter %%APPDIR%%.
+                if not exist "%%APPDIR%%\\%10$s" (
+                    call :log "Update fehlgeschlagen: neuer Ordner liess sich nicht an die richtige Stelle verschieben - alter Stand kommt zurueck."
+                    rem 2. Review-Nachtrag, Befund 4: ein gescheitertes/verschachteltes move kann trotzdem
+                    rem einen Teilstand unter APPDIR hinterlassen - genau wie im start-Fehlerzweig unten
+                    rem erst wegraeumen, sonst scheitert der Rueckweg am belegten Namen und es stehen am
+                    rem Ende BEIDE Ordner da.
                     if exist "%%APPDIR%%" rmdir /s /q "%%APPDIR%%" 2>nul
                     goto restore_old
                 )
@@ -539,7 +566,10 @@ public final class UpdateApply {
                     exit /b 1
                 )
                 ren "%%OLDDIR%%" "%%NAME%%"
-                if errorlevel 1 (
+                rem 4. Review-Nachtrag, Blocker 6: derselbe Zustands- statt Rueckgabewert-Beweis wie
+                rem beim ersten "ren" oben - existiert %%OLDDIR%% immer noch, hat das Zurueckbenennen
+                rem nicht gewirkt, unabhaengig von errorlevel.
+                if exist "%%OLDDIR%%" (
                     call :log "Update fehlgeschlagen: alter Ordner liess sich nicht zurueckbenennen - bitte von Hand pruefen."
                     call :cleanup
                     exit /b 1
@@ -548,7 +578,7 @@ public final class UpdateApply {
                 rem nach einem gescheiterten Tausch soll alles wieder genau so daliegen wie davor.
                 if exist "%%OLDPREV%%" ren "%%OLDPREV%%" "%%NAME%%.old"
                 rem alte Fassung erneut starten - ein Fehlschlag darf nie "die App ist einfach weg" bedeuten.
-                start "" /d "%%APPDIR%%" "%%APPDIR%%\\%s"
+                start "" /d "%%APPDIR%%" "%%APPDIR%%\\%10$s"
                 call :log "Alte Fassung nach fehlgeschlagenem Update erneut gestartet."
                 call :cleanup
                 exit /b 1
@@ -558,7 +588,14 @@ public final class UpdateApply {
                 rem einem eigenen, losgeloesten Prozess loeschen (Review-Befund, Aufraeumen): waehrend dieses
                 rem Skript noch laeuft, haelt cmd.exe seine eigene Datei fest. update.log liegt NICHT hier
                 rem (siehe DATADIR oben), bleibt also erhalten.
-                start "" /min cmd /c "ping -n 3 127.0.0.1 >nul & rmdir /s /q ""%%STAGING%%"" 2>nul"
+                rem 4. Review-Nachtrag, Blocker 7 (kritisch): OHNE "/d %%DATADIR%%" erbt der gestartete
+                rem cmd sein Arbeitsverzeichnis von DIESEM Skript - und das ist (siehe "cd /d %%~dp0" ganz
+                rem oben) %%STAGING%% selbst. Windows kann ein Verzeichnis nicht loeschen, das das
+                rem Arbeitsverzeichnis eines laufenden Prozesses ist - genau derselbe Grund, aus dem
+                rem dieses Skript zu Beginn in seinen eigenen Ordner wechselt, gilt hier fuer den
+                rem aufraeumenden Prozess ebenso. %%DATADIR%% existiert garantiert (siehe mkdir oben) und
+                rem ist nie der zu loeschende Ordner.
+                start "" /min /d "%%DATADIR%%" cmd /c "ping -n 3 127.0.0.1 >nul & rmdir /s /q ""%%STAGING%%"" 2>nul"
                 goto :eof
 
                 :log
