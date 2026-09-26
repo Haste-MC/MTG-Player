@@ -1,0 +1,164 @@
+name: Release
+
+# Ausloeser: ein Tag "v*" baut UND veroeffentlicht ein Release. "workflow_dispatch" baut denselben
+# Lauf von Hand OHNE Tag - dann wird nur das ZIP als Workflow-Artefakt angehaengt, kein Release
+# angelegt (Aufgabe 7, Schritt 2). So laesst sich der Bau pruefen, bevor eine Fassung tatsaechlich
+# veroeffentlicht wird - der einzige Unterschied zwischen beiden Wegen steckt ganz unten in den
+# beiden letzten Schritten.
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch: {}
+
+# GITHUB_TOKEN braucht Schreibrechte, um bei einem Tag ein Release samt Anhaengen anzulegen
+# ("gh release create" ganz unten); beim Probelauf (workflow_dispatch) wird davon nichts gebraucht.
+permissions:
+  contents: write
+
+jobs:
+  release:
+    # Nur windows-latest: jpackage baut immer nur fuer die gerade laufende Plattform, und dieses
+    # Projekt liefert bisher ausschliesslich ein Windows-Paket (Spec 2026-09-26-app-paket-design.md §10).
+    runs-on: windows-latest
+    # scripts/package.sh und scripts/trim-res.sh sind fuer Git-Bash geschrieben und darunter erprobt
+    # (siehe deren Kommentare) - ohne diese Vorgabe wuerde jeder "run"-Schritt sonst in PowerShell
+    # laufen, wo z.B. das "$#" Alter Kommandozeilen-Pruefung des package.sh-Skripts nicht gilt.
+    defaults:
+      run:
+        shell: bash
+    env:
+      # Arbeits- und Ausgabeverzeichnis fuer scripts/package.sh. "runner.temp" liefert auf
+      # windows-latest einen Windows-Laufwerkspfad (z.B. "D:\a\_temp"), keinen Git-Bash-Pfad
+      # ("/d/a/_temp") - package.sh behandelt "<Buchstabe>:..." aber schon selbst als absolut
+      # (siehe dessen Kommentar zu "ziel"), deshalb wird hier NICHT nach /d/... konvertiert.
+      ZIEL: ${{ runner.temp }}/paket
+    steps:
+      - name: Auschecken (mit Forge-Submodul)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: JDK 17 (Temurin) einrichten
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          # cache: maven cached ~/.m2/repository ueber einen Hash aller pom.xml im Checkout (Forge
+          # UND bridge/) - ohne das laedt jeder Lauf Forges komplette Abhaengigkeiten neu herunter
+          # und dauert unnoetig lange (Aufgabenstellung).
+          cache: maven
+
+      - name: Node einrichten
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Forge bauen (installiert 2.0.14-mtgplayer nach ~/.m2, wie im README beschrieben)
+        working-directory: forge
+        run: mvn -q -pl forge-gui -am install -DskipTests -Dcheckstyle.skip -Dmaven.javadoc.skip=true
+
+      - name: Web-UI bauen
+        working-directory: web
+        run: |
+          npm ci
+          npm run build
+
+      # Kein eigener "Bridge bauen"-Schritt hier: scripts/package.sh baut die Bridge (mvn package)
+      # und sammelt ihre Abhaengigkeiten bereits selbst als ersten eigenen Schritt (siehe dessen
+      # Kommentar "1. Bridge-Jar und Abhaengigkeiten sammeln") - ein zweiter Bau hier waere doppelte
+      # Arbeit.
+
+      - name: Fassung bestimmen
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            # Kein Tag vorhanden (Probelauf) - jpackage verlangt trotzdem eine rein numerische
+            # Punktfassung fuer --app-version. Die fortlaufende Workflow-Lauf-Nummer haelt sie
+            # eindeutig und zugleich klar erkennbar als "kein echtes Release".
+            echo "value=0.0.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+          else
+            # v1.2.0 -> 1.2.0: package.sh, version.txt und der Update-Weg (Version.isNewer) erwarten
+            # die Fassung durchgehend ohne fuehrendes "v".
+            echo "value=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Paket bauen (res ausduennen, jpackage-Abbild erzeugen)
+        run: scripts/package.sh "${{ steps.version.outputs.value }}" "$ZIEL"
+
+      - name: Fassung ins Jar-Manifest eintragen
+        env:
+          VERSION: ${{ steps.version.outputs.value }}
+        run: |
+          # package.sh selbst baut den Bridge-Jar per "mvn package" ohne die hier uebergebene
+          # App-Fassung (der Dateiname traegt weiter bridge/pom.xml's eigene Maven-Version, siehe
+          # package.sh-Kommentar dazu) - version.txt hat package.sh schon geschrieben, hier fehlt nur
+          # noch das Jar-Manifest, das Version.java als zweite Quelle liest. "jar ufm" haengt
+          # Implementation-Version nachtraeglich an den bereits im Paket-Abbild liegenden Jar an,
+          # ohne package.sh selbst anzufassen oder neu zu bauen (das app-image steht schon).
+          jar_pfad="$(find "$ZIEL/image/MTG-Player/app" -maxdepth 1 -name 'bridge-*.jar' \
+              ! -name '*-sources.jar' ! -name '*-javadoc.jar' | head -n1)"
+          if [ -z "$jar_pfad" ]; then
+            echo "release.yml: kein bridge-*.jar unter $ZIEL/image/MTG-Player/app gefunden" >&2
+            exit 1
+          fi
+          printf 'Implementation-Version: %s\n' "$VERSION" > "$RUNNER_TEMP/manifest-zusatz.txt"
+          jar ufm "$jar_pfad" "$RUNNER_TEMP/manifest-zusatz.txt"
+
+      - name: ZIP packen (genau ein oberster Ordner, siehe UpdateApply.singleTopLevelDir)
+        shell: pwsh
+        env:
+          VERSION: ${{ steps.version.outputs.value }}
+        run: |
+          # Compress-Archive nimmt bei einem Ordnerpfad (statt "Ordner\*") den Ordner selbst als
+          # einzigen obersten Eintrag mit ins ZIP - der Update-Weg entpackt und verlangt genau EINEN
+          # obersten Ordner (siehe UpdateApply.singleTopLevelDir), und ein Mitspieler soll beim
+          # Handentpacken einen Ordner "MTG-Player" sehen, keinen losen Dateihaufen.
+          $zipName = "MTG-Player-$env:VERSION-win.zip"
+          $zipPath = Join-Path $env:ZIEL $zipName
+          Compress-Archive -Path (Join-Path $env:ZIEL 'image/MTG-Player') -DestinationPath $zipPath
+          echo "ZIP_PATH=$zipPath" >> $env:GITHUB_ENV
+          echo "ZIP_NAME=$zipName" >> $env:GITHUB_ENV
+
+      - name: Pruefsumme schreiben
+        shell: pwsh
+        run: |
+          # Format von "sha256sum" ("<hash>  <dateiname>", zwei Leerzeichen: Trennzeichen plus
+          # Textmodus-Marker) - UpdateCheck.shaFromAsset liest das Release-Asset SHA256SUMS genau so.
+          $hash = (Get-FileHash -Algorithm SHA256 -Path $env:ZIP_PATH).Hash.ToLower()
+          $shaPath = Join-Path $env:RUNNER_TEMP 'SHA256SUMS'
+          "$hash  $env:ZIP_NAME" | Out-File -FilePath $shaPath -Encoding ascii
+          echo "SHA_PATH=$shaPath" >> $env:GITHUB_ENV
+          echo "SHA256=$hash" >> $env:GITHUB_ENV
+
+      - name: Probelauf - ZIP und Pruefsumme nur als Workflow-Artefakt anhaengen
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ZIP_NAME }}
+          path: |
+            ${{ env.ZIP_PATH }}
+            ${{ env.SHA_PATH }}
+          retention-days: 14
+
+      - name: Freigabetext schreiben (Pruefsumme auch als Text-Rueckfall, siehe UpdateCheck.shaFromBody)
+        if: github.event_name != 'workflow_dispatch'
+        run: |
+          cat > "$RUNNER_TEMP/notes.md" <<EOF
+          SHA-256 von \`$ZIP_NAME\` (liegt auch als eigenes Anhaengsel \`SHA256SUMS\` bei):
+
+          \`$SHA256  $ZIP_NAME\`
+          EOF
+          echo "NOTES_PATH=$RUNNER_TEMP/notes.md" >> "$GITHUB_ENV"
+
+      - name: Release anlegen und ZIP + Pruefsumme anhaengen
+        if: github.event_name != 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            "$ZIP_PATH" "$SHA_PATH" \
+            --title "MTG-Player ${{ steps.version.outputs.value }}" \
+            --notes-file "$NOTES_PATH"
