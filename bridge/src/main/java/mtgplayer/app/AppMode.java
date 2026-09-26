@@ -1,6 +1,7 @@
 package mtgplayer.app;
 
 import java.awt.Desktop;
+import java.awt.GraphicsEnvironment;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.URI;
@@ -9,6 +10,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
+import javax.swing.JOptionPane;
 
 /**
  * App-Modus fuer die herunterladbare Windows-Version (Zip zum Entpacken, Doppelklick, kein
@@ -78,8 +80,22 @@ public final class AppMode {
         try {
             Desktop.getDesktop().browse(URI.create(url));
         } catch (Exception fehlgeschlagen) {
-            System.out.println("Kein Fenster geoeffnet - bitte " + url + " im Browser oeffnen ("
-                    + fehlgeschlagen.getMessage() + ")");
+            // Review-Befund, Punkt 4: der gepackte Starter ist ein Fenster-Programm ohne Konsole -
+            // eine blosse println landet im Nichts, der Nutzer saehe niemals ein Fenster UND nie
+            // diese Meldung. Die Adresse steht deshalb zusaetzlich in einem Dialog, damit sie sich
+            // von Hand in einen Browser eintippen laesst.
+            //
+            // Eigener Probelauf (Blocker 3, Linux-Abbild): GENAU dieser Zweig hier haengt main() an
+            // JOptionPane fest, bis jemand den Dialog wegklickt - in main() steht {@link #openWindow}
+            // (nach der Umkehr aus Blocker 3) VOR ForgeBoot.init(), ein blockierender Aufruf hier wuerde
+            // also das Kartenladen (und damit die ganze App) auf diesen einen Klick warten lassen, statt
+            // im Hintergrund weiterzumachen - genau das Gegenteil dessen, was Blocker 3 erreichen soll.
+            // Der Dialog laeuft deshalb in einem eigenen Thread: er erscheint, sobald AWT dazu kommt,
+            // haelt aber niemanden auf.
+            String meldung = "Kein Fenster geoeffnet - bitte " + url + " im Browser oeffnen ("
+                    + fehlgeschlagen.getMessage() + ")";
+            System.out.println(meldung);
+            dialogAsync(meldung, JOptionPane.INFORMATION_MESSAGE);
         }
     }
 
@@ -132,5 +148,43 @@ public final class AppMode {
                     + aufraeumenFehlgeschlagen.getMessage());
         }
         return null;
+    }
+
+    /**
+     * Zeigt einen Abbruchgrund als Dialog (Review-Befund, Punkt 4): der gepackte Starter ist ein
+     * Fenster-Programm ohne Konsole, {@code System.err} geht ins Nichts - wer nach {@code C:\Programme}
+     * entpackt, saehe die (korrekt anschlagende) Schreibpruefung nie, nur ein Fenster, das nicht kommt.
+     * Deshalb fuer jeden Abbruchgrund im App-Modus verwendet: Schreibpruefung, kein freier Port,
+     * Fenster liess sich nicht oeffnen (siehe {@link #openWindow}).
+     *
+     * <p>Schreibt IMMER zusaetzlich auf {@code System.err} (falls doch eine Konsole dranhaengt, z. B.
+     * beim Aufruf aus einer cmd) und ueberspringt den Dialog in einer headless-Umgebung (Tests, CI) -
+     * dort wuerde {@link JOptionPane} sonst mit einer {@code HeadlessException} abstuerzen, obwohl der
+     * Abbruch selbst korrekt war.</p>
+     */
+    public static void showFatalError(String message) {
+        System.err.println(message);
+        dialog(message, JOptionPane.ERROR_MESSAGE);
+    }
+
+    private static void dialog(String message, int type) {
+        if (GraphicsEnvironment.isHeadless()) {
+            return;
+        }
+        try {
+            JOptionPane.showMessageDialog(null, message, "MTG-Player", type);
+        } catch (RuntimeException keinDialogMoeglich) {
+            // bestmoeglich - kein Dialog ist kein Grund, den eigentlichen Abbruch scheitern zu lassen
+        }
+    }
+
+    /** Wie {@link #dialog}, aber auf einem eigenen Thread (siehe Kommentar in {@link #openWindow}): fuer
+     *  einen Abbruchgrund, nach dem main() ohnehin gleich zurueckkehrt (Schreibpruefung, kein freier
+     *  Port), ist Blockieren gewollt - fuer die reine Fenster-Fallback-Meldung waere es das nicht, die
+     *  App soll trotzdem ganz normal weiter hochfahren (Kartenladen, WebSocket). */
+    private static void dialogAsync(String message, int type) {
+        Thread t = new Thread(() -> dialog(message, type), "app-mode-dialog");
+        t.setDaemon(true);
+        t.start();
     }
 }
