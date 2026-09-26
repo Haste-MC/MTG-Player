@@ -1,5 +1,6 @@
 package mtgplayer.app;
 
+import mtgplayer.forge.ForgeBoot;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -18,34 +19,60 @@ import java.util.zip.ZipOutputStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Aufgabe 5 (App-Paket, Spec §5): Update anwenden - herunterladen, Pruefsumme, entpacken, Skript
- * schreiben. Wie {@link UpdateCheckTest}/{@link mtgplayer.decks.Edhrec}: der Abruf ist eine
- * eingesetzte Funktion (URL -&gt; Bytes), kein Test geht ins Netz. Jeder Zwischenordner entsteht
- * unter einem eigenen {@code tempDir} (nie das echte {@code %TEMP%}) - das ist die einzige Naht, ueber
- * die diese Tests je etwas ausserhalb ihres {@code @TempDir} anfassen wuerden, und sie zeigt hier immer
- * auf ein Unterverzeichnis des {@code @TempDir}.
+ * schreiben. Wie {@link UpdateCheckTest}/{@link mtgplayer.decks.Edhrec}: der Abruf ist eine eingesetzte
+ * Funktion (URL -&gt; Bytes), kein Test geht ins Netz. Jeder Zwischenordner entsteht unter einem
+ * eigenen {@code tempDir} (nie das echte {@code %TEMP%}) - das ist die einzige Naht, ueber die diese
+ * Tests je etwas ausserhalb ihres {@code @TempDir} anfassen wuerden, und sie zeigt hier immer auf ein
+ * Unterverzeichnis des {@code @TempDir}.
+ *
+ * <p>Review-Nachtrag: das echte Release-ZIP traegt selbst einen einzigen obersten Ordner (Aufgabe 7
+ * baut es so) - jede Fixture hier bildet das nach ({@link #zip} nimmt den obersten Ordnernamen als
+ * ersten Teil jedes Eintragspfads).</p>
  */
 class UpdateApplyTest {
 
     private static final String URL = "https://github.com/Haste-MC/MTG-Player/releases/download/v1.3.0/MTG-Player-1.3.0-win.zip";
-    private static final String MARKER_FILE = "version.txt";
-    private static final String MARKER_TEXT = "1.2.0";
+    private static final String OLD_VERSION_TEXT = "1.2.0";
 
-    /** Baut ein ZIP mit bekanntem Inhalt (ein Ordner "app" mit einer Datei drin, wie im echten Paket). */
-    private static byte[] zip(String... entryNameAndContent) throws IOException {
+    /** Baut ein ZIP mit einem einzigen obersten Ordner {@code topDir} und den angegebenen
+     *  Eintragen darunter (Name -&gt; Inhalt) - wie ein echtes Release-ZIP (Aufgabe 7). */
+    private static byte[] zip(String topDir, String... entryNameAndContent) throws IOException {
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
         try (ZipOutputStream zos = new ZipOutputStream(bos)) {
             for (int i = 0; i < entryNameAndContent.length; i += 2) {
-                zos.putNextEntry(new ZipEntry(entryNameAndContent[i]));
+                zos.putNextEntry(new ZipEntry(topDir + "/" + entryNameAndContent[i]));
                 zos.write(entryNameAndContent[i + 1].getBytes(StandardCharsets.UTF_8));
                 zos.closeEntry();
             }
         }
         return bos.toByteArray();
+    }
+
+    /** ZIP mit genau EINEM rohen Eintragsnamen (ohne den ueblichen {@code topDir}-Zusammenbau) - fuer
+     *  die Zip-Slip-Faelle, die absichtlich KEINEN normalen obersten Ordner haben. */
+    private static byte[] zipRaw(String entryName, String content) throws IOException {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        try (ZipOutputStream zos = new ZipOutputStream(bos)) {
+            zos.putNextEntry(new ZipEntry(entryName));
+            zos.write(content.getBytes(StandardCharsets.UTF_8));
+            zos.closeEntry();
+        }
+        return bos.toByteArray();
+    }
+
+    /** Ein vollstaendiges, gueltiges Paket: version.txt und der Starter liegen im obersten Ordner
+     *  (siehe {@link UpdateApply#EXE_NAME}), wie {@link UpdateApply#validateAppContent} es verlangt. */
+    private static byte[] gueltigesPaket(String topDir) throws IOException {
+        return zip(topDir,
+                "version.txt", "1.3.0",
+                UpdateApply.EXE_NAME, "starter-binaer",
+                "app/bridge.jar", "hallo-welt");
     }
 
     private static String sha256Hex(byte[] data) {
@@ -60,50 +87,66 @@ class UpdateApplyTest {
         }
     }
 
-    /** App-Ordner mit einer Markerdatei anlegen, wie ihn Version.current() bei einer echten Installation vorfindet. */
+    /** App-Ordner mit einer version.txt anlegen, wie ihn eine echte Installation vorfindet - Name mit
+     *  Leerzeichen (Review-Befund: muss auch dann funktionieren). */
     private static Path appDir(Path root) throws IOException {
-        Path dir = root.resolve("MTG-Player");
+        Path dir = root.resolve("MTG Player App");
         Files.createDirectories(dir);
-        Files.writeString(dir.resolve(MARKER_FILE), MARKER_TEXT);
+        Files.writeString(dir.resolve("version.txt"), OLD_VERSION_TEXT);
         return dir;
     }
 
     private static void assertAppDirUnveraendert(Path appDir) throws IOException {
         assertTrue(Files.isDirectory(appDir), "App-Ordner darf nicht verschwinden");
-        assertEquals(MARKER_TEXT, Files.readString(appDir.resolve(MARKER_FILE)),
+        assertEquals(OLD_VERSION_TEXT, Files.readString(appDir.resolve("version.txt")),
                 "App-Ordner darf von run() nie direkt angefasst werden - der Tausch passiert erst im Skript, nach dieser JVM");
         try (var stream = Files.list(appDir)) {
             assertEquals(1, stream.count(), "im App-Ordner darf nichts Neues aufgetaucht sein");
         }
     }
 
+    /** Sammelt beide Argumente von {@code zustand} getrennt, wie ein Aufrufer (Bridge) es taete. */
+    private static final class Protokoll {
+        final List<String> zustaende = new ArrayList<>();
+        final List<String> texte = new ArrayList<>();
+        void add(String state, String text) {
+            zustaende.add(state);
+            texte.add(text);
+        }
+    }
+
     @Test
     void erfolgEntpacktInZwischenordnerUndSchreibtSkriptMitBeidenOrdnernamen(@TempDir Path root) throws IOException {
-        byte[] content = zip("app/bridge.jar", "hallo-welt");
+        byte[] content = gueltigesPaket("MTG-Player");
         String hash = sha256Hex(content);
         UpdateCheck.Release release = new UpdateCheck.Release("1.3.0", URL, hash, "Neuigkeiten");
         Path appDir = appDir(root);
         Path tempDir = root.resolve("temp");
         Files.createDirectories(tempDir);
-        List<String> zustaende = new ArrayList<>();
+        Protokoll protokoll = new Protokoll();
         UpdateApply apply = new UpdateApply(url -> {
             assertEquals(URL, url);
             return content;
         }, tempDir);
 
-        UpdateApply.Result result = apply.run(release, appDir, zustaende::add);
+        UpdateApply.Result result = apply.run(release, appDir, protokoll::add);
 
-        assertEquals(List.of("laden", "pruefen", "entpacken", "neustart"), zustaende);
+        assertEquals(List.of("laden", "pruefen", "entpacken", "neustart"), protokoll.zustaende);
         assertTrue(result != null, "Erfolg muss das geschriebene Skript liefern");
         Path script = result.script();
         assertTrue(Files.isRegularFile(script), "update.cmd muss neben dem Zwischenordner liegen");
         assertEquals("update.cmd", script.getFileName().toString());
-        // "daneben": Skript und der entpackte Zwischenordner teilen sich denselben Elternordner.
+        // "daneben": Skript und der entpackte Zwischenordner (der ZIP-eigene oberste Ordner) teilen
+        // sich denselben Elternordner.
         Path zwischenordner = script.getParent();
-        assertTrue(Files.list(zwischenordner).anyMatch(p -> !p.equals(script) && Files.isDirectory(p)),
-                "der entpackte Zwischenordner muss neben dem Skript liegen");
-        // wirklich entpackt, nicht nur ein leerer Ordner
-        Path entpackteDatei = zwischenordner.resolve(appDir.getFileName()).resolve("app").resolve("bridge.jar");
+        List<Path> geschwister;
+        try (var stream = Files.list(zwischenordner)) {
+            geschwister = stream.toList();
+        }
+        Path entpackterOrdner = geschwister.stream()
+                .filter(p -> !p.equals(script) && Files.isDirectory(p))
+                .findFirst().orElseThrow(() -> new AssertionError("der entpackte Zwischenordner muss neben dem Skript liegen"));
+        Path entpackteDatei = entpackterOrdner.resolve("app").resolve("bridge.jar");
         assertTrue(Files.isRegularFile(entpackteDatei), "der Zip-Inhalt muss im Zwischenordner liegen");
         assertEquals("hallo-welt", Files.readString(entpackteDatei));
         // Zwischenordner ist unter dem eingesetzten tempDir, nicht irgendwo sonst
@@ -112,34 +155,47 @@ class UpdateApplyTest {
         String skriptText = Files.readString(script);
         assertTrue(skriptText.contains(appDir.toAbsolutePath().normalize().toString()),
                 "das Skript muss den Namen/Pfad des App-Ordners enthalten");
-        assertTrue(skriptText.contains(entpackteDatei.getParent().getParent().toAbsolutePath().normalize().toString()),
+        assertTrue(skriptText.contains(entpackterOrdner.toAbsolutePath().normalize().toString()),
                 "das Skript muss den Namen/Pfad des neuen (entpackten) Ordners enthalten");
+        // CRLF (Review-Befund): cmd.exe braucht Windows-Zeilenenden
+        assertTrue(skriptText.contains("\r\n"), "das Skript muss CRLF-Zeilenenden haben");
+        // Codepage (Review-Befund)
+        assertTrue(skriptText.contains("chcp 65001"));
+        // Arbeitsverzeichnis (Review-Befund, Blocker 1)
+        assertTrue(skriptText.contains("cd /d"));
         // Warteschleife auf das Prozessende, bevor irgendetwas am App-Ordner angefasst wird
         assertTrue(skriptText.toLowerCase(Locale.ROOT).contains("tasklist"),
                 "das Skript muss auf das Ende dieses Prozesses warten, bevor es den App-Ordner anfasst");
-        // Rueckweg bei einem Fehlschlag mitten im Tausch
+        assertFalse(skriptText.contains("timeout /t"), "timeout mit umgeleitetem stdin funktioniert unter ProcessBuilder nicht (Review-Befund)");
+        assertTrue(skriptText.contains("ping -n"), "die Wartepausen muessen ueber ping laufen, nicht timeout");
+        // Rueckweg bei einem Fehlschlag mitten im Tausch: zurueckbenennen UND die alte Fassung erneut starten
         assertTrue(skriptText.contains(".old"), "das Skript muss den alten Ordner vor dem Tausch beiseite legen");
-        long renCount = skriptText.lines().filter(l -> l.trim().toLowerCase(Locale.ROOT).startsWith("ren ")).count();
-        assertTrue(renCount >= 2, "es muss sowohl das Beiseitelegen als auch das Zurueckbenennen im Fehlerfall geben");
+        assertTrue(skriptText.contains(":restore_old"), "es muss einen Rueckweg geben");
+        long startCount = skriptText.lines().filter(l -> l.trim().toLowerCase(Locale.ROOT).startsWith("start \"\"")).count();
+        assertTrue(startCount >= 2, "die alte Fassung muss im Fehlerfall erneut gestartet werden, nicht nur die neue im Erfolgsfall");
+        // Aufraeumen des Zwischenordners (Review-Befund)
+        assertTrue(skriptText.contains(":cleanup"));
 
         assertAppDirUnveraendert(appDir);
     }
 
     @Test
-    void falschePruefsummeBrichtAbUndLaesstKeinenZwischenordnerZurueck(@TempDir Path root) throws IOException {
-        byte[] content = zip("app/bridge.jar", "hallo-welt");
+    void falschePruefsummeBrichtAbMitGrundUndLaesstKeinenZwischenordnerZurueck(@TempDir Path root) throws IOException {
+        byte[] content = gueltigesPaket("MTG-Player");
         String falscheHash = "0".repeat(64);
         UpdateCheck.Release release = new UpdateCheck.Release("1.3.0", URL, falscheHash, "");
         Path appDir = appDir(root);
         Path tempDir = root.resolve("temp");
         Files.createDirectories(tempDir);
-        List<String> zustaende = new ArrayList<>();
+        Protokoll protokoll = new Protokoll();
         UpdateApply apply = new UpdateApply(url -> content, tempDir);
 
-        UpdateApply.Result result = apply.run(release, appDir, zustaende::add);
+        UpdateApply.Result result = apply.run(release, appDir, protokoll::add);
 
         assertNull(result);
-        assertEquals(List.of("laden", "pruefen", "fehler"), zustaende);
+        assertEquals(List.of("laden", "pruefen", "fehler"), protokoll.zustaende);
+        assertNotNull(protokoll.texte.get(2), "der Grund darf nicht verloren gehen (Review-Befund)");
+        assertTrue(protokoll.texte.get(2).contains(falscheHash), "der Grund soll die erwartete Pruefsumme nennen");
         try (var stream = Files.list(tempDir)) {
             assertEquals(0, stream.count(), "kein Zwischenordner darf liegen bleiben");
         }
@@ -147,20 +203,21 @@ class UpdateApplyTest {
     }
 
     @Test
-    void werfendeQuelleBrichtGenausoAb(@TempDir Path root) throws IOException {
+    void werfendeQuelleBrichtGenausoAbMitGrund(@TempDir Path root) throws IOException {
         UpdateCheck.Release release = new UpdateCheck.Release("1.3.0", URL, "a".repeat(64), "");
         Path appDir = appDir(root);
         Path tempDir = root.resolve("temp");
         Files.createDirectories(tempDir);
-        List<String> zustaende = new ArrayList<>();
+        Protokoll protokoll = new Protokoll();
         UpdateApply apply = new UpdateApply(url -> {
             throw new RuntimeException("Netz kaputt");
         }, tempDir);
 
-        UpdateApply.Result result = apply.run(release, appDir, zustaende::add);
+        UpdateApply.Result result = apply.run(release, appDir, protokoll::add);
 
         assertNull(result);
-        assertEquals(List.of("laden", "fehler"), zustaende);
+        assertEquals(List.of("laden", "fehler"), protokoll.zustaende);
+        assertEquals("Netz kaputt", protokoll.texte.get(1));
         try (var stream = Files.list(tempDir)) {
             assertEquals(0, stream.count(), "kein Zwischenordner darf liegen bleiben");
         }
@@ -168,26 +225,153 @@ class UpdateApplyTest {
     }
 
     @Test
-    void zipEintragAusserhalbDesZielordnersWirdAbgelehnt(@TempDir Path root) throws IOException {
-        // Zip-Slip: ein Eintrag, der ueber ".." aus dem Zielordner hinaus zeigt, darf nie entpackt
-        // werden - genau der Fall, den die Pfadpruefung in der Spec verhindern soll.
-        byte[] content = zip("../evil.txt", "ueberschrieben");
+    void unvollstaendigesPaketOhneStarterWirdVorErfolgsmeldungAbgelehnt(@TempDir Path root) throws IOException {
+        // Kein Starter im obersten Ordner - ein kaputtes/unvollstaendiges ZIP darf nie als Erfolg gelten.
+        byte[] content = zip("MTG-Player", "version.txt", "1.3.0");
         String hash = sha256Hex(content);
         UpdateCheck.Release release = new UpdateCheck.Release("1.3.0", URL, hash, "");
         Path appDir = appDir(root);
         Path tempDir = root.resolve("temp");
         Files.createDirectories(tempDir);
-        List<String> zustaende = new ArrayList<>();
+        Protokoll protokoll = new Protokoll();
         UpdateApply apply = new UpdateApply(url -> content, tempDir);
 
-        UpdateApply.Result result = apply.run(release, appDir, zustaende::add);
+        UpdateApply.Result result = apply.run(release, appDir, protokoll::add);
 
         assertNull(result);
-        assertEquals(List.of("laden", "pruefen", "entpacken", "fehler"), zustaende);
+        assertEquals(List.of("laden", "pruefen", "entpacken", "fehler"), protokoll.zustaende);
+        assertTrue(protokoll.texte.get(3).contains(UpdateApply.EXE_NAME));
         try (var stream = Files.list(tempDir)) {
-            assertEquals(0, stream.count(), "kein Zwischenordner darf liegen bleiben, auch nicht teilweise entpackt");
+            assertEquals(0, stream.count(), "kein Zwischenordner darf liegen bleiben");
         }
-        assertFalse(Files.exists(root.resolve("evil.txt")), "der boesartige Eintrag darf nie ausserhalb landen");
         assertAppDirUnveraendert(appDir);
+    }
+
+    @Test
+    void paketOhneErkennbarenOberstenOrdnerWirdAbgelehnt(@TempDir Path root) throws IOException {
+        // Kein einzelner oberster Ordner (zwei Eintraege direkt auf oberster Ebene) - unerwartetes Paket.
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        try (ZipOutputStream zos = new ZipOutputStream(bos)) {
+            zos.putNextEntry(new ZipEntry("eins.txt"));
+            zos.write("a".getBytes(StandardCharsets.UTF_8));
+            zos.closeEntry();
+            zos.putNextEntry(new ZipEntry("zwei.txt"));
+            zos.write("b".getBytes(StandardCharsets.UTF_8));
+            zos.closeEntry();
+        }
+        byte[] content = bos.toByteArray();
+        String hash = sha256Hex(content);
+        UpdateCheck.Release release = new UpdateCheck.Release("1.3.0", URL, hash, "");
+        Path appDir = appDir(root);
+        Path tempDir = root.resolve("temp");
+        Files.createDirectories(tempDir);
+        Protokoll protokoll = new Protokoll();
+        UpdateApply apply = new UpdateApply(url -> content, tempDir);
+
+        UpdateApply.Result result = apply.run(release, appDir, protokoll::add);
+
+        assertNull(result);
+        assertEquals(List.of("laden", "pruefen", "entpacken", "fehler"), protokoll.zustaende);
+        try (var stream = Files.list(tempDir)) {
+            assertEquals(0, stream.count());
+        }
+        assertAppDirUnveraendert(appDir);
+    }
+
+    /** Review-Befund: der reine Aufloesungscheck erkennt nur ".."-Segmente, die Java als Pfad deutet -
+     *  auf Linux (Testsystem) ist "..\evil" nur ein Dateiname, kein Verzeichniswechsel. Die textuelle
+     *  Vorpruefung muss deshalb JEDEN dieser Vektoren ablehnen, unabhaengig vom Testsystem-Betriebssystem. */
+    @Test
+    void zipEintraegeMitGefaehrlichenNamenWerdenTextuellAbgelehnt(@TempDir Path root) throws IOException {
+        String[] boesartigeNamen = {
+                "../evil.txt",
+                "..\\evil.txt",
+                "C:\\evil.txt",
+                "\\evil.txt",
+                "\\\\server\\share\\evil.txt",
+        };
+        for (String name : boesartigeNamen) {
+            byte[] content = zipRaw(name, "ueberschrieben");
+            String hash = sha256Hex(content);
+            UpdateCheck.Release release = new UpdateCheck.Release("1.3.0", URL, hash, "");
+            Path appDir = appDir(root.resolve("appdir-" + Math.abs(name.hashCode())));
+            Path tempDir = root.resolve("temp-" + Math.abs(name.hashCode()));
+            Files.createDirectories(tempDir);
+            Protokoll protokoll = new Protokoll();
+            UpdateApply apply = new UpdateApply(url -> content, tempDir);
+
+            UpdateApply.Result result = apply.run(release, appDir, protokoll::add);
+
+            assertNull(result, "abgelehnt werden muss: " + name);
+            assertEquals(List.of("laden", "pruefen", "entpacken", "fehler"), protokoll.zustaende, "Zustandsfolge fuer: " + name);
+            try (var stream = Files.list(tempDir)) {
+                assertEquals(0, stream.count(), "kein Zwischenordner darf liegen bleiben fuer: " + name);
+            }
+            assertFalse(Files.exists(root.resolve("evil.txt")), "der Eintrag darf nie ausserhalb landen: " + name);
+            assertAppDirUnveraendert(appDir);
+        }
+    }
+
+    /** Review-Befund (Punkt 14): ein Eintrag mit leerem Namen oder "." loest auf den Zielordner selbst
+     *  auf und wuerde ihn durch eine Datei ersetzen - muss abgelehnt werden wie die anderen gefaehrlichen
+     *  Namen oben. */
+    @Test
+    void zipEintragMitEigenemPfadWirdAbgelehnt(@TempDir Path root) throws IOException {
+        byte[] content = zipRaw("./", "ueberschrieben");
+        String hash = sha256Hex(content);
+        UpdateCheck.Release release = new UpdateCheck.Release("1.3.0", URL, hash, "");
+        Path appDir = appDir(root);
+        Path tempDir = root.resolve("temp");
+        Files.createDirectories(tempDir);
+        Protokoll protokoll = new Protokoll();
+        UpdateApply apply = new UpdateApply(url -> content, tempDir);
+
+        UpdateApply.Result result = apply.run(release, appDir, protokoll::add);
+
+        assertNull(result);
+        assertEquals(List.of("laden", "pruefen", "entpacken", "fehler"), protokoll.zustaende);
+        try (var stream = Files.list(tempDir)) {
+            assertEquals(0, stream.count(), "kein Zwischenordner darf liegen bleiben");
+        }
+        assertAppDirUnveraendert(appDir);
+    }
+
+    @Test
+    void appOrdnerOhneVersionTxtWirdVorJedemNetzzugriffAbgelehnt(@TempDir Path root) throws IOException {
+        Path appDir = root.resolve("Kein App-Ordner");
+        Files.createDirectories(appDir);
+        // absichtlich KEIN version.txt
+        UpdateCheck.Release release = new UpdateCheck.Release("1.3.0", URL, "a".repeat(64), "");
+        Protokoll protokoll = new Protokoll();
+        UpdateApply apply = new UpdateApply(url -> {
+            throw new AssertionError("appDir-Wache muss VOR jedem Netzzugriff greifen");
+        }, root.resolve("temp"));
+
+        UpdateApply.Result result = apply.run(release, appDir, protokoll::add);
+
+        assertNull(result);
+        assertEquals(List.of("fehler"), protokoll.zustaende);
+        assertNotNull(protokoll.texte.get(0));
+        assertTrue(protokoll.texte.get(0).contains("version.txt"));
+    }
+
+    @Test
+    void appOrdnerUnterDemDatenverzeichnisWirdAbgelehnt(@TempDir Path root) throws IOException {
+        // ForgeBoot.dataDir() zeigt im Testlauf auf target/test-data (siehe bridge/pom.xml,
+        // systemPropertyVariables) - ein appDir darunter waere katastrophal (Kevins echte Daten unter
+        // ~/.mtg-player im Betrieb) und muss VOR jedem Netzzugriff abgelehnt werden.
+        Path appDir = ForgeBoot.dataDir().resolve("MTG-Player-Attrappe");
+        UpdateCheck.Release release = new UpdateCheck.Release("1.3.0", URL, "a".repeat(64), "");
+        Protokoll protokoll = new Protokoll();
+        UpdateApply apply = new UpdateApply(url -> {
+            throw new AssertionError("appDir-Wache muss VOR jedem Netzzugriff greifen");
+        }, root.resolve("temp"));
+
+        UpdateApply.Result result = apply.run(release, appDir, protokoll::add);
+
+        assertNull(result);
+        assertEquals(List.of("fehler"), protokoll.zustaende);
+        assertTrue(protokoll.texte.get(0).contains("Datenverzeichnis"));
+        assertFalse(Files.exists(appDir), "die Wache darf appDir nicht einmal anlegen");
     }
 }

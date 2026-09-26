@@ -1,5 +1,7 @@
 package mtgplayer.app;
 
+import mtgplayer.forge.ForgeBoot;
+
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.net.URI;
@@ -7,6 +9,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.FileStore;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -15,7 +18,8 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.util.Comparator;
-import java.util.function.Consumer;
+import java.util.List;
+import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
@@ -32,18 +36,28 @@ import java.util.zip.ZipInputStream;
  * nicht klappen. Deshalb steckt die ganze Tausch-Logik im geschriebenen Skript (siehe
  * {@link #writeScript}), das erst NACH dem Ende dieses Prozesses laeuft, und {@link #run} startet dieses
  * Skript selbst nicht und beendet auch nicht die JVM - beides waere hier ohnehin nicht ehrlich testbar
- * (kein Windows, kein {@code cmd.exe}) und bleibt Sache des Aufrufers (Bridge, nach einer erfolgreichen
- * "neustart"-Rueckmeldung).</p>
+ * (kein Windows, kein {@code cmd.exe}) und bleibt Sache des Aufrufers (Bridge, ueber die eingesetzte
+ * {@code UpdateLauncher}-Naht dort, nach einer erfolgreichen "neustart"-Rueckmeldung).</p>
+ *
+ * <p><b>Review-Nachtrag:</b> das Release-ZIP traegt selbst einen einzigen obersten Ordner (Aufgabe 7
+ * baut es so - fuer einen Menschen beim Handentpacken das Richtige). {@link #run} entpackt deshalb roh
+ * in einen Zwischenordner und nimmt danach GENAU diesen einen obersten Ordner als neuen App-Ordner -
+ * und prueft ihn vor jeder Erfolgsmeldung ({@link #validateAppContent}), waehrend die alte Fassung noch
+ * unveraendert laeuft.</p>
  */
 public final class UpdateApply {
 
-    /** Endung des beiseitegelegten alten Ordners, siehe {@link #writeScript}. */
+    /** Name des von jpackage erzeugten Starters im Paket (Spec §2) - fuer die Inhaltspruefung nach dem
+     *  Entpacken UND fuer den Start-Befehl im Skript. */
+    static final String EXE_NAME = "MTG-Player.exe";
+    private static final String VERSION_FILE = "version.txt";
     private static final String OLD_SUFFIX = ".old";
 
     private final Function<String, byte[]> source;
-    /** Wo der Zwischenordner entsteht - im Betrieb {@code %TEMP%}, im Test ein eigenes Verzeichnis
-     *  (siehe UpdateApplyTest: nie das echte System-Temp, damit ein Test nie ausserhalb seines
-     *  {@code @TempDir} schreibt oder aufraeumt). */
+    /** Wo der Zwischenordner BEVORZUGT entsteht - im Betrieb {@code %TEMP%}, im Test ein eigenes
+     *  Verzeichnis (siehe UpdateApplyTest/BridgeApplyUpdateTest: nie das echte System-Temp, damit ein
+     *  Test nie ausserhalb seines {@code @TempDir} schreibt oder aufraeumt). {@link #stagingParent}
+     *  weicht davon ab, wenn es auf einem anderen Laufwerk als {@code appDir} liegt. */
     private final Path tempDir;
 
     /** @param source liefert die Bytes einer URL (im Betrieb der echte Download, im Test eine
@@ -56,8 +70,10 @@ public final class UpdateApply {
         this(UpdateApply::download);
     }
 
-    /** Fuer Tests: eigener Zwischenordner statt des echten {@code %TEMP%}. */
-    UpdateApply(Function<String, byte[]> source, Path tempDir) {
+    /** Fuer Tests (auch ausserhalb dieses Pakets, siehe BridgeApplyUpdateTest): eigener Zwischenordner
+     *  statt des echten {@code %TEMP%} - oeffentlich wie {@code Edhrec(Function, Path)}, dieselbe
+     *  DI-Naht fuer denselben Zweck. */
+    public UpdateApply(Function<String, byte[]> source, Path tempDir) {
         this.source = source;
         this.tempDir = tempDir;
     }
@@ -89,7 +105,7 @@ public final class UpdateApply {
 
     /** Ergebnis eines erfolgreichen {@link #run}: {@code script} zeigt auf das geschriebene
      *  {@code update.cmd}. Bei einem Fehlschlag liefert {@link #run} {@code null} - {@code zustand}
-     *  hat dann bereits "fehler" gemeldet. */
+     *  hat dann bereits "fehler" (mit einem Grund) gemeldet. */
     public record Result(Path script) { }
 
     /**
@@ -97,42 +113,114 @@ public final class UpdateApply {
      * App-Ordner - er bleibt bei JEDEM Fehlschlag unveraendert, und auch im Erfolgsfall fasst diese
      * Methode ihn nicht an (das macht erst das Skript). Jeder Schritt meldet seinen Zustand ueber
      * {@code zustand} in der Reihenfolge "laden", "pruefen", "entpacken", "neustart" (Protokoll §6);
-     * ein Fehlschlag an jeder Stelle meldet "fehler" und raeumt einen bereits angelegten
-     * Zwischenordner wieder vollstaendig ab, statt ihn liegen zu lassen - ein halb entpacktes
-     * Verzeichnis waere beim naechsten Versuch nur Verwirrung.
+     * ein Fehlschlag an jeder Stelle meldet "fehler" MIT einem Klartextgrund (Review-Befund: falsche
+     * Pruefsumme, totes Netz und ein bösartiges ZIP muessen fuer den Nutzer unterscheidbar sein) und
+     * raeumt einen bereits angelegten Zwischenordner wieder vollstaendig ab, statt ihn liegen zu lassen.
      */
-    public Result run(UpdateCheck.Release release, Path appDir, Consumer<String> zustand) {
+    public Result run(UpdateCheck.Release release, Path appDir, BiConsumer<String, String> zustand) {
+        // Wache VOR allem anderen (Review-Befund, kritisch): appDir landet gleich in einem Skript, das
+        // diesen Ordner umbenennt und ersetzt - ein falsch abgeleiteter Pfad waere katastrophal.
+        String appDirProblem = appDirProblem(appDir);
+        if (appDirProblem != null) {
+            zustand.accept("fehler", appDirProblem);
+            return null;
+        }
+
         Path stagingRoot = null;
         try {
-            zustand.accept("laden");
+            zustand.accept("laden", null);
             byte[] zip = source.apply(release.url());
 
-            zustand.accept("pruefen");
+            zustand.accept("pruefen", null);
             String actual = sha256Hex(zip);
             if (!actual.equalsIgnoreCase(release.sha256())) {
-                zustand.accept("fehler");
+                zustand.accept("fehler", "Pruefsumme stimmt nicht: erwartet " + release.sha256()
+                        + ", erhalten " + actual);
                 return null;
             }
 
-            zustand.accept("entpacken");
-            String name = appDir.getFileName() != null ? appDir.getFileName().toString() : "MTG-Player";
-            Files.createDirectories(tempDir);
-            stagingRoot = Files.createTempDirectory(tempDir, "mtg-player-update-");
-            Path newDir = stagingRoot.resolve(name);
-            Files.createDirectories(newDir);
-            unzip(zip, newDir);
+            zustand.accept("entpacken", null);
+            Path stagingParent = stagingParent(appDir);
+            Files.createDirectories(stagingParent);
+            stagingRoot = Files.createTempDirectory(stagingParent, "mtg-player-update-");
+            unzip(zip, stagingRoot);
+            // Das ZIP traegt selbst einen obersten Ordner (Aufgabe 7) - genau der ist der neue App-Ordner.
+            Path newDir = singleTopLevelDir(stagingRoot);
+            // Vor jeder Erfolgsmeldung pruefen, dass darin wirklich eine App steckt - waehrend die alte
+            // Fassung noch unveraendert laeuft, nicht erst wenn das Skript den alten Ordner schon
+            // umbenannt hat.
+            validateAppContent(newDir);
 
+            String name = appDir.getFileName() != null ? appDir.getFileName().toString() : "MTG-Player";
             Path script = writeScript(stagingRoot, appDir, newDir, name);
 
-            zustand.accept("neustart");
+            zustand.accept("neustart", null);
             return new Result(script);
-        } catch (IOException | RuntimeException scheitert) {
-            zustand.accept("fehler");
+        } catch (IOException | RuntimeException | OutOfMemoryError scheitert) {
+            // OutOfMemoryError extra (Review-Befund): das ZIP liegt komplett im Speicher, ein zu grosser
+            // Download darf den Hintergrund-Thread nicht wortlos sterben lassen - die Lobby wuerde sonst
+            // fuer immer auf "laden" haengen.
+            zustand.accept("fehler", reasonOf(scheitert));
             if (stagingRoot != null) {
                 deleteTree(stagingRoot);
             }
             return null;
         }
+    }
+
+    /** Klartextgrund fuer {@code zustand}, statt ihn (Review-Befund) stillschweigend wegzuwerfen. */
+    private static String reasonOf(Throwable t) {
+        String msg = t.getMessage();
+        return msg != null && !msg.isBlank() ? msg : t.getClass().getSimpleName();
+    }
+
+    /**
+     * Zwei Bedingungen, BEVOR ueberhaupt etwas passiert (Review-Befund, kritisch): {@code appDir} darf
+     * nicht unter dem Datenverzeichnis ({@code ~/.mtg-player}, siehe {@link ForgeBoot#dataDir()})
+     * liegen, und {@code version.txt} muss wirklich darin liegen - ein Ordner ohne {@code version.txt}
+     * sieht nicht wie eine echte Installation aus. Heute schuetzt uns dafuer nur der Zufall, dass
+     * {@link Version#current()} in einer Entwicklungsumgebung {@value Version#DEV} liefert und
+     * {@code Bridge.checkVersion()} dann gar nicht erst fragt - diese Wache gilt unabhaengig davon.
+     *
+     * @return eine Fehlermeldung, oder {@code null} wenn appDir in Ordnung ist
+     */
+    private static String appDirProblem(Path appDir) {
+        Path abs = appDir.toAbsolutePath().normalize();
+        Path data = ForgeBoot.dataDir().toAbsolutePath().normalize();
+        if (abs.equals(data) || abs.startsWith(data)) {
+            return "App-Ordner " + abs + " liegt unter dem Datenverzeichnis " + data + " - Abbruch vor jeder Aenderung.";
+        }
+        if (!Files.isRegularFile(abs.resolve(VERSION_FILE))) {
+            return "App-Ordner " + abs + " enthaelt kein " + VERSION_FILE + " - sieht nicht wie eine echte Installation aus.";
+        }
+        return null;
+    }
+
+    /**
+     * Wo der Zwischenordner entsteht: bevorzugt {@link #tempDir} (im Betrieb {@code %TEMP%}), aber nur
+     * wenn er auf demselben Laufwerk/Dateisystem liegt wie {@code appDir} - sonst scheitert das
+     * {@code move} im Skript IMMER (Review-Befund: App auf {@code D:}, TEMP auf {@code C:}, Windows
+     * kann Ordner nicht laufwerksuebergreifend umbenennen/verschieben). Dann stattdessen der
+     * Elternordner von {@code appDir} selbst - immer noch NICHT der App-Ordner selbst (das Skript liegt
+     * nie darin, siehe {@link #writeScript}), aber garantiert dasselbe Laufwerk.
+     */
+    private Path stagingParent(Path appDir) throws IOException {
+        try {
+            Files.createDirectories(tempDir);
+            FileStore tempStore = Files.getFileStore(tempDir);
+            FileStore appStore = Files.getFileStore(appDir);
+            if (tempStore.equals(appStore)) {
+                return tempDir;
+            }
+        } catch (IOException ignore) {
+            // Vergleich nicht moeglich (z.B. tempDir liess sich nicht anlegen) - im Zweifel die
+            // Variante unten, die garantiert auf demselben Laufwerk wie appDir liegt.
+        }
+        Path parent = appDir.getParent();
+        if (parent == null) {
+            throw new IOException("App-Ordner " + appDir + " hat keinen Elternordner");
+        }
+        return parent;
     }
 
     private static String sha256Hex(byte[] data) {
@@ -151,19 +239,23 @@ public final class UpdateApply {
     }
 
     /**
-     * Entpackt {@code zip} nach {@code targetDir}. Jeder Eintragspfad wird gegen {@code targetDir}
-     * geprueft (aufgeloest UND normalisiert): ein ZIP aus dem Netz wird nie blind entpackt, ein
-     * Eintrag wie {@code ../../evil.txt} darf niemals ausserhalb des Zielordners landen (Zip-Slip).
-     * Das ist keine theoretische Vorsicht - genau dafuer steht diese Pruefung in der Spec.
+     * Entpackt {@code zip} roh nach {@code targetDir} (die eigentliche Ordnersuche/-pruefung passiert
+     * danach in {@link #singleTopLevelDir}/{@link #validateAppContent}). Jeder Eintragspfad wird ZWEI
+     * Mal geprueft: zuerst textuell ({@link #validateEntryName}, plattformunabhaengig), dann nach der
+     * Aufloesung gegen {@code targetDir} - ein ZIP aus dem Netz wird nie blind entpackt, ein Eintrag wie
+     * {@code ../../evil.txt} darf niemals ausserhalb des Zielordners landen (Zip-Slip). Das ist keine
+     * theoretische Vorsicht - genau dafuer steht diese Pruefung in der Spec.
      */
     private static void unzip(byte[] zip, Path targetDir) throws IOException {
         Path targetAbs = targetDir.toAbsolutePath().normalize();
         try (ZipInputStream zis = new ZipInputStream(new ByteArrayInputStream(zip))) {
             ZipEntry entry;
             while ((entry = zis.getNextEntry()) != null) {
-                Path out = targetAbs.resolve(entry.getName()).normalize();
+                String rawName = entry.getName();
+                validateEntryName(rawName);
+                Path out = targetAbs.resolve(rawName).normalize();
                 if (!out.startsWith(targetAbs)) {
-                    throw new IOException("ZIP-Eintrag ausserhalb des Zielordners: " + entry.getName());
+                    throw new IOException("ZIP-Eintrag ausserhalb des Zielordners: " + rawName);
                 }
                 if (entry.isDirectory()) {
                     Files.createDirectories(out);
@@ -178,51 +270,144 @@ public final class UpdateApply {
     }
 
     /**
+     * Textuelle Vorpruefung VOR jeder Pfadaufloesung (Review-Befund): die reine Aufloesungspruefung in
+     * {@link #unzip} erkennt nur ".."-Segmente, die Java als Pfad DEUTET - auf Linux (Testsystem) ist
+     * {@code ..\evil} nur ein Dateiname mit Backslash darin, kein Verzeichniswechsel, waehrend genau
+     * dieser Eintrag auf Windows (Produktivsystem) sehr wohl aus dem Zielordner fuehrt. Lehnt deshalb
+     * JEDEN Eintrag ab, der einen Backslash, einen Doppelpunkt (Laufwerksbuchstabe wie {@code C:}), einen
+     * fuehrenden Slash (absoluter Pfad) oder ein ".."-Segment enthaelt - unabhaengig vom
+     * Testsystem-Betriebssystem. Ein leerer Name oder {@code "."} wuerde sonst auf den Zielordner selbst
+     * aufloesen und ihn durch eine Datei ersetzen.
+     */
+    private static void validateEntryName(String name) throws IOException {
+        if (name == null || name.isBlank() || name.equals(".") || name.equals("./")) {
+            throw new IOException("ZIP-Eintrag mit leerem/eigenem Pfad: \"" + name + "\"");
+        }
+        if (name.startsWith("/")) {
+            throw new IOException("ZIP-Eintrag mit absolutem Pfad: " + name);
+        }
+        if (name.contains("\\")) {
+            throw new IOException("ZIP-Eintrag mit Backslash im Namen: " + name);
+        }
+        if (name.contains(":")) {
+            throw new IOException("ZIP-Eintrag mit Laufwerksangabe: " + name);
+        }
+        for (String segment : name.split("/")) {
+            if (segment.equals("..")) {
+                throw new IOException("ZIP-Eintrag mit \"..\"-Segment: " + name);
+            }
+        }
+    }
+
+    /**
+     * Das Release-ZIP enthaelt selbst einen einzelnen obersten Ordner (Aufgabe 7 baut es so - fuer
+     * einen Menschen beim Handentpacken das Richtige). Genau dieser Ordner ist der neue App-Ordner;
+     * alles andere (kein Ordner, mehrere, eine lose Datei obendrauf) ist ein unerwartetes Paket.
+     */
+    private static Path singleTopLevelDir(Path stagingRoot) throws IOException {
+        List<Path> entries;
+        try (var stream = Files.list(stagingRoot)) {
+            entries = stream.toList();
+        }
+        if (entries.size() != 1 || !Files.isDirectory(entries.get(0))) {
+            throw new IOException("ZIP enthaelt nicht genau einen obersten Ordner (" + entries.size() + " Eintraege oben)");
+        }
+        return entries.get(0);
+    }
+
+    /**
+     * Vor jeder Erfolgsmeldung (Review-Befund, kritisch): steckt im entpackten Ordner ueberhaupt eine
+     * App? Ein kaputtes/unvollstaendiges Release-ZIP soll VOR dem Schreiben des Tauschskripts als
+     * "fehler" enden, waehrend die alte Fassung noch unveraendert laeuft - nicht erst beim Tausch
+     * selbst auffallen, wenn der alte Ordner schon umbenannt ist.
+     */
+    private static void validateAppContent(Path newDir) throws IOException {
+        if (!Files.isRegularFile(newDir.resolve(VERSION_FILE))) {
+            throw new IOException("entpackter Ordner enthaelt kein " + VERSION_FILE);
+        }
+        if (!Files.isRegularFile(newDir.resolve(EXE_NAME))) {
+            throw new IOException("entpackter Ordner enthaelt keinen Starter (" + EXE_NAME + ")");
+        }
+    }
+
+    /**
      * Schreibt {@code update.cmd} neben den entpackten Zwischenordner (beide teilen sich
-     * {@code stagingRoot}). Reihenfolge im Skript ist die Sicherheit (Spec §5): erst wartet es, bis
-     * dieser Prozess (per PID) wirklich beendet ist - vorher haelt Windows die eigenen Dateien fest -,
-     * dann legt es den alten App-Ordner als {@code <Name>.old} beiseite, schiebt den neuen an seine
-     * Stelle, startet die neue Fassung und loescht {@code .old} erst NACH dem erfolgreichen Start.
-     * Scheitert ein Schritt, benennt es zurueck statt einen halb ausgetauschten Ordner zu hinterlassen.
+     * {@code stagingRoot}). Reihenfolge im Skript ist die Sicherheit (Spec §5): erst bestaetigt es,
+     * dass dieser Prozess (per PID) wirklich lief und dann beendet ist - vorher haelt Windows die
+     * eigenen Dateien fest -, dann legt es den alten App-Ordner als {@code <Name>.old} beiseite,
+     * schiebt den neuen an seine Stelle, startet die neue Fassung und loescht {@code .old} erst NACH
+     * dem erfolgreichen Start. Scheitert ein Schritt, benennt es zurueck UND startet die alte Fassung
+     * erneut (Review-Befund: sonst ist die App nach einem Fehlschlag einfach weg) - nie beide Ordner
+     * gleichzeitig stehen lassen.
      */
     private static Path writeScript(Path stagingRoot, Path appDir, Path newDir, String name) throws IOException {
         Path script = stagingRoot.resolve("update.cmd");
         long pid = ProcessHandle.current().pid();
         String appAbs = appDir.toAbsolutePath().normalize().toString();
         String newAbs = newDir.toAbsolutePath().normalize().toString();
+        String stagingAbs = stagingRoot.toAbsolutePath().normalize().toString();
         // ren benennt IMMER innerhalb desselben Elternordners um - der volle Pfad des beiseitegelegten
         // Ordners ist deshalb einfach der Nachbar von appDir mit der Endung ".old". Das hier in Java
-        // auszurechnen (statt im Batch mit %~dp/%~nx zu hantieren) haelt das Skript selbst simpel:
-        // reines ren/move mit fest eingesetzten Namen, ohne Batch-Pfadmagie, die sich hier nicht testen liesse.
+        // auszurechnen (statt im Batch mit %~dp/%~nx zu hantieren) haelt das Skript selbst simpel.
         String oldAbs = appDir.resolveSibling(name + OLD_SUFFIX).toAbsolutePath().normalize().toString();
 
         String content = """
                 @echo off
+                rem UTF-8-Codepage (Review-Befund): sonst verstuemmelt ein Pfad mit Umlaut (z.B. "Buero")
+                rem die Ordnervariablen unten und jeder Vergleich/ren/move darauf scheitert.
+                chcp 65001 >nul
                 setlocal
-
-                rem Aufgabe 5 (App-Paket): dieses Skript liegt bewusst in %%TEMP%%, nicht im App-Ordner -
-                rem sonst wuerde es den Ordner tauschen wollen, in dem es selbst liegt, und Windows haelt
-                rem seine eigene .cmd-Datei fest, solange sie laeuft.
+                rem Arbeitsverzeichnis auf den eigenen Ordner setzen (Review-Befund, Blocker 1): ohne dieses
+                rem cd erbt cmd.exe sonst den App-Ordner als Arbeitsverzeichnis (ProcessBuilder setzt keins),
+                rem und Windows kann ein Verzeichnis nicht umbenennen, das das Arbeitsverzeichnis eines
+                rem laufenden Prozesses ist - "ren" wuerde scheitern, ohne dass jemand sieht warum.
+                cd /d "%%~dp0"
 
                 set "PID=%d"
                 set "NAME=%s"
                 set "APPDIR=%s"
                 set "NEWDIR=%s"
                 set "OLDDIR=%s"
+                set "STAGING=%s"
 
-                rem Erst warten, bis die alte MTG-Player.exe wirklich beendet ist - vorher haelt Windows
-                rem ihre Jars/die exe selbst fest, ein Umbenennen wuerde fehlschlagen.
+                rem Erst bestaetigen, dass die alte MTG-Player.exe wirklich gesehen wurde (tasklist koennte
+                rem beim allerersten Versuch aus Zeitgruenden noch nichts liefern) - erst DANACH gilt "nicht
+                rem mehr gefunden" als Beweis, dass der Prozess wirklich beendet ist. Beide Schleifen sind
+                rem begrenzt, damit ein dauerhaft haengender tasklist-Aufruf nicht ewig blockiert.
+                set "SEEN=0"
+                set "TRIES=0"
+                :confirmloop
+                tasklist /fi "PID eq %%PID%%" 2>nul | find "%%PID%%" >nul
+                if errorlevel 1 goto confirmnotfound
+                set "SEEN=1"
+                goto waitstart
+                :confirmnotfound
+                set /a TRIES=%%TRIES%%+1
+                if %%TRIES%% GEQ 5 goto waitstart
+                ping -n 2 127.0.0.1 >nul
+                goto confirmloop
+
+                :waitstart
+                if not "%%SEEN%%"=="1" goto waitdone
+                set "TRIES=0"
                 :waitloop
                 tasklist /fi "PID eq %%PID%%" 2>nul | find "%%PID%%" >nul
-                if not errorlevel 1 (
-                    timeout /t 1 /nobreak >nul
-                    goto waitloop
-                )
+                if errorlevel 1 goto waitdone
+                set /a TRIES=%%TRIES%%+1
+                if %%TRIES%% GEQ 300 goto waitdone
+                ping -n 2 127.0.0.1 >nul
+                goto waitloop
+                :waitdone
+
+                rem Ein liegengebliebener .old-Ordner aus einem abgebrochenen frueheren Versuch darf
+                rem kuenftige Updates nicht dauerhaft blockieren - bestmoeglich aufraeumen, bevor umbenannt wird.
+                if exist "%%OLDDIR%%" rmdir /s /q "%%OLDDIR%%" 2>nul
 
                 rem alten Ordner beiseite legen, bevor irgendetwas Neues an seine Stelle kommt
                 ren "%%APPDIR%%" "%%NAME%%.old"
                 if errorlevel 1 (
                     echo Update fehlgeschlagen: alter Ordner liess sich nicht umbenennen.
+                    call :cleanup
                     exit /b 1
                 )
 
@@ -230,30 +415,57 @@ public final class UpdateApply {
                 move /y "%%NEWDIR%%" "%%APPDIR%%"
                 if errorlevel 1 (
                     echo Update fehlgeschlagen: neuer Ordner liess sich nicht verschieben - alter Stand kommt zurueck.
-                    ren "%%OLDDIR%%" "%%NAME%%"
-                    exit /b 1
+                    goto restore_old
                 )
 
                 rem die neue Fassung starten
-                start "" "%%APPDIR%%\\MTG-Player.exe"
+                start "" "%%APPDIR%%\\%s"
                 if errorlevel 1 (
                     echo Update fehlgeschlagen: neue Fassung startet nicht - alter Stand kommt zurueck.
-                    rmdir /s /q "%%APPDIR%%" 2>nul
-                    ren "%%OLDDIR%%" "%%NAME%%"
-                    exit /b 1
+                    if exist "%%APPDIR%%" rmdir /s /q "%%APPDIR%%" 2>nul
+                    goto restore_old
                 )
 
                 rem Erfolg: der alte Stand wird nicht mehr gebraucht
                 rmdir /s /q "%%OLDDIR%%" 2>nul
-
+                call :cleanup
                 exit /b 0
-                """.formatted(pid, name, appAbs, newAbs, oldAbs);
-        Files.writeString(script, content, StandardCharsets.UTF_8);
+
+                :restore_old
+                rem Bestmoegliche Wiederherstellung (Review-Befund, Blocker 2): scheitert das Zurueckbenennen
+                rem ebenfalls, existieren NICHT beide Ordner gleichzeitig weiter, sondern das Skript bricht
+                rem mit einer klaren Meldung ab, statt den verbotenen Zustand still zu hinterlassen.
+                if exist "%%APPDIR%%" (
+                    echo Update fehlgeschlagen: %%APPDIR%% ist noch belegt - Wiederherstellung nicht moeglich, bitte von Hand pruefen.
+                    call :cleanup
+                    exit /b 1
+                )
+                ren "%%OLDDIR%%" "%%NAME%%"
+                if errorlevel 1 (
+                    echo Update fehlgeschlagen: alter Ordner liess sich nicht zurueckbenennen - bitte von Hand pruefen.
+                    call :cleanup
+                    exit /b 1
+                )
+                rem alte Fassung erneut starten - ein Fehlschlag darf nie "die App ist einfach weg" bedeuten.
+                start "" "%%APPDIR%%\\%s"
+                call :cleanup
+                exit /b 1
+
+                :cleanup
+                rem Den eigenen Zwischenordner (samt dieses Skripts) erst nach einer kurzen Verzoegerung in
+                rem einem eigenen, losgeloesten Prozess loeschen (Review-Befund, Aufraeumen): waehrend dieses
+                rem Skript noch laeuft, haelt cmd.exe seine eigene Datei fest.
+                start "" /min cmd /c "ping -n 3 127.0.0.1 >nul & rmdir /s /q ""%%STAGING%%"" 2>nul"
+                goto :eof
+                """.formatted(pid, name, appAbs, newAbs, oldAbs, stagingAbs, EXE_NAME, EXE_NAME);
+        // cmd.exe braucht CRLF-Zeilenenden (Review-Befund) - der Text-Block liefert reines "\n", sonst
+        // brechen goto-Spruenge und die geklammerten if-Bloecke auf Windows.
+        Files.writeString(script, content.replace("\n", "\r\n"), StandardCharsets.UTF_8);
         return script;
     }
 
-    /** Raeumt einen bereits angelegten Zwischenordner nach einem Fehlschlag vollstaendig ab - er
-     *  liegt IMMER unter {@link #tempDir} (siehe {@link #run}), nie irgendwo sonst. */
+    /** Raeumt einen bereits angelegten Zwischenordner nach einem Fehlschlag vollstaendig ab - er liegt
+     *  IMMER unter {@link #stagingParent}, nie irgendwo sonst. */
     private static void deleteTree(Path dir) {
         try (var walk = Files.walk(dir)) {
             walk.sorted(Comparator.reverseOrder()).forEach(p -> {

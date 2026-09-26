@@ -77,11 +77,24 @@ public final class Bridge {
      *  sie zusaetzlich beim (Re-)Verbinden nach, wenn sie inzwischen vorliegt. */
     private volatile Messages.VersionMsg versionMsg;
     /** App-Paket, Aufgabe 5: das erkannte Update herunterladen/pruefen/entpacken, siehe
-     *  {@link #applyUpdate()}. Anders als {@link #updateCheck} direkt real instanziert statt injiziert:
-     *  {@link UpdateApply#run} laeuft nie von selbst (anders als {@link #checkVersion()} bei jedem
-     *  {@link #start()}), sondern nur auf ein ausdrueckliches "applyUpdate" vom Client - kein
-     *  bestehender Bridge-Test schickt das, also braucht es keine Test-Sperre wie NO_UPDATE_CHECK. */
-    private final UpdateApply updateApply = new UpdateApply();
+     *  {@link #applyUpdate()}. Injiziert (Review-Nachtrag): BridgeApplyUpdateTest braucht eine eigene
+     *  Download-Quelle, um den Protokollweg ohne echtes Netz durchzuspielen. */
+    private final UpdateApply updateApply;
+    /** Woher {@link #applyUpdate()} den aktuellen App-Ordner nimmt - im Betrieb der Elternordner von
+     *  {@code assets/} ({@link ForgeBoot#assetsDir()}, wie {@code Main}/{@link Version}), im Test ein
+     *  eingesetzter Ordner (Review-Nachtrag: die appDir-Wache in {@link UpdateApply#run} muss sich
+     *  ueber das echte Protokoll pruefen lassen, nicht nur innerhalb von UpdateApplyTest). */
+    private final Supplier<Path> appDirForUpdate;
+    /**
+     * Letzter Schritt von {@link #applyUpdate()}: das geschriebene Skript starten und danach geordnet
+     * beenden. Eine eigene Schnittstelle statt direktem {@code ProcessBuilder}/{@code System.exit}
+     * (Review-Befund): kein Test darf einen echten Windows-Prozess starten oder die eigene JVM
+     * beenden - {@link #realLaunch} ist die echte Umsetzung, BridgeApplyUpdateTest setzt eine Attrappe ein.
+     */
+    interface UpdateLauncher {
+        void launch(Path script) throws IOException;
+    }
+    private final UpdateLauncher launcher;
     /** Genau ein archidektImport-Lauf zur Zeit (siehe handle, "archidektImport"). */
     private final AtomicBoolean importRunning = new AtomicBoolean();
     /** Deckel der "matches"-Liste zum Client (Task 3) - siehe {@link #matchesMsg()}. */
@@ -155,6 +168,20 @@ public final class Bridge {
      *  durchspielbar. */
     Bridge(int wsPort, DeckStore store, Archidekt archidekt, MatchStore matches, GameRunner sparringRunner,
            Edhrec edhrec, CardStore cards, UpdateCheck updateCheck, Supplier<String> currentVersion) {
+        this(wsPort, store, archidekt, matches, sparringRunner, edhrec, cards, updateCheck, currentVersion,
+                null, null, null);
+    }
+
+    /** Fuer Tests, die applyUpdate/updateState ueber das echte Protokoll pruefen (siehe
+     *  BridgeApplyUpdateTest): ein eigenes {@link UpdateApply} (typischerweise mit eingesetzter
+     *  Download-Quelle), eine eigene {@link UpdateLauncher}-Attrappe statt echtem Prozessstart/
+     *  {@code System.exit}, und ein eingesetzter App-Ordner statt {@link ForgeBoot#assetsDir()}.
+     *  {@code null} fuer irgendeinen der drei laesst {@link #applyUpdate()} bei der echten Umsetzung -
+     *  so bleiben alle kuerzeren Konstruktoren oben unveraendert und jeder bestehende Bridge-Test
+     *  weiterhin ohne Netz/Prozessstart/JVM-Ende. */
+    Bridge(int wsPort, DeckStore store, Archidekt archidekt, MatchStore matches, GameRunner sparringRunner,
+           Edhrec edhrec, CardStore cards, UpdateCheck updateCheck, Supplier<String> currentVersion,
+           UpdateApply updateApply, UpdateLauncher launcher, Supplier<Path> appDirForUpdate) {
         this.store = store;
         this.archidekt = archidekt;
         this.decks = new DeckSource(store, archidekt);
@@ -163,6 +190,9 @@ public final class Bridge {
         this.edhrec = edhrec;
         this.updateCheck = updateCheck;
         this.currentVersion = currentVersion;
+        this.updateApply = updateApply != null ? updateApply : new UpdateApply();
+        this.launcher = launcher != null ? launcher : this::realLaunch;
+        this.appDirForUpdate = appDirForUpdate != null ? appDirForUpdate : () -> ForgeBoot.assetsDir().getParent();
         this.ws = new WsServer(wsPort, this::handle, this::onClientConnected);
         // Der Lauf meldet Fortschritt und - je gespeicherter Partie - den Datensatz selbst; die
         // gedeckelte "matches"-Liste baut nur die Bridge (siehe matchesMsg()), deshalb hier die
@@ -230,22 +260,45 @@ public final class Bridge {
             return;
         }
         UpdateCheck.Release release = new UpdateCheck.Release(vm.latest(), vm.url(), vm.sha256(), vm.notes());
-        Path appDir = ForgeBoot.assetsDir().getParent();
+        Path appDir = appDirForUpdate.get();
         GuiBase.getInterface().runBackgroundTask("apply-update", () -> {
             UpdateApply.Result result = updateApply.run(release, appDir,
-                    state -> ws.send(new Messages.UpdateStateMsg(state)));
+                    (state, text) -> ws.send(new Messages.UpdateStateMsg(state, text)));
             if (result == null) return; // "fehler" ist schon raus, siehe UpdateApply.run
-            // Das Skript tauscht den App-Ordner erst NACH dem Ende dieses Prozesses (Windows haelt die
-            // eigenen Dateien fest, solange er laeuft - siehe UpdateApply-Klassenkommentar). Also hier
-            // starten und die JVM beenden, wie Spec §5 es fuer "Aktualisieren" vorsieht.
             try {
-                new ProcessBuilder(result.script().toString()).start();
+                launcher.launch(result.script());
             } catch (IOException e) {
                 ws.send(new Messages.ErrorMsg("Update: Skript konnte nicht gestartet werden - " + e.getMessage()));
-                return;
             }
-            System.exit(0);
         });
+    }
+
+    /**
+     * Echte Umsetzung von {@link UpdateLauncher} (Vorgabe, wenn kein Test etwas anderes einsetzt): das
+     * Skript starten und danach geordnet beenden. Arbeitsverzeichnis auf den Ordner des Skripts gesetzt
+     * (Review-Befund, Blocker 1): {@code ProcessBuilder} setzt sonst KEIN Arbeitsverzeichnis, cmd.exe
+     * wuerde also den App-Ordner erben (den aktuellen JVM-Arbeitsordner) - und Windows kann ein
+     * Verzeichnis nicht umbenennen, das das Arbeitsverzeichnis eines laufenden Prozesses ist.
+     *
+     * <p>Erst {@link #stop()} (Sparring/Match/WebSocket geordnet beenden), DANACH {@code System.exit}
+     * (Review-Befund, Punkt 12): ein blosses {@code System.exit(0)} wuerde ein laufendes
+     * Sparring-Kind ueberleben lassen, das dann weiter Dateien im App-Ordner offenhaelt - genau der
+     * Zustand, den das Skript beim Umbenennen vermeiden soll. {@code stop()} kann selbst etwas dauern
+     * (eine laufende Sparring-Partie beendet sich erst nach dem aktuellen Spiel) - das Skript wartet
+     * ohnehin auf das echte Prozessende, bevor es den App-Ordner anfasst.</p>
+     */
+    private void realLaunch(Path script) throws IOException {
+        new ProcessBuilder(script.toString())
+                .directory(script.getParent().toFile())
+                .start();
+        try {
+            stop();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        // Forge/Swing koennen nicht-daemon Threads hinterlassen, die ein blosses return ueberleben
+        // wuerden (siehe Main.java, --bench-one/--sparring-one) - die App soll aber zuverlaessig enden.
+        System.exit(0);
     }
 
     /** Fuer Tests (siehe BridgeSpectatorTest): Zugriff auf das HumanMatch, z. B. um nach dem
