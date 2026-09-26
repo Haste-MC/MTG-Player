@@ -66,6 +66,19 @@ jobs:
           npm ci
           npm run build
 
+      - name: Schnelle Bridge-Einheitentests (Sicherheitsnetz vor dem Paketbau)
+        working-directory: bridge
+        run: |
+          # Review-Befund, Punkt 12: scripts/package.sh baut die Bridge nur (mvn package -DskipTests)
+          # und prueft nichts - ohne diesen Schritt koennte ein Tag ein Paket veroeffentlichen, das nie
+          # gruen war. "Wenigstens die schnellen" heisst hier bewusst NICHT die volle Suite (laut README
+          # "Minuten", inkl. echter KI-Spiele/End-to-End/Sparring/Bench) - ausgeschlossen bleiben die
+          # namentlich als rechenintensiv erkennbaren Pakete/Klassen: Bench*/Sim* (volle KI-Simulation),
+          # *Sparring*/*Subprocess* (echte Kindprozess-Partien), *EndToEnd* (eine ganze Partie ueber
+          # echtes WebSocket), *Scene*/*Measurement* (Mehrzug-Nachstellungen), *CommanderDeath* (ebenfalls
+          # ein volles Spiel). Der Rest - die grosse Mehrheit reiner Einheitentests - laeuft hier.
+          mvn -q -Dtest='!Bench*,!Sim*,!*Sparring*,!*Subprocess*,!*EndToEnd*,!*Scene*,!*Measurement*,!*CommanderDeath*' test
+
       # Kein eigener "Bridge bauen"-Schritt hier: scripts/package.sh baut die Bridge (mvn package)
       # und sammelt ihre Abhaengigkeiten bereits selbst als ersten eigenen Schritt (siehe dessen
       # Kommentar "1. Bridge-Jar und Abhaengigkeiten sammeln") - ein zweiter Bau hier waere doppelte
@@ -108,19 +121,41 @@ jobs:
           jar ufm "$jar_pfad" "$RUNNER_TEMP/manifest-zusatz.txt"
 
       - name: ZIP packen (genau ein oberster Ordner, siehe UpdateApply.singleTopLevelDir)
-        shell: pwsh
         env:
           VERSION: ${{ steps.version.outputs.value }}
         run: |
-          # Compress-Archive nimmt bei einem Ordnerpfad (statt "Ordner\*") den Ordner selbst als
-          # einzigen obersten Eintrag mit ins ZIP - der Update-Weg entpackt und verlangt genau EINEN
-          # obersten Ordner (siehe UpdateApply.singleTopLevelDir), und ein Mitspieler soll beim
-          # Handentpacken einen Ordner "MTG-Player" sehen, keinen losen Dateihaufen.
-          $zipName = "MTG-Player-$env:VERSION-win.zip"
-          $zipPath = Join-Path $env:ZIEL $zipName
-          Compress-Archive -Path (Join-Path $env:ZIEL 'image/MTG-Player') -DestinationPath $zipPath
-          echo "ZIP_PATH=$zipPath" >> $env:GITHUB_ENV
-          echo "ZIP_NAME=$zipName" >> $env:GITHUB_ENV
+          # Review-Befund, Blocker 2 (kritisch): Compress-Archive (PowerShell) schreibt Eintragsnamen
+          # bekanntermassen mit Backslash statt Schraegstrich - UpdateApply.validateEntryName lehnt
+          # JEDEN Eintrag mit Backslash ab (Zip-Slip-Schutz, siehe dessen Kommentar). Von Hand entpacken
+          # klappte trotzdem (Windows Explorer ist da grosszuegig), aber JEDES Selbst-Update schlug beim
+          # Nutzer fehl. "jar -cMf" (kommt mit dem oben eingerichteten JDK, -M ohne Manifest - den
+          # braucht ein reines Auslieferungs-ZIP nicht) schreibt Eintragsnamen zuverlaessig mit
+          # Schraegstrich, wie jedes andere Java-Zip-Werkzeug auch.
+          zipName="MTG-Player-$VERSION-win.zip"
+          zipPath="$ZIEL/$zipName"
+          (cd "$ZIEL/image" && jar -cMf "$zipPath" MTG-Player)
+          echo "ZIP_PATH=$zipPath" >> "$GITHUB_ENV"
+          echo "ZIP_NAME=$zipName" >> "$GITHUB_ENV"
+
+      - name: ZIP-Vertrag pruefen (nur Schraegstriche, genau ein oberster Ordner)
+        run: |
+          # Maschinell festgenagelt statt nur im Kommentar (Review-Befund, Blocker 2): der Bau bricht
+          # ab, wenn doch ein Eintragsname einen Backslash enthaelt (UpdateApply.validateEntryName lehnt
+          # das beim Update ab) oder oben nicht genau ein Ordner liegt (UpdateApply.singleTopLevelDir
+          # verlangt das) - damit ist der Vertrag zwischen Bau und Update pruefbar, nicht nur behauptet.
+          entries="$(jar -tf "$ZIP_PATH")"
+          if echo "$entries" | grep -q '\\'; then
+            echo "release.yml: ZIP-Eintrag mit Backslash gefunden - das Update wuerde beim Nutzer fehlschlagen:" >&2
+            echo "$entries" | grep '\\' >&2
+            exit 1
+          fi
+          topLevel="$(echo "$entries" | cut -d/ -f1 | sort -u)"
+          topCount="$(echo "$topLevel" | grep -c .)"
+          if [ "$topCount" -ne 1 ]; then
+            echo "release.yml: ZIP hat nicht genau einen obersten Ordner (gefunden: $topCount):" >&2
+            echo "$topLevel" >&2
+            exit 1
+          fi
 
       - name: Pruefsumme schreiben
         shell: pwsh
@@ -146,10 +181,31 @@ jobs:
       - name: Freigabetext schreiben (Pruefsumme auch als Text-Rueckfall, siehe UpdateCheck.shaFromBody)
         if: github.event_name != 'workflow_dispatch'
         run: |
+          # Review-Befund, Punkt 10: die Release-Seite nannte bisher nur die Pruefsumme - wer das ZIP
+          # von den Assets herunterlaedt, landet nicht zwangslaeufig vorher im README. GPLv3 verlangt
+          # fuer eine weitergegebene gebaute Fassung Lizenztext, Quelltext-Zugriff UND kenntlich gemachte
+          # Aenderungen (Pflicht, nicht Kuer, siehe LICENSE/forge/MODIFICATIONS.md) - Quelltext und Fork
+          # gehoeren deshalb HIERHER, nicht nur ins README. Die SmartScreen-Zeilen ebenfalls, aus
+          # demselben Grund (unsignierte .exe, siehe README "Herunterladen und starten").
+          forgeCommit="$(git -C forge rev-parse HEAD)"
           cat > "$RUNNER_TEMP/notes.md" <<EOF
           SHA-256 von \`$ZIP_NAME\` (liegt auch als eigenes Anhaengsel \`SHA256SUMS\` bei):
 
           \`$SHA256  $ZIP_NAME\`
+
+          Windows warnt beim allerersten Start mit "Der Computer wurde durch Windows geschuetzt"
+          (SmartScreen, weil die \`.exe\` nicht signiert ist). Auf "Weitere Informationen" klicken, dann
+          "Trotzdem ausfuehren" - das erscheint nur beim ersten Start dieser Fassung.
+
+          ## Quelltext und Lizenz
+
+          MTG-Player ist freie Software unter der GNU General Public License v3 (GPLv3) - der volle
+          Lizenztext liegt als \`LICENSE\` bei diesem Release UND im Repository:
+          - Quelltext dieser Fassung (Tag \`${{ github.ref_name }}\`): <https://github.com/Haste-MC/MTG-Player/tree/${{ github.ref_name }}>
+          - Die Engine ist ein **veraenderter** Forge: Fork [Haste-MC/forge](https://github.com/Haste-MC/forge),
+            Branch \`mtg-player\`, Submodul-Commit \`$forgeCommit\` fuer genau dieses Release. Was gegenueber
+            dem Original anders ist: \`forge/MODIFICATIONS.md\` im Quelltext oben, bzw.
+            <https://github.com/Haste-MC/forge/blob/mtg-player/MODIFICATIONS.md>.
           EOF
           echo "NOTES_PATH=$RUNNER_TEMP/notes.md" >> "$GITHUB_ENV"
 
