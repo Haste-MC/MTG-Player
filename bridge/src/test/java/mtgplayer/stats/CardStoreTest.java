@@ -9,6 +9,7 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
 import mtgplayer.forge.CrashLog;
+import mtgplayer.protocol.Json;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -86,17 +87,56 @@ class CardStoreTest {
 
     /**
      * {@code MatchRecorder.newId} liefert Ids wie {@code "2026-09-25T14:39:39.718Z-f94358"} -
-     * Doppelpunkt und Punkt sind also Teil einer GANZ NORMALEN Partie-Id, keine Ausnahme. Waere
-     * {@link CardStore#write} strenger als das (nur {@code [A-Za-z0-9_-]}), schriebe die Ablage bei
-     * jeder echten Partie eine "ungueltige Id"-Notiz und nie eine Kartendatei - das genaue Gegenteil
-     * der Aufgabe.
+     * Doppelpunkt und Punkt sind also Teil einer GANZ NORMALEN Partie-Id, keine Ausnahme. Unter Windows
+     * ist der Doppelpunkt im DATEINAMEN aber verboten ({@code InvalidPathException}, siehe Klassen-
+     * kommentar von {@link CardStore}) - schreiben und lesen muss trotzdem klappen, UND die Datei auf
+     * der Platte darf keines der verbotenen Zeichen tragen (sonst waere der Test auf Linux gruen und
+     * auf Windows rot, genau der Fehler aus dem Testlauf).
      */
     @Test
-    void echteIdMitDoppelpunktUndPunktWirdGeschrieben(@TempDir Path dir) {
+    void echteIdMitDoppelpunktUndPunktWirdGeschrieben(@TempDir Path dir) throws Exception {
         CardStore store = new CardStore(dir);
         String id = "2026-09-25T14:39:39.718Z-f94358";
         store.write(log(id, "Mein Deck"));
         assertEquals(Optional.of(log(id, "Mein Deck")), store.read(id));
+
+        List<Path> files;
+        try (var s = Files.list(dir)) {
+            files = s.filter(p -> p.getFileName().toString().endsWith(".json")).toList();
+        }
+        assertEquals(1, files.size(), "genau eine Kartendatei liegt in " + dir);
+        String fileName = files.get(0).getFileName().toString();
+        assertFalse(fileName.matches(".*[:*?\"<>|].*"),
+                "der Dateiname " + fileName + " traegt kein unter Windows verbotenes Zeichen");
+    }
+
+    /**
+     * Auf Kevins Linux-Rechner liegen bereits Kartendateien mit Doppelpunkt im Namen (vor diesem Umbau
+     * geschrieben, siehe Klassenkommentar von {@link CardStore}) - {@link CardStore#read} muss die
+     * weiterhin finden, auch wenn KEINE Datei unter dem neuen, bereinigten Namen liegt.
+     */
+    @Test
+    void readFaelltAufDenAltenDoppelpunktNamenZurueck(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir);
+        String id = "2026-09-25T14:39:39.718Z-f94358";
+        Files.writeString(dir.resolve(id + ".json"), Json.toJson(log(id, "Altes Deck")));
+        CardStore store = new CardStore(dir);
+        assertEquals(Optional.of(log(id, "Altes Deck")), store.read(id));
+    }
+
+    /**
+     * Derselbe Rueckfall gilt fuers Loeschen (Bridge.deleteMatch raeumt sonst nie auf, wenn nur die alte
+     * Datei existiert).
+     */
+    @Test
+    void deleteFaelltAufDenAltenDoppelpunktNamenZurueck(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir);
+        String id = "2026-09-25T14:39:39.718Z-f94358";
+        Files.writeString(dir.resolve(id + ".json"), Json.toJson(log(id, "Altes Deck")));
+        CardStore store = new CardStore(dir);
+        store.delete(id);
+        assertTrue(store.read(id).isEmpty());
+        assertFalse(Files.exists(dir.resolve(id + ".json")), "die alte Datei ist weg");
     }
 
     /**
