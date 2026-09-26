@@ -86,7 +86,16 @@ jpackage --type app-image --name MTG-Player --input "$eingabe" --dest "$bild" \
     --java-options "-Xmx4g" \
     --java-options "-Dmtgplayer.app=true" \
     --java-options "-Dmtgplayer.assets=\$APPDIR/../assets" \
-    --java-options "-Dmtgplayer.web=\$APPDIR/web"
+    --java-options "-Dmtgplayer.web=\$APPDIR/web" \
+    --jlink-options "--strip-debug --no-man-pages --no-header-files"
+# --jlink-options ersetzt jpackages eigene Vorgabe VOLLSTAENDIG (per "jpackage --help": ohne diese
+# Option laeuft jlink mit "--strip-native-commands --strip-debug --no-man-pages --no-header-files")
+# - ohne den Wert hier ausdruecklich zu wiederholen (nur ohne --strip-native-commands) wuerde
+# runtime/bin/java(.exe) im fertigen Abbild fehlen (Blocker 1a). Sparring/Bench brauchen genau dieses
+# java als Kindprozess-Binary (siehe ChildJvm.JAVA_BIN) - ohne echtes java(.exe) in der Laufzeit
+# griffe dessen Rueckfall auf java.home/bin/java ins Leere, und der jpackage-Launcher selbst (die
+# gepackte .exe) wuerde als "java" missbraucht, was pro Sparring-Partie eine zweite komplette App
+# samt Fenster startet statt einer schlichten JVM.
 
 bild_ordner="$bild/MTG-Player"
 if [ ! -d "$bild_ordner" ]; then
@@ -121,6 +130,19 @@ if [ -z "$appdir_treffer" ]; then
 fi
 appdir_tatsaechlich="$(dirname "$appdir_treffer")"
 mv "$assets_staging" "$appdir_tatsaechlich/../assets"
+
+# Version.appDir() (siehe Version.java) leitet den Paketordner selbst NICHT aus $bild_ordner ab,
+# sondern aus dem Elternordner von assetsDir() - und der liegt, weil $APPDIR plattformabhaengig ist
+# (siehe Kommentar oben), unter Windows genau bei $bild_ordner (dort liegt version.txt schon, Schritt
+# 5), unter Linux aber eine Ebene TIEFER bei "$bild_ordner/lib" (kein version.txt dort). Ein lokaler
+# Linux-Probelauf dieses Bilds (z.B. fuer den Probelauf zu Blocker 3) liest also nie das oben
+# geschriebene version.txt und meldet immer "dev" - der Update-Weg greift dort dann nie. Zusaetzlich
+# an die Stelle kopieren, an der Version.java auf DIESER Plattform tatsaechlich sucht; unter Windows
+# ist das derselbe Ordner wie oben (die Bedingung greift dann nicht, keine Doppelablage).
+version_ordner="$(dirname "$appdir_tatsaechlich")"
+if [ "$version_ordner" != "$bild_ordner" ]; then
+    echo "$version" > "$version_ordner/version.txt"
+fi
 
 echo "package.sh: fertig."
 echo "  App-Image:        $bild_ordner"
