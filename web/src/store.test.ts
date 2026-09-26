@@ -662,8 +662,12 @@ describe("store: Update-Hinweis (Aufgabe 6)", () => {
     expect(useStore.getState().updateState).toEqual({ type: "updateState", state: "laden", text: "" });
   });
 
-  it("dismissUpdate blendet nur im Store-Zustand aus, ohne zu speichern - ein weiterer Aufruf ist "
-    + "wirkungslos (kein Fehler), initialState startet unberuehrt", () => {
+  // Review-Nachtrag: der Testname behauptete zuvor auch "ohne zu speichern" - dieses Testfile laeuft ohne
+  // jsdom (kein Storage-Global hier), kann das also gar nicht pruefen. Die localStorage-Freiheit von
+  // dismissUpdate ist stattdessen in Lobby.test.tsx mit einem echten Storage-Spy nachgewiesen; hier nur,
+  // was diese Datei wirklich zeigen kann: der Store-Zustand selbst.
+  it("dismissUpdate setzt updateDismissed (Ausgangswert false in initialState) und ist bei mehrfachem "
+    + "Aufruf idempotent", () => {
     expect(initialState.updateDismissed).toBe(false);
     useStore.getState().dismissUpdate();
     expect(useStore.getState().updateDismissed).toBe(true);

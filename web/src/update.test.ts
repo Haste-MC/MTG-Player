@@ -22,16 +22,14 @@ describe("updateBanner", () => {
     ["laden", "Lädt herunter …"],
     ["pruefen", "Prüft die Datei …"],
     ["entpacken", "Entpackt …"],
+    // "neustart" ist der letzte Zustand (die Bridge beendet sich danach selbst, siehe UpdateStateMsg) -
+    // der Text muss das erklaeren, nicht wie ein Fortschritt wirken, der nie als "fertig" ankaeme. Fester
+    // Textvergleich statt einer losen /neu/i-Regex, damit ein zufaellig anderes "neu" (z. B. "Neuer
+    // Fehler") den Test nicht faelschlich gruen macht.
+    ["neustart", "Update fertig, die App startet gleich neu …"],
   ] as const)("Zustand %s bekommt einen erklaerenden Text", (state, text) => {
     const updateState: UpdateStateMsg = { type: "updateState", state, text: "" };
     expect(updateBanner(VERSION, updateState)).toEqual({ state, text });
-  });
-
-  it("Zustand \"neustart\": Text erklaert das Verschwinden der Oberflaeche statt einen nie endenden Fortschritt zu zeigen", () => {
-    const updateState: UpdateStateMsg = { type: "updateState", state: "neustart", text: "" };
-    const banner = updateBanner(VERSION, updateState);
-    expect(banner?.state).toBe("neustart");
-    expect(banner?.text).toMatch(/neu/i);
   });
 
   it("Zustand \"fehler\": Text kommt aus updateState.text (der Grund), nicht aus einer festen Konstante", () => {
