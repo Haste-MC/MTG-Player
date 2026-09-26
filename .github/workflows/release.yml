@@ -187,8 +187,14 @@ jobs:
         run: |
           # Format von "sha256sum" ("<hash>  <dateiname>", zwei Leerzeichen: Trennzeichen plus
           # Textmodus-Marker) - UpdateCheck.shaFromAsset liest das Release-Asset SHA256SUMS genau so.
+          #
+          # Ablage NEBEN dem ZIP (in $ZIEL), nicht in $RUNNER_TEMP darueber: upload-artifact nimmt den
+          # gemeinsamen Wurzelordner ALLER angehaengten Pfade als Artefakt-Wurzel. Lag die Pruefsumme
+          # eine Ebene hoeher, war das $RUNNER_TEMP - und das ZIP trug im Artefakt den Zwischenordner
+          # "paket/", die Pruefsumme dagegen nicht. Beim Release (gh release create) war das nie ein
+          # Problem, dort haengen beide Dateien einzeln; nur der Probelauf sah unnoetig verschachtelt aus.
           $hash = (Get-FileHash -Algorithm SHA256 -Path $env:ZIP_PATH).Hash.ToLower()
-          $shaPath = Join-Path $env:RUNNER_TEMP 'SHA256SUMS'
+          $shaPath = Join-Path $env:ZIEL 'SHA256SUMS'
           "$hash  $env:ZIP_NAME" | Out-File -FilePath $shaPath -Encoding ascii
           echo "SHA_PATH=$shaPath" >> $env:GITHUB_ENV
           echo "SHA256=$hash" >> $env:GITHUB_ENV
