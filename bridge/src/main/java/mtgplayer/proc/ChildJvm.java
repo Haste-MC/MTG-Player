@@ -45,9 +45,44 @@ public final class ChildJvm {
      * nicht mit auf den PATH) - {@code ProcessHandle.current().info().command()} liefert den tatsaechlich
      * benutzten Pfad, sonst {@code java.home}/bin/java als Fallback (z. B. wenn das Betriebssystem den
      * Befehl nicht preisgibt).
+     *
+     * <p><b>Blocker 1b (Review-Befund):</b> im jpackage-Abbild IST diese JVM ueber den generierten
+     * Starter ({@code MTG-Player.exe}) gestartet worden - {@code ProcessHandle.current().info().command()}
+     * liefert dann genau dessen Pfad, NICHT irgendein {@code java}. Ein Kindprozess mit diesem "Binary"
+     * waere ein zweiter App-Start samt eigenem Fenster, keine schlichte JVM (siehe {@link #command}).
+     * {@link #resolveJavaBin} uebernimmt den gemeldeten Befehl deshalb nur, wenn sein Dateiname wirklich
+     * nach einem java-Launcher aussieht - sonst wie zuvor der Rueckfall auf {@code java.home}.</p>
      */
-    public static final String JAVA_BIN = ProcessHandle.current().info().command()
-            .orElseGet(() -> System.getProperty("java.home") + File.separator + "bin" + File.separator + "java");
+    public static final String JAVA_BIN = resolveJavaBin(ProcessHandle.current().info().command().orElse(null));
+
+    /**
+     * Testbarer Kern von {@link #JAVA_BIN}: {@code processCommand} ist der von {@code ProcessHandle}
+     * gemeldete Befehl (oder {@code null}), der Rueckgabewert ist entweder genau dieser Befehl (wenn sein
+     * Dateiname nach {@code java}/{@code java.exe} aussieht) oder der {@code java.home}-Rueckfall.
+     */
+    static String resolveJavaBin(String processCommand) {
+        if (processCommand != null && looksLikeJavaLauncher(processCommand)) {
+            return processCommand;
+        }
+        return System.getProperty("java.home") + File.separator + "bin" + File.separator + "java";
+    }
+
+    /**
+     * Nur der Dateiname zaehlt (nicht der ganze Pfad) - "java" oder "java.exe", Gross-/Kleinschreibung
+     * egal (Windows ist da nicht pingelig). Alles andere (z. B. {@code MTG-Player.exe}, der Name des
+     * jpackage-Starters) gilt NICHT als java-Launcher.
+     *
+     * <p>Bewusst OHNE {@link Path}/{@link java.nio.file.Paths}: welches Zeichen als Trenner gilt, haengt
+     * dort vom {@code FileSystem} DIESER JVM ab (Linux: nur {@code /}) - der zu pruefende Befehl kann
+     * aber von JEDER Plattform stammen, auf der die App tatsaechlich laeuft (Windows: {@code \}). Ein
+     * einfacher String-Schnitt nach dem letzten {@code /} ODER {@code \} ist unabhaengig vom
+     * Betriebssystem DIESER JVM und macht die Methode auf jedem Testsystem ehrlich pruefbar.</p>
+     */
+    private static boolean looksLikeJavaLauncher(String command) {
+        int trenner = Math.max(command.lastIndexOf('/'), command.lastIndexOf('\\'));
+        String name = trenner >= 0 ? command.substring(trenner + 1) : command;
+        return name.equalsIgnoreCase("java") || name.equalsIgnoreCase("java.exe");
+    }
 
     /**
      * Klassenpfad fuer den Kindprozess. Zwei sehr unterschiedliche Ausgangslagen je nachdem, wie DIESE

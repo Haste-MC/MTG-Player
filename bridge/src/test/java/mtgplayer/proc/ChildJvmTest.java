@@ -69,4 +69,34 @@ class ChildJvmTest {
         assertEquals("(kein Log)", ChildJvm.failureLine(null));
         assertEquals("(leer)", ChildJvm.failureLine(log("", "  ")));
     }
+
+    private static String javaHomeFallback() {
+        return System.getProperty("java.home") + java.io.File.separator + "bin" + java.io.File.separator + "java";
+    }
+
+    /** Blocker 1b: ein echtes java uebernimmt {@link ChildJvm#resolveJavaBin} unveraendert - das ist
+     *  der Fall bei {@code mvn test}/{@code exec:java} und in jeder normalen Entwicklungsumgebung. */
+    @Test
+    void echtesJavaWirdUebernommen() {
+        assertEquals("/usr/lib/jvm/temurin-17/bin/java",
+                ChildJvm.resolveJavaBin("/usr/lib/jvm/temurin-17/bin/java"));
+        assertEquals("C:\\Program Files\\Eclipse Adoptium\\jdk-17\\bin\\java.exe",
+                ChildJvm.resolveJavaBin("C:\\Program Files\\Eclipse Adoptium\\jdk-17\\bin\\java.exe"));
+    }
+
+    /** Der eigentliche Befund: im jpackage-Abbild liefert ProcessHandle den Pfad zum Starter
+     *  ({@code MTG-Player.exe}), nicht zu java - der faellt hier auf java.home zurueck, statt sich
+     *  selbst als Kindprozess-Binary misszuverstehen. */
+    @Test
+    void gepackterStarterFaelltAufJavaHomeZurueck() {
+        assertEquals(javaHomeFallback(),
+                ChildJvm.resolveJavaBin("C:\\Users\\Kevin\\MTG-Player\\MTG-Player.exe"));
+    }
+
+    /** Kein von ProcessHandle gemeldeter Befehl (manche Betriebssysteme geben ihn nicht preis) - auch
+     *  dann der Rueckfall, wie schon vor diesem Fix. */
+    @Test
+    void keinGemeldeterBefehlFaelltAufJavaHomeZurueck() {
+        assertEquals(javaHomeFallback(), ChildJvm.resolveJavaBin(null));
+    }
 }
