@@ -6,6 +6,7 @@ import { dropMissing, loadPicks, savePicks } from "../lobbyPicks";
 import type { AiPick } from "../protocol";
 import { formatSeries, seriesWinner } from "../series";
 import { useStore } from "../store";
+import { type UpdateBanner, updateBanner } from "../update";
 import { send } from "../ws";
 import DeckPicker from "./DeckPicker";
 
@@ -19,6 +20,16 @@ export default function Lobby() {
   const openStats = useStore((s) => s.openStats);
   // true zwischen "Spiel starten" und dem ersten Snapshot (bzw. error) - schuetzt vor einem zweiten startGame.
   const expectNewMatch = useStore((s) => s.expectNewMatch);
+  // Update-Hinweis (Aufgabe 6): version/updateState kommen unveraendert von der Bridge, updateBanner
+  // (reine Funktion, siehe update.ts) macht Text und Zustand daraus. updateDismissed lebt im Store statt
+  // in lokalem State, weil Lobby beim Wechsel zum Tisch und zurueck neu montiert wird - "Später" soll die
+  // ganze Sitzung ueber wirken, nicht nur bis zum naechsten Spiel.
+  const version = useStore((s) => s.version);
+  const updateState = useStore((s) => s.updateState);
+  const updateDismissed = useStore((s) => s.updateDismissed);
+  const requestUpdate = useStore((s) => s.requestUpdate);
+  const dismissUpdate = useStore((s) => s.dismissUpdate);
+  const banner = updateDismissed ? undefined : updateBanner(version, updateState);
   const [human, setHuman] = useState<Pick>(EMPTY_PICK);
   const [ais, setAis] = useState<Pick[]>([EMPTY_PICK]);
   const [aiPicks, setAiPicks] = useState<AiPick[]>([DEFAULT_AI]);
@@ -135,6 +146,9 @@ export default function Lobby() {
   return (
     <div className="lobby">
       <div className="lobby-card">
+        {banner && (
+          <UpdateNotice banner={banner} notes={version?.notes} onUpdate={requestUpdate} onLater={dismissUpdate} />
+        )}
         <div className="lobby-head">
           <h1>MTG-Player</h1>
           <p className="subtitle">Commander gegen die Forge-KI – Deck wählen, Gegner hinzufügen, losspielen.</p>
@@ -219,6 +233,38 @@ export default function Lobby() {
         )}
         {shownError && <pre className="import-error">{shownError}</pre>}
       </div>
+    </div>
+  );
+}
+
+/** Die Update-Leiste selbst (Aufgabe 6): Knoepfe nur im Zustand "verfuegbar" (Aktualisieren/Später) bzw.
+ *  "fehler" (Erneut versuchen, mit dem Grund aus der Bridge); die drei Zwischenzustaende zeigen nur den
+ *  Text aus updateBanner - "neustart" ist der letzte, danach reisst die Bridge die Verbindung selbst ab,
+ *  ein Knopf waere dort ohnehin folgenlos. `notes` (Release-Text) steht bei "verfuegbar" aufklappbar
+ *  darunter, wenn die Bridge einen mitgeschickt hat - nicht dauerhaft sichtbar, damit die Leiste knapp
+ *  bleibt (dasselbe Platzprinzip wie der Orakeltext-Tooltip in Suggestions.tsx). */
+function UpdateNotice({ banner, notes, onUpdate, onLater }: { banner: UpdateBanner; notes?: string; onUpdate: () => void; onLater: () => void }) {
+  const hasNotes = banner.state === "verfuegbar" && !!notes?.trim();
+  return (
+    <div className={"update-banner" + (banner.state === "fehler" ? " error" : "")}>
+      <div className="update-banner-row">
+        <span>{banner.text}</span>
+        {banner.state === "verfuegbar" && (
+          <div className="update-actions">
+            <button className="primary small" onClick={onUpdate}>Aktualisieren</button>
+            <button className="quiet small" onClick={onLater}>Später</button>
+          </div>
+        )}
+        {banner.state === "fehler" && (
+          <button className="primary small" onClick={onUpdate}>Erneut versuchen</button>
+        )}
+      </div>
+      {hasNotes && (
+        <details className="update-notes">
+          <summary>Was ist neu</summary>
+          <pre>{notes}</pre>
+        </details>
+      )}
     </div>
   );
 }

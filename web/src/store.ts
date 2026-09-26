@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { ArchidektEntry, ArchidektProgress, CardStatsMsg, CardSuggestionsMsg, Choice, DeckAnalysis, DeckInfo, Inbound, MatchRecord, Snapshot, StartGame } from "./protocol";
+import type { ArchidektEntry, ArchidektProgress, CardStatsMsg, CardSuggestionsMsg, Choice, DeckAnalysis, DeckInfo, Inbound, MatchRecord, Snapshot, StartGame, UpdateStateMsg, VersionMsg } from "./protocol";
 import { recordResult, type Series, startSeries } from "./series";
 import { send } from "./ws";
 
@@ -126,6 +126,17 @@ export interface AppState {
    *  keines gestartet wurde und keine Fortschrittsmeldung kam; nach dem Lauf bleibt der letzte Stand mit
    *  running: false stehen (Partienzahl und Fehlerliste sind dann das Ergebnis). */
   sparring?: SparringState;
+  /** Einmalig von der Bridge gemeldete neuere Fassung (Aufgabe 6, siehe VersionMsg) - undefined, solange
+   *  keine Nachricht kam (kein Update oder eine dev-Fassung, siehe Bridge.checkVersion). Bleibt stehen,
+   *  auch waehrend ein Update laeuft - updateState traegt den laufenden Fortschritt separat. */
+  version?: VersionMsg;
+  /** Fortschritt/Fehler des laufenden applyUpdate (siehe UpdateStateMsg); undefined, solange keiner
+   *  gestartet wurde. Beim Zustand "neustart" beendet sich die Bridge selbst - hier kommt dann nichts
+   *  mehr nach, die Anzeige bleibt bewusst auf diesem Zustand stehen (siehe update.ts). */
+  updateState?: UpdateStateMsg;
+  /** "Später" geklickt (Aufgabe 6): blendet den Update-Hinweis fuer diese Sitzung aus, ohne etwas zu
+   *  speichern - ein Neustart der App zeigt ihn wieder (die Bridge schickt "version" dann erneut). */
+  updateDismissed: boolean;
 }
 
 export const initialState: AppState = {
@@ -133,6 +144,7 @@ export const initialState: AppState = {
   aiModes: ["standard", "hybrid", "sim"], aiProfiles: ["Default"], aiTimeout: 5, bestOf: 0, expectNewMatch: false,
   archidekt: { loading: false }, matches: [], matchesTotal: 0, matchDetails: {}, deckAnalyses: {},
   suggestions: {}, cardStats: {}, pendingMatch: [], pendingAnalysis: [], pendingSuggestions: [], pendingCards: [],
+  updateDismissed: false,
 };
 
 const LOG_MAX = 500;
@@ -259,6 +271,11 @@ export function reduce(s: AppState, m: Inbound): AppState {
         ...s, cardStats: { ...s.cardStats, [m.deck]: m },
         pendingCards: s.pendingCards.filter((deck) => deck !== m.deck),
       };
+    case "version":
+      // Kommt hoechstens einmal pro Bridge-Lauf (siehe Bridge.checkVersion) - einfach uebernehmen.
+      return { ...s, version: m };
+    case "updateState":
+      return { ...s, updateState: m };
     default:
       return s;
   }
@@ -304,6 +321,14 @@ interface Store extends AppState {
   startSparring: (deck: string, games: number) => void;
   /** Bricht den laufenden Lauf ab (sparringCancel); die Bridge meldet das Ende mit running: false. */
   cancelSparring: () => void;
+  /** Stoesst das gemeldete Update an (applyUpdate, Aufgabe 6) - auch der erneute Versuch nach "fehler"
+   *  laeuft hierueber. Setzt schon vor der Antwort optimistisch "laden": die Bridge schickt diesen
+   *  Zustand zwar als ersten Schritt von UpdateApply.run praktisch sofort, aber ohne das blieben die
+   *  Knoepfe bis zur ersten echten updateState-Nachricht kurz anklickbar. */
+  requestUpdate: () => void;
+  /** "Später" (Aufgabe 6): blendet den Hinweis nur im Store-Zustand aus, nichts wird gespeichert - ein
+   *  Neuladen der Seite zeigt ihn wieder. */
+  dismissUpdate: () => void;
 }
 
 export const useStore = create<Store>((set, get) => ({
@@ -361,4 +386,9 @@ export const useStore = create<Store>((set, get) => ({
     send({ type: "sparringStart", deck, games });
   },
   cancelSparring: () => send({ type: "sparringCancel" }),
+  requestUpdate: () => {
+    set({ updateState: { type: "updateState", state: "laden", text: "" } });
+    send({ type: "applyUpdate" });
+  },
+  dismissUpdate: () => set({ updateDismissed: true }),
 }));

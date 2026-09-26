@@ -636,6 +636,42 @@ describe("store: Deckanalyse und Partie-Detail", () => {
   });
 });
 
+describe("store: Update-Hinweis (Aufgabe 6)", () => {
+  beforeEach(() => {
+    useStore.setState({ ...initialState });
+    vi.mocked(send).mockClear();
+  });
+
+  const version = { type: "version" as const, current: "1.40.0", latest: "1.41.0", url: "https://x", sha256: "abc", notes: "" };
+
+  it("version wird uebernommen", () => {
+    const s = reduce(initialState, version);
+    expect(s.version).toEqual(version);
+  });
+
+  it("updateState wird uebernommen", () => {
+    const updateState = { type: "updateState" as const, state: "pruefen" as const, text: "" };
+    const s = reduce(initialState, updateState);
+    expect(s.updateState).toEqual(updateState);
+  });
+
+  it("requestUpdate schickt applyUpdate und zeigt schon vorher \"laden\" an - die Bridge meldet diesen "
+    + "Zustand zwar praktisch sofort, aber der Knopf soll nicht bis dahin anklickbar bleiben", () => {
+    useStore.getState().requestUpdate();
+    expect(send).toHaveBeenCalledWith({ type: "applyUpdate" });
+    expect(useStore.getState().updateState).toEqual({ type: "updateState", state: "laden", text: "" });
+  });
+
+  it("dismissUpdate blendet nur im Store-Zustand aus, ohne zu speichern - ein weiterer Aufruf ist "
+    + "wirkungslos (kein Fehler), initialState startet unberuehrt", () => {
+    expect(initialState.updateDismissed).toBe(false);
+    useStore.getState().dismissUpdate();
+    expect(useStore.getState().updateDismissed).toBe(true);
+    useStore.getState().dismissUpdate();
+    expect(useStore.getState().updateDismissed).toBe(true);
+  });
+});
+
 describe("store: sparring", () => {
   beforeEach(() => {
     useStore.setState({ ...initialState, sparring: undefined });

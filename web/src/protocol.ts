@@ -350,7 +350,23 @@ export interface CardStatsMsg {
   type: "cardStats"; deck: string; games: number; withCardData: number; enough: boolean; cards: CardStat[];
 }
 
-export type Inbound = Snapshot | Choice | Lobby | LogLine | Thinking | GameOver | ErrorMsg | ArchidektDecks | ArchidektProgress | Matches | MatchMsg | DeckAnalysisMsg | SparringProgress | CardSuggestionsMsg | CardStatsMsg;
+/** Einmalig gemeldet, wenn die Bridge beim Start eine echt neuere Fassung erkennt (Aufgabe 5/6, Bridge:
+ *  Messages.VersionMsg) - ohne ein wirkliches Update kommt diese Nachricht gar nicht erst. current ist
+ *  die eigene, latest die neuere Fassung (jeweils reine Ziffern-Abschnitte, ohne "v"-Vorsilbe); notes ist
+ *  der Release-Text (leer ohne einen). Anwenden geschieht ueber Outbound "applyUpdate". */
+export interface VersionMsg {
+  type: "version"; current: string; latest: string; url: string; sha256: string; notes: string;
+}
+/** Fortschritt/Fehler eines laufenden applyUpdate (Aufgabe 5/6, Bridge: Messages.UpdateStateMsg): state
+ *  durchlaeuft "laden" -> "pruefen" -> "entpacken" -> "neustart" in dieser Reihenfolge; ein Fehlschlag an
+ *  jeder Stelle endet stattdessen mit "fehler". text traegt nur bei "fehler" einen Klartextgrund - die
+ *  anderen Zustaende formuliert der Client selbst (siehe update.ts). Beim Zustand "neustart" beendet
+ *  sich die App selbst, danach kommt keine weitere Nachricht mehr. */
+export interface UpdateStateMsg {
+  type: "updateState"; state: "laden" | "pruefen" | "entpacken" | "neustart" | "fehler"; text: string;
+}
+
+export type Inbound = Snapshot | Choice | Lobby | LogLine | Thinking | GameOver | ErrorMsg | ArchidektDecks | ArchidektProgress | Matches | MatchMsg | DeckAnalysisMsg | SparringProgress | CardSuggestionsMsg | CardStatsMsg | VersionMsg | UpdateStateMsg;
 
 export type Outbound =
   // humanDeck fehlt bei spectate:true (KI-only-Modus, kein eigener Sitz - siehe lobbyPayload.ts)
@@ -398,7 +414,11 @@ export type Outbound =
   | { type: "suggestCards"; deck: string; roles: string[] }
   // Kartentabelle eines Decks anfordern (Stueck 6, Bridge: mtgplayer.stats.CardStats). Die Bridge
   // antwortet mit cardStats oder error.
-  | { type: "deckCards"; deck: string };
+  | { type: "deckCards"; deck: string }
+  // Das ueber "version" gemeldete Update anwenden (Aufgabe 5/6); ohne vorherige "version" lehnt die
+  // Bridge mit error ab. Fortschritt/Fehler kommen als updateState, ein Erfolg beendet die Bridge selbst
+  // (Zustand "neustart" ist die letzte Nachricht).
+  | { type: "applyUpdate" };
 
 export type StartGame = Extract<Outbound, { type: "startGame" }>;
 
