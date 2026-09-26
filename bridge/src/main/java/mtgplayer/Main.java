@@ -5,6 +5,7 @@ import mtgplayer.app.AppMode;
 import mtgplayer.bench.Bench;
 import mtgplayer.bench.BenchArgs;
 import mtgplayer.bench.GameRecord;
+import mtgplayer.forge.CrashLog;
 import mtgplayer.forge.ForgeBoot;
 import mtgplayer.forge.Precons;
 import mtgplayer.images.ImageCache;
@@ -199,7 +200,24 @@ public final class Main {
             AppMode.openWindow("http://localhost:" + httpPort);
         }
 
-        ForgeBoot.init();
+        try {
+            ForgeBoot.init();
+        } catch (RuntimeException | LinkageError e) {
+            // Beobachtet beim ersten Windows-Paket: FModel.initialize scheiterte an Forges Profildatei
+            // (siehe ForgeBoot.writeProfileFile). Das Fenster stand zu diesem Zeitpunkt schon (es geht
+            // absichtlich VOR dem Kartenladen auf), der HTTP-Server lief - und weil dessen Threads die
+            // JVM am Leben halten, blieb eine App uebrig, die bedient wird, aber nie eine Engine
+            // bekommt: der Nutzer sah eine Oberflaeche im Leerlauf und keinerlei Grund. Ein Abbruch
+            // ohne Meldung waere genauso schlecht, deshalb derselbe Weg wie beim belegten Port unten.
+            CrashLog.report("Start abgebrochen", "die Spiel-Engine liess sich nicht laden", e);
+            http.stop();
+            if (appMode) {
+                AppMode.showFatalError("MTG-Player kann die Spiel-Engine nicht laden und beendet sich.\n\n"
+                        + e + "\n\nEinzelheiten stehen in " + CrashLog.file());
+                return;
+            }
+            throw e;
+        }
         printCardsLoaded(t0);
 
         Bridge bridge = new Bridge(wsPort);
