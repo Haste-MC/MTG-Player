@@ -27,13 +27,15 @@ jobs:
     defaults:
       run:
         shell: bash
-    env:
-      # Arbeits- und Ausgabeverzeichnis fuer scripts/package.sh. "runner.temp" liefert auf
-      # windows-latest einen Windows-Laufwerkspfad (z.B. "D:\a\_temp"), keinen Git-Bash-Pfad
-      # ("/d/a/_temp") - package.sh behandelt "<Buchstabe>:..." aber schon selbst als absolut
-      # (siehe dessen Kommentar zu "ziel"), deshalb wird hier NICHT nach /d/... konvertiert.
-      ZIEL: ${{ runner.temp }}/paket
     steps:
+      # ZIEL wird als SCHRITT gesetzt, nicht im env-Block der Aufgabe: der "runner"-Kontext steht
+      # dort noch nicht zur Verfuegung ("Unrecognized named-value: 'runner'"), erst in Schritten.
+      # "runner.temp" liefert auf windows-latest einen Windows-Laufwerkspfad (z.B. "D:\a\_temp"),
+      # keinen Git-Bash-Pfad ("/d/a/_temp") - package.sh behandelt "<Buchstabe>:..." aber schon
+      # selbst als absolut (siehe dessen Kommentar zu "ziel"), deshalb wird hier NICHT konvertiert.
+      - name: Arbeitsverzeichnis festlegen
+        run: echo "ZIEL=${{ runner.temp }}/paket" >> "$GITHUB_ENV"
+
       - name: Auschecken (mit Forge-Submodul)
         uses: actions/checkout@v4
         with:
