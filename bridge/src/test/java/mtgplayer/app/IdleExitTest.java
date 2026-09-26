@@ -19,6 +19,9 @@ import org.junit.jupiter.api.Test;
  */
 class IdleExitTest {
 
+    /** Frist fuers erste Fenster - in den Tests, die sie nicht pruefen, absichtlich unerreichbar lang. */
+    private static final Duration EGAL = Duration.ofHours(1);
+
     private final ScheduledExecutorService timer = Executors.newSingleThreadScheduledExecutor();
 
     @AfterEach
@@ -29,7 +32,7 @@ class IdleExitTest {
     @Test
     void ohneRueckkehrWirdBeendet() throws Exception {
         CountDownLatch beendet = new CountDownLatch(1);
-        IdleExit idle = new IdleExit(Duration.ofMillis(30), beendet::countDown, timer);
+        IdleExit idle = new IdleExit(Duration.ofMillis(30), EGAL, beendet::countDown, timer);
 
         idle.clientGone();
 
@@ -39,7 +42,7 @@ class IdleExitTest {
     @Test
     void werZurueckkommtSagtDenAbbruchAb() throws Exception {
         AtomicInteger beendet = new AtomicInteger();
-        IdleExit idle = new IdleExit(Duration.ofMillis(60), beendet::incrementAndGet, timer);
+        IdleExit idle = new IdleExit(Duration.ofMillis(60), EGAL, beendet::incrementAndGet, timer);
 
         idle.clientGone();
         idle.clientHere();   // Seite neu geladen, bevor die Schonfrist um ist
@@ -55,7 +58,7 @@ class IdleExitTest {
     @Test
     void mehrfachesTrennenStapeltNicht() throws Exception {
         AtomicInteger beendet = new AtomicInteger();
-        IdleExit idle = new IdleExit(Duration.ofMillis(60), beendet::incrementAndGet, timer);
+        IdleExit idle = new IdleExit(Duration.ofMillis(60), EGAL, beendet::incrementAndGet, timer);
 
         idle.clientGone();
         idle.clientGone();
@@ -70,10 +73,37 @@ class IdleExitTest {
         assertEquals(1, beendet.get(), "danach beendet es genau einmal");
     }
 
+    /**
+     * Kommt nach dem Start ueberhaupt kein Fenster (Browser ging nicht auf, oder die Seite sprach mit
+     * einer fremden Bridge), soll die App trotzdem nicht ewig im Hintergrund stehen bleiben.
+     */
+    @Test
+    void ohneErstenKlientenWirdAuchBeendet() throws Exception {
+        CountDownLatch beendet = new CountDownLatch(1);
+        IdleExit idle = new IdleExit(Duration.ofHours(1), Duration.ofMillis(30), beendet::countDown, timer);
+
+        idle.awaitFirstClient();
+
+        assertTrue(beendet.await(5, TimeUnit.SECONDS), "ohne erstes Fenster beendet sich die App");
+    }
+
+    /** Kommt das Fenster rechtzeitig, gilt die Start-Frist nicht mehr. */
+    @Test
+    void ersterKlientSagtDieStartFristAb() throws Exception {
+        AtomicInteger beendet = new AtomicInteger();
+        IdleExit idle = new IdleExit(Duration.ofHours(1), Duration.ofMillis(60), beendet::incrementAndGet, timer);
+
+        idle.awaitFirstClient();
+        idle.clientHere();
+
+        Thread.sleep(300);
+        assertEquals(0, beendet.get(), "ein verbundenes Fenster verhindert das Beenden");
+    }
+
     @Test
     void clientHereOhneVorherigesTrennenIstHarmlos() {
         AtomicInteger beendet = new AtomicInteger();
-        IdleExit idle = new IdleExit(Duration.ofMillis(30), beendet::incrementAndGet, timer);
+        IdleExit idle = new IdleExit(Duration.ofMillis(30), EGAL, beendet::incrementAndGet, timer);
 
         idle.clientHere();
 

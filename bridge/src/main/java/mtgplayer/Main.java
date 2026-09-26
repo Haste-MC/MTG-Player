@@ -198,7 +198,7 @@ public final class Main {
         if (appMode) {
             // Vor ForgeBoot.init() (Blocker 3): das Fenster erscheint sofort, die Seite zeigt den
             // Verbindungshinweis (".lobby-head .connecting"), waehrend Forge im Hintergrund laedt.
-            AppMode.openWindow("http://localhost:" + httpPort);
+            AppMode.openWindow(AppMode.windowUrl(httpPort, wsPort));
         }
 
         try {
@@ -222,13 +222,15 @@ public final class Main {
         printCardsLoaded(t0);
 
         Bridge bridge = new Bridge(wsPort);
+        IdleExit idleExit = null;
         if (appMode) {
             // Das Fenster ist ein eigener Prozess (AppMode.openWindow) - ohne diese Regel liefe die
             // Bridge nach dem Schliessen unbemerkt weiter, hielte ihren Port und den App-Ordner als
             // Arbeitsverzeichnis fest (Windows verweigert dann dessen Loeschen), und der einzige
             // Ausweg waere der Task-Manager. Die Schonfrist unterscheidet "Fenster zu" von einem
             // blossen Neuladen der Seite, das die Verbindung genauso trennt.
-            bridge.watchForIdle(new IdleExit(FENSTER_ZU_SCHONFRIST, () -> beenden(bridge, http)));
+            idleExit = new IdleExit(FENSTER_ZU_SCHONFRIST, ERSTE_VERBINDUNG_FRIST, () -> beenden(bridge, http));
+            bridge.watchForIdle(idleExit);
         }
         try {
             bridge.start();
@@ -244,7 +246,12 @@ public final class Main {
             }
             throw e;
         }
-        System.out.println("Bereit. Browser: http://localhost:" + httpPort + "  (Dev: http://localhost:5173)");
+        System.out.println("Bereit. Browser: " + AppMode.windowUrl(httpPort, wsPort) + "  (Dev: http://localhost:5173)");
+        if (idleExit != null) {
+            // Erst JETZT scharf stellen: vorher gibt es noch keinen WebSocket, zu dem sich das
+            // Fenster ueberhaupt verbinden koennte (Forge laedt davor die Kartenskripte).
+            idleExit.awaitFirstClient();
+        }
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             http.stop();
             try { bridge.stop(); } catch (InterruptedException ignored) { }
@@ -255,6 +262,10 @@ public final class Main {
     /** So lange darf das Fenster zu sein, bevor die App sich beendet - genug fuer ein Neuladen der
      *  Seite, kurz genug, dass niemand einen Prozess im Hintergrund vergisst. */
     private static final java.time.Duration FENSTER_ZU_SCHONFRIST = java.time.Duration.ofSeconds(15);
+
+    /** So lange wartet die App nach dem Start auf ihr erstes Fenster, bevor sie sich fuer verwaist
+     *  haelt - reichlich bemessen, weil im Notfall jemand die Adresse aus einem Dialog abtippt. */
+    private static final java.time.Duration ERSTE_VERBINDUNG_FRIST = java.time.Duration.ofMinutes(2);
 
     /** Geordnet beenden wie im Update-Weg (Bridge.realLaunch): erst Sparring/Match/WebSocket anhalten,
      *  dann die JVM - Forge und Swing hinterlassen Threads, die ein blosses return ueberleben wuerden. */

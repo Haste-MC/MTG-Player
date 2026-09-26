@@ -92,4 +92,16 @@ class AppModeTest {
         List<String> cmd = AppMode.windowCommand(browser, "http://localhost:18100");
         assertEquals(List.of(browser.toString(), "--app=http://localhost:18100"), cmd);
     }
+
+    /**
+     * Die Fenster-Adresse MUSS den WebSocket-Port nennen. Fehlt er, nimmt der Klient seinen
+     * eingebauten Standard 8081 (siehe web/src/ws.ts) - im App-Modus stimmt der aber nur zufaellig,
+     * denn freePort weicht aus, sobald 8081 belegt ist. Beobachtet: beim zweiten App-Start sprach die
+     * neue Seite mit der Bridge des ersten (zeigte deren Partie statt der Lobby), und die neue Bridge
+     * bekam nie einen Klienten - sie lief ohne Fenster weiter und hielt ihren Ordner fest.
+     */
+    @Test
+    void fensterAdresseNenntDenWebsocketPort() {
+        assertEquals("http://localhost:39071/?wsPort=40905", AppMode.windowUrl(39071, 40905));
+    }
 }

@@ -27,14 +27,15 @@ import java.util.concurrent.TimeUnit;
 public final class IdleExit {
 
     private final Duration grace;
+    private final Duration startGrace;
     private final Runnable exit;
     private final ScheduledExecutorService timer;
     private ScheduledFuture<?> pending;
 
-    public IdleExit(Duration grace, Runnable exit) {
+    public IdleExit(Duration grace, Duration startGrace, Runnable exit) {
         // Daemon: dieser eine Wartethread darf die JVM niemals am Leben halten - genau das Uebel,
         // gegen das die ganze Klasse gebaut ist.
-        this(grace, exit, Executors.newSingleThreadScheduledExecutor(r -> {
+        this(grace, startGrace, exit, Executors.newSingleThreadScheduledExecutor(r -> {
             Thread t = new Thread(r, "idle-exit");
             t.setDaemon(true);
             return t;
@@ -42,10 +43,23 @@ public final class IdleExit {
     }
 
     /** Fuer den Test: eigene Zeitplanung, damit die Schonfrist kurz sein kann. */
-    IdleExit(Duration grace, Runnable exit, ScheduledExecutorService timer) {
+    IdleExit(Duration grace, Duration startGrace, Runnable exit, ScheduledExecutorService timer) {
         this.grace = grace;
+        this.startGrace = startGrace;
         this.exit = exit;
         this.timer = timer;
+    }
+
+    /**
+     * Nach dem Start: kommt ueberhaupt kein Klient, beendet sich die App ebenfalls - nur mit einer
+     * laengeren Frist. Ohne das blieb eine App, deren Fenster gar nicht erst aufging oder an der
+     * falschen Adresse landete, unsichtbar im Hintergrund stehen; niemand konnte sie je schliessen,
+     * weil es nichts zu schliessen gab. Die Frist ist grosszuegig: oeffnet sich kein Fenster, nennt
+     * {@link AppMode#openWindow} die Adresse in einem Dialog, und die muss jemand abtippen koennen.
+     */
+    public synchronized void awaitFirstClient() {
+        cancelPending();
+        pending = timer.schedule(this::fire, startGrace.toMillis(), TimeUnit.MILLISECONDS);
     }
 
     /** Ein Klient ist da (Fenster offen oder Seite neu geladen): ein laufender Abbruch ist abgesagt. */

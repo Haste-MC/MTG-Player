@@ -51,6 +51,20 @@ public final class AppMode {
     }
 
     /**
+     * Die Adresse, die das Fenster bekommt - MIT dem WebSocket-Port als Abfrageteil.
+     *
+     * <p>Ohne den faellt der Klient auf seinen eingebauten Standard 8081 zurueck (siehe
+     * {@code web/src/ws.ts}). Im App-Modus stimmt der aber nur zufaellig: {@link #freePort} weicht auf
+     * einen freien Port aus, sobald 8081 belegt ist - etwa weil die App schon einmal laeuft. Die Seite
+     * des zweiten Starts sprach dann mit der Bridge des ERSTEN: sie zeigte deren Partie statt einer
+     * Lobby, und die zweite Bridge bekam nie einen Klienten - sie lief ohne Fenster weiter und hielt
+     * ihren Ordner fest. Genau dieser eine fehlende Abfrageteil stand hinter beidem.</p>
+     */
+    public static String windowUrl(int httpPort, int wsPort) {
+        return "http://localhost:" + httpPort + "/?wsPort=" + wsPort;
+    }
+
+    /**
      * Reine Kommandozeilen-Bildung fuer {@link #openWindow(String)}, getrennt testbar ohne dass
      * dabei wirklich ein Browser startet (den gibt es auf dem Testsystem ohnehin nicht).
      */
