@@ -3,6 +3,26 @@
 Lokaler Commander-Tisch mit KI-Gegnern auf Basis von Forge, mit eigener Browser-UI.
 Design: `docs/superpowers/specs/2026-09-16-mtg-player-design.md`.
 
+## Herunterladen und starten
+
+Keine Installation, kein Java, keine Konsole: das ZIP liegt unter den **Assets** des neuesten Releases auf
+<https://github.com/Haste-MC/MTG-Player/releases/latest> (z. B. `MTG-Player-1.2.0-win.zip`). Entpacke es in
+einen eigenen, leeren Ordner (nicht direkt nach „Downloads" – die Selbst-Aktualisierung ersetzt genau diesen
+Ordner später komplett) und starte darin `MTG-Player.exe` per Doppelklick.
+
+Windows warnt beim allerersten Start mit „Der Computer wurde durch Windows geschützt" (SmartScreen, weil die
+`.exe` nicht signiert ist – dagegen hilft nur ein gekauftes Zertifikat, das es hier nicht gibt). Auf
+„Weitere Informationen" klicken, dann „Trotzdem ausführen". Das erscheint nur beim ersten Start dieser
+Fassung.
+
+Der erste Start dauert spürbar länger als jeder weitere: Forge liest dabei rund 30.000 Karten ein. Ein
+Ladehinweis im Fenster zeigt an, dass die App arbeitet – einfach abwarten.
+
+Eigene Daten (Decks, Partien, Kartenauswertung) liegen getrennt vom Programmordner unter
+`%USERPROFILE%\.mtg-player` und überleben jedes Update sowie ein Löschen/Neuentpacken des Programmordners.
+Deinstallieren heißt: Programmordner löschen (die eigenen Daten bleiben davon unberührt und müssen bei
+Bedarf separat gelöscht werden).
+
 ## Voraussetzungen
 
 - Java 17, Maven ≥ 3.8.1 (`sudo apt install openjdk-17-jdk-headless maven`)
