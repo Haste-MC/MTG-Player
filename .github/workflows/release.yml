@@ -102,7 +102,7 @@ jobs:
           # und CardStoreTest (genau der Windows-Fehler mit dem Doppelpunkt im Partie-Id-Dateinamen,
           # siehe CardStore). Die vollstaendige Suite (inkl. aller ForgeBoot-Tests, echter KI-Spiele,
           # End-to-End, Sparring, Bench) laeuft weiterhin auf dem Entwicklungsrechner.
-          mvn -q -Dtest='AppModeTest,ArchidektTest,BenchStatsTest,BridgeImportErrorTextTest,CardLogTest,CardStoreTest,ChildJvmTest,ChoiceBrokerTest,CrashLogTest,EdhrecTest,ForgeBootDataDirTest,MatchRecordTest,MatchStoreTest,MessagesTest,SubprocessGameRunnerTest,ThinkingTickerTest,UpdateApplyTest,UpdateCheckTest,VersionTest,WsServerTest' test
+          mvn -q -Dtest='AppModeTest,ArchidektTest,BenchStatsTest,BridgeImportErrorTextTest,CardLogTest,CardStoreTest,ChildJvmTest,ChoiceBrokerTest,CrashLogTest,EdhrecTest,ForgeBootDataDirTest,IdleExitTest,MatchRecordTest,MatchStoreTest,MessagesTest,SubprocessGameRunnerTest,ThinkingTickerTest,UpdateApplyTest,UpdateCheckTest,VersionTest,WsServerTest' test
 
       # Kein eigener "Bridge bauen"-Schritt hier: scripts/package.sh baut die Bridge (mvn package)
       # und sammelt ihre Abhaengigkeiten bereits selbst als ersten eigenen Schritt (siehe dessen
