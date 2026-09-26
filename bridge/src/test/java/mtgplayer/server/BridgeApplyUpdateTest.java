@@ -255,6 +255,53 @@ class BridgeApplyUpdateTest {
     }
 
     /**
+     * 4. Review-Nachtrag, Blocker 8 (kritisch): scheitert der Start des Tauschskripts (die eingesetzte
+     * {@link Bridge.UpdateLauncher} wirft), MUSS ein "updateState"/"fehler" hinterher kommen - sonst
+     * bleibt die Leiste beim zuletzt gemeldeten Zustand "neustart" haengen ("Update fertig, die App
+     * startet gleich neu ...", siehe web/src/update.ts) und zeigt dem Nutzer nie, dass es tatsaechlich
+     * schiefging. Die reine {@code ErrorMsg} (bereits vorher vorhanden) reicht nicht - die Lobby zeigt
+     * diese Leiste nur ueber "updateState".
+     */
+    @Test
+    @Timeout(value = 1, unit = TimeUnit.MINUTES)
+    void scheiterndeLauncherNahtMeldetUpdateStateFehlerStattBeiNeustartHaengenZuBleiben() throws Exception {
+        byte[] content = zip("MTG-Player", "version.txt", "1.3.0", "MTG-Player.exe", "starter-binaer",
+                "runtime/release", "java-laufzeit", "app/bridge.jar", "hallo-welt");
+        String hash = sha256Hex(content);
+        Path appDir = echterAppDir(tmp.resolve("App"), "1.2.0");
+
+        Map<String, String> antworten = Map.of(
+                "https://api.github.com/repos/Haste-MC/MTG-Player/releases/latest",
+                releaseJsonMitShaAsset("v1.3.0", ZIP_URL, ZIP_NAME, "Neu"),
+                SHA_URL, hash + "  " + ZIP_NAME + "\n");
+        UpdateCheck updateCheck = new UpdateCheck(url -> {
+            String body = antworten.get(url);
+            if (body == null) throw new RuntimeException("keine eingesetzte Antwort fuer " + url);
+            return body;
+        });
+        UpdateApply realUpdateApply = new UpdateApply(url -> {
+            assertEquals(ZIP_URL, url);
+            return content;
+        }, tmp.resolve("temp"));
+        Bridge.UpdateLauncher werfenderLauncher = script -> {
+            throw new IOException("CreateProcess error=193, %1 ist keine gueltige Win32-Anwendung");
+        };
+        start(updateCheck, "1.2.0", realUpdateApply, werfenderLauncher, appDir);
+
+        await("version", 20);
+        client.send("{\"type\":\"applyUpdate\"}");
+
+        assertEquals("laden", await("updateState", 10).get("state").asText());
+        assertEquals("pruefen", await("updateState", 10).get("state").asText());
+        assertEquals("entpacken", await("updateState", 10).get("state").asText());
+        assertEquals("neustart", await("updateState", 10).get("state").asText());
+        JsonNode fehler = await("updateState", 10);
+        assertEquals("fehler", fehler.get("state").asText(),
+                "nach einem gescheiterten Skriptstart muss noch ein updateState/fehler kommen, sonst bleibt die Leiste bei 'neustart' haengen");
+        assertTrue(fehler.get("text").asText().contains("193"), "der Grund aus der IOException darf nicht verloren gehen");
+    }
+
+    /**
      * 2. Review-Nachtrag, Befund 5: {@code applyUpdate} braucht dieselbe Wiedereintrittssperre wie
      * {@code archidektImport} - zwei Klicks auf "Aktualisieren" duerfen nicht zwei Downloads und zwei
      * Tauschskripte gleichzeitig anstossen. Die eingesetzte Quelle blockiert auf einem Latch, GENAU

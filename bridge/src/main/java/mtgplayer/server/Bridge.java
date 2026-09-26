@@ -284,6 +284,15 @@ public final class Bridge {
                     try {
                         launcher.launch(result.script());
                     } catch (IOException e) {
+                        // Review-Befund, Punkt 8: OHNE das folgende updateState bliebe die Leiste beim
+                        // zuletzt gemeldeten Zustand haengen - das ist "neustart" (der letzte, den
+                        // UpdateApply.run selbst schickt), und dessen Text lautet "Update fertig, die
+                        // App startet gleich neu ..." (siehe PROGRESS_TEXT in web/src/update.ts). Die
+                        // reine ErrorMsg allein aendert daran nichts, sie landet nur im allgemeinen
+                        // Fehlerkanal, den die Lobby fuer diese Leiste gar nicht anzeigt - erst ein
+                        // "fehler"-updateState schaltet auf "Erneut versuchen" samt Grund um.
+                        ws.send(new Messages.UpdateStateMsg("fehler",
+                                "Skript konnte nicht gestartet werden - " + e.getMessage()));
                         ws.send(new Messages.ErrorMsg("Update: Skript konnte nicht gestartet werden - " + e.getMessage()));
                     }
                 } finally {
@@ -315,7 +324,12 @@ public final class Bridge {
      * ohnehin auf das echte Prozessende, bevor es den App-Ordner anfasst.</p>
      */
     private void realLaunch(Path script) throws IOException {
-        new ProcessBuilder(script.toString())
+        // Ueber "cmd /c" statt das .cmd direkt als Programmname zu uebergeben (Review-Befund, Punkt 9):
+        // ProcessBuilder/CreateProcess behandeln eine .cmd-Datei nicht immer zuverlaessig als
+        // ausfuehrbar (je nach PATHEXT/Assoziation kann das mit "CreateProcess error=193: %1 ist keine
+        // gueltige Win32-Anwendung" scheitern) - der Umweg ueber den Kommandozeileninterpreter selbst
+        // ist die billige Versicherung dagegen und aendert am Verhalten des Skripts nichts.
+        new ProcessBuilder("cmd", "/c", script.toString())
                 .directory(script.getParent().toFile())
                 .start();
         try {
