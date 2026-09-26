@@ -193,13 +193,36 @@ class UpdateApplyTest {
         // sonst sieht sie niemand (die Pipes sterben mit der bereits beendeten JVM).
         assertTrue(skriptText.contains(":log"), "es muss eine Protokoll-Routine geben");
         assertTrue(skriptText.contains("update.log"), "das Protokoll muss in eine eigene Datei gehen");
-        // 2. Review-Nachtrag, Entscheidung B: kein automatisches Loeschen des alten Ordners nach Erfolg -
-        // die EINZIGE verbleibende rmdir-Stelle fuer OLDDIR ist das Aufraeumen eines liegengebliebenen
-        // .old VOR dem naechsten Tausch, nicht ein automatisches Loeschen NACH diesem.
-        long oldRmdirCount = skriptText.lines()
+        // 3. Review-Nachtrag: der FRISCHE .old (OLDDIR, gerade erst durch DIESEN Tausch entstanden)
+        // wird von KEINER Stelle im Skript geloescht - weder vor noch nach dem Tausch. Ein VORHANDENES
+        // .old aus einem frueheren Update wird nur beiseitegeschoben (ren nach OLDPREV) und erst NACH
+        // erfolgreichem Start der neuen Fassung geloescht - sonst waere die Sicherung schon weg, obwohl
+        // DIESER Tausch nie stattfand (das war genau der Fehler, den dieser Nachtrag behebt).
+        long oldDirRmdirCount = skriptText.lines()
                 .filter(l -> l.contains("rmdir") && l.contains("\"%OLDDIR%\"")).count();
-        assertEquals(1, oldRmdirCount,
-                "genau eine rmdir-Stelle fuer OLDDIR darf es geben (Aufraeumen VOR dem Tausch) - keine automatische nach Erfolg");
+        assertEquals(0, oldDirRmdirCount,
+                "OLDDIR (der frische alte Ordner) darf von keiner Stelle im Skript geloescht werden");
+        assertTrue(skriptText.contains("OLDPREV"), "ein vorhandenes .old muss beiseitegeschoben werden koennen");
+        assertTrue(skriptText.contains(".old.previous"), "der Zwischenname fuer ein vorhandenes .old muss im Skript auftauchen");
+        // Das Loeschen von OLDPREV darf nur NACH dem erfolgreichen Start der neuen Fassung stehen -
+        // ueber Zeilen-Indizes geprueft statt ueber einen bruechigen Gesamttext-Vergleich: es muss
+        // (mindestens) eine "rmdir OLDPREV"-Zeile geben, auf die (nach etwaigen Leerzeilen) direkt die
+        // "Update erfolgreich"-Meldung folgt.
+        List<String> zeilen = skriptText.lines().toList();
+        boolean loeschtOldprevErstNachErfolg = false;
+        for (int i = 0; i < zeilen.size(); i++) {
+            String zeile = zeilen.get(i).trim();
+            if (zeile.contains("rmdir") && zeile.contains("\"%OLDPREV%\"")) {
+                for (int j = i + 1; j < zeilen.size(); j++) {
+                    String naechste = zeilen.get(j).trim();
+                    if (naechste.isEmpty()) continue;
+                    if (naechste.contains("Update erfolgreich")) loeschtOldprevErstNachErfolg = true;
+                    break;
+                }
+            }
+        }
+        assertTrue(loeschtOldprevErstNachErfolg,
+                "OLDPREV darf erst geloescht werden, wenn direkt danach der Erfolg protokolliert wird");
         assertTrue(skriptText.contains("kann von Hand geloescht werden"),
                 "das Protokoll muss dem Nutzer sagen, dass .old von Hand geloescht werden kann");
 

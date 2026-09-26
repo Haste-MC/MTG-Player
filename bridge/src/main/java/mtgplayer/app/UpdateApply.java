@@ -380,9 +380,16 @@ public final class UpdateApply {
      * <p><b>{@code <Name>.old} wird NICHT automatisch geloescht</b> (2. Review-Nachtrag, Entscheidung
      * B): ein {@code rmdir} auf einen Ordner, dessen Inhalt wir nur vermuten, ist das Risiko nicht
      * wert. Er bleibt liegen; das Protokoll ({@code update.log}, siehe unten) nennt seinen Pfad, damit
-     * der Nutzer ihn von Hand loeschen kann. Ein liegengebliebenes {@code .old} aus einem FRUEHEREN,
-     * erfolgreichen Update darf beim NAECHSTEN Update ersetzt werden (erst ein erfolgreicher Lauf
-     * belegt, dass die neue Fassung wirklich lief).</p>
+     * der Nutzer ihn von Hand loeschen kann.</p>
+     *
+     * <p><b>3. Review-Nachtrag:</b> ein liegengebliebenes {@code .old} aus einem FRUEHEREN Update wurde
+     * bisher schon VOR diesem Tausch geloescht, um Platz fuer das neue {@code .old} zu machen - loescht
+     * danach {@code ren}/{@code move}/{@code start} nicht, ist die alte Sicherungskopie schon weg,
+     * obwohl DIESER Tausch nie stattfand (widerspricht Entscheidung B: die Sicherung darf erst weg,
+     * wenn ein erfolgreicher Lauf der NEUEN Fassung das belegt). Ein vorhandenes {@code .old} wird
+     * deshalb jetzt nur beiseitegeschoben (nach {@code <Name>.old.previous}, siehe {@code oldPrevAbs}
+     * unten) statt geloescht - endgueltig weg ist es erst NACH dem erfolgreichen Start der neuen
+     * Fassung; scheitert irgendetwas davor, kommt es an genau dieser Stelle zurueck.</p>
      */
     private static Path writeScript(Path stagingRoot, Path appDir, Path newDir, String name) throws IOException {
         Path script = stagingRoot.resolve("update.cmd");
@@ -394,6 +401,9 @@ public final class UpdateApply {
         // Ordners ist deshalb einfach der Nachbar von appDir mit der Endung ".old". Das hier in Java
         // auszurechnen (statt im Batch mit %~dp/%~nx zu hantieren) haelt das Skript selbst simpel.
         String oldAbs = appDir.resolveSibling(name + OLD_SUFFIX).toAbsolutePath().normalize().toString();
+        // Zwischenname fuer ein bereits vorhandenes .old (3. Review-Nachtrag) - derselbe Nachbar-Trick
+        // wie bei oldAbs.
+        String oldPrevAbs = appDir.resolveSibling(name + OLD_SUFFIX + ".previous").toAbsolutePath().normalize().toString();
         // update.log liegt im Datenverzeichnis (2. Review-Nachtrag, Befund 3): das Skript laeuft NACH
         // dem Ende der JVM, seine echo-Ausgaben gehen an niemanden (die Pipes sterben mit dem Prozess,
         // der sie angelegt hat) - ohne eigene Datei waere ein gescheitertes Update nie nachvollziehbar.
@@ -417,6 +427,7 @@ public final class UpdateApply {
                 set "APPDIR=%s"
                 set "NEWDIR=%s"
                 set "OLDDIR=%s"
+                set "OLDPREV=%s"
                 set "STAGING=%s"
                 set "DATADIR=%s"
                 set "LOG=%s"
@@ -461,12 +472,15 @@ public final class UpdateApply {
                 exit /b 1
                 :waitdone
 
-                rem Ein liegengebliebener .old-Ordner aus einem FRUEHEREN, erfolgreichen Update darf das
-                rem naechste nicht dauerhaft blockieren - er gilt erst jetzt (ein neuer Tausch beginnt
-                rem gerade wirklich) als ersetzbar, nicht automatisch nach jedem Erfolg (Entscheidung B).
+                rem Ein liegengebliebener .old-Ordner aus einem FRUEHEREN Update wird beiseitegeschoben,
+                rem NICHT geloescht (3. Review-Nachtrag): er bleibt die Rueckfallebene, bis DIESER neue
+                rem Tausch nachweislich geklappt hat (Entscheidung B) - macht aber Platz, damit gleich
+                rem "%%APPDIR%%" nach ".old" umbenannt werden kann. Ein ganz altes OLDPREV (von einem noch
+                rem frueheren, abgebrochenen Versuch) darf hier weichen - es ist laengst durch OLDDIR ersetzt.
                 if exist "%%OLDDIR%%" (
-                    call :log "Vorhandenes %%OLDDIR%% (Rest eines frueheren Updates) wird vor dem Tausch entfernt."
-                    rmdir /s /q "%%OLDDIR%%" 2>nul
+                    call :log "Vorhandenes %%OLDDIR%% wird beiseitegeschoben, bis der neue Tausch bestaetigt ist."
+                    if exist "%%OLDPREV%%" rmdir /s /q "%%OLDPREV%%" 2>nul
+                    ren "%%OLDDIR%%" "%%NAME%%.old.previous"
                 )
 
                 rem alten Ordner beiseite legen, bevor irgendetwas Neues an seine Stelle kommt
@@ -476,6 +490,8 @@ public final class UpdateApply {
                     rem stand bisher NICHTS, das die App wieder startet. %%APPDIR%% hat sich nicht
                     rem geaendert (ren ist fehlgeschlagen), die alte Fassung liegt also unveraendert dort.
                     call :log "Update fehlgeschlagen: alter Ordner liess sich nicht umbenennen - alte Fassung wird erneut gestartet."
+                    rem das beiseitegeschobene .old zurueckholen - an diesem Tausch hat sich sonst nichts geaendert.
+                    if exist "%%OLDPREV%%" ren "%%OLDPREV%%" "%%NAME%%.old"
                     start "" /d "%%APPDIR%%" "%%APPDIR%%\\%s"
                     call :cleanup
                     exit /b 1
@@ -503,8 +519,12 @@ public final class UpdateApply {
                     goto restore_old
                 )
 
-                rem Erfolg: der alte Stand wird NICHT geloescht (Entscheidung B) - er bleibt unter
-                rem OLDDIR liegen, bis der Nutzer ihn von Hand entfernt oder das naechste Update ihn ersetzt.
+                rem Erfolg: der FRISCHE alte Stand (OLDDIR, gerade erst entstanden) wird NICHT geloescht
+                rem (Entscheidung B) - er bleibt liegen, bis der Nutzer ihn von Hand entfernt oder das
+                rem naechste Update ihn ersetzt. Die AELTERE, beiseitegeschobene Sicherung (OLDPREV) darf
+                rem jetzt aber wirklich weg - die neue Fassung hat gerade erfolgreich gestartet, genau der
+                rem Beweis, den Entscheidung B verlangt (3. Review-Nachtrag).
+                if exist "%%OLDPREV%%" rmdir /s /q "%%OLDPREV%%" 2>nul
                 call :log "Update erfolgreich. Alter Ordner bleibt erhalten unter %%OLDDIR%% - kann von Hand geloescht werden."
                 call :cleanup
                 exit /b 0
@@ -524,6 +544,9 @@ public final class UpdateApply {
                     call :cleanup
                     exit /b 1
                 )
+                rem die beiseitegeschobene AELTERE Sicherung (3. Review-Nachtrag) ebenfalls zurueckholen -
+                rem nach einem gescheiterten Tausch soll alles wieder genau so daliegen wie davor.
+                if exist "%%OLDPREV%%" ren "%%OLDPREV%%" "%%NAME%%.old"
                 rem alte Fassung erneut starten - ein Fehlschlag darf nie "die App ist einfach weg" bedeuten.
                 start "" /d "%%APPDIR%%" "%%APPDIR%%\\%s"
                 call :log "Alte Fassung nach fehlgeschlagenem Update erneut gestartet."
@@ -545,7 +568,7 @@ public final class UpdateApply {
                 echo %%~1
                 >>"%%LOG%%" echo %%date%% %%time%% %%~1
                 goto :eof
-                """.formatted(pid, name, appAbs, newAbs, oldAbs, stagingAbs, dataDirAbs, logAbs,
+                """.formatted(pid, name, appAbs, newAbs, oldAbs, oldPrevAbs, stagingAbs, dataDirAbs, logAbs,
                 EXE_NAME, EXE_NAME, EXE_NAME);
         // cmd.exe braucht CRLF-Zeilenenden (Review-Befund) - der Text-Block liefert reines "\n", sonst
         // brechen goto-Spruenge und die geklammerten if-Bloecke auf Windows.
