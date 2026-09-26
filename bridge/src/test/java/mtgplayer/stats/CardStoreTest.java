@@ -13,6 +13,8 @@ import mtgplayer.protocol.Json;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 
 class CardStoreTest {
@@ -114,8 +116,16 @@ class CardStoreTest {
      * Auf Kevins Linux-Rechner liegen bereits Kartendateien mit Doppelpunkt im Namen (vor diesem Umbau
      * geschrieben, siehe Klassenkommentar von {@link CardStore}) - {@link CardStore#read} muss die
      * weiterhin finden, auch wenn KEINE Datei unter dem neuen, bereinigten Namen liegt.
+     *
+     * <p>Nicht unter Windows: dieser Test muss die alte Datei SELBST anlegen, und ihr Name laesst sich
+     * dort nicht einmal bilden ({@code Path.resolve} wirft die {@link java.nio.file.InvalidPathException}
+     * aus dem Klassenkommentar). Es gibt dort auch nichts zurueckzufallen - {@code write} scheiterte unter
+     * Windows an genau diesem Doppelpunkt, eine solche Altdatei kann also nur auf einem Dateisystem
+     * liegen, das Doppelpunkte erlaubt. Dass der Rueckfall unter Windows nicht erneut in diese Ausnahme
+     * laeuft, prueft {@link #echteIdMitDoppelpunktLaesstSichLoeschen()} auf JEDER Plattform.</p>
      */
     @Test
+    @DisabledOnOs(OS.WINDOWS)
     void readFaelltAufDenAltenDoppelpunktNamenZurueck(@TempDir Path dir) throws Exception {
         Files.createDirectories(dir);
         String id = "2026-09-25T14:39:39.718Z-f94358";
@@ -126,9 +136,11 @@ class CardStoreTest {
 
     /**
      * Derselbe Rueckfall gilt fuers Loeschen (Bridge.deleteMatch raeumt sonst nie auf, wenn nur die alte
-     * Datei existiert).
+     * Datei existiert). Nicht unter Windows, aus dem Grund bei
+     * {@link #readFaelltAufDenAltenDoppelpunktNamenZurueck(Path)}.
      */
     @Test
+    @DisabledOnOs(OS.WINDOWS)
     void deleteFaelltAufDenAltenDoppelpunktNamenZurueck(@TempDir Path dir) throws Exception {
         Files.createDirectories(dir);
         String id = "2026-09-25T14:39:39.718Z-f94358";
@@ -137,6 +149,22 @@ class CardStoreTest {
         store.delete(id);
         assertTrue(store.read(id).isEmpty());
         assertFalse(Files.exists(dir.resolve(id + ".json")), "die alte Datei ist weg");
+    }
+
+    /**
+     * Der Rueckfall auf den alten Namen darf nicht die Ausnahme wiederherstellen, die dieser Umbau
+     * behebt: {@link CardStore#delete} fragt den alten Namen IMMER mit, und fuer eine echte Id mit
+     * Doppelpunkt ist der unter Windows gar kein gueltiger Pfad. Dieser Test laeuft deshalb auf jeder
+     * Plattform - unter Windows prueft er den Fang in {@code legacyFile}, unter Linux, dass der Rueckfall
+     * die richtige Datei nicht verschont.
+     */
+    @Test
+    void echteIdMitDoppelpunktLaesstSichLoeschen(@TempDir Path dir) {
+        CardStore store = new CardStore(dir);
+        String id = "2026-09-25T14:39:39.718Z-f94358";
+        store.write(log(id, "Mein Deck"));
+        store.delete(id);
+        assertTrue(store.read(id).isEmpty(), "nach dem Loeschen ist die Partie weg");
     }
 
     /**
