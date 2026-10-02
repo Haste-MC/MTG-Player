@@ -1,0 +1,101 @@
+name: Kartendaten
+
+# Woechentlich und auf Knopfdruck. Kein Windows noetig: hier wird nichts gepackt.
+on:
+  schedule:
+    - cron: '17 4 * * 1'
+  workflow_dispatch: {}
+
+# Nur ein Lauf gleichzeitig - zwei wuerden denselben Zweig gegeneinander schieben.
+concurrency:
+  group: kartendaten
+  cancel-in-progress: false
+
+jobs:
+  abgleich:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Auschecken (mit Forge-Submodul)
+        uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      - name: JDK 17 (Temurin) einrichten
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+
+      - name: Forge bauen
+        working-directory: forge
+        run: mvn -q -pl forge-gui -am install -DskipTests -Dcheckstyle.skip -Dmaven.javadoc.skip=true
+
+      - name: Bridge bauen
+        run: |
+          # Das Abgleich-Skript uebersetzt bewusst nicht selbst (siehe dessen Kommentar) - gebaut wird hier.
+          mvn -q -f bridge/pom.xml -DskipTests package
+          mvn -q -f bridge/pom.xml dependency:build-classpath -Dmdep.outputFile="$PWD/target/cp.txt"
+
+      - name: Abgleich
+        id: sync
+        run: |
+          set +e
+          scripts/kartendaten-sync.sh
+          echo "code=$?" >> "$GITHUB_OUTPUT"
+
+      - name: Befund anhaengen (immer, auch bei Fehlschlag)
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: kartendaten-befund
+          path: |
+            kartendaten-befund*.json
+            kartendaten-bericht.md
+          if-no-files-found: ignore
+
+      - name: Nichts Neues
+        if: steps.sync.outputs.code == '2'
+        run: echo "upstream hat keine neuen Kartendaten - kein Pull Request."
+
+      - name: Fehlschlag
+        if: steps.sync.outputs.code != '0' && steps.sync.outputs.code != '2'
+        run: |
+          echo "Der Abgleich ist nicht sauber durchgelaufen; der Befund haengt als Artefakt an." >&2
+          exit 1
+
+      - name: Zweig schieben und Pull Request anlegen
+        if: steps.sync.outputs.code == '0'
+        env:
+          GH_TOKEN: ${{ secrets.FORK_TOKEN }}
+        working-directory: forge
+        run: |
+          # Commit im Fork: Englisch, upstream-tauglich, ohne Verweis auf dieses Projekt -
+          # wie jeder Commit dort. Der Bericht gehoert in den Pull Request, nicht hierher.
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/Haste-MC/forge.git"
+          git checkout -B kartendaten-abgleich
+          git add forge-gui/res/cardsfolder forge-gui/res/editions forge-gui/res/tokenscripts
+          git commit -m "Sync card data from upstream master"
+          git push --force origin kartendaten-abgleich
+          if gh pr view kartendaten-abgleich --repo Haste-MC/forge >/dev/null 2>&1; then
+            gh pr edit kartendaten-abgleich --repo Haste-MC/forge \
+               --body-file "${GITHUB_WORKSPACE}/kartendaten-bericht.md"
+          else
+            gh pr create --repo Haste-MC/forge --base mtg-player --head kartendaten-abgleich \
+               --title "Sync card data from upstream master" \
+               --body-file "${GITHUB_WORKSPACE}/kartendaten-bericht.md"
+          fi
+
+      - name: Ausschlussliste fortschreiben
+        if: steps.sync.outputs.code == '0'
+        run: |
+          # Die Liste gehoert ins Hauptprojekt, nicht in den Fork - dafuer reicht das eingebaute Token.
+          if ! git diff --quiet -- docs/kartendaten-ausgeschlossen.txt; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add docs/kartendaten-ausgeschlossen.txt
+            git commit -m "docs: ausschlussliste aus dem kartendaten-abgleich fortgeschrieben"
+            git push
+          fi

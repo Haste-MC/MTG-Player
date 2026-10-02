@@ -124,6 +124,16 @@ Kante ist hover-/klickbar. Flüche auf Spielern stehen als „Aura"-Chip im Pane
 Die Grab-/Exil-Liste öffnet zur Bildmitte hin.
 Alternative Bridge-Ports lassen sich per URL setzen: `?wsPort=8082` (gleicher Host) oder `?ws=ws://host:port` (eigene WebSocket-URL).
 
+## Kartendaten-Abgleich
+
+Der Ablauf `.github/workflows/kartendaten.yml` gleicht Forges Kartendaten wöchentlich mit upstream ab
+und legt das Ergebnis als Pull Request in `Haste-MC/forge` vor.
+
+Dafür braucht er ein Geheimnis `FORK_TOKEN` in diesem Repository: ein fein granuliertes
+Personal Access Token auf `Haste-MC/forge` mit **Contents: Read and write** und
+**Pull requests: Read and write**. Ohne das Token schlägt nur der letzte Schritt fehl — Abgleich und
+Prüfung laufen trotzdem, und der Befund hängt als Artefakt am Lauf.
+
 ## Bridge
 
 ```bash
