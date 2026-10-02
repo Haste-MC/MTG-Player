@@ -1136,17 +1136,25 @@ BEFUND="$WURZEL/kartendaten-befund.json"
 BERICHT="$WURZEL/kartendaten-bericht.md"
 NEUE_DATEIEN="$WURZEL/kartendaten-neu.txt"
 
+# Das Skript UEBERSETZT NICHT. Es erwartet eine fertig gebaute Bridge und sagt sonst, was zu tun ist.
+# Grund: auf dem Entwicklungsrechner laeuft Kevins Bridge aus genau diesem target/classes - ein
+# "mvn package" waehrend des Spiels tauscht ihr die Klassen unter der laufenden JVM weg
+# (NoSuchMethodError mitten in der Partie). Der Ablauf baut vorher, von Hand baut man vorher.
+if [ ! -d bridge/target/classes/mtgplayer ] || [ ! -s "$WURZEL/target/cp.txt" ]; then
+  echo "Bridge ist nicht gebaut. Vorher einmal, und NICHT waehrend eine Bridge laeuft:" >&2
+  echo "  mvn -q -f bridge/pom.xml -DskipTests package" >&2
+  echo "  mvn -q -f bridge/pom.xml dependency:build-classpath -Dmdep.outputFile=target/cp.txt" >&2
+  exit 1
+fi
+
 pruefen() {   # $1 = Zieldatei
   ( cd bridge
-    mvn -q -DskipTests package >/dev/null
     java -Xmx4g -Dmtgplayer.data="$WURZEL/target/kartendaten-data" \
          -cp "target/classes:$(cat "$WURZEL/target/cp.txt")" \
          mtgplayer.Main --kartendaten-pruefen ) \
     | sed -n 's/^KARTENDATEN_BEFUND //p' > "$1"
   [ -s "$1" ] || { echo "Pruefmodus lieferte keinen Befund" >&2; exit 1; }
 }
-
-mvn -q -f bridge/pom.xml dependency:build-classpath -Dmdep.outputFile="$WURZEL/target/cp.txt" >/dev/null
 
 echo "== 1. Vergleichsmarke =="
 pruefen "$BEFUND_VORHER"
@@ -1260,6 +1268,12 @@ jobs:
         working-directory: forge
         run: mvn -q -pl forge-gui -am install -DskipTests -Dcheckstyle.skip -Dmaven.javadoc.skip=true
 
+      - name: Bridge bauen
+        run: |
+          # Das Abgleich-Skript uebersetzt bewusst nicht selbst (siehe dessen Kommentar) - gebaut wird hier.
+          mvn -q -f bridge/pom.xml -DskipTests package
+          mvn -q -f bridge/pom.xml dependency:build-classpath -Dmdep.outputFile="$PWD/target/cp.txt"
+
       - name: Abgleich
         id: sync
         run: |
@@ -1343,10 +1357,10 @@ Prüfung laufen trotzdem, und der Befund hängt als Artefakt am Lauf.
 - [ ] **Step 3: Den Ablauf auf Gültigkeit prüfen**
 
 ```bash
-python3 -c "import yaml,sys; d=yaml.safe_load(open('.github/workflows/kartendaten.yml')); print('yaml ok, schritte:', len(d['jobs']['abgleich']['steps']))"
+python3 -c "import yaml,sys; d=yaml.safe_load(open('.github/workflows/kartendaten.yml')); print("yaml ok, schritte:", len(d["jobs"]["abgleich"]["steps"]))"
 ```
 
-Erwartet: `yaml ok, schritte: 9`.
+Erwartet: `yaml ok, schritte: 10`.
 
 - [ ] **Step 4: Committen**
 
