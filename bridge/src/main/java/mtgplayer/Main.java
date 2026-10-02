@@ -7,6 +7,8 @@ import mtgplayer.bench.Bench;
 import mtgplayer.bench.BenchArgs;
 import mtgplayer.bench.GameRecord;
 import mtgplayer.carddata.CardDataCheck;
+import mtgplayer.carddata.CardDataSweep;
+import mtgplayer.carddata.Exclusions;
 import mtgplayer.forge.CrashLog;
 import mtgplayer.forge.ForgeBoot;
 import mtgplayer.forge.Precons;
@@ -23,6 +25,7 @@ import mtgplayer.stats.MatchRecord;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.PrintStream;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -150,6 +153,25 @@ public final class Main {
                 CardDataCheck.Befund befund = CardDataCheck.pruefen(
                         ForgeBoot.assetsDir().resolve("res"), meldungen);
                 System.out.println("KARTENDATEN_BEFUND " + Json.toJson(befund));
+                System.exit(0);
+                return;
+            }
+
+            if (modus.equals("--kartendaten-aussortieren")) {
+                // Entfernt die Dateien hinter einem Befund und schreibt die Ausschlussliste fort.
+                // Getrennt vom Pruefmodus, weil der nicht urteilen soll (Spezifikation 3).
+                // args: <befund.json> <ausschlussliste.txt> <neue-dateien.txt>
+                Path befundDatei = Paths.get(args[1]);
+                Path listenDatei = Paths.get(args[2]);
+                Path neueDateien = Paths.get(args[3]);
+                CardDataCheck.Befund befund = Json.mapper()
+                        .readValue(Files.readString(befundDatei), CardDataCheck.Befund.class);
+                Path res = ForgeBoot.assetsDir().resolve("res");
+                int entfernt = CardDataSweep.aussortieren(befund, res, neueDateien);
+                Exclusions.schreiben(listenDatei,
+                        Exclusions.ergaenzen(Exclusions.lesen(listenDatei), befund,
+                                java.time.LocalDate.now().toString()));
+                System.out.println("KARTENDATEN_AUSSORTIERT " + entfernt);
                 System.exit(0);
                 return;
             }
