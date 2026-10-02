@@ -11,6 +11,12 @@
 #                 Zwischenschritts (auch ein Java-Rueckgabewert 2 oder 3) wird zu 1, sonst hielte der
 #                 aufrufende Ablauf ein Scheitern fuer "nichts Neues".
 #
+# Eine Karte, die vor dem Abgleich da war, geht durch ihn nicht verloren: faellt upstreams NEUE Fassung
+# einer bei uns schon vorhandenen Datei durch die Pruefung, kommt unsere alte Fassung zurueck (git checkout
+# HEAD) und die Karte steht im Bericht unter "bleibt auf unserer bisherigen Fassung" - nicht auf der
+# Ausschlussliste. Nur wirklich neue Dateien werden geloescht und ausgeschlossen. Die Gegenprobe vergleicht
+# deshalb auch die MENGE der Kartennamen vorher/nachher, nicht nur ihre Anzahl.
+#
 # Kein halbes Ergebnis: scheitert irgendein Schritt, nachdem der Arbeitsbaum veraendert wurde, wird die
 # Aenderung zurueckgenommen (Kartenordner im Submodul und Ausschlussliste) und das laut gesagt. Wer den
 # halben Stand zum Nachsehen braucht: KARTENDATEN_BEHALTEN=1 (dann bleibt er stehen, mit Hinweis).
@@ -180,11 +186,15 @@ BEFUND_ROH="$WURZEL/kartendaten-befund-roh.json"
 BEFUND="$WURZEL/kartendaten-befund.json"
 BERICHT="$WURZEL/kartendaten-bericht.md"
 NEUE_DATEIEN="$WURZEL/kartendaten-neu.txt"
+NAMEN_VORHER="$WURZEL/target/kartennamen-vorher.txt"
+NAMEN_NACHHER="$WURZEL/target/kartennamen-nachher.txt"
+BLEIBT="$WURZEL/target/kartendaten-bleibt.tsv"   # Karten, die auf unserer alten Fassung bleiben
 CP_DATEI="$WURZEL/target/cp.txt"
 DATA="$WURZEL/target/kartendaten-data"
 
 # Reste eines frueheren Laufs duerfen nie fuer das Ergebnis dieses Laufs gehalten werden.
-rm -f "$BEFUND_VORHER" "$BEFUND_ROH" "$BEFUND" "$BERICHT" "$NEUE_DATEIEN"
+rm -f "$BEFUND_VORHER" "$BEFUND_ROH" "$BEFUND" "$BERICHT" "$NEUE_DATEIEN" \
+      "$NAMEN_VORHER" "$NAMEN_NACHHER" "$BLEIBT"
 
 # Das Skript UEBERSETZT NICHT. Es erwartet eine fertig gebaute Bridge und sagt sonst, was zu tun ist.
 # Grund: auf dem Entwicklungsrechner laeuft Kevins Bridge aus genau diesem target/classes - ein
@@ -219,6 +229,27 @@ pruefen() {   # $1 = Zieldatei
 }
 karten() { python3 -c "import json,sys;print(json.load(open(sys.argv[1], encoding='utf-8'))['karten'])" "$1"; }
 
+# Die Kartennamen unter cardsfolder (erste "Name:"-Zeile je Datei, wie CardFiles), sortiert, einer je Zeile.
+# $1 = Zieldatei. Liest den Arbeitsbaum - vor dem Uebernehmen ist der (siehe Pruefung unten) gleich HEAD.
+kartennamen() {
+  python3 - "$FORGE/forge-gui/res/cardsfolder" "$1" <<'PY'
+import os, sys
+wurzel, ziel = sys.argv[1:3]
+namen = set()
+for ordner, _, dateien in os.walk(wurzel):
+    for datei in dateien:
+        try:
+            with open(os.path.join(ordner, datei), encoding="utf-8") as f:
+                name = next((z[5:].strip() for z in f if z.startswith("Name:")), None)
+        except UnicodeDecodeError:
+            name = None
+        if name:
+            namen.add(name)
+with open(ziel, "w", encoding="utf-8") as f:
+    f.write("".join(n + "\n" for n in sorted(namen)))
+PY
+}
+
 SCHRITT="1. Vergleichsmarke"
 echo "== 1. Vergleichsmarke =="
 # Vorher: ein unsauberer Ausgangsstand wuerde sonst unserem Abgleich angelastet, und ein "git clean"
@@ -229,6 +260,8 @@ fi
 pruefen "$BEFUND_VORHER"
 KARTEN_VORHER=$(karten "$BEFUND_VORHER")
 echo "Karten vorher: $KARTEN_VORHER"
+mkdir -p "$WURZEL/target"
+kartennamen "$NAMEN_VORHER"
 
 SCHRITT="2. Uebernehmen von $REF"
 echo "== 2. Uebernehmen von $REF =="
@@ -288,6 +321,79 @@ if [ "$rc" -ne 0 ]; then
   fehler "Aussortieren endete mit $rc (2 = Neu-Liste unbrauchbar, 3 = ungeloeste Schluessel, siehe oben)"
 fi
 
+# Eine Datei, die HEAD schon kannte, war eine laufende Karte: upstream hat sie nur geaendert. Faellt diese
+# neue Fassung durch, ist es richtig, SIE zu verwerfen - aber die Karte darf dadurch nicht verloren gehen.
+# Darum kommt unsere alte Fassung zurueck, und der Name verlaesst die Ausschlussliste wieder (er stand nur
+# darauf, weil das Aussortieren die Datei nicht von der neuen unterscheiden kann). Bleibt der Schluessel
+# trotzdem ausgeschlossen, wenn eine ZWEITE, wirklich neue Datei mit demselben Schluessel gefallen ist:
+# diese Dublette bleibt draussen, die alte gute Datei bleibt stehen.
+# Das Format von $BLEIBT: Schluessel, Grund, Pfad - Tabulator-getrennt, fuer den Bericht.
+SCHRITT="3b. Bisherige Fassungen wiederherstellen"
+python3 - "$FORGE" "$NEUE_DATEIEN" "$AUSSCHLUSS_KOPIE" "$AUSSCHLUSS" "$BLEIBT" <<'PY'
+import os, subprocess, sys
+repo, neue, ausschluss_vor, ausschluss_nach, bleibt = sys.argv[1:6]
+
+def zeilen(p):
+    if not os.path.isfile(p):
+        return []
+    with open(p, encoding="utf-8") as f:
+        return f.read().split("\n")
+
+def eintraege(p):
+    ergebnis = {}
+    for z in zeilen(p):
+        if z.strip() and not z.startswith("#"):
+            teile = z.split("\t")
+            ergebnis[teile[0]] = teile[1] if len(teile) > 1 else ""
+    return ergebnis
+
+def git(*args, **kw):
+    return subprocess.run(["git", "-C", repo, *args], capture_output=True, **kw)
+
+def schluessel_im_index(pfad):
+    praefix = ("Name:" if "/cardsfolder/" in pfad else "Code=" if "/editions/" in pfad else None)
+    if praefix is None:
+        return None
+    inhalt = git("show", ":" + pfad, check=True).stdout
+    try:
+        text = inhalt.decode("utf-8")
+    except UnicodeDecodeError:
+        return None
+    return next((z[len(praefix):].strip() for z in text.split("\n") if z.startswith(praefix)), None)
+
+with open(neue, "rb") as f:
+    kandidaten = [os.fsdecode(p) for p in f.read().split(b"\n") if p]
+# Das Aussortieren loescht nur im Arbeitsbaum; der Index kennt die Datei noch (siehe unten, "add -A").
+geloescht = [p for p in kandidaten if not os.path.lexists(os.path.join(repo, p))]
+alt = [p for p in geloescht if git("cat-file", "-e", "HEAD:" + p).returncode == 0]
+neu_weg = [p for p in geloescht if p not in alt]
+vor = eintraege(ausschluss_vor)
+nach = eintraege(ausschluss_nach)
+bleibt_zeilen = []
+if alt:
+    schluessel_alt = {p: schluessel_im_index(p) for p in alt}
+    schluessel_neu_weg = {schluessel_im_index(p) for p in neu_weg}
+    git("checkout", "-q", "HEAD", "--pathspec-from-file=-", "--pathspec-file-nul",
+        input=b"\0".join(os.fsencode(p) for p in alt), check=True)
+    entfernen = set()
+    for pfad, k in sorted(schluessel_alt.items()):
+        if k is None:
+            continue
+        grund = nach.get(k) or "von unserer Forge-Fassung nicht baubar"
+        bleibt_zeilen.append(f"{k}\t{grund}\t{pfad}")
+        # Nur was dieser Lauf neu eingetragen hat, wird wieder gestrichen; ein alter Eintrag ist Handarbeit.
+        if k not in vor and k not in schluessel_neu_weg:
+            entfernen.add(k)
+    if entfernen and os.path.isfile(ausschluss_nach):
+        behalten = [z for z in zeilen(ausschluss_nach)
+                    if not (z.strip() and not z.startswith("#") and z.split("\t")[0] in entfernen)]
+        with open(ausschluss_nach, "w", encoding="utf-8") as f:
+            f.write("\n".join(behalten))
+with open(bleibt, "w", encoding="utf-8") as f:
+    f.write("".join(z + "\n" for z in bleibt_zeilen))
+print(f"auf unserer bisherigen Fassung geblieben: {len(bleibt_zeilen)} Karte(n)")
+PY
+
 # Das Aussortieren hat Dateien aus dem Arbeitsbaum geloescht, der Index kennt sie noch: angleichen, damit
 # der Stand im Submodul (und die Zaehlung im Bericht) das Endergebnis zeigt.
 git -C "$FORGE" add -A -- "${DIRS[@]}"
@@ -295,10 +401,12 @@ git -C "$FORGE" add -A -- "${DIRS[@]}"
 SCHRITT="4. Gegenprobe"
 echo "== 4. Gegenprobe =="
 pruefen "$BEFUND"
-python3 - "$BEFUND" "$BEFUND_VORHER" "$BERICHT" "$AUSSCHLUSS_KOPIE" "$AUSSCHLUSS" "$FORGE" "${DIRS[@]}" <<'PY'
+kartennamen "$NAMEN_NACHHER"
+python3 - "$BEFUND" "$BEFUND_VORHER" "$BERICHT" "$AUSSCHLUSS_KOPIE" "$AUSSCHLUSS" "$NAMEN_VORHER" \
+          "$NAMEN_NACHHER" "$BLEIBT" "$FORGE" "${DIRS[@]}" <<'PY'
 import json, os, subprocess, sys
-befund_p, vorher_p, bericht, ausschluss_vor, ausschluss_nach, forge = sys.argv[1:7]
-dirs = sys.argv[7:]
+befund_p, vorher_p, bericht, ausschluss_vor, ausschluss_nach, namen_vor, namen_nach, bleibt_p, forge = sys.argv[1:10]
+dirs = sys.argv[10:]
 lade = lambda p: json.load(open(p, encoding="utf-8"))
 befund, vorher = lade(befund_p), lade(vorher_p)
 
@@ -320,6 +428,16 @@ zaehler = {"A": 0, "M": 0, "D": 0}
 for i in range(0, len(teile) - 1, 2):
     zaehler[teile[i].decode()[:1]] = zaehler.get(teile[i].decode()[:1], 0) + 1
 
+def namen(p):
+    with open(p, encoding="utf-8") as f:
+        return {z.rstrip("\n") for z in f if z.strip()}
+# Die Zahl allein genuegt nicht: verschwindet eine Karte und kommen zwei neue dazu, steigt sie trotzdem.
+fehlend = sorted(namen(namen_vor) - namen(namen_nach))
+bleibt = []
+if os.path.isfile(bleibt_p):
+    with open(bleibt_p, encoding="utf-8") as f:
+        bleibt = [z.rstrip("\n").split("\t") for z in f if z.strip()]
+
 offen = (befund["nichtBaubar"] or befund["nichtAuffindbar"]
          or befund["doppelteSetCodes"] or befund["doppelteNamen"])
 gefallen = befund["karten"] < vorher["karten"]
@@ -334,14 +452,25 @@ with open(bericht, "w", encoding="utf-8") as f:
         f.write("\n")
     else:
         f.write("Nichts neu ausgeschlossen.\n\n")
+    if bleibt:
+        f.write(f"Bleibt auf unserer bisherigen Fassung ({len(bleibt)}) - upstreams neue Fassung ist mit "
+                "unserer Forge-Fassung nicht baubar, die Karte laeuft weiter wie bisher:\n\n")
+        for k, grund, pfad in sorted(bleibt):
+            f.write(f"- `{k}`: {grund}\n")
+        f.write("\n")
     if offen:
         f.write("**Befund nach dem Aussortieren noch offen:**\n\n```\n"
                 + json.dumps(befund, indent=1, ensure_ascii=False) + "\n```\n")
     if gefallen:
         f.write(f"**Kartenzahl gefallen: {vorher['karten']} -> {befund['karten']}**\n")
-if offen or gefallen:
+    if fehlend:
+        f.write(f"**Karten verschwunden ({len(fehlend)}), die vor dem Abgleich da waren:**\n\n")
+        for n in fehlend:
+            f.write(f"- `{n}`\n")
+if offen or gefallen or fehlend:
     print("Gegenprobe nicht sauber" + (": Befund offen" if offen else "")
-          + (f": Kartenzahl gefallen {vorher['karten']} -> {befund['karten']}" if gefallen else ""),
+          + (f": Kartenzahl gefallen {vorher['karten']} -> {befund['karten']}" if gefallen else "")
+          + (f": {len(fehlend)} Karte(n) verschwunden: " + "; ".join(fehlend) if fehlend else ""),
           file=sys.stderr)
     sys.exit(1)
 PY

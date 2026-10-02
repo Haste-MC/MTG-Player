@@ -6,3 +6,6 @@ bridge/assets/forge.profile.properties
 *.iml
 web/dist/
 build/
+kartendaten-bericht.md
+kartendaten-befund*.json
+kartendaten-neu.txt
