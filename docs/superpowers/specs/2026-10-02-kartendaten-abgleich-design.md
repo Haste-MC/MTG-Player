@@ -74,7 +74,7 @@ Spielaufbau ab, sobald eine solche Karte im Deck liegt.
 
 ## 4. Das Abgleich-Skript
 
-`scripts/kartendaten-sync.sh`, aufrufbar ohne GitHub, mit höchstens drei Forge-Starts:
+`scripts/kartendaten-sync.sh`, aufrufbar ohne GitHub, mit höchstens vier Forge-Starts (drei Prüfläufe in den Schritten 1, 3 und 4, dazu die abschließende Partie in Schritt 5):
 
 1. **Vergleichsmarke.** Prüfmodus auf dem unveränderten Stand laufen lassen.
 2. **Übernehmen.** `git fetch upstream`, dann die drei Verzeichnisse aus `upstream/master` in den
@@ -103,8 +103,14 @@ das unsere Fassung nicht kennt - genau der Fall, der beim Abgleich 2026-09-25 be
 **Abbruchbedingungen.** Das Skript meldet Fehlschlag, wenn nach Schritt 4 noch ein Befund offen ist, wenn
 `karten` unter die Vergleichsmarke aus Schritt 1 gefallen ist, oder wenn ein Kartenname fehlt, der vorher
 da war. Die Zahl allein genügt nicht: eine verschwundene Karte und zwei neue heben sie, der Verlust bliebe
-unbemerkt. Eine echte Löschung bei upstream laesst den Abgleich deshalb fehlschlagen - das ist gewollt,
-ein Mensch sieht sie sich an. Eine Umbenennung nicht, denn der Kartenname in der Datei bleibt derselbe.
+unbemerkt.
+
+**Löschungen bei upstream sind erlaubt.** Fehlt ein Kartenname nachher, entscheidet `upstream/master`: steht
+er dort auch nicht mehr, hat upstream die Karte gestrichen - das ist dessen Entscheidung, die der Abgleich
+übernimmt. Es ist kein Fehlschlag; der Bericht führt die Karte unter „von upstream entfernt", und die
+Kartenzahl darf um genau so viele fallen. Steht der Name in `upstream/master` noch, hat der Abgleich die
+Karte selbst verloren: Fehlschlag mit Rücknahme. (Anders wäre der erste echte Lauf garantiert gescheitert.) Eine Umbenennung
+ist keine Löschung, denn der Kartenname in der Datei bleibt derselbe.
 
 ## 5. Die Ausschlussliste
 
@@ -112,7 +118,9 @@ ein Mensch sieht sie sich an. Eine Umbenennung nicht, denn der Kartenname in der
 der Aufnahme.
 
 Ohne sie käme jede Woche derselbe Kartensatz herein und flöge wieder heraus – der Bericht wäre jedes Mal
-gleich laut und niemand läse ihn mehr. Mit ihr nennt der Bericht nur, was **neu** dazugekommen ist. Die
+gleich laut und niemand läse ihn mehr. Mit ihr nennt der Bericht nur, was **neu** dazugekommen ist - dazu die Zahl der Einträge, die schon
+vorher auf der Liste standen, mit Verweis auf sie: diese Karten werden nicht hereingelassen und fehlen deshalb
+im Zweig. Das braucht ein zweiter Lauf vor dem Merge, dessen Text den des ersten überschreibt. Die
 Liste ist zugleich die Antwort auf die Frage „was bekomme ich durch einen Fassungswechsel zurück?" (§8).
 
 Die Liste gilt für unsere Engine-Fassung. Beim Fassungswechsel wird sie geleert und neu aufgebaut.
@@ -178,7 +186,9 @@ Durchweg gilt: **kein halbes Ergebnis.**
 | upstream nicht erreichbar | Ablauf schlägt fehl, nichts wurde angefasst |
 | nichts Neues bei upstream | kein Pull Request, Ablauf grün, eine Zeile im Protokoll |
 | Befund nach dem Aussortieren noch offen | **kein** Pull Request, Ablauf schlägt fehl, voller Befund als Artefakt |
-| Kartenzahl unter der Vergleichsmarke | wie oben |
+| Kartenzahl unter der Vergleichsmarke, abzüglich der von upstream entfernten Karten | wie oben |
+| Karte nach dem Abgleich verschwunden, in `upstream/master` aber noch vorhanden | wie oben (Fehlschlag mit Rücknahme) |
+| Karte von upstream gestrichen | **kein** Fehlschlag; Abschnitt „von upstream entfernt" im Bericht, Kartenzahl darf entsprechend fallen |
 | Pull Request schon offen | derselbe Zweig wird nachgeschoben, Berichtstext neu geschrieben |
 
 ## 10. Tests
@@ -201,6 +211,13 @@ Durchweg gilt: **kein halbes Ergebnis.**
 - Die abschließende Partie läuft mit Precon-Decks und sucht nicht gezielt nach neuen Karten.
 - Der Kartenabgleich bringt keine Engine-Korrekturen. Was an Forges Java kaputt ist, bleibt bis zum
   Fassungswechsel kaputt – oder wir reparieren es wie bisher selbst im Fork.
+- **Latente Falle für die Fassungswechsel-Arbeit:** `CardFiles` liest JEDE Datei unter `cardsfolder/`, Forge
+  dagegen nur `*.txt` und überspringt Punkt-Verzeichnisse. Heute ist das harmlos, weil unsere Forge-Fassung als
+  Entwicklungsfassung gilt und deshalb auch `upcoming/` lädt. Bekommt der Forge-Bau beim Fassungswechsel ein
+  versioniertes Manifest, lädt Forge `upcoming/` nicht mehr, und rund 640 Karten von dort fielen als „nicht
+  auffindbar" durch - der Lauf wäre dauerhaft rot. Wer die Fassung wechselt, muss `CardFiles` (und das
+  Namensverzeichnis im Skript) auf Forges Regel angleichen: nur `*.txt`, keine Punkt-Verzeichnisse, und
+  `upcoming/` nur, wenn Forge es lädt.
 
 ## 12. Nicht enthalten
 
