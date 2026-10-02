@@ -112,14 +112,18 @@ class CardDataCheckTest {
      * Datenbank), die aber beim Bauen scheitern. In den echten Daten gibt es keine - ohne diesen Test fiele
      * es nicht auf, wenn die Bauschleife nichts taete. Jedes Skript enthaelt ein Schluesselwort, das unsere
      * Forge-Fassung nicht kennt; der Grund muss es nennen, nicht nur die aeussere Ausnahme.
+     *
+     * <p>Die erste Testkarte heißt bewusst "Zzz Unbekannte Faehigkeit", nicht "Zzz Empower Testkarte":
+     * der Name darf das Schluesselwort nicht enthalten, sonst waere die Zusicherung auch gruen, wenn die
+     * Ursachenkette gar nicht ausgewertet wurde (Forges Meldung kaeme ueber den KARTENNAMEN, nicht die Cause).
      */
     @Test
     void kartenDieSichNichtBauenLassenStehenMitUrsacheImBefund(@TempDir Path tmp) throws Exception {
         Path res = tmp.resolve("res");
         kopiereRes(Path.of("assets").toAbsolutePath(), res);
         Path ordner = res.resolve("cardsfolder").resolve("z");
-        Files.writeString(ordner.resolve("zzz_empower_testkarte.txt"),
-                "Name:Zzz Empower Testkarte\nManaCost:1\nTypes:Artifact\n"
+        Files.writeString(ordner.resolve("zzz_unbekannte_faehigkeit_testkarte.txt"),
+                "Name:Zzz Unbekannte Faehigkeit\nManaCost:1\nTypes:Artifact\n"
                         + "A:AB$ Empower | Cost$ T | SpellDescription$ Testfaehigkeit.\nOracle:{T}: Testfaehigkeit.\n");
         Files.writeString(ordner.resolve("zzz_muenzen_testkarte.txt"),
                 "Name:Zzz Muenzen Testkarte\nManaCost:1\nTypes:Artifact\n"
@@ -133,7 +137,7 @@ class CardDataCheckTest {
         JsonNode b = befund(tmp, res.getParent());
 
         JsonNode probleme = b.get("nichtBaubar");
-        assertGrund(probleme, "Zzz Empower Testkarte", "crash in raw Ability", "Empower");
+        assertGrund(probleme, "Zzz Unbekannte Faehigkeit", "crash in raw Ability", "Empower");
         assertGrund(probleme, "Zzz Muenzen Testkarte", "Error in Trigger for Card", "FlippedCoinOnce");
         assertGrund(probleme, "Zzz Strahl Testkarte", "CantBeBeamedUp");
     }
