@@ -139,6 +139,12 @@ nicht, und der unangenehmste Handgriff bliebe liegen.
 
 ## 8. Der Fassungsweg
 
+> **Eigener Plan, später.** Dieser Abschnitt hängt sachlich an nichts aus dem Rest und wird erst
+> gebraucht, wenn upstream tatsächlich ein Release über `forge-2.0.14` veröffentlicht – heute gibt es
+> keines. Der erste Umsetzungsplan deckt §1–§7 und §9–§12 ab; §8 bekommt einen eigenen, wenn es so weit
+> ist. Der Abschnitt bleibt hier stehen, weil er die Gegenseite beschreibt, gegen die der Kartenweg
+> abgegrenzt ist (§1).
+
 **Nachricht.** `.github/workflows/forge-release.yml`, wöchentlich: fragt die GitHub-API nach dem
 neuesten Release von `Card-Forge/forge` und vergleicht es mit unserer Basis. Ist es neuer, entsteht
 **ein** Issue – und kein zweites für dasselbe Release.
