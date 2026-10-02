@@ -58,8 +58,10 @@ jobs:
           git checkout -B "$zweig"
           git add forge
           git commit -m "build: forge-submodul auf ${{ steps.stand.outputs.kurz }} angehoben"
-          # --force-with-lease statt --force: bricht ab, wenn der Zweig nicht mehr dort steht, wo wir ihn eben
-          # gesehen haben. Leerer Erwartungswert = der Zweig darf noch nicht existieren.
+          # Hier ist --force-with-lease nur Gurt, kein Netz: der Erwartungswert wird unmittelbar vor dem Push
+          # gelesen, die Bedingung ist also praktisch immer erfuellt. Das schadet nicht - der Zweigname
+          # enthaelt den Commit-Hash, ein fremder Commit auf genau diesem Zweig ist nicht zu erwarten.
+          # Leerer Erwartungswert = der Zweig darf noch nicht existieren.
           stand=$(git ls-remote --heads origin "refs/heads/$zweig")
           git push --force-with-lease="$zweig:${stand%%[[:space:]]*}" origin "$zweig"
           gh pr create --base main --head "$zweig" \

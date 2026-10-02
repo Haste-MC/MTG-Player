@@ -96,12 +96,30 @@ jobs:
           if git diff --cached --quiet; then
             echo "Nach dem Aussortieren ist nichts uebrig geblieben - kein Commit, kein Push, kein Pull Request."
           else
-            git commit -m "Sync card data from upstream master"
-            # --force-with-lease statt --force: der Push bricht ab, wenn der Zweig im Fork nicht mehr dort
-            # steht, wo wir ihn eben gesehen haben, statt fremde Commits am offenen Pull Request zu loeschen.
-            # Leerer Erwartungswert = der Zweig darf noch nicht existieren (erster Lauf).
+            # Handarbeit auf dem Zweig schuetzen: liegt auf seiner Spitze ein Commit, der nicht von diesem
+            # Bot stammt, brechen wir ab, statt ihn zu ueberschreiben (der Zweig wird jedes Mal neu aus
+            # upstream gebaut, ein fremder Commit ginge sonst lautlos verloren). Das Gelesene ist zugleich
+            # der Erwartungswert fuer --force-with-lease unten: dort schlaegt der Push nur noch fehl, wenn
+            # jemand zwischen dieser Pruefung und dem Push etwas auf den Zweig schiebt. Ein "ls-remote"
+            # unmittelbar vor dem Push waere als Erwartungswert wirkungslos (immer erfuellt = --force).
+            bot="41898282+github-actions[bot]@users.noreply.github.com"
             stand=$(git ls-remote --heads origin refs/heads/kartendaten-abgleich)
-            git push --force-with-lease="kartendaten-abgleich:${stand%%[[:space:]]*}" origin kartendaten-abgleich
+            stand=${stand%%[[:space:]]*}
+            if [ -n "$stand" ]; then
+              git fetch --quiet --depth=1 origin "+refs/heads/kartendaten-abgleich:refs/remotes/origin/kartendaten-abgleich"
+              spitze=$(git rev-parse refs/remotes/origin/kartendaten-abgleich)
+              von=$(git log -1 --format='%ae %ce' "$spitze")
+              if [ "$von" != "$bot $bot" ]; then
+                echo "::error::Auf kartendaten-abgleich in Haste-MC/forge liegt Handarbeit (Spitze ${spitze}, von: ${von}). Der Abgleich bricht ab und ueberschreibt nichts - erst dort aufraeumen (einarbeiten oder den Zweig loeschen), dann neu starten." >&2
+                exit 1
+              fi
+              stand="$spitze"
+            fi
+            git commit -m "Sync card data from upstream master"
+            # --force-with-lease statt --force: der Erwartungswert ist die Spitze, die wir oben geprueft haben
+            # (vom Bot, keine Handarbeit). Schiebt zwischen Pruefung und Push jemand etwas auf den Zweig,
+            # bricht der Push ab. Leerer Erwartungswert = der Zweig darf noch nicht existieren (erster Lauf).
+            git push --force-with-lease="kartendaten-abgleich:${stand}" origin kartendaten-abgleich
             # Gezielt nach OFFENEN Pull Requests fragen: "gh pr view" fand auch gemergte und geschlossene,
             # und nach dem ersten Merge waere nie wieder einer angelegt worden. Fehler von gh duerfen nicht
             # als "gibt es nicht" durchgehen - darum kein 2>/dev/null; schlaegt gh fehl, bricht der Schritt ab.

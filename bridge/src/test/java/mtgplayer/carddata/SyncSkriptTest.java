@@ -438,6 +438,38 @@ class SyncSkriptTest {
         assertEquals("Sol Ring\tvon Hand\t2026-01-01\n", Files.readString(w.liste()));
     }
 
+    @Test
+    void derBerichtNenntFruehereAusschluesseAuchWennNichtsNeuHinzukommt(@TempDir Path tmp) throws Exception {
+        // Zweiter Lauf vor dem Merge: die Karte des ersten Laufs steht schon auf der Liste, wird gar nicht
+        // erst hereingelassen und ist "nicht neu" - der Zweig entfernt sie trotzdem, der Text muss es sagen.
+        Wurzel w = baueWurzel(tmp);
+        Files.writeString(w.liste(), "Neue Karte\tParameter Foo unbekannt\t2026-09-25\n");
+        upstream(w, "echo 'Oracle:neu' >> forge-gui/res/cardsfolder/s/sol_ring.txt;"
+                + " echo 'Name:Neue Karte' > forge-gui/res/cardsfolder/s/neu.txt");
+        befunde(w, json(2), json(2), json(2));
+
+        Lauf lauf = laufVoll(w, "--ausschluss", w.liste().toString(), "upstream-test");
+
+        assertEquals(0, lauf.rc(), lauf.ausgabe());
+        assertFalse(Files.exists(w.karte("s/neu.txt")), "gar nicht erst hereingelassen");
+        String bericht = Files.readString(w.bericht());
+        assertTrue(bericht.contains("Nichts neu ausgeschlossen"), bericht);
+        assertTrue(bericht.contains("Bereits auf der Ausschlussliste (1)"), bericht);
+        assertTrue(bericht.contains("docs/kartendaten-ausgeschlossen.txt"), bericht);
+    }
+
+    @Test
+    void beiLeererListeFehltDerAbsatzUeberFruehereAusschluesse(@TempDir Path tmp) throws Exception {
+        Wurzel w = baueWurzel(tmp);
+        upstream(w, "echo 'Oracle:neu' >> forge-gui/res/cardsfolder/s/sol_ring.txt");
+        befunde(w, json(2), json(2), json(2));
+
+        Lauf lauf = laufVoll(w, "--ausschluss", w.liste().toString(), "upstream-test");
+
+        assertEquals(0, lauf.rc(), lauf.ausgabe());
+        assertFalse(Files.readString(w.bericht()).contains("Bereits auf der Ausschlussliste"));
+    }
+
     // --- Befund 4: die Gegenprobe vergleicht Namen, nicht nur die Zahl --------------------------
 
     @Test

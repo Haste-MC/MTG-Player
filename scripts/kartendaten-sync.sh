@@ -503,6 +503,13 @@ with open(bericht, "w", encoding="utf-8") as f:
         f.write("\n")
     else:
         f.write("Nichts neu ausgeschlossen.\n\n")
+    # Was frueher ausgeschlossen wurde, wird gar nicht erst hereingelassen und taucht darum nie unter "neu"
+    # auf. Laeuft der Abgleich ein zweites Mal vor dem Merge, ueberschreibt dieser Text den des ersten Laufs -
+    # ohne diesen Absatz stuende dort nicht mehr, warum der Zweig Karten entfernt.
+    if vor:
+        f.write(f"Bereits auf der Ausschlussliste ({len(vor)}) - frueher ausgeschlossen, werden nicht "
+                "hereingelassen und fehlen deshalb in diesem Zweig, soweit upstream sie fuehrt. Die Liste und "
+                "ihre Gruende: `docs/kartendaten-ausgeschlossen.txt` im Projekt MTG-Player.\n\n")
     if bleibt:
         f.write(f"Bleibt auf unserer bisherigen Fassung ({len(bleibt)}) - upstreams neue Fassung ist mit "
                 "unserer Forge-Fassung nicht baubar, die Karte laeuft weiter wie bisher:\n\n")
