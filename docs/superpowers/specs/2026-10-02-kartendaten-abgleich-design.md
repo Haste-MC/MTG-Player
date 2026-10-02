@@ -35,7 +35,7 @@ Nichts anderes. Kein Java, keine POMs, keine `lists`/`formats`.
 **Warum vollständig und nicht nur das Fehlende:** Der Abgleich von 2026-09-25 kopierte bewusst nur
 fehlende Dateien. Die Nachprüfung am 2026-10-02 zeigt, dass diese Vorsicht nichts von uns schützt – wir
 haben **nie** ein Kartenskript selbst geändert (`git diff --name-status forge-2.0.14..mtg-player` über
-die drei Verzeichnisse: 376 × `A`, 2 × `R100`, kein einziges `M`). Gleichzeitig liegen 2525 Skripte
+die drei Verzeichnisse: 376 × `A`, 2 × `R100`, kein einziges `M`). Gleichzeitig liegen 2536 Skripte
 upstream in einer neueren Fassung als bei uns; darin stecken Korrekturen an Karten, die bei uns heute
 falsch spielen. Der einzige echte Grund, etwas nicht zu übernehmen, ist, dass unsere Engine es nicht
 bauen kann – und genau das stellt die Prüfung fest, statt es zu vermuten.
@@ -93,9 +93,18 @@ Spielaufbau ab, sobald eine solche Karte im Deck liegt.
 Ergebnis ist ein Bericht (Markdown) plus der Zustand des Arbeitsbaums. Das Skript schreibt **keinen**
 Commit und schiebt nichts – das macht der Ablauf (§6).
 
-**Abbruchbedingungen.** Das Skript meldet Fehlschlag, wenn nach Schritt 4 noch ein Befund offen ist oder
-wenn `karten` unter die Vergleichsmarke aus Schritt 1 gefallen ist. Beides hieße, der Abgleich hat mehr
-zerstört als gebracht.
+**Keine laufende Karte darf verloren gehen.** Fällt eine Datei durch, die es vor dem Abgleich schon gab
+(upstream hat sie nur geändert), wird unsere bisherige Fassung wiederhergestellt statt gelöscht - sie lief
+ja. Diese Karte kommt NICHT auf die Ausschlussliste, sondern in einen eigenen Abschnitt des Berichts
+("bleibt auf unserer bisherigen Fassung"). Gelöscht und ausgeschlossen werden nur wirklich neue Dateien.
+Ohne diese Regel verschwände eine bei uns spielbare Karte, sobald upstream ihr ein Schlüsselwort beibringt,
+das unsere Fassung nicht kennt - genau der Fall, der beim Abgleich 2026-09-25 bei 37 von 394 Karten eintrat.
+
+**Abbruchbedingungen.** Das Skript meldet Fehlschlag, wenn nach Schritt 4 noch ein Befund offen ist, wenn
+`karten` unter die Vergleichsmarke aus Schritt 1 gefallen ist, oder wenn ein Kartenname fehlt, der vorher
+da war. Die Zahl allein genügt nicht: eine verschwundene Karte und zwei neue heben sie, der Verlust bliebe
+unbemerkt. Eine echte Löschung bei upstream laesst den Abgleich deshalb fehlschlagen - das ist gewollt,
+ein Mensch sieht sie sich an. Eine Umbenennung nicht, denn der Kartenname in der Datei bleibt derselbe.
 
 ## 5. Die Ausschlussliste
 
