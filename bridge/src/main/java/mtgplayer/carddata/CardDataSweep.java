@@ -21,7 +21,9 @@ import java.util.Set;
  * die Dublette aelter als dieser Abgleich und gehoert von Hand angesehen.</p>
  *
  * <p>Dasselbe gilt fuer {@code nichtBaubar} und {@code nichtAuffindbar}, sobald ein Schluessel MEHRERE
- * Dateien hat: dann faellt nur die neue. Hat er genau eine, faellt sie.</p>
+ * Dateien hat: dann faellt nur die neue. Hat er genau eine, faellt sie. Steht bei mehreren keine auf der
+ * Neu-Liste, faellt nichts und der Schluessel kommt als {@link Ergebnis#mehrereKeineNeu()} zurueck - die
+ * kaputte Karte liegt ja noch da.</p>
  *
  * <p>Nichts davon darf lautlos misslingen: ein Schluessel ohne Datei kommt im {@link Ergebnis} zurueck,
  * eine fehlende oder unbrauchbare Neu-Liste ist ein Fehler.</p>
@@ -34,10 +36,15 @@ public final class CardDataSweep {
      * @param entfernt         Zahl der geloeschten Dateien
      * @param ohneDatei        Schluessel aus dem Befund, zu denen es unter {@code res} keine Datei gibt - das
      *                         Problem ist dort NICHT geloest, der Aufrufer muss laut werden
-     * @param fortzuschreiben  der Befund ohne diese Schluessel: nur was hierin steht, darf in die
-     *                         Ausschlussliste
+     * @param mehrereKeineNeu  Schluessel aus {@code nichtBaubar}/{@code nichtAuffindbar} mit MEHREREN Dateien,
+     *                         von denen keine auf der Neu-Liste steht: es fiel nichts, die kaputte Karte
+     *                         liegt weiter im Kartenordner - ebenfalls NICHT geloest, der Aufrufer muss
+     *                         laut werden (Handgriff: von Hand die kaputte Datei bestimmen)
+     * @param fortzuschreiben  der Befund ohne die Schluessel aus {@code ohneDatei} und
+     *                         {@code mehrereKeineNeu}: nur was hierin steht, darf in die Ausschlussliste
      */
-    public record Ergebnis(int entfernt, List<String> ohneDatei, CardDataCheck.Befund fortzuschreiben) { }
+    public record Ergebnis(int entfernt, List<String> ohneDatei, List<String> mehrereKeineNeu,
+            CardDataCheck.Befund fortzuschreiben) { }
 
     private CardDataSweep() { }
 
@@ -64,6 +71,7 @@ public final class CardDataSweep {
         Map<String, List<Path>> editionen = CardFiles.editionen(res);
 
         Set<String> ohneDatei = new LinkedHashSet<>();
+        Set<String> mehrereKeineNeu = new LinkedHashSet<>();
         List<Path> zuLoeschen = new ArrayList<>();
 
         List<CardDataCheck.Problem> nichtBaubar = new ArrayList<>();
@@ -72,8 +80,13 @@ public final class CardDataSweep {
             if (leer(dateien)) {
                 ohneDatei.add(p.karte());
             } else {
-                nichtBaubar.add(p);
-                zuLoeschen.addAll(einzelnOderNeue(dateien, res, neu));
+                List<Path> fallen = einzelnOderNeue(dateien, res, neu);
+                if (fallen.isEmpty()) {
+                    mehrereKeineNeu.add(p.karte());
+                } else {
+                    nichtBaubar.add(p);
+                    zuLoeschen.addAll(fallen);
+                }
             }
         }
         List<String> nichtAuffindbar = new ArrayList<>();
@@ -82,8 +95,13 @@ public final class CardDataSweep {
             if (leer(dateien)) {
                 ohneDatei.add(n);
             } else {
-                nichtAuffindbar.add(n);
-                zuLoeschen.addAll(einzelnOderNeue(dateien, res, neu));
+                List<Path> fallen = einzelnOderNeue(dateien, res, neu);
+                if (fallen.isEmpty()) {
+                    mehrereKeineNeu.add(n);
+                } else {
+                    nichtAuffindbar.add(n);
+                    zuLoeschen.addAll(fallen);
+                }
             }
         }
         List<String> doppelteNamen = new ArrayList<>();
@@ -113,7 +131,13 @@ public final class CardDataSweep {
                 entfernt++;
             }
         }
-        return new Ergebnis(entfernt, List.copyOf(ohneDatei), new CardDataCheck.Befund(befund.karten(),
+        // Ein Schluessel, dessen kaputte Karte liegen blieb, darf in KEINER Liste des Befunds weiterwandern -
+        // auch nicht als Dublette: sonst steht er in der Ausschlussliste und der Bericht schweigt ihn tot.
+        nichtBaubar.removeIf(p -> mehrereKeineNeu.contains(p.karte()));
+        nichtAuffindbar.removeIf(mehrereKeineNeu::contains);
+        doppelteNamen.removeIf(mehrereKeineNeu::contains);
+        return new Ergebnis(entfernt, List.copyOf(ohneDatei), List.copyOf(mehrereKeineNeu),
+                new CardDataCheck.Befund(befund.karten(),
                 nichtBaubar, nichtAuffindbar, doppelteSetCodes, doppelteNamen, befund.parseMeldungen()));
     }
 

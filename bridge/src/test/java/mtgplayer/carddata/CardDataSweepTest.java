@@ -399,4 +399,132 @@ class CardDataSweepTest {
         assertEquals(1, n);
         assertFalse(Files.exists(einzige));
     }
+
+    // ---- Mehrere Dateien, keine neu: nichts faellt, also darf auch nichts auf die Ausschlussliste ----
+
+    private static List<String> aufDerListe(Ergebnis e) {
+        return Exclusions.ergaenzen(List.of(), e.fortzuschreiben(), "2026-10-02").stream()
+                .map(Exclusions.Eintrag::schluessel).toList();
+    }
+
+    /** Der Fall der Durchsicht: X in nichtBaubar UND doppelteNamen, zwei Dateien, leere Neu-Liste. */
+    @Test
+    void nichtBaubarMitMehrerenDateienOhneNeueIstUngeloestUndNichtAufDerListe(@TempDir Path tmp) throws Exception {
+        Path res = tmp.resolve("res");
+        Path eins = karte(res, "x/x.txt", "X");
+        Path zwei = karte(res, "x/x_zwei.txt", "X");
+
+        Ergebnis e = CardDataSweep.aussortieren(
+                befund(List.of(new CardDataCheck.Problem("X", "kaputt")), List.of(), List.of(), List.of("X")),
+                res, neueDateien(tmp));
+
+        assertEquals(0, e.entfernt());
+        assertTrue(Files.exists(eins));
+        assertTrue(Files.exists(zwei));
+        assertEquals(List.of("X"), e.mehrereKeineNeu());
+        assertEquals(List.of(), e.ohneDatei(), "das ist nicht 'keine Datei gefunden'");
+        assertEquals(List.of(), aufDerListe(e), "die kaputte Karte liegt noch da: nicht totschweigen");
+    }
+
+    @Test
+    void nichtAuffindbarMitMehrerenDateienOhneNeueIstUngeloestUndNichtAufDerListe(@TempDir Path tmp)
+            throws Exception {
+        Path res = tmp.resolve("res");
+        karte(res, "x/x.txt", "X");
+        karte(res, "x/x_zwei.txt", "X");
+
+        Ergebnis e = CardDataSweep.aussortieren(befund(List.of(), List.of("X"), List.of(), List.of()), res,
+                neueDateien(tmp));
+
+        assertEquals(0, e.entfernt());
+        assertEquals(List.of("X"), e.mehrereKeineNeu());
+        assertEquals(List.of(), aufDerListe(e));
+    }
+
+    /** Gegenfall: eine reine Dublette ohne neue Datei laeuft, beide Karten sind heil - Eintrag wie bisher. */
+    @Test
+    void reineDubletteOhneNeueDateiBleibtAufDerListeUndIstNichtUngeloest(@TempDir Path tmp) throws Exception {
+        Path res = tmp.resolve("res");
+        Path eins = karte(res, "x/x.txt", "X");
+        Path zwei = karte(res, "x/x_zwei.txt", "X");
+        edition(res, "a.txt", "YWOE");
+        edition(res, "b.txt", "YWOE");
+
+        Ergebnis e = CardDataSweep.aussortieren(befund(List.of(), List.of(), List.of("YWOE"), List.of("X")), res,
+                neueDateien(tmp));
+
+        assertEquals(0, e.entfernt());
+        assertTrue(Files.exists(eins));
+        assertTrue(Files.exists(zwei));
+        assertEquals(List.of(), e.mehrereKeineNeu());
+        assertEquals(List.of(), e.ohneDatei());
+        assertEquals(List.of("X", "YWOE"), aufDerListe(e).stream().sorted().toList());
+    }
+
+    private record Lauf(int exit, String stderr, String liste) { }
+
+    /** --kartendaten-aussortieren im Kindprozess: Exit-Wert, stderr und die fortgeschriebene Ausschlussliste. */
+    private static Lauf aussortierenImKind(Path tmp, Path assets, CardDataCheck.Befund b) throws Exception {
+        Path befundDatei = tmp.resolve("befund.json");
+        Files.writeString(befundDatei, Json.toJson(b), StandardCharsets.UTF_8);
+        Path liste = tmp.resolve("ausgeschlossen.txt");
+        Path neu = neueDateien(tmp);
+        String vorherAssets = System.getProperty("mtgplayer.assets");
+        System.setProperty("mtgplayer.assets", assets.toString());
+        List<String> cmd;
+        try {
+            cmd = ChildJvm.command(List.of("--kartendaten-aussortieren", befundDatei.toString(),
+                    liste.toString(), neu.toString()));
+        } finally {
+            if (vorherAssets == null) {
+                System.clearProperty("mtgplayer.assets");
+            } else {
+                System.setProperty("mtgplayer.assets", vorherAssets);
+            }
+        }
+        ProcessBuilder pb = new ProcessBuilder(cmd);
+        Path err = tmp.resolve("err.txt");
+        pb.redirectOutput(tmp.resolve("out.txt").toFile()).redirectError(err.toFile());
+        Process p = pb.start();
+        assertTrue(p.waitFor(2, java.util.concurrent.TimeUnit.MINUTES), "Kindprozess haengt");
+        return new Lauf(p.exitValue(), Files.readString(err, StandardCharsets.UTF_8),
+                Files.exists(liste) ? Files.readString(liste, StandardCharsets.UTF_8) : "");
+    }
+
+    @Test
+    void aussortierenMeldetMehrereDateienOhneNeueUnterscheidbarUndEndetMitFehler(@TempDir Path tmp)
+            throws Exception {
+        Path assets = tmp.resolve("assets");
+        Path res = assets.resolve("res");
+        Path eins = karte(res, "x/x.txt", "Zweifach");
+        Path zwei = karte(res, "x/x_zwei.txt", "Zweifach");
+        CardDataCheck.Befund b = new CardDataCheck.Befund(10,
+                List.of(new CardDataCheck.Problem("Zweifach", "kaputt"), new CardDataCheck.Problem("Fehlt", "y")),
+                List.of(), List.of(), List.of("Zweifach"), List.of());
+
+        Lauf l = aussortierenImKind(tmp, assets, b);
+
+        assertNotEquals(0, l.exit(), l.stderr());
+        assertTrue(Files.exists(eins) && Files.exists(zwei));
+        assertTrue(l.stderr().contains("MEHRERE Dateien"), l.stderr());
+        assertTrue(l.stderr().contains("keine Datei unter"), "beide Ursachen getrennt gemeldet: " + l.stderr());
+        assertTrue(l.stderr().contains("  Zweifach"), l.stderr());
+        assertFalse(l.liste().contains("Zweifach"), "nicht auf der Liste: " + l.liste());
+        assertFalse(l.liste().contains("Fehlt"), l.liste());
+    }
+
+    @Test
+    void aussortierenEndetBeiReinerDubletteOhneNeueDateiMitNull(@TempDir Path tmp) throws Exception {
+        Path assets = tmp.resolve("assets");
+        Path res = assets.resolve("res");
+        karte(res, "x/x.txt", "Doppelt");
+        karte(res, "x/x_zwei.txt", "Doppelt");
+        CardDataCheck.Befund b = new CardDataCheck.Befund(10, List.of(), List.of(), List.of(),
+                List.of("Doppelt"), List.of());
+
+        Lauf l = aussortierenImKind(tmp, assets, b);
+
+        assertEquals(0, l.exit(), l.stderr());
+        assertTrue(l.liste().contains("Doppelt\t"), l.liste());
+    }
 }

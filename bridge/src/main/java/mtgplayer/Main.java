@@ -191,11 +191,21 @@ public final class Main {
                         Exclusions.ergaenzen(Exclusions.lesen(listenDatei), ergebnis.fortzuschreiben(),
                                 java.time.LocalDate.now().toString()));
                 System.out.println("KARTENDATEN_AUSSORTIERT " + ergebnis.entfernt());
-                if (!ergebnis.ohneDatei().isEmpty()) {
-                    fehler.println("KARTENDATEN_AUSSORTIEREN_FEHLER " + ergebnis.ohneDatei().size()
-                            + " Schluessel aus dem Befund haben keine Datei unter " + res
-                            + " - NICHT in die Ausschlussliste, die Karte bleibt ungeloest:");
-                    ergebnis.ohneDatei().forEach(k -> fehler.println("  " + k));
+                if (!ergebnis.ohneDatei().isEmpty() || !ergebnis.mehrereKeineNeu().isEmpty()) {
+                    if (!ergebnis.ohneDatei().isEmpty()) {
+                        fehler.println("KARTENDATEN_AUSSORTIEREN_FEHLER " + ergebnis.ohneDatei().size()
+                                + " Schluessel aus dem Befund haben keine Datei unter " + res
+                                + " - NICHT in die Ausschlussliste, die Karte bleibt ungeloest:");
+                        ergebnis.ohneDatei().forEach(k -> fehler.println("  " + k));
+                    }
+                    if (!ergebnis.mehrereKeineNeu().isEmpty()) {
+                        fehler.println("KARTENDATEN_AUSSORTIEREN_FEHLER " + ergebnis.mehrereKeineNeu().size()
+                                + " Schluessel aus dem Befund haben MEHRERE Dateien unter " + res
+                                + ", keine davon steht auf der Neu-Liste - nichts geloescht, NICHT in die "
+                                + "Ausschlussliste, die kaputte Karte liegt weiter im Kartenordner "
+                                + "(von Hand die kaputte Datei bestimmen und entfernen):");
+                        ergebnis.mehrereKeineNeu().forEach(k -> fehler.println("  " + k));
+                    }
                     System.exit(3);
                     return;
                 }
