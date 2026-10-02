@@ -442,18 +442,65 @@ class SyncSkriptTest {
 
     @Test
     void verschwindetEineKarteAberKommenZweiNeueDazuIstDieGegenprobeRot(@TempDir Path tmp) throws Exception {
+        // Upstream behaelt "Alte Karte" (Datei unveraendert, also nicht auf der Neu-Liste); das Aussortieren
+        // nimmt sie trotzdem mit. Der Abgleich hat sie verloren, obwohl <ref> sie noch kennt.
         Wurzel w = baueWurzel(tmp);
-        upstream(w, "rm forge-gui/res/cardsfolder/s/alt.txt;"
-                + " echo 'Name:Neu Eins' > forge-gui/res/cardsfolder/s/n1.txt;"
+        upstream(w, "echo 'Name:Neu Eins' > forge-gui/res/cardsfolder/s/n1.txt;"
                 + " echo 'Name:Neu Zwei' > forge-gui/res/cardsfolder/s/n2.txt");
-        befunde(w, json(2), json(3), json(3));   // die Zahl STEIGT: 2 -> 3
+        befunde(w, json(2), json(4), json(3));   // die Zahl STEIGT: 2 -> 3
+        aussortieren(w, "rm -f '" + w.karte("s/alt.txt") + "'", 0);
 
         Lauf lauf = laufVoll(w, "--ausschluss", w.liste().toString(), "upstream-test");
 
         assertEquals(1, lauf.rc(), "eine Karte fehlt - trotz steigender Zahl");
         assertTrue(lauf.ausgabe().contains("Alte Karte"), "die fehlende Karte wird genannt: " + lauf.ausgabe());
-        assertTrue(Files.readString(w.bericht()).contains("`Alte Karte`"), "auch im Bericht");
+        String bericht = Files.readString(w.bericht());
+        assertTrue(bericht.contains("`Alte Karte`"), "auch im Bericht");
+        assertFalse(bericht.contains("Von upstream entfernt"), "sie ist NICHT von upstream entfernt: " + bericht);
         assertEquals("", gitAusgabe(w.forge(), "status", "--porcelain", "-uall"), "zurueckgenommen");
         assertTrue(Files.exists(w.karte("s/alt.txt")));
+    }
+
+    @Test
+    void hatUpstreamEineKarteEntferntIstDasKeinFehlschlagSondernEinEigenerAbschnitt(@TempDir Path tmp)
+            throws Exception {
+        Wurzel w = baueWurzel(tmp);
+        upstream(w, "rm forge-gui/res/cardsfolder/s/alt.txt;"
+                + " echo 'Name:Neue Karte' > forge-gui/res/cardsfolder/s/neu.txt");
+        // 2 -> 2: eine Karte weg, eine neu. Die Kartenzahl faellt hier nicht, die Namensmenge aendert sich doch.
+        befunde(w, json(2), json(2), json(2));
+
+        Lauf lauf = laufVoll(w, "--ausschluss", w.liste().toString(), "upstream-test");
+
+        assertEquals(0, lauf.rc(), "upstreams Entscheidung ist kein Fehlschlag: " + lauf.ausgabe());
+        assertFalse(Files.exists(w.karte("s/alt.txt")), "upstreams Loeschung bleibt uebernommen");
+        String bericht = Files.readString(w.bericht());
+        assertTrue(bericht.contains("Von upstream entfernt (1)"), bericht);
+        assertTrue(bericht.contains("- `Alte Karte`"), bericht);
+        assertFalse(bericht.contains("verschwunden"), bericht);
+    }
+
+    @Test
+    void entferntUpstreamEineKarteDarfDieKartenzahlUmGenauSoVielFallen(@TempDir Path tmp) throws Exception {
+        Wurzel w = baueWurzel(tmp);
+        upstream(w, "rm forge-gui/res/cardsfolder/s/alt.txt");
+        befunde(w, json(2), json(1), json(1));   // 2 -> 1: genau die entfernte Karte
+
+        Lauf lauf = laufVoll(w, "--ausschluss", w.liste().toString(), "upstream-test");
+
+        assertEquals(0, lauf.rc(), lauf.ausgabe());
+        assertTrue(Files.readString(w.bericht()).contains("Von upstream entfernt (1)"));
+    }
+
+    @Test
+    void fallendeKartenzahlOhneUpstreamLoeschungBleibtEinFehlschlag(@TempDir Path tmp) throws Exception {
+        Wurzel w = baueWurzel(tmp);
+        upstream(w, "rm forge-gui/res/cardsfolder/s/alt.txt");
+        befunde(w, json(2), json(0), json(0));   // 2 -> 0: eine mehr als upstream entfernt hat
+
+        Lauf lauf = laufVoll(w, "--ausschluss", w.liste().toString(), "upstream-test");
+
+        assertEquals(1, lauf.rc(), lauf.ausgabe());
+        assertTrue(lauf.ausgabe().contains("Kartenzahl gefallen"), lauf.ausgabe());
     }
 }

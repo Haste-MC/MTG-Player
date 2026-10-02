@@ -16,6 +16,9 @@
 # HEAD) und die Karte steht im Bericht unter "bleibt auf unserer bisherigen Fassung" - nicht auf der
 # Ausschlussliste. Nur wirklich neue Dateien werden geloescht und ausgeschlossen. Die Gegenprobe vergleicht
 # deshalb auch die MENGE der Kartennamen vorher/nachher, nicht nur ihre Anzahl.
+# Fehlt ein Name nachher, entscheidet <ref>: steht er dort auch nicht mehr, hat upstream ihn entfernt (Abschnitt
+# "Von upstream entfernt" im Bericht, kein Fehlschlag, die Kartenzahl darf um so viele fallen); steht er dort noch,
+# hat der Abgleich ihn verloren (Fehlschlag mit Ruecknahme).
 #
 # Kein halbes Ergebnis: scheitert irgendein Schritt, nachdem der Arbeitsbaum veraendert wurde, wird die
 # Aenderung zurueckgenommen (Kartenordner im Submodul und Ausschlussliste) und das laut gesagt. Wer den
@@ -328,6 +331,13 @@ fi
 # trotzdem ausgeschlossen, wenn eine ZWEITE, wirklich neue Datei mit demselben Schluessel gefallen ist:
 # diese Dublette bleibt draussen, die alte gute Datei bleibt stehen.
 # Das Format von $BLEIBT: Schluessel, Grund, Pfad - Tabulator-getrennt, fuer den Bericht.
+#
+# BEKANNTE GRENZE (erkannt, bewusst der Handarbeit ueberlassen): Verschiebt upstream eine Datei UND aendert
+# sie zugleich so, dass sie unbaubar wird, ist sie hier nicht wiederherzustellen. Der neue Pfad ist in HEAD
+# unbekannt (also "neu", nicht "alt" - sie wird geloescht und ausgeschlossen), und der alte Pfad ist durch
+# upstream weg. Die Karte, die es vorher gab, fehlt dann nach dem Abgleich; stuende sie nicht mehr in <ref>
+# (anderer Name), waere sie "von upstream entfernt", sonst scheitert die Gegenprobe laut (Schritt 4) mit
+# Ruecknahme. Das ist richtig so: von Hand entscheiden, welche Fassung gelten soll.
 SCHRITT="3b. Bisherige Fassungen wiederherstellen"
 python3 - "$FORGE" "$NEUE_DATEIEN" "$AUSSCHLUSS_KOPIE" "$AUSSCHLUSS" "$BLEIBT" <<'PY'
 import os, subprocess, sys
@@ -403,10 +413,11 @@ echo "== 4. Gegenprobe =="
 pruefen "$BEFUND"
 kartennamen "$NAMEN_NACHHER"
 python3 - "$BEFUND" "$BEFUND_VORHER" "$BERICHT" "$AUSSCHLUSS_KOPIE" "$AUSSCHLUSS" "$NAMEN_VORHER" \
-          "$NAMEN_NACHHER" "$BLEIBT" "$FORGE" "${DIRS[@]}" <<'PY'
+          "$NAMEN_NACHHER" "$BLEIBT" "$FORGE" "$REF" "${DIRS[@]}" <<'PY'
 import json, os, subprocess, sys
 befund_p, vorher_p, bericht, ausschluss_vor, ausschluss_nach, namen_vor, namen_nach, bleibt_p, forge = sys.argv[1:10]
-dirs = sys.argv[10:]
+ref = sys.argv[10]
+dirs = sys.argv[11:]
 lade = lambda p: json.load(open(p, encoding="utf-8"))
 befund, vorher = lade(befund_p), lade(vorher_p)
 
@@ -432,7 +443,46 @@ def namen(p):
     with open(p, encoding="utf-8") as f:
         return {z.rstrip("\n") for z in f if z.strip()}
 # Die Zahl allein genuegt nicht: verschwindet eine Karte und kommen zwei neue dazu, steigt sie trotzdem.
-fehlend = sorted(namen(namen_vor) - namen(namen_nach))
+weg = namen(namen_vor) - namen(namen_nach)
+
+# Zwei Faelle, wenn ein Name nach dem Abgleich fehlt:
+#  - er steht auch in <ref> nicht mehr: upstream hat ihn entfernt (Entscheidung von upstream, die wir
+#    uebernehmen wollen) - kein Fehlschlag, eigener Abschnitt im Bericht;
+#  - er steht in <ref> noch: der Abgleich hat ihn verloren - Fehlschlag mit Ruecknahme.
+def namen_in_ref():
+    pfade = subprocess.run(["git", "-C", forge, "ls-tree", "-r", "-z", "--name-only", ref, "--"]
+                           + [d for d in dirs if d.endswith("/cardsfolder")],
+                           capture_output=True, check=True).stdout.split(b"\0")
+    pfade = [p for p in pfade if p]
+    gefunden = set()
+    if not pfade:
+        return gefunden
+    # "cat-file --batch" liest je Zeile "<ref>:<pfad>"; Pfade mit Zeilenumbruch gibt es in Kartendaten nicht.
+    eingabe = b"".join(ref.encode() + b":" + p + b"\n" for p in pfade if b"\n" not in p)
+    ausgabe = subprocess.run(["git", "-C", forge, "cat-file", "--batch"], input=eingabe,
+                             capture_output=True, check=True).stdout
+    pos = 0
+    while pos < len(ausgabe):
+        ende = ausgabe.index(b"\n", pos)
+        kopf = ausgabe[pos:ende].split(b" ")
+        if len(kopf) != 3:      # "<name> missing"
+            pos = ende + 1
+            continue
+        groesse = int(kopf[2])
+        inhalt = ausgabe[ende + 1:ende + 1 + groesse]
+        pos = ende + 1 + groesse + 1
+        try:
+            text = inhalt.decode("utf-8")
+        except UnicodeDecodeError:
+            continue
+        n = next((z[5:].strip() for z in text.split("\n") if z.startswith("Name:")), None)
+        if n:
+            gefunden.add(n)
+    return gefunden
+
+in_ref = namen_in_ref() if weg else set()
+entfernt = sorted(weg - in_ref)
+fehlend = sorted(weg & in_ref)
 bleibt = []
 if os.path.isfile(bleibt_p):
     with open(bleibt_p, encoding="utf-8") as f:
@@ -440,7 +490,8 @@ if os.path.isfile(bleibt_p):
 
 offen = (befund["nichtBaubar"] or befund["nichtAuffindbar"]
          or befund["doppelteSetCodes"] or befund["doppelteNamen"])
-gefallen = befund["karten"] < vorher["karten"]
+# Was upstream entfernt hat, darf die Kartenzahl senken - um genau so viel und nicht mehr.
+gefallen = befund["karten"] < vorher["karten"] - len(entfernt)
 with open(bericht, "w", encoding="utf-8") as f:
     f.write(f"## Kartendaten-Abgleich\n\nKarten: {vorher['karten']} -> {befund['karten']}\n\n")
     f.write(f"Dateien gegenueber unserem Stand: {zaehler['A']} neu, {zaehler['M']} geaendert, "
@@ -457,6 +508,12 @@ with open(bericht, "w", encoding="utf-8") as f:
                 "unserer Forge-Fassung nicht baubar, die Karte laeuft weiter wie bisher:\n\n")
         for k, grund, pfad in sorted(bleibt):
             f.write(f"- `{k}`: {grund}\n")
+        f.write("\n")
+    if entfernt:
+        f.write(f"Von upstream entfernt ({len(entfernt)}) - upstream hat diese Karten gestrichen, "
+                "kein Verlust durch den Abgleich:\n\n")
+        for n in entfernt:
+            f.write(f"- `{n}`\n")
         f.write("\n")
     if offen:
         f.write("**Befund nach dem Aussortieren noch offen:**\n\n```\n"
