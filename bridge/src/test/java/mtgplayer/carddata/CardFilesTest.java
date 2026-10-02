@@ -5,6 +5,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -69,21 +71,30 @@ class CardFilesTest {
     }
 
     /**
-     * Mehrere Dubletten werden sortiert zurückgegeben, damit sich Abgleichsberichte zweier Läufe vergleichen lassen.
+     * Mehrere Dubletten werden sortiert zurueckgegeben, damit sich Abgleichsberichte zweier Laeufe vergleichen lassen.
+     * Dieser Test prueft die Sortierung DIREKT durch Aufruf von doppelte() mit einer unsortierten LinkedHashMap:
+     * Der Schluessel mit spaetem Anfangsbuchstaben wird zuerst eingefuegt, der mit fruhem danach.
+     * Ist die Sortierlogik entfernt, gibt die Methode die Dubletten in der urspruenglichen Einfuegungsreihenfolge zurueck.
      */
     @Test
-    void mehrereeDublettenWerdenSortiert(@TempDir Path res) throws Exception {
-        karte(res, "z", "zealot_one.txt", "Zealot");
-        karte(res, "z", "zealot_two.txt", "Zealot");
-        karte(res, "a", "arbor_one.txt", "Arbor Elf");
-        karte(res, "a", "arbor_two.txt", "Arbor Elf");
+    void mehrererDublettenWerdenSortiert() {
+        // Ungeordnete Map mit Einfuegungsreihenfolge: spaeter Buchstabe zuerst, dann frueher Buchstabe
+        Map<String, List<Path>> unsortiert = new LinkedHashMap<>();
+        Path zealotEins = Path.of("/cards/z/zealot_one.txt");
+        Path zealotZwei = Path.of("/cards/z/zealot_two.txt");
+        unsortiert.put("Zealot", new ArrayList<>(List.of(zealotEins, zealotZwei)));
 
-        assertEquals(List.of("Arbor Elf", "Zealot"), CardFiles.doppelte(CardFiles.karten(res)));
+        Path arborEins = Path.of("/cards/a/arbor_one.txt");
+        Path arborZwei = Path.of("/cards/a/arbor_two.txt");
+        unsortiert.put("Arbor Elf", new ArrayList<>(List.of(arborEins, arborZwei)));
+
+        // Erwartete Ausgabe: alphabetisch sortiert, unabhaengig von Einfuegungsreihenfolge
+        assertEquals(List.of("Arbor Elf", "Zealot"), CardFiles.doppelte(unsortiert));
     }
 
     /**
      * Nicht jede Datei unter cardsfolder/ ist ein Kartenskript. Sie darf nicht den Index verschmutzen,
-     * aber auch nicht lautlos verschwinden - sonst merkt niemand, wenn der Parser danebenliegt.
+     * aber auch nicht lautlos verschwinden - sonst merkt niemand, wenn der Parser daneben liegt.
      */
     @Test
     void dateiOhneNamenZeileWirdUebersprungenUndGezaehlt(@TempDir Path res) throws Exception {
