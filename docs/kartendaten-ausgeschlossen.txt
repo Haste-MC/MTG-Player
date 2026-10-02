@@ -1,0 +1,3 @@
+# Karten und Set-Codes, die unsere Forge-Fassung nicht bauen kann.
+# Erzeugt von scripts/kartendaten-sync.sh - von Hand aendern ist erlaubt, aber unnoetig.
+# Spalten (Tabulator): Schluessel, Grund, seit wann.

@@ -6,6 +6,7 @@ import mtgplayer.app.IdleExit;
 import mtgplayer.bench.Bench;
 import mtgplayer.bench.BenchArgs;
 import mtgplayer.bench.GameRecord;
+import mtgplayer.carddata.CardDataCheck;
 import mtgplayer.forge.CrashLog;
 import mtgplayer.forge.ForgeBoot;
 import mtgplayer.forge.Precons;
@@ -20,6 +21,8 @@ import mtgplayer.server.HttpStatic;
 import mtgplayer.stats.MatchRecord;
 
 import java.io.IOException;
+import java.io.OutputStream;
+import java.io.PrintStream;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -118,6 +121,35 @@ public final class Main {
                 AiMatch.Result r = AiMatch.play(zweiDecks, List.of("KI 1", "KI 2"), 40, l -> { });
                 System.out.println("TRIMMED_RESULT cards=" + ForgeBoot.cardCount() + " precons=" + names.size()
                         + " turns=" + r.turns() + " capped=" + r.turnCapped());
+                System.exit(0);
+                return;
+            }
+
+            if (modus.equals("--kartendaten-pruefen")) {
+                // Vom woechentlichen Abgleich gerufen (scripts/kartendaten-sync.sh) und von
+                // CardDataCheckTest. Die Parse-Meldungen koennen nur WAEHREND des Ladens eingesammelt
+                // werden - danach sind sie durch, deshalb haengt sich der Modus vorher an System.out.
+                List<String> meldungen = new ArrayList<>();
+                PrintStream echt = System.out;
+                System.setOut(new PrintStream(new OutputStream() {
+                    private final StringBuilder zeile = new StringBuilder();
+                    @Override public void write(int b) {
+                        if (b == '\n') {
+                            meldungen.add(zeile.toString());
+                            zeile.setLength(0);
+                        } else if (b != '\r') {
+                            zeile.append((char) b);
+                        }
+                    }
+                }, true));
+                try {
+                    ForgeBoot.init();
+                } finally {
+                    System.setOut(echt);
+                }
+                CardDataCheck.Befund befund = CardDataCheck.pruefen(
+                        ForgeBoot.assetsDir().resolve("res"), meldungen);
+                System.out.println("KARTENDATEN_BEFUND " + Json.toJson(befund));
                 System.exit(0);
                 return;
             }
