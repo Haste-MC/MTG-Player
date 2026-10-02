@@ -8,6 +8,7 @@ on:
 jobs:
   anheben:
     runs-on: ubuntu-latest
+    timeout-minutes: 90
     permissions:
       contents: write
       pull-requests: write
@@ -26,7 +27,9 @@ jobs:
         id: stand
         run: |
           git -C forge fetch origin mtg-player
-          git -C forge checkout --detach origin/mtg-player
+          # FETCH_HEAD statt origin/mtg-player: checkout holt Submodule flach, dabei kann remote.origin.fetch
+          # auf einen einzelnen Zweig beschraenkt sein, sodass keine Referenz origin/mtg-player entsteht.
+          git -C forge checkout --detach FETCH_HEAD
           if git diff --quiet -- forge; then
             echo "geaendert=0" >> "$GITHUB_OUTPUT"
           else
@@ -55,7 +58,10 @@ jobs:
           git checkout -B "$zweig"
           git add forge
           git commit -m "build: forge-submodul auf ${{ steps.stand.outputs.kurz }} angehoben"
-          git push --force origin "$zweig"
+          # --force-with-lease statt --force: bricht ab, wenn der Zweig nicht mehr dort steht, wo wir ihn eben
+          # gesehen haben. Leerer Erwartungswert = der Zweig darf noch nicht existieren.
+          stand=$(git ls-remote --heads origin "$zweig")
+          git push --force-with-lease="$zweig:${stand%%[[:space:]]*}" origin "$zweig"
           gh pr create --base main --head "$zweig" \
              --title "Forge-Submodul auf ${{ steps.stand.outputs.kurz }} anheben" \
              --body "Neuer Stand aus Haste-MC/forge, Branch mtg-player. Bridge-Testsuite in diesem Lauf gruen."

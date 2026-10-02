@@ -14,6 +14,11 @@ concurrency:
 jobs:
   abgleich:
     runs-on: ubuntu-latest
+    # Ein haengender Forge-Start soll nicht ueber die concurrency-Gruppe auch den naechsten Lauf blockieren.
+    timeout-minutes: 120
+    # Der Listen-Push ganz unten geht ins Hauptrepo; ohne das waere das Token bei neueren Repos nur lesend.
+    permissions:
+      contents: write
     steps:
       - name: Auschecken (mit Forge-Submodul)
         uses: actions/checkout@v5
@@ -52,6 +57,7 @@ jobs:
           path: |
             kartendaten-befund*.json
             kartendaten-bericht.md
+            kartendaten-neu.txt
           if-no-files-found: ignore
 
       - name: Nichts Neues
@@ -74,28 +80,55 @@ jobs:
           # wie jeder Commit dort. Der Bericht gehoert in den Pull Request, nicht hierher.
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # WICHTIG, nicht entfernen: actions/checkout traegt mit "submodules: recursive" in JEDES Submodul
+          # einen http.https://github.com/.extraheader mit dem eingebauten Token des Hauptrepos ein. Git
+          # schickt diesen Header an github.com sofort mit; die Zugangsdaten aus der URL unten kaemen erst
+          # nach einer 401-Antwort zum Zug. Das Hauptrepo-Token darf aber nicht in Haste-MC/forge schreiben
+          # - GitHub antwortet mit 403, die URL-Zugangsdaten werden nie probiert, und das Schieben scheitert
+          # in jedem Lauf. Darum den vererbten Header hier loswerden (Rueckgabewert 5 = war gar nicht da).
+          git config --local --unset-all http.https://github.com/.extraheader || [ "$?" -eq 5 ]
           git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/Haste-MC/forge.git"
           git checkout -B kartendaten-abgleich
           git add forge-gui/res/cardsfolder forge-gui/res/editions forge-gui/res/tokenscripts
-          git commit -m "Sync card data from upstream master"
-          git push --force origin kartendaten-abgleich
-          if gh pr view kartendaten-abgleich --repo Haste-MC/forge >/dev/null 2>&1; then
-            gh pr edit kartendaten-abgleich --repo Haste-MC/forge \
-               --body-file "${GITHUB_WORKSPACE}/kartendaten-bericht.md"
+          # Das Skript prueft "nichts Neues" VOR dem Aussortieren. Faellt danach alles Neue durch, liegt
+          # hier nichts im Index - dann gibt es weder Commit noch Pull Request, aber auch keinen Fehler:
+          # die neuen Ausschluesse muessen im naechsten Schritt trotzdem in die Liste.
+          if git diff --cached --quiet; then
+            echo "Nach dem Aussortieren ist nichts uebrig geblieben - kein Commit, kein Push, kein Pull Request."
           else
-            gh pr create --repo Haste-MC/forge --base mtg-player --head kartendaten-abgleich \
-               --title "Sync card data from upstream master" \
-               --body-file "${GITHUB_WORKSPACE}/kartendaten-bericht.md"
+            git commit -m "Sync card data from upstream master"
+            # --force-with-lease statt --force: der Push bricht ab, wenn der Zweig im Fork nicht mehr dort
+            # steht, wo wir ihn eben gesehen haben, statt fremde Commits am offenen Pull Request zu loeschen.
+            # Leerer Erwartungswert = der Zweig darf noch nicht existieren (erster Lauf).
+            stand=$(git ls-remote --heads origin kartendaten-abgleich)
+            git push --force-with-lease="kartendaten-abgleich:${stand%%[[:space:]]*}" origin kartendaten-abgleich
+            # Gezielt nach OFFENEN Pull Requests fragen: "gh pr view" fand auch gemergte und geschlossene,
+            # und nach dem ersten Merge waere nie wieder einer angelegt worden. Fehler von gh duerfen nicht
+            # als "gibt es nicht" durchgehen - darum kein 2>/dev/null; schlaegt gh fehl, bricht der Schritt ab.
+            offen=$(gh pr list --repo Haste-MC/forge --head kartendaten-abgleich --state open \
+                      --json number --jq '.[0].number // empty')
+            if [ -n "$offen" ]; then
+              gh pr edit "$offen" --repo Haste-MC/forge \
+                 --body-file "${GITHUB_WORKSPACE}/kartendaten-bericht.md"
+            else
+              gh pr create --repo Haste-MC/forge --base mtg-player --head kartendaten-abgleich \
+                 --title "Sync card data from upstream master" \
+                 --body-file "${GITHUB_WORKSPACE}/kartendaten-bericht.md"
+            fi
           fi
 
       - name: Ausschlussliste fortschreiben
         if: steps.sync.outputs.code == '0'
         run: |
           # Die Liste gehoert ins Hauptprojekt, nicht in den Fork - dafuer reicht das eingebaute Token.
+          # Der Schritt haengt nur am Rueckgabewert 0 des Abgleichs, nicht daran, ob ein Pull Request
+          # entstanden ist.
           if ! git diff --quiet -- docs/kartendaten-ausgeschlossen.txt; then
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git add docs/kartendaten-ausgeschlossen.txt
             git commit -m "docs: ausschlussliste aus dem kartendaten-abgleich fortgeschrieben"
+            # Der Lauf dauert viele Minuten; in der Zeit kann jemand nach main gepusht haben.
+            git pull --rebase origin "$GITHUB_REF_NAME"
             git push
           fi

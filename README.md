@@ -131,8 +131,15 @@ und legt das Ergebnis als Pull Request in `Haste-MC/forge` vor.
 
 Dafür braucht er ein Geheimnis `FORK_TOKEN` in diesem Repository: ein fein granuliertes
 Personal Access Token auf `Haste-MC/forge` mit **Contents: Read and write** und
-**Pull requests: Read and write**. Ohne das Token schlägt nur der letzte Schritt fehl — Abgleich und
-Prüfung laufen trotzdem, und der Befund hängt als Artefakt am Lauf.
+**Pull requests: Read and write**. Ohne das Token scheitert bereits das Schieben in den Fork, und die
+Fortschreibung der Ausschlussliste entfällt; Abgleich und Prüfung laufen trotzdem, und der Befund hängt
+als Artefakt am Lauf.
+
+Reihenfolge: erst den Pull Request im Fork mergen, dann `.github/workflows/submodul.yml` starten, und erst
+danach wieder abgleichen – sonst baut der nächste Abgleich auf einem veralteten Submodul-Zeiger auf.
+`submodul.yml` legt einen Pull Request im Hauptrepo an; dafür muss in dessen Einstellungen
+„Allow GitHub Actions to create and approve pull requests“ eingeschaltet sein, sonst hinterlässt der
+Ablauf einen Zweig ohne Pull Request.
 
 ## Bridge
 
