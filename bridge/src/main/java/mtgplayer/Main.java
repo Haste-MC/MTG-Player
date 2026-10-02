@@ -152,7 +152,12 @@ public final class Main {
                 }
                 CardDataCheck.Befund befund = CardDataCheck.pruefen(
                         ForgeBoot.assetsDir().resolve("res"), meldungen);
-                System.out.println("KARTENDATEN_BEFUND " + Json.toJson(befund));
+                // Ausdruecklich UTF-8: System.out nimmt sonst die Kodierung der Locale (LC_ALL=POSIX macht aus
+                // "Joetun Grunt" ein "J?tun Grunt"), und der Schluessel passte dann zu keiner Datei mehr.
+                byte[] zeileBytes = ("KARTENDATEN_BEFUND " + Json.toJson(befund) + System.lineSeparator())
+                        .getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                echt.write(zeileBytes, 0, zeileBytes.length);
+                echt.flush();
                 System.exit(0);
                 return;
             }
@@ -164,14 +169,36 @@ public final class Main {
                 Path befundDatei = Paths.get(args[1]);
                 Path listenDatei = Paths.get(args[2]);
                 Path neueDateien = Paths.get(args[3]);
-                CardDataCheck.Befund befund = Json.mapper()
-                        .readValue(Files.readString(befundDatei), CardDataCheck.Befund.class);
+                // Wer hier scheitert, soll das laut tun und mit != 0 enden: das aufrufende Skript bricht dann ab,
+                // statt eine kaputte Kartendatei im cardsfolder liegen zu lassen (anders als --kartendaten-pruefen,
+                // das immer mit 0 endet).
+                PrintStream fehler = new PrintStream(new java.io.FileOutputStream(java.io.FileDescriptor.err),
+                        true, java.nio.charset.StandardCharsets.UTF_8);
+                CardDataCheck.Befund befund = Json.mapper().readValue(
+                        Files.readString(befundDatei, java.nio.charset.StandardCharsets.UTF_8),
+                        CardDataCheck.Befund.class);
                 Path res = ForgeBoot.assetsDir().resolve("res");
-                int entfernt = CardDataSweep.aussortieren(befund, res, neueDateien);
+                CardDataSweep.Ergebnis ergebnis;
+                try {
+                    ergebnis = CardDataSweep.aussortieren(befund, res, neueDateien);
+                } catch (IOException | IllegalStateException e) {
+                    fehler.println("KARTENDATEN_AUSSORTIEREN_FEHLER " + e.getMessage());
+                    System.exit(2);
+                    return;
+                }
+                // Nur was eine Datei hatte, kommt in die Liste - der Rest ist ungeloest.
                 Exclusions.schreiben(listenDatei,
-                        Exclusions.ergaenzen(Exclusions.lesen(listenDatei), befund,
+                        Exclusions.ergaenzen(Exclusions.lesen(listenDatei), ergebnis.fortzuschreiben(),
                                 java.time.LocalDate.now().toString()));
-                System.out.println("KARTENDATEN_AUSSORTIERT " + entfernt);
+                System.out.println("KARTENDATEN_AUSSORTIERT " + ergebnis.entfernt());
+                if (!ergebnis.ohneDatei().isEmpty()) {
+                    fehler.println("KARTENDATEN_AUSSORTIEREN_FEHLER " + ergebnis.ohneDatei().size()
+                            + " Schluessel aus dem Befund haben keine Datei unter " + res
+                            + " - NICHT in die Ausschlussliste, die Karte bleibt ungeloest:");
+                    ergebnis.ohneDatei().forEach(k -> fehler.println("  " + k));
+                    System.exit(3);
+                    return;
+                }
                 System.exit(0);
                 return;
             }

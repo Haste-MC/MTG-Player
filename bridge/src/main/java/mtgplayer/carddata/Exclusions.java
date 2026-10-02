@@ -58,12 +58,21 @@ public final class Exclusions {
         eintraege.stream()
                 .sorted((a, b) -> a.schluessel().compareTo(b.schluessel()))
                 .forEach(e -> sb.append(e.schluessel()).append('\t')
-                        .append(e.grund()).append('\t').append(e.seit()).append('\n'));
+                        .append(einzeilig(e.grund())).append('\t').append(e.seit()).append('\n'));
         Path eltern = datei.getParent();
         if (eltern != null) {
             Files.createDirectories(eltern);
         }
         Files.writeString(datei, sb.toString(), StandardCharsets.UTF_8);
+    }
+
+    /**
+     * Der Grund ist der Text einer Forge-Ausnahme und kann Zeilenumbrueche und Tabulatoren tragen; beides
+     * zerstoert das Format (ein Umbruch macht aus einem Eintrag zwei zu kurze Zeilen, die {@link #lesen}
+     * verwirft, ein Tabulator verschiebt die Spalten). Folgen von Leerraum werden deshalb zu einem Leerzeichen.
+     */
+    private static String einzeilig(String grund) {
+        return grund.replaceAll("\\s+", " ").trim();
     }
 
     /**

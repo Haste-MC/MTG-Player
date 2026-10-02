@@ -102,4 +102,29 @@ class ExclusionsTest {
 
         assertEquals(befund, mtgplayer.protocol.Json.mapper().readValue(json, CardDataCheck.Befund.class));
     }
+
+    /**
+     * Der Grund ist der Text einer Forge-Ausnahme und kann Umbruch und Tabulator tragen. Ohne
+     * Normalisierung wuerde der Eintrag auf zwei zu kurze Zeilen verteilt (die lesen() verwirft) bzw. die
+     * Datumsspalte verschoben.
+     */
+    @Test
+    void grundMitUmbruchUndTabulatorUeberstehtDenRundlauf(@TempDir Path tmp) throws Exception {
+        Path datei = tmp.resolve("ausgeschlossen.txt");
+        String grund = "java.lang.IllegalStateException: Error in Trigger\n\tat forge.Foo.bar(Foo.java:1)\r\n"
+                + "Caused by: Empower\tfehlt  in ApiType";
+        List<Exclusions.Eintrag> eintraege = List.of(
+                new Exclusions.Eintrag("Anna", grund, "2026-10-02"),
+                new Exclusions.Eintrag("Berta", "heil", "2026-09-25"));
+
+        Exclusions.schreiben(datei, eintraege);
+        List<Exclusions.Eintrag> gelesen = Exclusions.lesen(datei);
+
+        assertEquals(2, gelesen.size(), "kein Eintrag geht verloren");
+        assertEquals("Anna", gelesen.get(0).schluessel());
+        assertEquals("java.lang.IllegalStateException: Error in Trigger at forge.Foo.bar(Foo.java:1) "
+                + "Caused by: Empower fehlt in ApiType", gelesen.get(0).grund());
+        assertEquals("2026-10-02", gelesen.get(0).seit(), "die Datumsspalte bleibt, wo sie ist");
+        assertEquals(new Exclusions.Eintrag("Berta", "heil", "2026-09-25"), gelesen.get(1));
+    }
 }

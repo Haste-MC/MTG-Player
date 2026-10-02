@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -140,6 +141,47 @@ class CardDataCheckTest {
         assertGrund(probleme, "Zzz Unbekannte Faehigkeit", "crash in raw Ability", "Empower");
         assertGrund(probleme, "Zzz Muenzen Testkarte", "Error in Trigger for Card", "FlippedCoinOnce");
         assertGrund(probleme, "Zzz Strahl Testkarte", "CantBeBeamedUp");
+    }
+
+    /**
+     * Unter LC_ALL=POSIX ist die Standardkodierung der JVM ASCII; ein Befund ueber System.out machte aus
+     * "J\u00f6tun Grunt" ein "J?tun Grunt", und der Schluessel passte zu keiner Datei mehr. Der Befund wird
+     * deshalb ausdruecklich als UTF-8 geschrieben - hier im Kindprozess unter POSIX nachgewiesen.
+     */
+    @Test
+    void befundNenntNichtAsciiNamenAuchUnterPosixLocaleUnversehrt(@TempDir Path tmp) throws Exception {
+        Path res = tmp.resolve("res");
+        kopiereRes(Path.of("assets").toAbsolutePath(), res);
+        Files.writeString(res.resolve("cardsfolder").resolve("z").resolve("zzz_joetun.txt.bak"),
+                "Name:Zzz J\u00f6tun Grunt\nUnbekanntesSchluesselwort:Ja\nOracle:\n", StandardCharsets.UTF_8);
+
+        String vorherAssets = System.getProperty("mtgplayer.assets");
+        String vorherData = System.getProperty("mtgplayer.data");
+        System.setProperty("mtgplayer.assets", res.getParent().toString());
+        System.setProperty("mtgplayer.data", tmp.resolve("child-data").toString());
+        List<String> cmd;
+        try {
+            cmd = ChildJvm.command(List.of("--kartendaten-pruefen"));
+        } finally {
+            setze("mtgplayer.assets", vorherAssets);
+            setze("mtgplayer.data", vorherData);
+        }
+        ProcessBuilder pb = new ProcessBuilder(cmd);
+        pb.environment().remove("LC_CTYPE");
+        pb.environment().remove("JAVA_TOOL_OPTIONS");
+        pb.environment().put("LC_ALL", "POSIX");
+        pb.environment().put("LANG", "POSIX");
+        Path out = tmp.resolve("out.txt");
+        pb.redirectOutput(out.toFile()).redirectError(tmp.resolve("err.txt").toFile());
+        Process p = pb.start();
+        assertTrue(p.waitFor(15, TimeUnit.MINUTES), "Kindprozess haengt");
+        assertEquals(0, p.exitValue());
+
+        String zeile = Files.readAllLines(out, StandardCharsets.UTF_8).stream()
+                .filter(z -> z.startsWith("KARTENDATEN_BEFUND ")).findFirst().orElseThrow();
+        JsonNode b = Json.parse(zeile.substring("KARTENDATEN_BEFUND ".length()));
+        assertTrue(b.get("nichtAuffindbar").toString().contains("Zzz J\u00f6tun Grunt"),
+                "der Name mit Umlaut kommt unversehrt an: " + b.get("nichtAuffindbar"));
     }
 
     private static void assertGrund(JsonNode probleme, String karte, String... teile) {
