@@ -9,6 +9,7 @@ import mtgplayer.bench.GameRecord;
 import mtgplayer.carddata.CardDataCheck;
 import mtgplayer.carddata.CardDataSweep;
 import mtgplayer.carddata.Exclusions;
+import mtgplayer.carddata.StromSammler;
 import mtgplayer.forge.CrashLog;
 import mtgplayer.forge.ForgeBoot;
 import mtgplayer.forge.Precons;
@@ -23,7 +24,6 @@ import mtgplayer.server.HttpStatic;
 import mtgplayer.stats.MatchRecord;
 
 import java.io.IOException;
-import java.io.OutputStream;
 import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -44,6 +44,10 @@ import java.util.Random;
  * {@code mtgplayer.sparring.SubprocessGameRunner} - nicht fuer den direkten Gebrauch gedacht.
  * {@code --trimmed-check}: Kartenzahl, Precons und eine KI-Partie pruefen, fuer den internen Aufruf
  * durch {@code mtgplayer.forge.TrimmedResTest} - nicht fuer den direkten Gebrauch gedacht.
+ * {@code --kartendaten-pruefen}: Forges Kartendaten laden und einen Befund (JSON, eine Zeile) ausgeben, fuer den
+ * woechentlichen Abgleich ({@code scripts/kartendaten-sync.sh}) - urteilt nicht.
+ * {@code --kartendaten-aussortieren <befund.json> <ausschluss.txt> <neue-dateien.txt>}: die Dateien hinter einem
+ * Befund entfernen und die Ausschlussliste fortschreiben, ebenfalls fuer den Abgleich.
  */
 public final class Main {
 
@@ -131,25 +135,12 @@ public final class Main {
             if (modus.equals("--kartendaten-pruefen")) {
                 // Vom woechentlichen Abgleich gerufen (scripts/kartendaten-sync.sh) und von
                 // CardDataCheckTest. Die Parse-Meldungen koennen nur WAEHREND des Ladens eingesammelt
-                // werden - danach sind sie durch, deshalb haengt sich der Modus vorher an System.out.
-                List<String> meldungen = new ArrayList<>();
+                // werden - danach sind sie durch, deshalb haengt sich der Modus vorher an die Strome.
+                // Beide Strome: Forge schreibt auf stdout beim Laden nur eine Zeile, alles Diagnostische
+                // (Stacktraces, "not assigned to any set", "Upcoming set ...") geht auf stderr.
+                // Durchgereicht wird weiter, damit das Ablauf-Protokoll vollstaendig bleibt.
                 PrintStream echt = System.out;
-                System.setOut(new PrintStream(new OutputStream() {
-                    private final StringBuilder zeile = new StringBuilder();
-                    @Override public void write(int b) {
-                        if (b == '\n') {
-                            meldungen.add(zeile.toString());
-                            zeile.setLength(0);
-                        } else if (b != '\r') {
-                            zeile.append((char) b);
-                        }
-                    }
-                }, true));
-                try {
-                    ForgeBoot.init();
-                } finally {
-                    System.setOut(echt);
-                }
+                List<String> meldungen = StromSammler.einsammeln(ForgeBoot::init);
                 CardDataCheck.Befund befund = CardDataCheck.pruefen(
                         ForgeBoot.assetsDir().resolve("res"), meldungen);
                 // Ausdruecklich UTF-8: System.out nimmt sonst die Kodierung der Locale (LC_ALL=POSIX macht aus
