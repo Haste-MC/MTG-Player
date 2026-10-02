@@ -69,6 +69,19 @@ class CardFilesTest {
     }
 
     /**
+     * Mehrere Dubletten werden sortiert zurückgegeben, damit sich Abgleichsberichte zweier Läufe vergleichen lassen.
+     */
+    @Test
+    void mehrereeDublettenWerdenSortiert(@TempDir Path res) throws Exception {
+        karte(res, "z", "zealot_one.txt", "Zealot");
+        karte(res, "z", "zealot_two.txt", "Zealot");
+        karte(res, "a", "arbor_one.txt", "Arbor Elf");
+        karte(res, "a", "arbor_two.txt", "Arbor Elf");
+
+        assertEquals(List.of("Arbor Elf", "Zealot"), CardFiles.doppelte(CardFiles.karten(res)));
+    }
+
+    /**
      * Nicht jede Datei unter cardsfolder/ ist ein Kartenskript. Sie darf nicht den Index verschmutzen,
      * aber auch nicht lautlos verschwinden - sonst merkt niemand, wenn der Parser danebenliegt.
      */

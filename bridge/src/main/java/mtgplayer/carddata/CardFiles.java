@@ -17,8 +17,8 @@ import java.util.stream.Stream;
  * <p>Das ist die Haelfte des Abgleichs, die OHNE Forge auskommt - und die gebraucht wird, sobald eine
  * Karte durchfaellt: der Pruefmodus kennt dann ihren NAMEN, entfernt werden muss aber ihre DATEI.</p>
  *
- * <p>Dateien ohne den jeweiligen Schluessel werden uebersprungen (unter {@code cardsfolder/} liegt nicht
- * nur Kartenskript). Damit das nicht lautlos geschieht, zaehlt {@link #uebersprungen} sie.</p>
+ * <p>Kartenskripte unter {@code cardsfolder/} ohne {@code Name:}-Zeile werden uebersprungen und von
+ * {@link #uebersprungen} gezaehlt. Editionsdateien ohne {@code Code=}-Zeile verschwinden lautlos.</p>
  */
 public final class CardFiles {
 
