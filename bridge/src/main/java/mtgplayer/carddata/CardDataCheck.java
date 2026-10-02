@@ -12,6 +12,8 @@ import forge.item.PaperCard;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -36,6 +38,13 @@ import mtgplayer.match.CommanderRules;
  */
 public final class CardDataCheck {
 
+    /**
+     * @param karte der NAME DER VORDERSEITE, nicht der Datenbankname ("A", nicht "A // B"): das ist derselbe
+     *              Schluessel, unter dem {@link CardFiles} die Skriptdatei fuehrt, weil das Kartenskript
+     *              nach seiner Vorderseite benannt ist - nur so findet der Aufrufer die Datei zur Karte.
+     * @param grund {@code toString()} der aeusseren Ausnahme, gefolgt von der tiefsten Ursache aus der
+     *              {@code cause}-Kette; erst die nennt das fehlende Schluesselwort.
+     */
     public record Problem(String karte, String grund) { }
 
     public record Befund(int karten,
@@ -103,13 +112,26 @@ public final class CardDataCheck {
         Player besitzer = leeresSpiel().getPlayers().get(0);
         List<Problem> probleme = new ArrayList<>();
         for (PaperCard pc : alle) {
+            // StackOverflowError (zyklisches Kartenskript) ist ein Fehler dieser einen Karte und gehoert in den
+            // Befund; OutOfMemoryError und die uebrigen VirtualMachineError schlagen bewusst durch, weil die
+            // JVM danach nicht mehr verlaesslich weiterarbeitet und ein Weitermachen falsche Befunde lieferte.
             try {
                 CardFactory.getCard(pc, besitzer, besitzer.getGame());
-            } catch (RuntimeException | LinkageError e) {
-                probleme.add(new Problem(pc.getName(), e.toString()));
+            } catch (RuntimeException | LinkageError | StackOverflowError e) {
+                probleme.add(new Problem(vorderseite(pc.getName()), grund(e)));
             }
         }
         return probleme;
+    }
+
+    /** Aeussere Ausnahme plus tiefste Ursache: Forge verpackt das fehlende Schluesselwort in der cause-Kette. */
+    private static String grund(Throwable e) {
+        Throwable tiefste = e;
+        Set<Throwable> gesehen = Collections.newSetFromMap(new IdentityHashMap<>());
+        while (tiefste.getCause() != null && gesehen.add(tiefste)) {
+            tiefste = tiefste.getCause();
+        }
+        return tiefste == e ? e.toString() : e + " / Ursache: " + tiefste;
     }
 
     /**

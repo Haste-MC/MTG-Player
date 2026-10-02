@@ -83,14 +83,15 @@ class CardDataCheckTest {
 
     /**
      * Ohne diesen Test beweist der erste nichts: er waere auch gruen, wenn der Modus gar nichts prueft.
-     * Das Kartenskript hier ist absichtlich unlesbar fuer Forge - es traegt einen Namen, landet aber nicht
-     * in der Datenbank. Forge liest unter {@code cardsfolder/} nur Dateien auf {@code .txt}; die Endung
-     * {@code .bak} macht das Skript fuer Forge unsichtbar, fuer {@code CardFiles} aber nicht. (Ein
-     * Skript ohne {@code Types:}-Zeile taugt dafuer NICHT: Forge bricht beim Laden mit einer
-     * NullPointerException ab, statt es zu uebergehen - dann kaeme gar kein Befund zustande.)
+     * Geprueft wird hier {@code nichtAuffindbar}: eine Datei mit {@code Name:}-Zeile, deren Karte NICHT in
+     * Forges Datenbank landet. Dazu dient die Endung {@code .bak}: Forge liest unter {@code cardsfolder/}
+     * nur {@code *.txt} und sieht die Datei nicht, {@code CardFiles} indexiert dagegen jede Datei. Der Test
+     * nutzt also bewusst diese Abweichung zwischen beiden. (Ein Skript ohne {@code Types:}-Zeile taugt
+     * dafuer NICHT: Forge bricht beim Laden mit einer NullPointerException ab, statt es zu uebergehen -
+     * dann kaeme gar kein Befund zustande.)
      */
     @Test
-    void einUnlesbaresKartenskriptWirdGemeldet(@TempDir Path tmp) throws Exception {
+    void eineDateiOhneKarteInDerDatenbankWirdGemeldet(@TempDir Path tmp) throws Exception {
         Path res = tmp.resolve("res");
         kopiereRes(Path.of("assets").toAbsolutePath(), res);
         Files.writeString(res.resolve("cardsfolder").resolve("z").resolve("zzz_kaputt.txt.bak"),
@@ -101,9 +102,53 @@ class CardDataCheckTest {
         JsonNode b = befund(tmp, res.getParent());
 
         assertTrue(b.get("nichtAuffindbar").toString().contains("Zzz Kaputte Testkarte"),
-                "die unlesbare Karte steht im Befund: " + b.get("nichtAuffindbar"));
+                "die Karte ohne Datenbankeintrag steht im Befund: " + b.get("nichtAuffindbar"));
         assertTrue(b.get("doppelteSetCodes").toString().contains("LEA"),
                 "der doppelte Set-Code steht im Befund: " + b.get("doppelteSetCodes"));
+    }
+
+    /**
+     * Der Pfad, um dessentwillen der Modus existiert: Karten, die Forge LAEDT (sie stehen in der
+     * Datenbank), die aber beim Bauen scheitern. In den echten Daten gibt es keine - ohne diesen Test fiele
+     * es nicht auf, wenn die Bauschleife nichts taete. Jedes Skript enthaelt ein Schluesselwort, das unsere
+     * Forge-Fassung nicht kennt; der Grund muss es nennen, nicht nur die aeussere Ausnahme.
+     */
+    @Test
+    void kartenDieSichNichtBauenLassenStehenMitUrsacheImBefund(@TempDir Path tmp) throws Exception {
+        Path res = tmp.resolve("res");
+        kopiereRes(Path.of("assets").toAbsolutePath(), res);
+        Path ordner = res.resolve("cardsfolder").resolve("z");
+        Files.writeString(ordner.resolve("zzz_empower_testkarte.txt"),
+                "Name:Zzz Empower Testkarte\nManaCost:1\nTypes:Artifact\n"
+                        + "A:AB$ Empower | Cost$ T | SpellDescription$ Testfaehigkeit.\nOracle:{T}: Testfaehigkeit.\n");
+        Files.writeString(ordner.resolve("zzz_muenzen_testkarte.txt"),
+                "Name:Zzz Muenzen Testkarte\nManaCost:1\nTypes:Artifact\n"
+                        + "T:Mode$ FlippedCoinOnce | ValidPlayer$ You | Execute$ TrigDraw | TriggerZones$ Battlefield"
+                        + " | TriggerDescription$ Wenn eine Muenze faellt, zieh eine Karte.\n"
+                        + "SVar:TrigDraw:DB$ Draw | NumCards$ 1\nOracle:Wenn eine Muenze faellt, zieh eine Karte.\n");
+        Files.writeString(ordner.resolve("zzz_strahl_testkarte.txt"),
+                "Name:Zzz Strahl Testkarte\nManaCost:1\nTypes:Artifact\n"
+                        + "S:Mode$ CantBeBeamedUp | ValidCard$ Card.Self | Description$ Testregel.\nOracle:Testregel.\n");
+
+        JsonNode b = befund(tmp, res.getParent());
+
+        JsonNode probleme = b.get("nichtBaubar");
+        assertGrund(probleme, "Zzz Empower Testkarte", "crash in raw Ability", "Empower");
+        assertGrund(probleme, "Zzz Muenzen Testkarte", "Error in Trigger for Card", "FlippedCoinOnce");
+        assertGrund(probleme, "Zzz Strahl Testkarte", "CantBeBeamedUp");
+    }
+
+    private static void assertGrund(JsonNode probleme, String karte, String... teile) {
+        for (JsonNode p : probleme) {
+            if (p.get("karte").asText().equals(karte)) {
+                String grund = p.get("grund").asText();
+                for (String teil : teile) {
+                    assertTrue(grund.contains(teil), karte + ": Grund nennt nicht '" + teil + "': " + grund);
+                }
+                return;
+            }
+        }
+        throw new AssertionError(karte + " steht nicht in nichtBaubar: " + probleme);
     }
 
     /** Symlink statt Kopie fuer cardsfolder waere schneller, aber der Test MUSS hineinschreiben. */
