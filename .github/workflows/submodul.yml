@@ -1,0 +1,65 @@
+name: Submodul anheben
+
+# Nur auf Knopfdruck: gedacht fuer den Moment, in dem der Kartendaten-Pull-Request im Fork
+# gemergt ist und der neue Stand ins Hauptprojekt soll.
+on:
+  workflow_dispatch: {}
+
+jobs:
+  anheben:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+
+      - name: Neuen Fork-Stand holen
+        id: stand
+        run: |
+          git -C forge fetch origin mtg-player
+          git -C forge checkout --detach origin/mtg-player
+          if git diff --quiet -- forge; then
+            echo "geaendert=0" >> "$GITHUB_OUTPUT"
+          else
+            echo "geaendert=1" >> "$GITHUB_OUTPUT"
+            echo "kurz=$(git -C forge rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Forge bauen
+        if: steps.stand.outputs.geaendert == '1'
+        working-directory: forge
+        run: mvn -q -pl forge-gui -am install -DskipTests -Dcheckstyle.skip -Dmaven.javadoc.skip=true
+
+      - name: Bridge-Tests
+        if: steps.stand.outputs.geaendert == '1'
+        working-directory: bridge
+        run: mvn -q test
+
+      - name: Pull Request anlegen
+        if: steps.stand.outputs.geaendert == '1'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          zweig="submodul-${{ steps.stand.outputs.kurz }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B "$zweig"
+          git add forge
+          git commit -m "build: forge-submodul auf ${{ steps.stand.outputs.kurz }} angehoben"
+          git push --force origin "$zweig"
+          gh pr create --base main --head "$zweig" \
+             --title "Forge-Submodul auf ${{ steps.stand.outputs.kurz }} anheben" \
+             --body "Neuer Stand aus Haste-MC/forge, Branch mtg-player. Bridge-Testsuite in diesem Lauf gruen."
+
+      - name: Nichts zu tun
+        if: steps.stand.outputs.geaendert == '0'
+        run: echo "Der Submodul-Zeiger ist bereits aktuell."
