@@ -100,7 +100,7 @@ jobs:
             # --force-with-lease statt --force: der Push bricht ab, wenn der Zweig im Fork nicht mehr dort
             # steht, wo wir ihn eben gesehen haben, statt fremde Commits am offenen Pull Request zu loeschen.
             # Leerer Erwartungswert = der Zweig darf noch nicht existieren (erster Lauf).
-            stand=$(git ls-remote --heads origin kartendaten-abgleich)
+            stand=$(git ls-remote --heads origin refs/heads/kartendaten-abgleich)
             git push --force-with-lease="kartendaten-abgleich:${stand%%[[:space:]]*}" origin kartendaten-abgleich
             # Gezielt nach OFFENEN Pull Requests fragen: "gh pr view" fand auch gemergte und geschlossene,
             # und nach dem ersten Merge waere nie wieder einer angelegt worden. Fehler von gh duerfen nicht
@@ -129,6 +129,8 @@ jobs:
             git add docs/kartendaten-ausgeschlossen.txt
             git commit -m "docs: ausschlussliste aus dem kartendaten-abgleich fortgeschrieben"
             # Der Lauf dauert viele Minuten; in der Zeit kann jemand nach main gepusht haben.
-            git pull --rebase origin "$GITHUB_REF_NAME"
+            # Das Submodul forge steht hier auf einem anderen Commit als im Index (von einem frueheren Schritt),
+            # weshalb rebase die Sauberkeitspruefung fehlschlagen laesst. --autostash versorgt das.
+            git pull --rebase --autostash origin "$GITHUB_REF_NAME"
             git push
           fi
