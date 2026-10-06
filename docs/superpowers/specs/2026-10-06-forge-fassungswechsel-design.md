@@ -45,8 +45,9 @@ einzeln per `git am --3way` auf den Tag aufgetragen.
 
 ## 3. Wie die Commits auf die neue Basis kommen
 
-**Zuerst der Rettungsanker.** Der heutige Fork-Stand (`903f0f1d`) bekommt im Fork den Tag
-`mtg-player-2.0.14`. Das ist Pflicht, nicht Bequemlichkeit: die veröffentlichten Pakete verweisen über
+**Zuerst der Rettungsanker.** Der heutige Fork-Stand (`840f3cc0`, Merge des ersten Kartenabgleichs, Pull Request #1
+im Fork) bekommt im Fork den Tag `mtg-player-2.0.14`; er enthält `903f0f1d` als Vorfahr, auf das die ausgelieferten
+Pakete verweisen, und deckt es damit mit ab. Das ist Pflicht, nicht Bequemlichkeit: die veröffentlichten Pakete verweisen über
 `forge/MODIFICATIONS.md` und den Release-Text auf genau diesen Quelltext, und die GPL verlangt, dass
 dieser Verweis gültig bleibt. Ohne den Tag liefe er nach dem Umschreiben ins Leere.
 
