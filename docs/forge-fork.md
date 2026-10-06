@@ -3,10 +3,14 @@
 Basis: Tag `forge-2.0.15` (Commit 4ec5f1a2). Maven-Version `2.0.15-mtgplayer`.
 
 Seit dem 2026-10-06 steht der Fork auf `forge-2.0.15` (Zweig `mtg-player-2.0.15`, siehe „Wechsel auf 2.0.15“ unten).
-Die Commit-Hashes der Tabelle sind die der **alten** Fassung auf `forge-2.0.14` (Tag `mtg-player-2.0.14`, Kopf
-`903f0f1d`); beim Neuaufsetzen haben die Code-Commits neue Hashes bekommen, Inhalt und Begründung gelten weiter.
-Der Kartendaten-Commit `0e30eaac` und der Versions-Commit `952c5e1a` wurden nicht übertragen (2.0.15 bringt die Karten
-selbst mit, die Version steht neu in den POMs).
+Die Commit-Hashes der Tabelle sind die der **alten** Fassung auf `forge-2.0.14` (Kopf der Tabelle: `903f0f1d`);
+beim Neuaufsetzen haben die Code-Commits neue Hashes bekommen, Inhalt und Begründung gelten weiter.
+Der Tag `mtg-player-2.0.14` steht auf `840f3cc0` (Merge des ersten Kartenabgleichs, Pull Request #1 im Fork,
+2026-10-06) und enthält `903f0f1d` als Vorfahr; die ausgelieferten Pakete verweisen auf `903f0f1d`, der Tag deckt sie
+damit mit ab.
+Der Kartendaten-Commit `0e30eaac` und der Versions-Commit `952c5e1a` wurden nicht übertragen (2.0.15 bringt den
+Großteil der Karten selbst mit – 54 Karten, die upstream erst nach dem Tag hinzugefügt hat, fehlen, siehe „Wechsel
+auf 2.0.15“ unten; die Version steht neu in den POMs).
 
 | Commit | Änderung | Warum |
 |---|---|---|
@@ -126,3 +130,11 @@ Kartendaten des Tags `forge-2.0.15`, nicht die der Abgleiche: 33469 (Zeiger bis 
 u. a.), −1 (Cybernetics Specialist, von upstream entfernt) und −54 Karten, die erst nach 2.0.15 in upstream
 hinzukamen. Der erste Abgleich auf der neuen Basis holt sie zurück. Die Ausschlussliste ist geleert, sie gilt je
 Engine-Fassung.
+
+**Entscheidung: Engine- und Datenwechsel bleiben getrennt (16 Karten weniger sind gewollt, kein Verlust).**
+Der Zweig `mtg-player-2.0.15` trägt die Kartendaten des Tags `forge-2.0.15`: `getUniqueCards` liefert dort 33507,
+auf dem bisherigen Fork-Zweig `mtg-player` (Abgleich vom 2026-10-06 bereits gemergt) 33523 – also 16 weniger. Das ist
+bekannt und so entschieden: Der Wechsel der Engine soll nichts mit einem Wechsel der Kartendaten vermengen, damit sich
+Fehler eindeutig einer der beiden Ursachen zuordnen lassen. Direkt nach dem Umstellen wird der Kartenabgleich
+einmal von Hand gestartet; er holt den Rückstand auf. Wer in dieser Lücke eine Karte vermisst, findet sie
+nach dem Abgleich wieder.

@@ -31,7 +31,7 @@ Bedarf separat gelöscht werden).
 ## Einmalig: Forge bauen
 
 ```bash
-git submodule update --init --depth 1   # Fork Haste-MC/forge, Branch mtg-player (Basis: Tag forge-2.0.15)
+git submodule update --init --depth 1   # Fork Haste-MC/forge, Zweig mtg-player-2.0.15 (Basis: Tag forge-2.0.15)
 cd forge && mvn -q -pl forge-gui -am install -DskipTests -Dcheckstyle.skip -Dmaven.javadoc.skip=true   # installiert 2.0.15-mtgplayer nach ~/.m2
 ```
 
@@ -455,8 +455,9 @@ Lizenztext steht in [LICENSE](LICENSE). Das heißt für jeden, der eine gebaute 
 mitliefern, Quelltext verfügbar halten, Änderungen kenntlich machen.
 
 Die Engine steckt als Submodul unter `forge/` und ist ein **veränderter** Forge: Fork
-[Haste-MC/forge](https://github.com/Haste-MC/forge), Branch `mtg-player`, Basis Tag `forge-2.0.15`. Was
-gegenüber dem Original anders ist, steht commitweise in `git log forge-2.0.15..mtg-player` und zusammengefasst
+[Haste-MC/forge](https://github.com/Haste-MC/forge), der Zeiger steht auf dem Zweig `mtg-player-2.0.15` (Basis
+Tag `forge-2.0.15`; der Zweig `mtg-player` ist bis zum Abschluss des Wechsels weiter 2.0.14-basiert). Was
+gegenüber dem Original anders ist, steht commitweise in `git log forge-2.0.15..mtg-player-2.0.15` und zusammengefasst
 in `forge/MODIFICATIONS.md` – im Kern Fehlerbehebungen und Verbesserungen an der KI.
 
 Magic: The Gathering ist ein Markenzeichen von Wizards of the Coast; dieses Projekt steht in keiner Verbindung
