@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import forge.StaticData;
+import forge.card.CardSplitType;
 import mtgplayer.forge.ForgeBoot;
 import mtgplayer.forge.Precons;
 import forge.item.IPaperCard;
@@ -114,6 +115,47 @@ class ImageKeys2ScryfallTest {
         PaperCard avacyn = vorschaukarte("Avacyn, Angel of Horror");
         assertEquals("https://api.scryfall.com/cards/named?exact=Avacyn%2C%20Angel%20of%20Horror&format=image&version=normal",
                 ImageKeys2Scryfall.nameUrl(avacyn, true));
+    }
+
+    /** Befund 1: {@code face=back} gibt es nur bei Karten mit zwei echten Seiten (Transform, Modal). Bei Adventure,
+     *  Omen, Prepare, Split und Flip ist es bei Scryfall ein einziges Bild; {@code face=back} wuerde mit 422
+     *  beantwortet. Die Bedingung haengt an der Kartenart, nicht nur am Rueckseiten-Suffix des Keys. */
+    @Test
+    void namensRueckfallHaengtFaceBackNurAnKartenMitEchterRueckseite() {
+        String basis = "https://api.scryfall.com/cards/named?exact=";
+        String ende = "&format=image&version=normal";
+        // Karten ohne echte Rueckseite: auch bei verlangter Rueckseite nur face=front
+        for (Object[] f : new Object[][] {
+                {"Bonecrusher Giant", CardSplitType.Adventure},
+                {"Cunning Azurescale", CardSplitType.Omen},
+                {"Hallway Heckler", CardSplitType.Prepare},
+                {"Consign // Oblivion", CardSplitType.Split},
+                {"Akki Lavarunner", CardSplitType.Flip},
+        }) {
+            PaperCard pc = ohneNummer(vorschaukarte((String) f[0]), (CardSplitType) f[1]);
+            assertEquals(basis + enc(pc.getName()) + ende + "&face=front", ImageKeys2Scryfall.nameUrl(pc, true), f[0] + " Rueckseite");
+            assertEquals(basis + enc(pc.getName()) + ende + "&face=front", ImageKeys2Scryfall.nameUrl(pc, false), f[0] + " Vorderseite");
+        }
+        // Karten mit zwei echten Seiten: Rueckseite bekommt face=back
+        for (Object[] f : new Object[][] {
+                {"Delver of Secrets", CardSplitType.Transform},
+                {"Clearwater Pathway", CardSplitType.Modal},
+        }) {
+            PaperCard pc = ohneNummer(vorschaukarte((String) f[0]), (CardSplitType) f[1]);
+            assertEquals(basis + enc(pc.getName()) + ende + "&face=back", ImageKeys2Scryfall.nameUrl(pc, true), f[0] + " Rueckseite");
+            assertEquals(basis + enc(pc.getName()) + ende + "&face=front", ImageKeys2Scryfall.nameUrl(pc, false), f[0] + " Vorderseite");
+        }
+    }
+
+    /** Wie {@code encode}, aber unabhaengig davon ausgeschrieben, damit der Test die Kodierung nicht von sich selbst erbt. */
+    private static String enc(String s) {
+        return s.replace(",", "%2C").replace(" ", "%20").replace("/", "%2F");
+    }
+
+    private static PaperCard ohneNummer(PaperCard pc, CardSplitType erwartet) {
+        assertEquals(erwartet, pc.getRules().getSplitType(), pc.getName());
+        return new PaperCard(pc.getRules(), pc.getEdition(), pc.getRarity(), pc.getArtIndex(),
+                false, IPaperCard.NO_COLLECTOR_NUMBER, pc.getArtist(), pc.getFunctionalVariant());
     }
 
     /** Jede Absage nennt ihren Grund - sonst ist ein fehlendes Bild von einem nie angefragten nicht zu unterscheiden. */

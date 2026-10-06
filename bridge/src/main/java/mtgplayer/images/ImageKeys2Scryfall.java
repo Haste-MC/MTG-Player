@@ -86,15 +86,19 @@ public final class ImageKeys2Scryfall {
 
     /**
      * Rueckfall ohne Sammlernummer: {@code cards/named?exact=<Name>}. Das {@code face} folgt Forges eigener
-     * Regel im Nummernweg: Karten mit anderer Seite bekommen {@code face=front} bzw. {@code face=back} (nicht
-     * bei Flip, dort ist die Rueckseite dieselbe Scryfall-Karte); Meld und Specialize bekommen keins, weil
-     * ihre Seiten unter dem Namen nicht eindeutig sind.
+     * Regel im Nummernweg: Karten mit anderer Seite bekommen {@code face=front} bzw. {@code face=back}, Letzteres
+     * aber nur bei Transform und Modal (zwei echte Seiten). Adventure, Omen, Prepare, Split und Flip bleiben auch
+     * bei verlangter Rueckseite bei {@code face=front}; Meld und Specialize bekommen keins, weil ihre Seiten unter
+     * dem Namen nicht eindeutig sind.
      */
     static String nameUrl(PaperCard pc, boolean back) {
         String url = SCRYFALL + "named?exact=" + encode(pc.getName()) + "&format=image&version=normal";
         CardSplitType split = pc.getRules().getSplitType();
         if (split != CardSplitType.Meld && split != CardSplitType.Specialize && pc.getRules().getOtherPart() != null) {
-            url += back && split != CardSplitType.Flip ? "&face=back" : "&face=front";
+            // face=back nur bei zwei echten Seiten; Adventure/Omen/Prepare/Split/Flip sind bei Scryfall ein
+            // einziges Bild, dort antwortet face=back mit 422.
+            boolean zweiSeiten = split == CardSplitType.Transform || split == CardSplitType.Modal;
+            url += back && zweiSeiten ? "&face=back" : "&face=front";
         }
         return url;
     }
