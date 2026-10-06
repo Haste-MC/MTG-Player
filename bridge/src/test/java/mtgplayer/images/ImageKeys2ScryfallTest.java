@@ -117,6 +117,66 @@ class ImageKeys2ScryfallTest {
                 ImageKeys2Scryfall.nameUrl(avacyn, true));
     }
 
+    /** Befund 3: echte Vorschaukarten-Namen mit Akzenten. Forges Key enthaelt den Namen ohne Akzente
+     *  ({@code StringUtils.stripAccents}), die Adresse aber den echten Namen, UTF-8-kodiert - Scryfalls
+     *  {@code exact} vergleicht mit dem echten Namen. */
+    @Test
+    void namensRueckfallKodiertAkzenteAlsUtf8() {
+        String basis = "https://api.scryfall.com/cards/named?exact=";
+        String ende = "&format=image&version=normal";
+        String[][] faelle = {
+                {"Fíli the Pathfinder", "F%C3%ADli%20the%20Pathfinder", "c:Fili the Pathfinder|"},
+                {"Kíli the Resourceful", "K%C3%ADli%20the%20Resourceful", "c:Kili the Resourceful|"},
+                {"Glóin the Mighty", "Gl%C3%B3in%20the%20Mighty", "c:Gloin the Mighty|"},
+                {"Fíli and Kíli, Joyous", "F%C3%ADli%20and%20K%C3%ADli%2C%20Joyous", "c:Fili and Kili, Joyous|"},
+                {"Dáin's Company", "D%C3%A1in%27s%20Company", "c:Dain's Company|"},
+                {"Thrór's Map", "Thr%C3%B3r%27s%20Map", "c:Thror's Map|"},
+        };
+        for (String[] f : faelle) {
+            PaperCard pc = vorschaukarte(f[0]);
+            // Forges Key traegt den Namen ohne Akzente ...
+            String key = pc.getImageKey(false);
+            assertTrue(key.startsWith(f[2]), key);
+            // ... die Adresse den echten (Forges Datenbank fuehrt diese Karten teils schon mit Nummer, hier ohne)
+            PaperCard ohne = ohneNummer(pc, pc.getRules().getSplitType());
+            assertEquals(f[0], ohne.getName());
+            String url = ImageKeys2Scryfall.nameUrl(ohne, false);
+            assertTrue(url.startsWith(basis + f[1] + ende), url);
+        }
+    }
+
+    /** Befund 3: Namen mit Satzzeichen aus Forges Vorschaukarten ({@code !}, {@code -}, {@code .}) und echten
+     *  Karten ({@code :}, {@code /}). Nur Buchstaben, Ziffern sowie {@code - . _ *} lassen {@code URLEncoder}
+     *  stehen; alles andere wird %XX, Leerzeichen %20 (nicht '+'). */
+    @Test
+    void namensRueckfallKodiertSatzzeichenImNamen() {
+        String basis = "https://api.scryfall.com/cards/named?exact=";
+        String ende = "&format=image&version=normal";
+        assertEquals(basis + "Khaaaaaaaaaaaannn%21" + ende,
+                ImageKeys2Scryfall.nameUrl(ohneNummer(vorschaukarte("Khaaaaaaaaaaaannn!"), CardSplitType.None), false));
+        assertEquals(basis + "Shields%20Up%21" + ende,
+                ImageKeys2Scryfall.nameUrl(ohneNummer(vorschaukarte("Shields Up!"), CardSplitType.None), false));
+        assertEquals(basis + "Celebrate%20the%20Mountain-king" + ende,
+                ImageKeys2Scryfall.nameUrl(ohneNummer(vorschaukarte("Celebrate the Mountain-king"), CardSplitType.None), false));
+        assertEquals(basis + "I%27m%20a%20Doctor%2C%20Not%20a%20.%20.%20." + ende,
+                ImageKeys2Scryfall.nameUrl(ohneNummer(vorschaukarte("I'm a Doctor, Not a . . ."), CardSplitType.None), false));
+        assertEquals(basis + "Circle%20of%20Protection%3A%20Red" + ende,
+                ImageKeys2Scryfall.nameUrl(ohneNummer(vorschaukarte("Circle of Protection: Red"), CardSplitType.None), false));
+    }
+
+    /** Die Kodierung selbst, ohne Karte: auch Zeichen, die in keiner heutigen Vorschaukarte vorkommen. */
+    @Test
+    void encodeKodiertJedesNichtSicherZeichen() {
+        assertEquals("a%20b", ImageKeys2Scryfall.encode("a b"));
+        assertEquals("a%2Bb", ImageKeys2Scryfall.encode("a+b"));      // ein echtes '+' bleibt %2B, wird nicht zu %20
+        assertEquals("a%2Ab", ImageKeys2Scryfall.encode("a*b"));      // URLEncoder liess '*' stehen
+        assertEquals("%2A", ImageKeys2Scryfall.encode("*"));
+        assertEquals("a-b.c_d", ImageKeys2Scryfall.encode("a-b.c_d")); // sicher, bleiben stehen
+        assertEquals("%21%3A%2F%2F%26%23%3F", ImageKeys2Scryfall.encode("!://&#?"));
+        assertEquals("F%C3%ADli", ImageKeys2Scryfall.encode("Fíli"));
+        assertEquals("Fire%20%2F%2F%20Ice", ImageKeys2Scryfall.encode("Fire // Ice"));
+    }
+
     /** Befund 1: {@code face=back} gibt es nur bei Karten mit zwei echten Seiten (Transform, Modal). Bei Adventure,
      *  Omen, Prepare, Split und Flip ist es bei Scryfall ein einziges Bild; {@code face=back} wuerde mit 422
      *  beantwortet. Die Bedingung haengt an der Kartenart, nicht nur am Rueckseiten-Suffix des Keys. */

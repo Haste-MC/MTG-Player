@@ -116,7 +116,7 @@ public final class ImageKeys2Scryfall {
     }
 
     /** Prozent-Kodierung fuer einen Query-Wert: Leerzeichen als %20 (nicht '+'), Komma/Apostroph/'*' kodiert. */
-    private static String encode(String s) {
+    static String encode(String s) {
         return URLEncoder.encode(s, StandardCharsets.UTF_8).replace("+", "%20").replace("*", "%2A");
     }
 
