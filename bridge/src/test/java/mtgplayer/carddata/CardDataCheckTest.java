@@ -111,10 +111,13 @@ class CardDataCheckTest {
     /**
      * Der Pfad, um dessentwillen der Modus existiert: Karten, die Forge LAEDT (sie stehen in der
      * Datenbank), die aber beim Bauen scheitern. In den echten Daten gibt es keine - ohne diesen Test fiele
-     * es nicht auf, wenn die Bauschleife nichts taete. Jedes Skript enthaelt ein Schluesselwort, das unsere
-     * Forge-Fassung nicht kennt; der Grund muss es nennen, nicht nur die aeussere Ausnahme.
+     * es nicht auf, wenn die Bauschleife nichts taete. Jedes Skript enthaelt ein Schluesselwort, das
+     * keine Forge-Fassung kennt; der Grund muss es nennen, nicht nur die aeussere Ausnahme.
      *
-     * <p>Die erste Testkarte heißt bewusst "Zzz Unbekannte Faehigkeit", nicht "Zzz Empower Testkarte":
+     * <p>Die Schluesselwoerter sind erfunden, weil echte, nur noch nicht unterstuetzte Namen den Test bei
+     * jedem Forge-Wechsel in einen Fassungs-Detektor verwandeln.</p>
+     *
+     * <p>Die erste Testkarte heißt bewusst "Zzz Unbekannte Faehigkeit", nicht "Zzz ZzzErfundenerApi Testkarte":
      * der Name darf das Schluesselwort nicht enthalten, sonst waere die Zusicherung auch gruen, wenn die
      * Ursachenkette gar nicht ausgewertet wurde (Forges Meldung kaeme ueber den KARTENNAMEN, nicht die Cause).
      */
@@ -125,22 +128,22 @@ class CardDataCheckTest {
         Path ordner = res.resolve("cardsfolder").resolve("z");
         Files.writeString(ordner.resolve("zzz_unbekannte_faehigkeit_testkarte.txt"),
                 "Name:Zzz Unbekannte Faehigkeit\nManaCost:1\nTypes:Artifact\n"
-                        + "A:AB$ Empower | Cost$ T | SpellDescription$ Testfaehigkeit.\nOracle:{T}: Testfaehigkeit.\n");
+                        + "A:AB$ ZzzErfundenerApi | Cost$ T | SpellDescription$ Testfaehigkeit.\nOracle:{T}: Testfaehigkeit.\n");
         Files.writeString(ordner.resolve("zzz_muenzen_testkarte.txt"),
                 "Name:Zzz Muenzen Testkarte\nManaCost:1\nTypes:Artifact\n"
-                        + "T:Mode$ FlippedCoinOnce | ValidPlayer$ You | Execute$ TrigDraw | TriggerZones$ Battlefield"
+                        + "T:Mode$ ZzzErfundenerAusloeser | ValidPlayer$ You | Execute$ TrigDraw | TriggerZones$ Battlefield"
                         + " | TriggerDescription$ Wenn eine Muenze faellt, zieh eine Karte.\n"
                         + "SVar:TrigDraw:DB$ Draw | NumCards$ 1\nOracle:Wenn eine Muenze faellt, zieh eine Karte.\n");
         Files.writeString(ordner.resolve("zzz_strahl_testkarte.txt"),
                 "Name:Zzz Strahl Testkarte\nManaCost:1\nTypes:Artifact\n"
-                        + "S:Mode$ CantBeBeamedUp | ValidCard$ Card.Self | Description$ Testregel.\nOracle:Testregel.\n");
+                        + "S:Mode$ ZzzErfundenerModus | ValidCard$ Card.Self | Description$ Testregel.\nOracle:Testregel.\n");
 
         JsonNode b = befund(tmp, res.getParent());
 
         JsonNode probleme = b.get("nichtBaubar");
-        assertGrund(probleme, "Zzz Unbekannte Faehigkeit", "crash in raw Ability", "Empower");
-        assertGrund(probleme, "Zzz Muenzen Testkarte", "Error in Trigger for Card", "FlippedCoinOnce");
-        assertGrund(probleme, "Zzz Strahl Testkarte", "CantBeBeamedUp");
+        assertGrund(probleme, "Zzz Unbekannte Faehigkeit", "crash in raw Ability", "ZzzErfundenerApi");
+        assertGrund(probleme, "Zzz Muenzen Testkarte", "Error in Trigger for Card", "ZzzErfundenerAusloeser");
+        assertGrund(probleme, "Zzz Strahl Testkarte", "ZzzErfundenerModus");
     }
 
     /**
