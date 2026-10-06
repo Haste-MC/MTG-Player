@@ -1,6 +1,12 @@
 # Forge-Fork (Haste-MC/forge, Branch `mtg-player`)
 
-Basis: Tag `forge-2.0.14` (Commit a37a865a). Maven-Version `2.0.14-mtgplayer`.
+Basis: Tag `forge-2.0.15` (Commit 4ec5f1a2). Maven-Version `2.0.15-mtgplayer`.
+
+Seit dem 2026-10-06 steht der Fork auf `forge-2.0.15` (Zweig `mtg-player-2.0.15`, siehe „Wechsel auf 2.0.15“ unten).
+Die Commit-Hashes der Tabelle sind die der **alten** Fassung auf `forge-2.0.14` (Tag `mtg-player-2.0.14`, Kopf
+`903f0f1d`); beim Neuaufsetzen haben die Code-Commits neue Hashes bekommen, Inhalt und Begründung gelten weiter.
+Der Kartendaten-Commit `0e30eaac` und der Versions-Commit `952c5e1a` wurden nicht übertragen (2.0.15 bringt die Karten
+selbst mit, die Version steht neu in den POMs).
 
 | Commit | Änderung | Warum |
 |---|---|---|
@@ -80,3 +86,43 @@ Fixture (`AITest`/`GuiDesktop`), nicht der Stufe-2-Fork-Änderungen. Die Bridge-
 
 Upstream-Update: `cd forge && git fetch upstream --tags && git merge forge-<version>` (Konflikte nur in den
 POM-Versionen und unseren Patches), dann `mvn versions:set -DnewVersion=<version>-mtgplayer` und Bridge-POM anpassen.
+
+## Wechsel auf 2.0.15 (2026-10-06): was er an Karten bringt
+
+Gemessen mit `--kartendaten-pruefen` (baut jede Karte per `CardFactory.getCard` im Spielkontext). „Baubar“ heißt:
+die Karte entsteht ohne Ausnahme; gespielt wurde mit den zurückgekehrten Karten nicht.
+
+**Methode.** Dieselben Kartendaten durch beide Engines: Forges `upstream/master` (Commit `0d425a66`, 2026-10-06
+18:45 UTC) über `cardsfolder`, `editions` und `tokenscripts` gelegt, einmal unter `2.0.14-mtgplayer`, einmal unter
+`2.0.15-mtgplayer`. Gegenprobe der Messung: unter 2.0.14 fallen genau **88** Karten durch – die 78 der
+Ausschlussliste vom 2026-10-06 (Namensmenge identisch) plus die zehn „auf unserer bisherigen Fassung geblieben“.
+Der Unterschied zwischen `upstream/master` und dem Abgleichsergebnis (`d72bad69`) sind genau diese 78 Dateien und
+14 geänderte Skripte (die zehn und vier weitere reine Datenänderungen, die in beiden Engines baubar sind).
+
+**Kartenzahl (`getUniqueCards`), gleiche Daten, beide Engines:** 33469 / 33469 (Stand vor dem Abgleich),
+33523 / 33523 (Abgleich 2026-10-06), 33600 / 33600 (`upstream/master` roh). Die neue Engine kennt nicht weniger Karten.
+
+**Die 78 ausgeschlossenen Karten: 38 kommen zurück, 40 nicht.**
+
+| Ursache (Karten) | Unter 2.0.15 |
+|---|---|
+| `Empower` (34) | alle 34 baubar |
+| `FlippedCoinOnce` (1), `CantBeBeamedUp` (1) | baubar |
+| `CombatDamageNegatePower` (1, Loot, the Anomaly), `IgnorePlaneswalkerZeroLoyaltyRule` (1, Sanctum Lurker) | baubar |
+| `PutSticker` (35) und `StickerPlaced` (5) – die Aufkleber-Mechanik | **bleiben ausgeschlossen**: 2.0.15 kennt weder den `ApiType` `PutSticker` noch den `TriggerType` `StickerPlaced` (in keiner Klasse der vier Forge-Module zu finden) |
+
+**Die zehn Karten, die beim Abgleich auf der alten Fassung blieben: 8 kommen auf upstreams Fassung zurück, 2 nicht.**
+`CanBlockIfShadow` (Aether Web, Aetherflame Wall, Heartwood Dryad, Wall of Diffusion), `ManaRestriction`
+(Hogaak, Arisen Necropolis; Imperiosaur; Myr Superion) und `CantGainControl` (Guardian Beast) kennt 2.0.15.
+`DrawFromBottom` (Lantern of Undersight, River Song) kennt es nicht – beide bleiben auf der alten Fassung.
+
+**Erwartetes Ergebnis des nächsten Abgleichs auf 2.0.15:** 40 Karten auf der Ausschlussliste (alle Aufkleber),
+zwei auf der alten Fassung (`DrawFromBottom`), Kartenzahl rechnerisch 33560 statt 33523 (33600 minus die 40 Aufkleber-Karten).
+
+**Kartenzahl bei bloßem Umstellen des Zeigers (ohne neuen Abgleich).** Der Zweig `mtg-player-2.0.15` trägt die
+Kartendaten des Tags `forge-2.0.15`, nicht die der Abgleiche: 33469 (Zeiger bis hierhin, `903f0f1d`) → 33507
+(+38), aber gegenüber dem inzwischen gemergten `mtg-player` (`840f3cc0`, Abgleich 2026-10-06, 33523) **16 weniger**:
++39 Namen, die 2.0.15 selbst mitbringt (34 Empower-Karten, Loot, Marooned, Sanctum Lurker, Chira, Command the Stage
+u. a.), −1 (Cybernetics Specialist, von upstream entfernt) und −54 Karten, die erst nach 2.0.15 in upstream
+hinzukamen. Der erste Abgleich auf der neuen Basis holt sie zurück. Die Ausschlussliste ist geleert, sie gilt je
+Engine-Fassung.

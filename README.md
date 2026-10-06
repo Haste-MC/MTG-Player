@@ -31,8 +31,8 @@ Bedarf separat gelöscht werden).
 ## Einmalig: Forge bauen
 
 ```bash
-git submodule update --init --depth 1   # Fork Haste-MC/forge, Branch mtg-player (Basis: Tag forge-2.0.14)
-cd forge && mvn -q -pl forge-gui -am install -DskipTests -Dcheckstyle.skip -Dmaven.javadoc.skip=true   # installiert 2.0.14-mtgplayer nach ~/.m2
+git submodule update --init --depth 1   # Fork Haste-MC/forge, Branch mtg-player (Basis: Tag forge-2.0.15)
+cd forge && mvn -q -pl forge-gui -am install -DskipTests -Dcheckstyle.skip -Dmaven.javadoc.skip=true   # installiert 2.0.15-mtgplayer nach ~/.m2
 ```
 
 ## Spielen
@@ -348,7 +348,7 @@ Nachdenken ein `ChoiceBroker`-Stack im Log, also genau die Signatur des echten H
 ## Forge-Fork
 
 Seit dem KI-Paket Stufe 2 läuft die Bridge gegen einen Fork von Forge (`Haste-MC/forge`, Branch `mtg-player`,
-Maven-Version `2.0.14-mtgplayer`, damit der Fork-Build das Original in `~/.m2` nicht überschreibt). Im Submodule
+Maven-Version `2.0.15-mtgplayer`, damit der Fork-Build das Original in `~/.m2` nicht überschreibt). Im Submodule
 ist `origin` der Fork und `upstream` Card-Forge; neue Forge-Versionen kommen per `git fetch upstream && git merge
 forge-<version>` auf den Branch. Nach jeder Änderung an Forge: obiges `mvn install` erneut, dann Bridge neu bauen.
 Was der Fork ändert, steht kommitweise in `docs/forge-fork.md`: Zeitbudget für die Voll-Simulation (die
@@ -455,8 +455,8 @@ Lizenztext steht in [LICENSE](LICENSE). Das heißt für jeden, der eine gebaute 
 mitliefern, Quelltext verfügbar halten, Änderungen kenntlich machen.
 
 Die Engine steckt als Submodul unter `forge/` und ist ein **veränderter** Forge: Fork
-[Haste-MC/forge](https://github.com/Haste-MC/forge), Branch `mtg-player`, Basis Tag `forge-2.0.14`. Was
-gegenüber dem Original anders ist, steht commitweise in `git log forge-2.0.14..mtg-player` und zusammengefasst
+[Haste-MC/forge](https://github.com/Haste-MC/forge), Branch `mtg-player`, Basis Tag `forge-2.0.15`. Was
+gegenüber dem Original anders ist, steht commitweise in `git log forge-2.0.15..mtg-player` und zusammengefasst
 in `forge/MODIFICATIONS.md` – im Kern Fehlerbehebungen und Verbesserungen an der KI.
 
 Magic: The Gathering ist ein Markenzeichen von Wizards of the Coast; dieses Projekt steht in keiner Verbindung

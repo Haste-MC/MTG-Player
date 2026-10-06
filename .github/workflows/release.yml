@@ -68,7 +68,7 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
 
-      - name: Forge bauen (installiert 2.0.14-mtgplayer nach ~/.m2, wie im README beschrieben)
+      - name: Forge bauen (installiert 2.0.15-mtgplayer nach ~/.m2, wie im README beschrieben)
         working-directory: forge
         run: mvn -q -pl forge-gui -am install -DskipTests -Dcheckstyle.skip -Dmaven.javadoc.skip=true
 
