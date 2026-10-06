@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import forge.StaticData;
 import mtgplayer.forge.ForgeBoot;
 import mtgplayer.forge.Precons;
+import forge.item.IPaperCard;
 import forge.item.PaperCard;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -77,5 +78,58 @@ class ImageKeys2ScryfallTest {
         String key = StaticData.instance().getAllTokens().getToken("g_3_3_beast", "C21").getImageKey(false);
         assertTrue(key.startsWith("t:g_3_3_beast|C21"), key);
         assertTrue(ImageKeys2Scryfall.url(key).orElse("").startsWith("https://api.scryfall.com/cards/tc21/"), key);
+    }
+
+    /** Vorschaukarten aus cardsfolder/upcoming haben keinen Druck und damit keine Sammlernummer
+     *  ("Avacyn, Angel of Horror|TRK|[N.A.]" in den Deck-Dateien). Scryfall kennt sie trotzdem, nur unter dem
+     *  echten Set - also ueber den Namen fragen statt gar nicht. */
+    @Test
+    void karteOhneSammlernummerFaelltAufDenNamenZurueck() {
+        PaperCard avacyn = vorschaukarte("Avacyn, Angel of Horror");
+        assertEquals(IPaperCard.NO_COLLECTOR_NUMBER, avacyn.getCollectorNumber());
+        Optional<String> url = ImageKeys2Scryfall.url(avacyn.getImageKey(false));
+        assertEquals("https://api.scryfall.com/cards/named?exact=Avacyn%2C%20Angel%20of%20Horror&format=image&version=normal", url.orElse("-"));
+    }
+
+    @Test
+    void namensRueckfallKodiertApostrophUndKommaUndLeerzeichen() {
+        PaperCard samut = vorschaukarte("Samut, Hazoret's Champion");
+        assertEquals("https://api.scryfall.com/cards/named?exact=Samut%2C%20Hazoret%27s%20Champion&format=image&version=normal",
+                ImageKeys2Scryfall.url(samut.getImageKey(false)).orElse("-"));
+    }
+
+    @Test
+    void namensRueckfallBeiRueckseiteMitFaceBack() {
+        // Delver ist ein Transform-Pair; ohne Nummer faellt der Weg auf den Namen, und die Rueckseite
+        // behaelt ihr &face=back wie im Weg ueber die Sammlernummer. (Direkt auf nameUrl geprueft: ueber den Key
+        // wuerde Forge die echte Delver-Karte mit Nummer aus der Datenbank holen.)
+        PaperCard delver = StaticData.instance().getCommonCards().getCard("Delver of Secrets");
+        PaperCard ohneNummer = new PaperCard(delver.getRules(), delver.getEdition(), delver.getRarity(), delver.getArtIndex(),
+                false, IPaperCard.NO_COLLECTOR_NUMBER, delver.getArtist(), delver.getFunctionalVariant());
+        assertEquals("https://api.scryfall.com/cards/named?exact=Delver%20of%20Secrets&format=image&version=normal&face=front",
+                ImageKeys2Scryfall.nameUrl(ohneNummer, false));
+        assertEquals("https://api.scryfall.com/cards/named?exact=Delver%20of%20Secrets&format=image&version=normal&face=back",
+                ImageKeys2Scryfall.nameUrl(ohneNummer, true));
+        // Karte ohne Rueckseite: kein &face, auch wenn die Rueckseite verlangt wird (wie Forges Builder)
+        PaperCard avacyn = vorschaukarte("Avacyn, Angel of Horror");
+        assertEquals("https://api.scryfall.com/cards/named?exact=Avacyn%2C%20Angel%20of%20Horror&format=image&version=normal",
+                ImageKeys2Scryfall.nameUrl(avacyn, true));
+    }
+
+    /** Jede Absage nennt ihren Grund - sonst ist ein fehlendes Bild von einem nie angefragten nicht zu unterscheiden. */
+    @Test
+    void jedeAbsageHatEinenGrund() {
+        for (String key : new String[] {null, "", "x", "t:goblin_r_1_1", "t:gibt_es_nicht|C21", "c:Gibtsnicht|XXX|1"}) {
+            ImageKeys2Scryfall.Result r = ImageKeys2Scryfall.resolve(key);
+            assertTrue(r.url().isEmpty(), String.valueOf(key));
+            assertTrue(r.reason() != null && !r.reason().isBlank(), "Grund fehlt fuer " + key);
+        }
+        assertEquals(null, ImageKeys2Scryfall.resolve("t:g_3_3_beast|C21").reason());
+    }
+
+    private static PaperCard vorschaukarte(String name) {
+        PaperCard pc = StaticData.instance().getCommonCards().getCard(name);
+        assertTrue(pc != null, name + " fehlt in Forges Kartendatenbank");
+        return pc;
     }
 }
