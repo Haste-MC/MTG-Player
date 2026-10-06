@@ -47,7 +47,7 @@ Erwartet: `* [new tag] mtg-player-2.0.14 -> mtg-player-2.0.14`
 - [ ] **Step 2: Arbeitsbaum auf dem neuen Zweig anlegen**
 
 ```bash
-git -C /home/kevin/projects/MTG-Player/forge worktree add -b mtg-player-2.0.15 /tmp/fassung forge-2.0.15
+git -C /home/kevin/projects/MTG-Player/forge worktree add -b mtg-player-2.0.15 /tmp/claude-1000/-home-kevin-projects-DiscordBot/4cee7c96-6aaf-442e-8cd8-a9f8632f3c2b/scratchpad/fassung forge-2.0.15
 ```
 
 Erwartet: `Zu neuem Branch 'mtg-player-2.0.15' gewechselt`
@@ -59,7 +59,7 @@ Bewertungs-Experiment und Rücknahme, der Kartendaten-Commit und der alte Versio
 (Spezifikation §3).
 
 ```bash
-cd /tmp/fassung
+cd /tmp/claude-1000/-home-kevin-projects-DiscordBot/4cee7c96-6aaf-442e-8cd8-a9f8632f3c2b/scratchpad/fassung
 for c in ffe45981 7b88bf01 2990f760 6c84aec7 450c26e5 deb29633 94931591 c3910fdb \
          7f98cdd9 54afc702 2e25b15a 773e120c db869874 932dd8e9 1c91bcd0 aa851d40 \
          7c4fbee2 af525e92 6b2dc295 a4aba034 f712e5fa 14c29d9a 55a04676 20a78f69 \
@@ -81,8 +81,8 @@ Null-Test in `Player.getMonarchSet()` stand verkehrt herum.
 Übernimm beide Absichten in den Text von 2.0.15. Danach:
 
 ```bash
-git -C /tmp/fassung add forge-game/src/main/java/forge/game/player/Player.java
-git -C /tmp/fassung cherry-pick --continue --no-edit
+git -C /tmp/claude-1000/-home-kevin-projects-DiscordBot/4cee7c96-6aaf-442e-8cd8-a9f8632f3c2b/scratchpad/fassung add forge-game/src/main/java/forge/game/player/Player.java
+git -C /tmp/claude-1000/-home-kevin-projects-DiscordBot/4cee7c96-6aaf-442e-8cd8-a9f8632f3c2b/scratchpad/fassung cherry-pick --continue --no-edit
 ```
 
 Dann die restlichen Commits weiterlaufen lassen — dieselbe Schleife, nur ohne die schon erledigten:
@@ -121,15 +121,15 @@ als zweites `invokeAll` danach). Zwei Dinge müssen erhalten bleiben — der Zug
 hochgezählt. Die Hilfsmethode `resolveRequiredDefender` kommt unverändert aus unserem Commit.
 
 ```bash
-git -C /tmp/fassung add forge-ai/src/main/java/forge/ai/AiAttackController.java
-git -C /tmp/fassung cherry-pick --continue --no-edit
+git -C /tmp/claude-1000/-home-kevin-projects-DiscordBot/4cee7c96-6aaf-442e-8cd8-a9f8632f3c2b/scratchpad/fassung add forge-ai/src/main/java/forge/ai/AiAttackController.java
+git -C /tmp/claude-1000/-home-kevin-projects-DiscordBot/4cee7c96-6aaf-442e-8cd8-a9f8632f3c2b/scratchpad/fassung cherry-pick --continue --no-edit
 ```
 
 - [ ] **Step 6: Version setzen**
 
 ```bash
-cd /tmp/fassung && mvn -q versions:set -DnewVersion=2.0.15-mtgplayer -DgenerateBackupPoms=false
-git -C /tmp/fassung add -A && git -C /tmp/fassung commit -m "mtg-player: version 2.0.15-mtgplayer (fork branch for MTG-Player)"
+cd /tmp/claude-1000/-home-kevin-projects-DiscordBot/4cee7c96-6aaf-442e-8cd8-a9f8632f3c2b/scratchpad/fassung && mvn -q versions:set -DnewVersion=2.0.15-mtgplayer -DgenerateBackupPoms=false
+git -C /tmp/claude-1000/-home-kevin-projects-DiscordBot/4cee7c96-6aaf-442e-8cd8-a9f8632f3c2b/scratchpad/fassung add -A && git -C /tmp/claude-1000/-home-kevin-projects-DiscordBot/4cee7c96-6aaf-442e-8cd8-a9f8632f3c2b/scratchpad/fassung commit -m "mtg-player: version 2.0.15-mtgplayer (fork branch for MTG-Player)"
 ```
 
 - [ ] **Step 7: Änderungshinweis nachziehen**
@@ -139,14 +139,14 @@ git -C /tmp/fassung add -A && git -C /tmp/fassung commit -m "mtg-player: version
 Forge 2.0.14 als Tag `mtg-player-2.0.14` erhalten bleibt. Dann committen (englisch, ohne Projektverweis):
 
 ```bash
-git -C /tmp/fassung commit -am "Point the modification notice at the 2.0.15 base"
+git -C /tmp/claude-1000/-home-kevin-projects-DiscordBot/4cee7c96-6aaf-442e-8cd8-a9f8632f3c2b/scratchpad/fassung commit -am "Point the modification notice at the 2.0.15 base"
 ```
 
 - [ ] **Step 8: Bauen**
 
 ```bash
 ps -eo args= | grep -c '[c]lassworlds'   # muss 0 oder 1 sein
-cd /tmp/fassung && mvn -q -pl forge-gui -am install -DskipTests -Dcheckstyle.skip -Dmaven.javadoc.skip=true
+cd /tmp/claude-1000/-home-kevin-projects-DiscordBot/4cee7c96-6aaf-442e-8cd8-a9f8632f3c2b/scratchpad/fassung && mvn -q -pl forge-gui -am install -DskipTests -Dcheckstyle.skip -Dmaven.javadoc.skip=true
 ```
 
 Erwartet: kein Fehler; danach liegt `2.0.15-mtgplayer` in `~/.m2`. Die alte `2.0.14-mtgplayer` bleibt
@@ -155,8 +155,8 @@ daneben bestehen — das ist Absicht, Task 4 braucht beide.
 - [ ] **Step 9: Zählprobe und schieben**
 
 ```bash
-git -C /tmp/fassung log --oneline forge-2.0.15..mtg-player-2.0.15 | wc -l   # erwartet: 29
-git -C /tmp/fassung push -u origin mtg-player-2.0.15
+git -C /tmp/claude-1000/-home-kevin-projects-DiscordBot/4cee7c96-6aaf-442e-8cd8-a9f8632f3c2b/scratchpad/fassung log --oneline forge-2.0.15..mtg-player-2.0.15 | wc -l   # erwartet: 29
+git -C /tmp/claude-1000/-home-kevin-projects-DiscordBot/4cee7c96-6aaf-442e-8cd8-a9f8632f3c2b/scratchpad/fassung push -u origin mtg-player-2.0.15
 ```
 
 29 = 27 Code-Commits plus Version und Änderungshinweis.
@@ -175,7 +175,7 @@ git -C /tmp/fassung push -u origin mtg-player-2.0.15
 - [ ] **Step 1: Arbeitsbaum des Hauptprojekts vorbereiten**
 
 ```bash
-git -C /home/kevin/projects/MTG-Player worktree add --detach /tmp/fassung-bridge main
+git -C /home/kevin/projects/MTG-Player worktree add --detach /tmp/claude-1000/-home-kevin-projects-DiscordBot/4cee7c96-6aaf-442e-8cd8-a9f8632f3c2b/scratchpad/fassung-bridge main
 ```
 
 Der Arbeitsbaum steht auf `main`, sein Submodul-Zeiger also noch auf dem **alten** Fork-Stand. Das ist
@@ -189,7 +189,7 @@ Jeder davon beschreibt eine Lage, die vor unserer Reparatur kaputt war.
 
 ```bash
 ps -eo args= | grep -c '[c]lassworlds'
-cd /tmp/fassung-bridge/bridge && mvn test -Dforge.version=2.0.15-mtgplayer \
+cd /tmp/claude-1000/-home-kevin-projects-DiscordBot/4cee7c96-6aaf-442e-8cd8-a9f8632f3c2b/scratchpad/fassung-bridge/bridge && mvn test -Dforge.version=2.0.15-mtgplayer \
   -Dtest='GoadTest,GoadedTokenSceneTest,ControlDonationSceneTest,MeldTitaniaTest,PhagePlayerLossTest,SimCopierTest,MulliganTest,SorceryCommanderTest' \
   -DfailIfNoSpecifiedTests=false
 ```
@@ -203,7 +203,7 @@ aussagekräftigen.
 
 ```bash
 ps -eo args= | grep -c '[c]lassworlds'
-cd /tmp/fassung-bridge/bridge && mvn test -Dforge.version=2.0.15-mtgplayer
+cd /tmp/claude-1000/-home-kevin-projects-DiscordBot/4cee7c96-6aaf-442e-8cd8-a9f8632f3c2b/scratchpad/fassung-bridge/bridge && mvn test -Dforge.version=2.0.15-mtgplayer
 ```
 
 - [ ] **Step 4: Befund festhalten**
@@ -240,7 +240,7 @@ In `bridge/pom.xml` Zeile 15: `<forge.version>2.0.14-mtgplayer</forge.version>` 
 - [ ] **Step 2: Submodul-Zeiger auf den neuen Zweig**
 
 ```bash
-cd /tmp/fassung-bridge && git -C forge fetch origin mtg-player-2.0.15 && git -C forge checkout --detach origin/mtg-player-2.0.15
+cd /tmp/claude-1000/-home-kevin-projects-DiscordBot/4cee7c96-6aaf-442e-8cd8-a9f8632f3c2b/scratchpad/fassung-bridge && git -C forge fetch origin mtg-player-2.0.15 && git -C forge checkout --detach origin/mtg-player-2.0.15
 git add forge bridge/pom.xml
 ```
 
@@ -264,11 +264,11 @@ die **historische** Basis beziehen (etwa die Herleitung früherer Messungen), bl
 
 ```bash
 ps -eo args= | grep -c '[c]lassworlds'
-cd /tmp/fassung-bridge/bridge && mvn -q -DskipTests package
-mvn -q -f pom.xml dependency:build-classpath -Dmdep.outputFile=/tmp/fassung-bridge/target/cp.txt
-java -Xmx4g -Dmtgplayer.data=/tmp/fassung-bridge/target/kartendaten-data \
-  -cp "target/classes:$(cat /tmp/fassung-bridge/target/cp.txt)" \
-  mtgplayer.Main --kartendaten-pruefen | sed -n 's/^KARTENDATEN_BEFUND //p' > /tmp/fassung-bridge/befund-2015.json
+cd /tmp/claude-1000/-home-kevin-projects-DiscordBot/4cee7c96-6aaf-442e-8cd8-a9f8632f3c2b/scratchpad/fassung-bridge/bridge && mvn -q -DskipTests package
+mvn -q -f pom.xml dependency:build-classpath -Dmdep.outputFile=/tmp/claude-1000/-home-kevin-projects-DiscordBot/4cee7c96-6aaf-442e-8cd8-a9f8632f3c2b/scratchpad/fassung-bridge/target/cp.txt
+java -Xmx4g -Dmtgplayer.data=/tmp/claude-1000/-home-kevin-projects-DiscordBot/4cee7c96-6aaf-442e-8cd8-a9f8632f3c2b/scratchpad/fassung-bridge/target/kartendaten-data \
+  -cp "target/classes:$(cat /tmp/claude-1000/-home-kevin-projects-DiscordBot/4cee7c96-6aaf-442e-8cd8-a9f8632f3c2b/scratchpad/fassung-bridge/target/cp.txt)" \
+  mtgplayer.Main --kartendaten-pruefen | sed -n 's/^KARTENDATEN_BEFUND //p' > /tmp/claude-1000/-home-kevin-projects-DiscordBot/4cee7c96-6aaf-442e-8cd8-a9f8632f3c2b/scratchpad/fassung-bridge/befund-2015.json
 ```
 
 Vergleiche `nichtBaubar` mit den 78 Karten aus dem Bericht vom 2026-10-06 (im Pull Request des ersten
@@ -307,11 +307,11 @@ bleiben gleich.
 
 ```bash
 ps -eo args= | grep -c '[c]lassworlds'
-cd /tmp/fassung-bridge/bridge
+cd /tmp/claude-1000/-home-kevin-projects-DiscordBot/4cee7c96-6aaf-442e-8cd8-a9f8632f3c2b/scratchpad/fassung-bridge/bridge
 mvn -q compile exec:java -Dforge.version=2.0.14-mtgplayer \
-  -Dexec.args="--bench --games 40 --seed 20261006 --out /tmp/fassung-bridge/bench-2014.json"
+  -Dexec.args="--bench --games 40 --seed 20261006 --out /tmp/claude-1000/-home-kevin-projects-DiscordBot/4cee7c96-6aaf-442e-8cd8-a9f8632f3c2b/scratchpad/fassung-bridge/bench-2014.json"
 mvn -q compile exec:java -Dforge.version=2.0.15-mtgplayer \
-  -Dexec.args="--bench --games 40 --seed 20261006 --out /tmp/fassung-bridge/bench-2015.json"
+  -Dexec.args="--bench --games 40 --seed 20261006 --out /tmp/claude-1000/-home-kevin-projects-DiscordBot/4cee7c96-6aaf-442e-8cd8-a9f8632f3c2b/scratchpad/fassung-bridge/bench-2015.json"
 ```
 
 Beide Läufe dauern Stunden. Lass sie nacheinander laufen, nicht gleichzeitig — zwei Maven-Prozesse
@@ -365,14 +365,14 @@ Der alte Stand bleibt über den Tag `mtg-player-2.0.14` aus Task 1 dauerhaft err
 Umschreiben hier zulässig.
 
 ```bash
-git -C /tmp/fassung branch -f mtg-player mtg-player-2.0.15
-git -C /tmp/fassung push --force-with-lease origin mtg-player
+git -C /tmp/claude-1000/-home-kevin-projects-DiscordBot/4cee7c96-6aaf-442e-8cd8-a9f8632f3c2b/scratchpad/fassung branch -f mtg-player mtg-player-2.0.15
+git -C /tmp/claude-1000/-home-kevin-projects-DiscordBot/4cee7c96-6aaf-442e-8cd8-a9f8632f3c2b/scratchpad/fassung push --force-with-lease origin mtg-player
 ```
 
 - [ ] **Step 2: Submodul-Zeiger auf `mtg-player` statt auf den Arbeitszweig**
 
 ```bash
-cd /tmp/fassung-bridge && git -C forge fetch origin mtg-player && git -C forge checkout --detach origin/mtg-player
+cd /tmp/claude-1000/-home-kevin-projects-DiscordBot/4cee7c96-6aaf-442e-8cd8-a9f8632f3c2b/scratchpad/fassung-bridge && git -C forge fetch origin mtg-player && git -C forge checkout --detach origin/mtg-player
 git add forge && git commit -m "build: forge-submodul zeigt wieder auf mtg-player"
 ```
 
@@ -384,8 +384,8 @@ letztes Mal laufen lassen, dann `git push origin main`.
 - [ ] **Step 4: Aufräumen**
 
 ```bash
-git -C /home/kevin/projects/MTG-Player worktree remove --force /tmp/fassung-bridge
-git -C /home/kevin/projects/MTG-Player/forge worktree remove --force /tmp/fassung
+git -C /home/kevin/projects/MTG-Player worktree remove --force /tmp/claude-1000/-home-kevin-projects-DiscordBot/4cee7c96-6aaf-442e-8cd8-a9f8632f3c2b/scratchpad/fassung-bridge
+git -C /home/kevin/projects/MTG-Player/forge worktree remove --force /tmp/claude-1000/-home-kevin-projects-DiscordBot/4cee7c96-6aaf-442e-8cd8-a9f8632f3c2b/scratchpad/fassung
 git -C /home/kevin/projects/MTG-Player worktree prune
 git -C /home/kevin/projects/MTG-Player/forge worktree prune
 ```
