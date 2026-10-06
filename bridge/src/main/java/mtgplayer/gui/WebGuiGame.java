@@ -15,7 +15,6 @@ import forge.game.player.DelayedReveal;
 import forge.game.player.IHasIcon;
 import forge.game.player.PlayerView;
 import forge.game.spellability.SpellAbilityView;
-import forge.game.zone.ZoneType;
 import forge.gamemodes.match.AbstractGuiGame;
 import forge.gamemodes.match.input.InputSelectTargets;
 import forge.gui.GuiBase;
@@ -26,7 +25,6 @@ import forge.localinstance.properties.ForgePreferences.FPref;
 import forge.localinstance.skin.FSkinProp;
 import forge.player.PlayerControllerHuman;
 import forge.player.PlayerZoneUpdate;
-import forge.player.PlayerZoneUpdates;
 import forge.trackable.TrackableCollection;
 import forge.trackable.TrackableTypes;
 import forge.util.FSerializableFunction;
@@ -38,7 +36,6 @@ import mtgplayer.protocol.ViewContext;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -890,13 +887,6 @@ public class WebGuiGame extends AbstractGuiGame {
     @Override public void message(String message, String title) { sendLog(new Messages.LogLine(title + ": " + message)); }
     @Override public void showErrorDialog(String message, String title) { out.send(new Messages.ErrorMsg(title + ": " + message)); }
 
-    @Override
-    public PlayerZoneUpdates openZones(PlayerView controller, Collection<ZoneType> zones, Map<PlayerView, Object> players, boolean backupLastZones) {
-        return null;
-    }
-    @Override public void restoreOldZones(PlayerView playerView, PlayerZoneUpdates playerZoneUpdates) { }
-    @Override public Iterable<PlayerZoneUpdate> tempShowZones(PlayerView controller, Iterable<PlayerZoneUpdate> zonesToUpdate) { return zonesToUpdate; }
-    @Override public void hideZones(PlayerView controller, Iterable<PlayerZoneUpdate> zonesToUpdate) { }
     @Override public GameState getGamestate() { return null; }
 
     /** true = Phase überspringen. Ohne Spielzustand wird der eigene Zug angenommen. */
