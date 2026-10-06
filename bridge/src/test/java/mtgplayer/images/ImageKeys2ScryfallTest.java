@@ -147,6 +147,22 @@ class ImageKeys2ScryfallTest {
         }
     }
 
+    /** Befund 2: Forge setzt bei Meld in beiden Faellen {@code face=front} (ImageUtil.getScryfallDownloadUrl) und
+     *  erreicht die Rueckseite ueber eine andere Sammlernummer. Ueber den Namen heisst das: die Rueckseite ist die
+     *  Karte des Meld-Ergebnisses (Forges {@code getNameToUse}), nicht noch einmal die Vorderseite. */
+    @Test
+    void namensRueckfallBeiMeldImmerFaceFrontUndRueckseiteIstDasErgebnis() {
+        String basis = "https://api.scryfall.com/cards/named?exact=";
+        String ende = "&format=image&version=normal&face=front";
+        String ergebnis = "Hanweir%2C%20the%20Writhing%20Township";
+        PaperCard battlements = ohneNummer(vorschaukarte("Hanweir Battlements"), CardSplitType.Meld);
+        PaperCard garrison = ohneNummer(vorschaukarte("Hanweir Garrison"), CardSplitType.Meld);
+        assertEquals(basis + "Hanweir%20Battlements" + ende, ImageKeys2Scryfall.nameUrl(battlements, false));
+        assertEquals(basis + ergebnis + ende, ImageKeys2Scryfall.nameUrl(battlements, true));
+        assertEquals(basis + "Hanweir%20Garrison" + ende, ImageKeys2Scryfall.nameUrl(garrison, false));
+        assertEquals(basis + ergebnis + ende, ImageKeys2Scryfall.nameUrl(garrison, true));
+    }
+
     /** Wie {@code encode}, aber unabhaengig davon ausgeschrieben, damit der Test die Kodierung nicht von sich selbst erbt. */
     private static String enc(String s) {
         return s.replace(",", "%2C").replace(" ", "%20").replace("/", "%2F");

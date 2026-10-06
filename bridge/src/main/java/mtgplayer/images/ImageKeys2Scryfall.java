@@ -85,22 +85,34 @@ public final class ImageKeys2Scryfall {
     }
 
     /**
-     * Rueckfall ohne Sammlernummer: {@code cards/named?exact=<Name>}. Das {@code face} folgt Forges eigener
-     * Regel im Nummernweg: Karten mit anderer Seite bekommen {@code face=front} bzw. {@code face=back}, Letzteres
-     * aber nur bei Transform und Modal (zwei echte Seiten). Adventure, Omen, Prepare, Split und Flip bleiben auch
-     * bei verlangter Rueckseite bei {@code face=front}; Meld und Specialize bekommen keins, weil ihre Seiten unter
-     * dem Namen nicht eindeutig sind.
+     * Rueckfall ohne Sammlernummer: {@code cards/named?exact=<Name>}. Das {@code face} folgt Forges Regel im
+     * Nummernweg ({@link ImageUtil#getScryfallDownloadUrl}), aber an der Kartenart, nicht nur am Rueckseiten-Suffix:
+     * <ul>
+     * <li>Meld bekommt immer {@code face=front}, auch fuer die Rueckseite. Forge erreicht die Rueckseite (das
+     *     Meld-Ergebnis) dort ueber eine andere Sammlernummer; hier ueber den Namen des Ergebnisses
+     *     ({@link ImageUtil#getNameToUse}) - sonst kaeme fuer die Rueckseite nur wieder die Vorderseite.</li>
+     * <li>Transform und Modal haben zwei echte Seiten: {@code face=back} nur fuer die Rueckseite.</li>
+     * <li>Adventure, Omen, Prepare, Split und Flip sind bei Scryfall ein einziges Bild; {@code face=back} wuerde dort
+     *     mit 422 beantwortet. Auch bei verlangter Rueckseite bleibt es {@code face=front}.</li>
+     * <li>Specialize und Karten ohne andere Seite bekommen kein {@code face}.</li>
+     * </ul>
      */
     static String nameUrl(PaperCard pc, boolean back) {
-        String url = SCRYFALL + "named?exact=" + encode(pc.getName()) + "&format=image&version=normal";
         CardSplitType split = pc.getRules().getSplitType();
-        if (split != CardSplitType.Meld && split != CardSplitType.Specialize && pc.getRules().getOtherPart() != null) {
-            // face=back nur bei zwei echten Seiten; Adventure/Omen/Prepare/Split/Flip sind bei Scryfall ein
-            // einziges Bild, dort antwortet face=back mit 422.
+        String name = pc.getName();
+        String face = "";
+        if (split == CardSplitType.Meld) {
+            String ergebnis = back ? ImageUtil.getNameToUse(pc, "back") : null;
+            if (ergebnis != null) {
+                name = ergebnis;
+            }
+            face = "&face=front";
+        } else if (split != CardSplitType.Specialize && pc.getRules().getOtherPart() != null) {
+            // face=back nur bei zwei echten Seiten
             boolean zweiSeiten = split == CardSplitType.Transform || split == CardSplitType.Modal;
-            url += back && zweiSeiten ? "&face=back" : "&face=front";
+            face = back && zweiSeiten ? "&face=back" : "&face=front";
         }
-        return url;
+        return SCRYFALL + "named?exact=" + encode(name) + "&format=image&version=normal" + face;
     }
 
     /** Prozent-Kodierung fuer einen Query-Wert: Leerzeichen als %20 (nicht '+'), Komma/Apostroph/'*' kodiert. */
