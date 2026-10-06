@@ -1,5 +1,6 @@
 package mtgplayer.images;
 
+import mtgplayer.forge.CrashLog;
 import mtgplayer.forge.ForgeBoot;
 
 import java.io.IOException;
@@ -16,6 +17,7 @@ import java.time.Duration;
 import java.util.HexFormat;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -38,6 +40,8 @@ public final class ImageCache {
     private final Fetcher fetcher;
     private final long minGapMs;
     private final Map<String, Long> failedUntil = new ConcurrentHashMap<>();
+    /** Schon gemeldete (Key, Grund)-Paare: dieselbe Karte soll nicht bei jedem Bildabruf im Log stehen. */
+    private final Set<String> gemeldet = ConcurrentHashMap.newKeySet();
     private final Object downloadLock = new Object();
     private long lastRequestAt;
 
@@ -57,6 +61,10 @@ public final class ImageCache {
                     .timeout(Duration.ofSeconds(20)).GET().build();
             try {
                 HttpResponse<byte[]> res = client.send(req, HttpResponse.BodyHandlers.ofByteArray());
+                if (res.statusCode() != 200) {
+                    // Der Fetcher kennt nur "Bild oder null"; den Statuscode wuerde get() sonst nie erfahren.
+                    CrashLog.note("[images] kein Bild", url + ": HTTP " + res.statusCode());
+                }
                 return res.statusCode() == 200 ? res.body() : null;
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
@@ -67,8 +75,12 @@ public final class ImageCache {
     }
 
     public Optional<byte[]> get(String imageKey) {
-        Optional<String> url = ImageKeys2Scryfall.url(imageKey);
-        if (url.isEmpty()) return Optional.empty();
+        ImageKeys2Scryfall.Result resolved = ImageKeys2Scryfall.resolve(imageKey);
+        Optional<String> url = resolved.url();
+        if (url.isEmpty()) {
+            meldeKeinBild(imageKey, resolved.reason());
+            return Optional.empty();
+        }
         Path file = dir.resolve(sha1(imageKey) + ".jpg");
         if (Files.isRegularFile(file)) {
             try {
@@ -96,10 +108,13 @@ public final class ImageCache {
             try {
                 data = fetcher.fetch(url.get());
             } catch (IOException e) {
-                System.err.println("[images] " + url.get() + ": " + e);
+                meldeKeinBild(imageKey, "Abruf " + url.get() + " fehlgeschlagen: " + e);
                 transportError = true;
             }
             if (data == null || data.length == 0) {
+                if (!transportError) {
+                    meldeKeinBild(imageKey, "Scryfall lieferte kein Bild fuer " + url.get());
+                }
                 long ttl = transportError ? TRANSPORT_ERROR_TTL_MS : NEGATIVE_TTL_MS;
                 failedUntil.put(imageKey, System.currentTimeMillis() + ttl);
                 return Optional.empty();
@@ -113,6 +128,16 @@ public final class ImageCache {
                 System.err.println("[images] cache schreiben: " + e);
             }
             return Optional.of(data);
+        }
+    }
+
+    /**
+     * Vermerkt in {@code bridge.log} (nur Datei, nichts im Browser), dass fuer diesen Schluessel kein Bild
+     * zustande kam - mit Grund. Je Schluessel und Grund einmal pro Lauf.
+     */
+    void meldeKeinBild(String imageKey, String grund) {
+        if (gemeldet.add(imageKey + "\n" + grund)) {
+            CrashLog.note("[images] kein Bild", "Key '" + imageKey + "': " + grund);
         }
     }
 

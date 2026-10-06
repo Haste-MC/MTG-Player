@@ -3,6 +3,8 @@ package mtgplayer.images;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 
+import mtgplayer.forge.CrashLog;
+
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.URLDecoder;
@@ -76,6 +78,9 @@ public final class ImageHandler implements HttpHandler, AutoCloseable {
             // wuerde so ein rohes '+' faelschlich als Leerzeichen lesen, deshalb wird es vorsorglich
             // zu "%2B" escaped, bevor decodiert wird.
             String key = raw.isEmpty() ? "" : URLDecoder.decode(raw.replace("+", "%2B"), StandardCharsets.UTF_8);
+            if (key.isBlank()) {
+                cache.meldeKeinBild(key, "Anfrage ohne Bildschluessel: " + ex.getRequestURI());
+            }
             Optional<byte[]> img = key.isBlank() ? Optional.empty() : cache.get(key);
             if (img.isEmpty()) {
                 ex.sendResponseHeaders(404, -1);
@@ -97,6 +102,7 @@ public final class ImageHandler implements HttpHandler, AutoCloseable {
             System.err.println("[images] " + ex.getRequestURI() + ": " + e);
             ex.close();
         } catch (RuntimeException e) {
+            CrashLog.note("[images] kein Bild", ex.getRequestURI() + ": 500 durch " + e);
             e.printStackTrace();
             try {
                 ex.sendResponseHeaders(500, -1);
