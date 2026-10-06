@@ -117,9 +117,10 @@ class CardDataCheckTest {
      * <p>Die Schluesselwoerter sind erfunden, weil echte, nur noch nicht unterstuetzte Namen den Test bei
      * jedem Forge-Wechsel in einen Fassungs-Detektor verwandeln.</p>
      *
-     * <p>Die erste Testkarte heißt bewusst "Zzz Unbekannte Faehigkeit", nicht "Zzz ZzzErfundenerApi Testkarte":
-     * der Name darf das Schluesselwort nicht enthalten, sonst waere die Zusicherung auch gruen, wenn die
-     * Ursachenkette gar nicht ausgewertet wurde (Forges Meldung kaeme ueber den KARTENNAMEN, nicht die Cause).
+     * <p>Die erste Testkarte heißt bewusst "Zzz Unbekannte Faehigkeit" und nicht nach ihrem Schluesselwort: der
+     * Kartenname darf das geprueften Schluesselwort nicht enthalten, sonst steht es schon in Forges aeusserer
+     * Meldung und die Zusicherung waere auch gruen, wenn die Ursachenkette gar nicht ausgewertet wurde (Forges
+     * Meldung kaeme ueber den KARTENNAMEN, nicht die Cause).
      */
     @Test
     void kartenDieSichNichtBauenLassenStehenMitUrsacheImBefund(@TempDir Path tmp) throws Exception {
