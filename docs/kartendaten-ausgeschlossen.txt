@@ -1,3 +1,43 @@
 # Karten und Set-Codes, die unsere Forge-Fassung nicht bauen kann.
 # Erzeugt von scripts/kartendaten-sync.sh - von Hand aendern ist erlaubt, aber unnoetig.
 # Spalten (Tabulator): Schluessel, Grund, seit wann.
+A Good Day to Pie	java.lang.RuntimeException: Error in Trigger for Card: A Good Day to Pie / Ursache: java.lang.RuntimeException: Element StickerPlaced not found in TriggerType enum	2026-10-07
+Aerialephant	java.lang.RuntimeException: Error in Trigger for Card: Aerialephant / Ursache: java.lang.RuntimeException: Element PutSticker not found in ApiType enum	2026-10-07
+Ambassador Blorpityblorpboop	java.lang.RuntimeException: Error in Trigger for Card: Ambassador Blorpityblorpboop / Ursache: java.lang.RuntimeException: Element PutSticker not found in ApiType enum	2026-10-07
+Baaallerina	java.lang.RuntimeException: Error in Trigger for Card: Baaallerina / Ursache: java.lang.RuntimeException: Element PutSticker not found in ApiType enum	2026-10-07
+Bioluminary	java.lang.RuntimeException: Error in Trigger for Card: Bioluminary / Ursache: java.lang.RuntimeException: Element PutSticker not found in ApiType enum	2026-10-07
+Carnival Carnivore	java.lang.RuntimeException: Error in Trigger for Card: Carnival Carnivore / Ursache: java.lang.RuntimeException: Element PutSticker not found in ApiType enum	2026-10-07
+Chicken Troupe	java.lang.RuntimeException: Error in Trigger for Card: Chicken Troupe / Ursache: java.lang.RuntimeException: Element PutSticker not found in ApiType enum	2026-10-07
+Clandestine Chameleon	java.lang.RuntimeException: Error in Trigger for Card: Clandestine Chameleon / Ursache: java.lang.RuntimeException: Element PutSticker not found in ApiType enum	2026-10-07
+Command Performance	forge.game.ability.IllegalAbilityException: crash in raw Ability, check card script of Command Performance / Ursache: java.lang.RuntimeException: Element PutSticker not found in ApiType enum	2026-10-07
+Costume Shop	java.lang.RuntimeException: Error in Keyword Visit:TrigSticker for card Costume Shop / Ursache: java.lang.RuntimeException: Element PutSticker not found in ApiType enum	2026-10-07
+Done for the Day	java.lang.RuntimeException: Error in Trigger for Card: Done for the Day / Ursache: java.lang.RuntimeException: Element PutSticker not found in ApiType enum	2026-10-07
+Fight the _____ Fight	java.lang.RuntimeException: Error in Trigger for Card: Fight the _____ Fight / Ursache: java.lang.RuntimeException: Element PutSticker not found in ApiType enum	2026-10-07
+Finishing Move	forge.game.ability.IllegalAbilityException: crash in raw Ability, check card script of Finishing Move / Ursache: java.lang.RuntimeException: Element PutSticker not found in ApiType enum	2026-10-07
+Glitterflitter	java.lang.RuntimeException: Error in Trigger for Card: Glitterflitter / Ursache: java.lang.RuntimeException: Element PutSticker not found in ApiType enum	2026-10-07
+Goblin Airbrusher	java.lang.RuntimeException: Error in Trigger for Card: Goblin Airbrusher / Ursache: java.lang.RuntimeException: Element StickerPlaced not found in TriggerType enum	2026-10-07
+Last Voyage of the _____	java.lang.RuntimeException: Error in Trigger for Card: Last Voyage of the _____ / Ursache: java.lang.RuntimeException: Element PutSticker not found in ApiType enum	2026-10-07
+Lineprancers	java.lang.RuntimeException: Error in Trigger for Card: Lineprancers / Ursache: java.lang.RuntimeException: Element PutSticker not found in ApiType enum	2026-10-07
+Make a _____ Splash	java.lang.RuntimeException: Error in Trigger for Card: Make a _____ Splash / Ursache: java.lang.RuntimeException: Element PutSticker not found in ApiType enum	2026-10-07
+Minotaur de Force	java.lang.RuntimeException: Error in Trigger for Card: Minotaur de Force / Ursache: java.lang.RuntimeException: Element PutSticker not found in ApiType enum	2026-10-07
+Park Bleater	forge.game.ability.IllegalAbilityException: crash in raw Ability, check card script of Park Bleater / Ursache: java.lang.RuntimeException: Element PutSticker not found in ApiType enum	2026-10-07
+Pin Collection	java.lang.RuntimeException: Error in Trigger for Card: Pin Collection / Ursache: java.lang.RuntimeException: Element PutSticker not found in ApiType enum	2026-10-07
+Prize Wall	forge.game.ability.IllegalAbilityException: crash in raw Ability, check card script of Prize Wall / Ursache: java.lang.RuntimeException: Element PutSticker not found in ApiType enum	2026-10-07
+Proficient Pyrodancer	java.lang.RuntimeException: Error in Trigger for Card: Proficient Pyrodancer / Ursache: java.lang.RuntimeException: Element PutSticker not found in ApiType enum	2026-10-07
+Robo-Piñata	java.lang.RuntimeException: Error in Trigger for Card: Robo-Piñata / Ursache: java.lang.RuntimeException: Element PutSticker not found in ApiType enum	2026-10-07
+Roxi, Publicist to the Stars	java.lang.RuntimeException: Error in Trigger for Card: Roxi, Publicist to the Stars / Ursache: java.lang.RuntimeException: Element PutSticker not found in ApiType enum	2026-10-07
+Scampire	java.lang.RuntimeException: Error in Trigger for Card: Scampire / Ursache: java.lang.RuntimeException: Element PutSticker not found in ApiType enum	2026-10-07
+Stiltstrider	java.lang.RuntimeException: Error in Trigger for Card: Stiltstrider / Ursache: java.lang.RuntimeException: Element PutSticker not found in ApiType enum	2026-10-07
+Sword-Swallowing Seraph	java.lang.RuntimeException: Error in Trigger for Card: Sword-Swallowing Seraph / Ursache: java.lang.RuntimeException: Element PutSticker not found in ApiType enum	2026-10-07
+Ticketomaton	java.lang.RuntimeException: Error in Trigger for Card: Ticketomaton / Ursache: java.lang.RuntimeException: Element PutSticker not found in ApiType enum	2026-10-07
+Tusk and Whiskers	java.lang.RuntimeException: Error in Trigger for Card: Tusk and Whiskers / Ursache: java.lang.RuntimeException: Element StickerPlaced not found in TriggerType enum	2026-10-07
+Unlawful Entry	java.lang.RuntimeException: Error in Trigger for Card: Unlawful Entry / Ursache: java.lang.RuntimeException: Element StickerPlaced not found in TriggerType enum	2026-10-07
+Wee Champion	java.lang.RuntimeException: Error in Trigger for Card: Wee Champion / Ursache: java.lang.RuntimeException: Element StickerPlaced not found in TriggerType enum	2026-10-07
+Wizards of the _____	java.lang.RuntimeException: Error in Trigger for Card: Wizards of the _____ / Ursache: java.lang.RuntimeException: Element PutSticker not found in ApiType enum	2026-10-07
+Wolf in _____ Clothing	java.lang.RuntimeException: Error in Trigger for Card: Wolf in _____ Clothing / Ursache: java.lang.RuntimeException: Element PutSticker not found in ApiType enum	2026-10-07
+_____ Balls of Fire	java.lang.RuntimeException: Error in Trigger for Card: _____ Balls of Fire / Ursache: java.lang.RuntimeException: Element PutSticker not found in ApiType enum	2026-10-07
+_____ Bird Gets the Worm	java.lang.RuntimeException: Error in Trigger for Card: _____ Bird Gets the Worm / Ursache: java.lang.RuntimeException: Element PutSticker not found in ApiType enum	2026-10-07
+_____ Goblin	java.lang.RuntimeException: Error in Trigger for Card: _____ Goblin / Ursache: java.lang.RuntimeException: Element PutSticker not found in ApiType enum	2026-10-07
+_____ _____ Rocketship	java.lang.RuntimeException: Error in Trigger for Card: _____ _____ Rocketship / Ursache: java.lang.RuntimeException: Element PutSticker not found in ApiType enum	2026-10-07
+_____ _____ _____ Trespasser	java.lang.RuntimeException: Error in Trigger for Card: _____ _____ _____ Trespasser / Ursache: java.lang.RuntimeException: Element PutSticker not found in ApiType enum	2026-10-07
+_____-o-saurus	java.lang.RuntimeException: Error in Trigger for Card: _____-o-saurus / Ursache: java.lang.RuntimeException: Element PutSticker not found in ApiType enum	2026-10-07
