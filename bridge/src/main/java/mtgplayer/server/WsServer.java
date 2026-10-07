@@ -1,6 +1,7 @@
 package mtgplayer.server;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import mtgplayer.forge.CrashLog;
 import mtgplayer.gui.Transport;
 import mtgplayer.protocol.Json;
 import mtgplayer.protocol.Messages;
@@ -68,8 +69,9 @@ public final class WsServer extends WebSocketServer implements Transport {
                 c.send(Json.toJson(message));
             } catch (RuntimeException e) {
                 // deckt WebsocketNotConnectedException (Subklasse) mit ab - ein Client, der mitten im
-                // Senden abreisst, darf den Game-Thread nicht mitreissen
-                e.printStackTrace();
+                // Senden abreisst, darf den Game-Thread nicht mitreissen. Nur ins Log: ein
+                // abgerissener Client ist kein Absturz, und die Meldung erreichte ihn ohnehin nicht.
+                CrashLog.note("ws", "Senden fehlgeschlagen: " + e, e);
             }
         }
     }

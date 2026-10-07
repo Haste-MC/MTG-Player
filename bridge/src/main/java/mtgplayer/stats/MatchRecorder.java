@@ -856,7 +856,7 @@ public final class MatchRecorder {
             // Log-Pfad, volle Platte), stuende finished zwar, der Sink bekaeme die Partie aber nie -
             // und ein zweiter finish()-Versuch kehrte wegen finished != null sofort um: die Partie
             // waere weg. Ueber CrashLog laesst sich das nicht melden, genau das ist ja kaputt.
-            System.err.println("[MatchRecorder] Sammelmeldung fehlgeschlagen: " + ex);
+            CrashLog.note("MatchRecorder", "Sammelmeldung fehlgeschlagen", ex);
         }
         // Der Datensatz steht; ab hier braucht niemand mehr die Forge-Objekte. Ohne das haelt der
         // Recorder ueber seats/byView das ganze Game fest, solange ihn irgendwer noch referenziert

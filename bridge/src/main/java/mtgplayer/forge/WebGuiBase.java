@@ -56,13 +56,28 @@ public final class WebGuiBase implements IGuiBase {
     @Override public void invokeInEdtNow(Runnable runnable) {
         if (isGuiThread()) { runnable.run(); } else { invokeInEdtAndWait(runnable); }
     }
+    /**
+     * Forges Weg, Arbeit auf die Oberflaeche zu schieben - und bei uns der Weg, auf dem Forges
+     * gesamte Zustandsverarbeitung laeuft ({@code FControlGameEventHandler.processEvents}),
+     * einschliesslich {@code finishGame()}: der Stelle, die das Spielende an den Browser schickt und
+     * den Wachhund abschaltet.
+     *
+     * <p>Faellt hier etwas um, hoert der Tisch im Browser auf, sich zu bewegen. Bis 2026-10-07 ging
+     * das nur nach {@code stderr}, also ins Terminal: {@code bridge.log} blieb leer, der Browser
+     * stumm, und zwei Vorfaelle vom 2026-10-06 liessen sich deshalb nicht aufklaeren (siehe
+     * {@link ThreadDump}). Jetzt {@link CrashLog#report}, mit allem was dazugehoert - Zeile im Log,
+     * Fehlermeldung im Browser, und die Partie ist aus der Wertung.
+     *
+     * <p>{@code Throwable}, nicht {@code Exception}: ein {@code StackOverflowError} aus einer
+     * Forge-Rekursion ist genau der Fall, der hier nicht lautlos verschwinden darf. Der Taktgeber
+     * laeuft danach weiter - die naechste Aufgabe soll eine Chance haben.</p>
+     */
     @Override public void invokeInEdtLater(Runnable runnable) {
         uiThread.submit(() -> {
             try {
                 runnable.run();
             } catch (Throwable t) {
-                System.err.println("[bridge-ui] " + t);
-                t.printStackTrace();
+                CrashLog.report("uncaught in bridge-ui", null, t);
             }
         });
     }

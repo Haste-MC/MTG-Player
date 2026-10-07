@@ -116,6 +116,16 @@ public final class CrashLog {
         write(title, text, null);
     }
 
+    /**
+     * Wie {@link #note(String, String)}, nur mit Stacktrace. Fuer die Stellen, die eine Ausnahme
+     * abfangen MUESSEN, damit sie nicht den Spiel- oder UI-Thread mitreisst, bei denen aber der Ort
+     * des Scheiterns die eigentliche Auskunft ist (Hintergrund-Aufgaben der {@code Bridge}, ein
+     * abgerissener Client in {@code WsServer}). Ohne Absturz-Semantik: die Partie laeuft weiter.
+     */
+    public static synchronized void note(String title, String text, Throwable e) {
+        write(title, text, e);
+    }
+
     /** Zeitstempel + Titel + Text (+ Stacktrace) nach stderr und in {@link #file()}. */
     private static void write(String title, String text, Throwable e) {
         StringBuilder sb = new StringBuilder();
@@ -136,7 +146,11 @@ public final class CrashLog {
             Path f = file();
             Files.createDirectories(f.getParent());
             Files.writeString(f, entry, StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
-        } catch (IOException io) {
+        } catch (IOException | RuntimeException io) {
+            // Auch RuntimeException: ein Log-Pfad ohne Elternverzeichnis laesst createDirectories in
+            // eine NullPointerException laufen. CrashLog ist die letzte Instanz - sie darf niemals den
+            // Aufrufer mitreissen, sonst kostet eine kaputte Meldung genau das, was sie melden sollte
+            // (siehe MatchRecorderTest.fehlerBeimMeldenVerschlucktDenDatensatzNicht).
             System.err.println("[crashlog] konnte nicht schreiben: " + io);
         }
     }

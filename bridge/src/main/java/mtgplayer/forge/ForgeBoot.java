@@ -51,6 +51,9 @@ public final class ForgeBoot {
         if (initialized) {
             return;
         }
+        // Vor allem anderen: ab hier landen Ausnahmen aus Ereignis-Abonnenten im Log statt nur im
+        // Terminal (siehe EventBusLog) - auch die aus dem Hochfahren.
+        EventBusLog.install();
         Path realAssets = assetsDir();
         if (!Files.isDirectory(realAssets.resolve("res").resolve("cardsfolder"))) {
             throw new IllegalStateException("assets/res/cardsfolder fehlt unter " + realAssets

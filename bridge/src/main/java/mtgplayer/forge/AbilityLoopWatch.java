@@ -81,7 +81,7 @@ public final class AbilityLoopWatch {
         try {
             closeOutstandingIncidents();
         } catch (RuntimeException ex) {
-            System.err.println("[ability-loop-watch] Zugabschluss fehlgeschlagen: " + ex);
+            CrashLog.note("AbilityLoopWatch", "Zugabschluss fehlgeschlagen", ex);
         }
         counts.clear();
         reported.clear();
@@ -108,7 +108,7 @@ public final class AbilityLoopWatch {
                         + ability + "') in Zug " + currentTurn + " (" + phase() + ") - Sitz " + seatLabel(actor));
             }
         } catch (RuntimeException ex) {
-            System.err.println("[ability-loop-watch] Zaehlung fehlgeschlagen: " + ex);
+            CrashLog.note("AbilityLoopWatch", "Zaehlung fehlgeschlagen", ex);
         }
     }
 

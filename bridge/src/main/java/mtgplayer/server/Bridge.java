@@ -438,7 +438,7 @@ public final class Bridge {
                         try {
                             gui.onConcede();
                         } catch (RuntimeException e) {
-                            e.printStackTrace();
+                            CrashLog.note("bridge", String.valueOf(e), e);
                             ws.send(new Messages.ErrorMsg("Bridge: " + e));
                         }
                     });
@@ -461,7 +461,7 @@ public final class Bridge {
                         ws.send(new Messages.ErrorMsg(e.getMessage()));
                     } catch (RuntimeException e) {
                         // wie bei "concede": sonst stirbt der Fehler still auf dem Hintergrund-Thread
-                        e.printStackTrace();
+                        CrashLog.note("bridge", String.valueOf(e), e);
                         ws.send(new Messages.ErrorMsg("Resync " + name + ": " + e));
                     }
                 });
@@ -474,7 +474,7 @@ public final class Bridge {
                         ws.send(new Messages.Lobby(Precons.infos(), store.infos()));
                     } catch (RuntimeException e) {
                         // wie bei "concede": sonst stirbt der Fehler still auf dem Hintergrund-Thread
-                        e.printStackTrace();
+                        CrashLog.note("bridge", String.valueOf(e), e);
                         ws.send(new Messages.ErrorMsg("Löschen " + name + ": "
                                 + (e instanceof IllegalArgumentException ? e.getMessage() : e.toString())));
                     }
@@ -489,7 +489,7 @@ public final class Bridge {
                         ws.send(new Messages.Lobby(Precons.infos(), store.infos()));
                     } catch (RuntimeException e) {
                         // wie bei "concede": sonst stirbt der Fehler still auf dem Hintergrund-Thread
-                        e.printStackTrace();
+                        CrashLog.note("bridge", String.valueOf(e), e);
                         ws.send(new Messages.ErrorMsg("Bracket " + name + ": "
                                 + (e instanceof IllegalArgumentException ? e.getMessage() : e.toString())));
                     }
@@ -528,7 +528,7 @@ public final class Bridge {
                 ws.send(new Messages.DeckAnalysisMsg(name, DeckAnalysis.of(deck)));
             } catch (RuntimeException e) {
                 // wie bei "concede": sonst stirbt der Fehler still auf dem Hintergrund-Thread
-                e.printStackTrace();
+                CrashLog.note("bridge", String.valueOf(e), e);
                 ws.send(new Messages.ErrorMsg("Deckanalyse " + name + ": "
                         + (e instanceof IllegalArgumentException ? e.getMessage() : e.toString())));
             }
@@ -578,7 +578,7 @@ public final class Bridge {
                                 lookup.reason(), ownCards)));
             } catch (RuntimeException e) {
                 // wie bei "concede": sonst stirbt der Fehler still auf dem Hintergrund-Thread
-                e.printStackTrace();
+                CrashLog.note("bridge", String.valueOf(e), e);
                 ws.send(new Messages.ErrorMsg("Kartenvorschläge " + name + ": "
                         + (e instanceof IllegalArgumentException ? e.getMessage() : e.toString())));
             }
@@ -605,7 +605,7 @@ public final class Bridge {
                 ws.send(new Messages.CardStatsMsg(name, CardStats.of(name, matches.all(), cards)));
             } catch (RuntimeException e) {
                 // wie bei "concede": sonst stirbt der Fehler still auf dem Hintergrund-Thread
-                e.printStackTrace();
+                CrashLog.note("bridge", String.valueOf(e), e);
                 ws.send(new Messages.ErrorMsg("Kartenauswertung " + name + ": "
                         + (e instanceof IllegalArgumentException ? e.getMessage() : e.toString())));
             }
@@ -652,7 +652,7 @@ public final class Bridge {
             ws.send(new Messages.ErrorMsg(e.getMessage()));
         } catch (RuntimeException e) {
             if (!(e instanceof IllegalArgumentException)) {
-                e.printStackTrace();
+                CrashLog.note("bridge", String.valueOf(e), e);
             }
             ws.send(new Messages.ErrorMsg("Sparring: "
                     + (e instanceof IllegalArgumentException ? e.getMessage() : e.toString())));
@@ -670,7 +670,7 @@ public final class Bridge {
                 ws.send(matchesMsg());
             } catch (RuntimeException e) {
                 // wie bei "concede": sonst stirbt der Fehler still auf dem Hintergrund-Thread
-                e.printStackTrace();
+                CrashLog.note("bridge", String.valueOf(e), e);
                 ws.send(new Messages.ErrorMsg("Partie " + id + ": "
                         + (e instanceof IllegalArgumentException ? e.getMessage() : e.toString())));
             }
@@ -685,7 +685,7 @@ public final class Bridge {
                 ws.send(matchesMsg());
             } catch (RuntimeException e) {
                 // wie bei "concede": sonst stirbt der Fehler still auf dem Hintergrund-Thread
-                e.printStackTrace();
+                CrashLog.note("bridge", String.valueOf(e), e);
                 ws.send(new Messages.ErrorMsg("Partie " + id + ": "
                         + (e instanceof IllegalArgumentException ? e.getMessage() : e.toString())));
             }
@@ -710,7 +710,7 @@ public final class Bridge {
             } catch (RuntimeException e) {
                 // wie bei "concede": sonst stirbt der Fehler still auf dem Hintergrund-Thread - und der
                 // Client wartet ewig auf die Zeitachse, die nie kommt
-                e.printStackTrace();
+                CrashLog.note("bridge", String.valueOf(e), e);
                 ws.send(new Messages.ErrorMsg("Partie " + id + ": "
                         + (e instanceof IllegalArgumentException ? e.getMessage() : e.toString())));
             }
@@ -745,7 +745,7 @@ public final class Bridge {
             } catch (IllegalArgumentException e) {
                 ws.send(new Messages.ErrorMsg(e.getMessage()));
             } catch (RuntimeException e) {
-                e.printStackTrace();
+                CrashLog.note("bridge", String.valueOf(e), e);
                 ws.send(new Messages.ErrorMsg("Archidekt: " + e));
             }
         });
@@ -789,7 +789,7 @@ public final class Bridge {
                 try {
                     decks.importArchidekt(id).save().run();
                 } catch (RuntimeException e) {
-                    if (!(e instanceof IllegalArgumentException)) e.printStackTrace();
+                    if (!(e instanceof IllegalArgumentException)) CrashLog.note("bridge", String.valueOf(e), e);
                     String reason = e instanceof IllegalArgumentException ? e.getMessage() : e.toString();
                     errors.add(current + ": " + stripDeckPrefix(current, reason));
                 }
@@ -807,7 +807,7 @@ public final class Bridge {
             }
         } catch (RuntimeException e) {
             // wie bei "concede": sonst stirbt der Fehler still auf dem Hintergrund-Thread
-            e.printStackTrace();
+            CrashLog.note("bridge", String.valueOf(e), e);
             ws.send(new Messages.ErrorMsg("Archidekt-Import: " + e));
         } finally {
             importRunning.set(false);
@@ -842,7 +842,7 @@ public final class Bridge {
             try {
                 r.run();
             } catch (RuntimeException e) {
-                e.printStackTrace();
+                CrashLog.note("bridge", String.valueOf(e), e);
                 ws.send(new Messages.ErrorMsg("Bridge: " + e));
             }
         });
@@ -952,7 +952,7 @@ public final class Bridge {
                 }
             } catch (RuntimeException e) {
                 ws.send(new Messages.ErrorMsg("Spielstart fehlgeschlagen: " + e));
-                e.printStackTrace();
+                CrashLog.note("bridge", String.valueOf(e), e);
             }
         });
     }
