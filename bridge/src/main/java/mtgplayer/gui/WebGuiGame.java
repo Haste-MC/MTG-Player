@@ -18,6 +18,7 @@ import forge.game.spellability.SpellAbilityView;
 import forge.gamemodes.match.AbstractGuiGame;
 import forge.gamemodes.match.input.InputSelectTargets;
 import forge.gui.GuiBase;
+import mtgplayer.forge.CrashLog;
 import forge.interfaces.IGameController;
 import forge.item.PaperCard;
 import forge.gamemodes.match.input.InputQueue;
@@ -76,6 +77,13 @@ public class WebGuiGame extends AbstractGuiGame {
     private int logSeen;
     /** Fortlaufende id je Partie (siehe {@link #remember}), unter dem Puffer-Lock gepflegt. */
     private int logId;
+
+    /** Abschluss schon beim Browser? Macht {@link #finishGame()} wiederholbar und verhindert, dass
+     *  das nachgelieferte Spielende (siehe {@link #spielendeNachliefern()}) doppelt rausgeht. */
+    private volatile boolean abschlussGesendet;
+
+    /** Wurde das Nachliefern schon angestossen? Sonst taete der Wachposten es in jedem Takt erneut. */
+    private volatile boolean nachliefernAngestossen;
 
     /**
      * Denk-Anzeige und Wachhund der laufenden Partie; {@code null}, solange keine laeuft. Je Partie
@@ -136,8 +144,10 @@ public class WebGuiGame extends AbstractGuiGame {
     private void startTicker() {
         stopTicker();
         gameThread = null;
+        abschlussGesendet = false;
+        nachliefernAngestossen = false;
         ThinkingTicker t = new ThinkingTicker(out::send, System::nanoTime, this::priorityPlayer,
-                this::thinkingInfo, () -> gameThread, this::waitingForHuman);
+                this::thinkingInfo, () -> gameThread, this::waitingForHuman, this::spielendeNachliefern);
         ticker = t;
         t.start();
     }
@@ -474,8 +484,19 @@ public class WebGuiGame extends AbstractGuiGame {
         push();
     }
 
+    /**
+     * Forges Abschluss der Partie - die einzige Stelle, die dem Browser "gameOver" schickt und den
+     * Wachhund abschaltet.
+     *
+     * <p>Wiederholbar, weil zwei Wege hierher fuehren: Forges Ereigniskette und, wenn die ausbleibt,
+     * {@link #spielendeNachliefern()}. Ein zweiter Aufruf darf dem Spieler kein zweites Spielende
+     * anzeigen.</p>
+     */
     @Override
     public void finishGame() {
+        if (abschlussGesendet) {
+            return;
+        }
         GameView gv = getGameView();
         String winner = gv == null ? null : gv.getWinningPlayerName();
         broker.cancelAll();
@@ -483,7 +504,39 @@ public class WebGuiGame extends AbstractGuiGame {
         // Snapshot muss den Client also synchron vor GameOver erreichen statt erst später über invokeInEdtLater.
         pushState();
         out.send(new Messages.GameOver(winner));
+        abschlussGesendet = true;
         stopTicker();                            // beendet auch eine noch laufende Denk-Anzeige
+    }
+
+    /**
+     * Rettungsnetz gegen einen Tisch, der stehenbleibt, weil das Spielende den Browser nie erreicht.
+     *
+     * <p>Am 2026-10-07 um 20:01 stand im Protokoll: Partie laut {@code GameView} beendet,
+     * Spiel-Thread fertig, UI-Thread untaetig - und im Browser noch Zug 35. Der Weg von Forges
+     * {@code GameEventGameFinished} zu {@link #finishGame()} fuehrt ueber
+     * {@code FControlGameEventHandler}, und dessen Merker {@code processEventsQueued},
+     * {@code gameFinished} und {@code gameOver} sind einfache, nicht-{@code volatile} Felder: der
+     * Spiel-Thread schreibt sie, der UI-Thread liest sie. Bleibt einer davon fuer einen der beiden
+     * veraltet, hoert die Oberflaeche auf, Ereignisse zu verarbeiten - mitten in der Partie und
+     * dauerhaft. Der Fork behebt das an der Wurzel; dieses Netz haengt darunter, weil ein verlorenes
+     * Spielende aus jeder kuenftigen Ursache genauso aussieht und den Spieler genauso ratlos vor den
+     * Tisch setzt.
+     *
+     * <p>Laeuft je Takt der {@link ThinkingTicker Denk-Anzeige} (also etwa sekuendlich), schlaegt
+     * genau einmal je Partie zu und faellt dann in {@link #finishGame()} auf dem UI-Thread - nicht
+     * auf dem Taktgeber, der mit {@code pushState} nichts zu tun hat.
+     */
+    public void spielendeNachliefern() {
+        if (abschlussGesendet || nachliefernAngestossen) {
+            return;
+        }
+        GameView gv = getGameView();
+        if (gv == null || !gv.isGameOver()) {
+            return;
+        }
+        nachliefernAngestossen = true;
+        CrashLog.note("Spielende", "nachgeliefert - die Partie war beendet, Forges Abschluss blieb aus");
+        GuiBase.getInterface().invokeInEdtLater(this::finishGame);
     }
 
     @Override

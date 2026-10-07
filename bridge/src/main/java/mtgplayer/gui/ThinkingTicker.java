@@ -30,6 +30,11 @@ import java.util.function.Supplier;
  * wirklich etwas haengt (Stack im {@code ChoiceBroker}/{@code CompletableFuture}). Erst nach Aktivitaet
  * meldet er wieder.</p>
  *
+ * <p><b>Wachposten.</b> Der Taktgeber ist der einzige Puls, den eine laufende Partie hat - deshalb
+ * haengt daran auch die Kontrolle, ob ein Spielende den Browser erreicht hat
+ * ({@code WebGuiGame.spielendeNachliefern}). Er laeuft je Takt, auch waehrend auf den Menschen
+ * gewartet wird: ein verlorenes Spielende ist kein Grund zu schweigen.</p>
+ *
  * <p>Der Abzug nimmt bewusst mehr mit als den Spiel-Thread: zweimal am 2026-10-06 war genau der schon
  * tot, und ein toter Thread hat keinen Stack. Was den Tisch festhaelt, stand in diesen Faellen im
  * UI-Thread - siehe {@link mtgplayer.forge.ThreadDump}.</p>
@@ -68,6 +73,7 @@ public final class ThinkingTicker implements AutoCloseable {
     private final Supplier<String> phaseInfo;
     private final Supplier<Thread> gameThread;
     private final BooleanSupplier waitingForHuman;
+    private final Runnable eachTick;
 
     /** Scharf ab {@link #arm()}, aus ab {@link #close()} - ohne laufendes Spiel passiert nichts. */
     private volatile boolean armed;
@@ -92,8 +98,9 @@ public final class ThinkingTicker implements AutoCloseable {
      */
     public ThinkingTicker(Consumer<Object> out, LongSupplier nanos, Supplier<Integer> priorityPlayer,
                           Supplier<String> phaseInfo, Supplier<Thread> gameThread,
-                          BooleanSupplier waitingForHuman) {
+                          BooleanSupplier waitingForHuman, Runnable eachTick) {
         this.out = out;
+        this.eachTick = eachTick;
         this.nanos = nanos;
         this.priorityPlayer = priorityPlayer;
         this.phaseInfo = phaseInfo;
@@ -101,6 +108,13 @@ public final class ThinkingTicker implements AutoCloseable {
         this.waitingForHuman = waitingForHuman;
         this.lastActivityNanos = nanos.getAsLong();
         this.lastSeenActivityNanos = this.lastActivityNanos;
+    }
+
+    /** Ohne Wachposten - fuer Tests, die nur die Anzeige selbst takten. */
+    public ThinkingTicker(Consumer<Object> out, LongSupplier nanos, Supplier<Integer> priorityPlayer,
+                          Supplier<String> phaseInfo, Supplier<Thread> gameThread,
+                          BooleanSupplier waitingForHuman) {
+        this(out, nanos, priorityPlayer, phaseInfo, gameThread, waitingForHuman, () -> { });
     }
 
     /**
@@ -197,6 +211,9 @@ public final class ThinkingTicker implements AutoCloseable {
         if (watchdog) {
             CrashLog.note("Wachhund", silence + " s ohne Fortschritt – " + info() + "\n" + stack());
         }
+        // Zuletzt und ausserhalb des Monitors (wie out.accept): der Wachposten darf senden und sich
+        // selbst schliessen, ohne dass close() vom UI-Thread auf diesem Monitor warten muss.
+        eachTick.run();
     }
 
     /**

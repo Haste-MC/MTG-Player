@@ -188,6 +188,16 @@ public final class HumanMatch {
     }
 
     /**
+     * Das laufende Spiel - nur fuer Tests (paketsichtbar), die ein Spielende von INNEN ausloesen
+     * muessen, also auf Forges Weg statt ueber {@link #end()}. Ohne das waere das natuerliche Ende
+     * einer Zuschauer-Partie (eine KI gewinnt) nur zu pruefen, indem der Test eine echte Partie bis
+     * zum Schluss spielt - viele Minuten, mit nicht vorhersagbarer Dauer.
+     */
+    Game laufendesSpiel() {
+        return hosted == null ? null : hosted.getGame();
+    }
+
+    /**
      * Beendet das laufende Spiel wirklich, statt es nur aus der Buchhaltung von HostedMatch zu
      * loesen: {@code hosted.endCurrentGame()} allein setzt nur {@code hosted}s eigene Referenz auf
      * {@code null} - der Game-Thread selbst laeuft unbeeinflusst weiter (relevant z. B. beim

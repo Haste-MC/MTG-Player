@@ -49,6 +49,36 @@ class ThinkingTickerTest {
         CrashLog.setListener(null);
     }
 
+    /** Mit Wachposten - siehe {@link #derWachpostenLaeuftJeTakt()}. */
+    private ThinkingTicker ticker(Runnable wachposten) {
+        return new ThinkingTicker(sent::add, () -> now[0], () -> priority,
+                () -> "Prioritaet: KI 2, Phase: MAIN1, Zug 14", () -> gameThread, () -> waitingForHuman,
+                wachposten);
+    }
+
+    /**
+     * Der Taktgeber ist der einzige Puls einer laufenden Partie - daran haengt die Kontrolle, ob ein
+     * Spielende den Browser erreicht hat ({@code WebGuiGame.spielendeNachliefern}). Er muss je Takt
+     * laufen, auch waehrend auf den Menschen gewartet wird: ein verlorenes Spielende ist kein Grund
+     * zu schweigen.
+     */
+    @Test
+    void derWachpostenLaeuftJeTakt() {
+        int[] laeufe = {0};
+        try (ThinkingTicker t = ticker(() -> laeufe[0]++)) {
+            t.arm();
+            t.tick();
+            advance(1);
+            t.tick();
+            assertEquals(2, laeufe[0], "zwei Takte, zwei Laeufe");
+
+            waitingForHuman = true;
+            advance(1);
+            t.tick();
+            assertEquals(3, laeufe[0], "auch beim Warten auf den Menschen");
+        }
+    }
+
     private ThinkingTicker ticker() {
         return new ThinkingTicker(sent::add, () -> now[0], () -> priority,
                 () -> "Prioritaet: KI 2, Phase: MAIN1, Zug 14", () -> gameThread, () -> waitingForHuman);
