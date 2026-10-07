@@ -319,9 +319,15 @@ Als Nächstes: aus den so gefüllten Kennzahlen eine Schwächen-Analyse mit Kart
 
 ## Wenn der Tisch einfriert
 
-Friert ein Spiel ein (kein Prompt mehr, Log steht), ist meist der Spiel-Thread mit einer Ausnahme abgebrochen.
+Friert ein Spiel ein (kein Prompt mehr, Log steht), ist meist ein Thread mit einer Ausnahme abgebrochen.
 Die Bridge schreibt jeden solchen Abbruch mit Stacktrace nach `~/.mtg-player/logs/bridge.log` und als rote
 Zeile ins Browser-Log („Spiel abgebrochen …"). Für einen Bugreport reicht der letzte Block aus der Datei.
+
+Das gilt für **alle drei** Wege, auf denen eine Partie sterben kann: den Spiel-Thread, den UI-Thread
+(`uncaught in bridge-ui` – über ihn läuft Forges ganze Zustandsverarbeitung samt Spielende) und einen
+Abonnenten am Ereignisbus (`eventbus` – Guava fängt die Ausnahme ab, damit der Bus nicht zerbricht).
+Die letzten zwei landeten bis zum 2026-10-07 nur im Terminal; zwei Vorfälle vom 2026-10-06 ließen sich
+deshalb nicht aufklären.
 
 Steht dort nichts, rechnet vermutlich nur die KI. Ein Sitz im Simulations-Modus braucht je Entscheidung bis zur
 vollen Bedenkzeit, und gemessen kosten **vier Simulations-Sitze 20–31 s je Entscheidung** – in dieser Zeit
@@ -329,18 +335,26 @@ erreicht den Browser nichts. Deshalb steht ab 3 s Stille „… denkt" in der Pr
 der Fußzeile); solange die Sekunden dort hochlaufen, ist alles in Ordnung.
 
 Bleibt der Tisch trotzdem stehen, hilft der Wachhund: nach 120 s Stille legt die Bridge **einmal je Vorfall**
-den Stacktrace des Spiel-Threads im Log ab (nur dort, nicht im Browser):
+einen Thread-Abzug im Log ab (nur dort, nicht im Browser):
 
 ```bash
-grep -A40 Wachhund ~/.mtg-player/logs/bridge.log | tail -60
+grep -A60 Wachhund ~/.mtg-player/logs/bridge.log | tail -80
 ```
 
-Der Stack sagt, was los ist:
+Im Abzug stehen der gemerkte Spiel-Thread, `bridge-ui`, Forges `Game-*`-Pool und `bridge-bg` – nicht nur
+einer, weil in den Vorfällen vom 2026-10-06 genau der Spiel-Thread schon tot war und ein toter Thread
+keinen Stack hat. Was der Abzug sagt:
 
 * `GameSimulator` / `GameCopier` (auch `SpellAbilityPicker`, `AiController`) – die KI rechnet. Kein Fehler,
   höchstens ein Grund, die Bedenkzeit zu senken oder weniger Simulations-Sitze zu setzen.
 * `ChoiceBroker` / `CompletableFuture.get` – **echter Hänger**: der Spiel-Thread wartet auf eine Antwort, die
   nie kommt (verlorene Frage, abgerissene Verbindung). Das gehört in den Bugreport.
+* `TERMINATED` beim Spiel-Thread – die Partie rechnet nicht mehr. Dann sagt der Rest des Abzugs, wer sie
+  festhält; hängt `bridge-ui` in einem `send` oder einem `get`, ist er der Schuldige.
+* `VERKLEMMUNG erkannt zwischen:` als erste Zeile – die JVM hat einen Deadlock gefunden und nennt beide
+  Threads und das Schloss. Keine weitere Deutung nötig.
+* `ACHTUNG: GameView meldet das Spiel als BEENDET` in der Kopfzeile – die Partie ist vorbei und die Bridge
+  hat es nicht mitbekommen (es fehlt `finishGame()`). Kein Hänger, ein verlorenes Spielende.
 
 Während die Bridge auf *deine* Eingabe wartet, ruhen Anzeige und Wachhund – sonst stünde nach zwei Minuten
 Nachdenken ein `ChoiceBroker`-Stack im Log, also genau die Signatur des echten Hängers.
