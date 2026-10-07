@@ -13,6 +13,8 @@ import forge.model.FModel;
 import forge.player.LobbyPlayerHuman;
 import mtgplayer.ai.AiConfig;
 import mtgplayer.forge.AbilityLoopWatch;
+import mtgplayer.forge.CrashLog;
+import mtgplayer.forge.ThreadDump;
 import mtgplayer.gui.WebGuiGame;
 import mtgplayer.stats.CardLog;
 import mtgplayer.stats.MatchRecord;
@@ -262,7 +264,10 @@ public final class HumanMatch {
                 }
             }
             if (!view.isGameOver()) {
-                System.err.println("[HumanMatch] end(): Spiel wurde nicht innerhalb von 5 s beendet (GameView.isGameOver() weiterhin false)");
+                // Mit Thread-Abzug: dass das Spiel nicht endet, heisst fast immer, dass einer der
+                // beteiligten Threads haengt - und welcher, steht nur hier.
+                CrashLog.note("HumanMatch", "end(): Spiel wurde nicht innerhalb von 5 s beendet"
+                        + " (GameView.isGameOver() weiterhin false)\n" + ThreadDump.of(null));
             }
         }
         lastGameOver = view == null || view.isGameOver();

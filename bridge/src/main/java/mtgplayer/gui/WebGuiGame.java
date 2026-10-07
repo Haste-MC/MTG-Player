@@ -188,7 +188,18 @@ public class WebGuiGame extends AbstractGuiGame {
         return s == null ? null : s.priorityPlayer();
     }
 
-    /** Kontextzeile fuer den Wachhund: wer am Zug ist, in welcher Phase und in welchem Zug. */
+    /**
+     * Kontextzeile fuer den Wachhund: wer am Zug ist, in welcher Phase und in welchem Zug.
+     *
+     * <p>Zusaetzlich die Frage, die zwei Vorfaelle am 2026-10-06 offen liessen: ist das Spiel
+     * ueberhaupt noch im Gang? Die Zahlen kommen aus dem letzten GESENDETEN Zustand und sind bei einem
+     * Haenger naturgemaess alt; der Blick auf die {@code GameView} dagegen ist frisch. Steht dort
+     * "beendet", waehrend der Wachhund bellt, ist die Diagnose ohne weiteres Nachsehen klar: die Partie
+     * ist vorbei und die Bridge hat es nicht mitbekommen (es fehlt {@code finishGame()}), statt dass
+     * irgendwo etwas haengt. Nur {@link GameView#isGameOver()} lesen, nie {@code Game.isGameOver()} -
+     * letzteres nimmt den Monitor des Spiels und kann sich mit dem Spiel-Thread verklemmen (siehe
+     * {@code HumanMatch.end()}).</p>
+     */
     private String thinkingInfo() {
         Snapshot s = lastSnapshot;
         if (s == null) {
@@ -197,7 +208,10 @@ public class WebGuiGame extends AbstractGuiGame {
         String name = s.players().stream()
                 .filter(p -> Integer.valueOf(p.id()).equals(s.priorityPlayer()))
                 .map(Snapshot.PlayerSnap::name).findFirst().orElse("unbekannt");
-        return "Priorität: " + name + ", Phase: " + s.phase() + ", Zug " + s.turn();
+        GameView gv = getGameView();
+        String over = gv != null && gv.isGameOver()
+                ? " – ACHTUNG: GameView meldet das Spiel als BEENDET" : "";
+        return "Priorität: " + name + ", Phase: " + s.phase() + ", Zug " + s.turn() + over;
     }
 
     /** Forge markiert Spieler nicht als wählbar – wir leiten es aus dem aktiven Input ab. */

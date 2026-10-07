@@ -186,7 +186,9 @@ class ThinkingTickerTest {
         assertEquals(1, count(first, "Wachhund:"), "ein Vorfall, eine Zeile:\n" + first);
         assertTrue(first.contains("s ohne Fortschritt"), first);
         assertTrue(first.contains("Prioritaet: KI 2, Phase: MAIN1, Zug 14"), first);
-        assertTrue(first.contains("at mtgplayer.gui.ThinkingTickerTest"), "Stacktrace des Spiel-Threads fehlt:\n" + first);
+        // Ohne "at " davor: der Abzug kommt aus Thread.getAllStackTraces(), dort tragen die Rahmen
+        // den Namen des Klassenladers ("at app//mtgplayer...").
+        assertTrue(first.contains("mtgplayer.gui.ThinkingTickerTest"), "Stacktrace des Spiel-Threads fehlt:\n" + first);
 
         t.touch();
         t.tick();

@@ -1,6 +1,7 @@
 package mtgplayer.gui;
 
 import mtgplayer.forge.CrashLog;
+import mtgplayer.forge.ThreadDump;
 import mtgplayer.protocol.Messages;
 
 import java.util.ArrayList;
@@ -22,11 +23,16 @@ import java.util.function.Supplier;
  * {@code seconds == 0} raus, womit der Browser die Anzeige loescht.</p>
  *
  * <p>Ab {@value #WATCHDOG_S} s Stille schreibt der Wachhund <b>einmal je Vorfall</b> ueber
- * {@link CrashLog#note} den Stacktrace des Spiel-Threads ins Bridge-Log (nur Log, keine Zeile im
- * Browser: eine lange KI-Rechnung ist normal und soll den Spieler nicht erschrecken). Er greift nicht
- * ein; er liefert nur das Beweismittel, mit dem sich beim naechsten Mal sofort unterscheiden laesst, ob
- * die KI rechnet (Stack in {@code GameSimulator}/{@code GameCopier}) oder wirklich etwas haengt (Stack
- * im {@code ChoiceBroker}/{@code CompletableFuture}). Erst nach Aktivitaet meldet er wieder.</p>
+ * {@link CrashLog#note} einen {@link mtgplayer.forge.ThreadDump Thread-Abzug} ins Bridge-Log (nur Log,
+ * keine Zeile im Browser: eine lange KI-Rechnung ist normal und soll den Spieler nicht erschrecken). Er
+ * greift nicht ein; er liefert nur das Beweismittel, mit dem sich beim naechsten Mal sofort
+ * unterscheiden laesst, ob die KI rechnet (Stack in {@code GameSimulator}/{@code GameCopier}) oder
+ * wirklich etwas haengt (Stack im {@code ChoiceBroker}/{@code CompletableFuture}). Erst nach Aktivitaet
+ * meldet er wieder.</p>
+ *
+ * <p>Der Abzug nimmt bewusst mehr mit als den Spiel-Thread: zweimal am 2026-10-06 war genau der schon
+ * tot, und ein toter Thread hat keinen Stack. Was den Tisch festhaelt, stand in diesen Faellen im
+ * UI-Thread - siehe {@link mtgplayer.forge.ThreadDump}.</p>
  *
  * <p><b>Warten auf den Menschen zaehlt nicht.</b> Ueberlegt ein Mensch zwei Minuten, steht der
  * Spiel-Thread im {@code ChoiceBroker} - genau die Signatur, die den <em>echten</em> Haenger ausmacht.
@@ -243,8 +249,9 @@ public final class ThinkingTicker implements AutoCloseable {
                 tick();
             } catch (RuntimeException e) {
                 // Eine kaputte Verbindung oder ein halb abgebauter Snapshot darf den Taktgeber nicht
-                // mitreissen - sonst faellt die Anzeige fuer den Rest der Partie aus.
-                System.err.println("[thinking] Takt fehlgeschlagen: " + e);
+                // mitreissen - sonst faellt die Anzeige fuer den Rest der Partie aus. Trotzdem
+                // nachlesbar: ein stummer Taktgeber heisst auch stummer Wachhund.
+                CrashLog.note("thinking", "Takt fehlgeschlagen", e);
             }
         }
     }
@@ -254,17 +261,8 @@ public final class ThinkingTicker implements AutoCloseable {
         return s == null || s.isBlank() ? "(Zustand unbekannt)" : s;
     }
 
-    /** Stacktrace des Spiel-Threads - das eigentliche Beweismittel; ohne ihn wenigstens der Vermerk. */
+    /** Das eigentliche Beweismittel; welche Threads mitkommen, entscheidet {@link ThreadDump}. */
     private String stack() {
-        Thread t = gameThread.get();
-        if (t == null) {
-            return "(Spiel-Thread unbekannt)";
-        }
-        StringBuilder sb = new StringBuilder("Spiel-Thread \"").append(t.getName()).append("\" (")
-                .append(t.getState()).append(')');
-        for (StackTraceElement e : t.getStackTrace()) {
-            sb.append("\n\tat ").append(e);
-        }
-        return sb.toString();
+        return ThreadDump.of(gameThread.get());
     }
 }
