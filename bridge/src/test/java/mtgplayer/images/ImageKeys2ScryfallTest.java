@@ -1,6 +1,7 @@
 package mtgplayer.images;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import forge.StaticData;
@@ -82,21 +83,29 @@ class ImageKeys2ScryfallTest {
     }
 
     /** Vorschaukarten aus cardsfolder/upcoming haben keinen Druck und damit keine Sammlernummer
-     *  ("Avacyn, Angel of Horror|TRK|[N.A.]" in den Deck-Dateien). Scryfall kennt sie trotzdem, nur unter dem
-     *  echten Set - also ueber den Namen fragen statt gar nicht. */
+     *  ("…|TRK|[N.A.]" in den Deck-Dateien). Scryfall kennt sie trotzdem, nur unter dem echten Set -
+     *  also ueber den Namen fragen statt gar nicht. Die Karte wird an ihrer Eigenschaft gesucht, nicht
+     *  am Namen: welche Karte unveroeffentlicht ist, entscheidet jede Forge-Fassung neu (siehe
+     *  {@link Vorschaukarten}). */
     @Test
     void karteOhneSammlernummerFaelltAufDenNamenZurueck() {
-        PaperCard avacyn = vorschaukarte("Avacyn, Angel of Horror");
-        assertEquals(IPaperCard.NO_COLLECTOR_NUMBER, avacyn.getCollectorNumber());
-        Optional<String> url = ImageKeys2Scryfall.url(avacyn.getImageKey(false));
-        assertEquals("https://api.scryfall.com/cards/named?exact=Avacyn%2C%20Angel%20of%20Horror&format=image&version=normal", url.orElse("-"));
+        PaperCard vorschau = Vorschaukarten.irgendeine();
+        String url = ImageKeys2Scryfall.url(vorschau.getImageKey(false)).orElse("-");
+        assertTrue(url.startsWith("https://api.scryfall.com/cards/named?exact="), url);
+        assertTrue(url.endsWith("&format=image&version=normal"), url);
+        assertFalse(url.contains("N.A."), "der Platzhalter darf nicht in der Adresse landen: " + url);
     }
 
+    /**
+     * Der Name wandert in einen Abfrageparameter, muss also kodiert werden. Geprueft wird
+     * {@link ImageKeys2Scryfall#nameUrl} unmittelbar: die Kodierung haengt am NAMEN, nicht daran, ob
+     * die Karte gerade einen Druck hat - und Kartennamen sind stabil, Drucke nicht.
+     */
     @Test
     void namensRueckfallKodiertApostrophUndKommaUndLeerzeichen() {
         PaperCard samut = vorschaukarte("Samut, Hazoret's Champion");
         assertEquals("https://api.scryfall.com/cards/named?exact=Samut%2C%20Hazoret%27s%20Champion&format=image&version=normal",
-                ImageKeys2Scryfall.url(samut.getImageKey(false)).orElse("-"));
+                ImageKeys2Scryfall.nameUrl(samut, false));
     }
 
     @Test

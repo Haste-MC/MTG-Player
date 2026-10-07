@@ -62,11 +62,13 @@ class ImageCacheTest {
 
     @Test
     void vorschaukarteOhneSammlernummerFragtUeberDenNamenAn(@TempDir Path dir) throws Exception {
-        String avacyn = StaticData.instance().getCommonCards().getCard("Avacyn, Angel of Horror").getImageKey(false);
+        // Karte an der Eigenschaft gesucht, nicht am Namen - siehe Vorschaukarten.
+        String key = Vorschaukarten.irgendeine().getImageKey(false);
         List<String> calls = new ArrayList<>();
         ImageCache cache = new ImageCache(dir, url -> { calls.add(url); return new byte[] {7}; }, 0);
-        assertArrayEquals(new byte[] {7}, cache.get(avacyn).get());
-        assertEquals(List.of("https://api.scryfall.com/cards/named?exact=Avacyn%2C%20Angel%20of%20Horror&format=image&version=normal"), calls);
+        assertArrayEquals(new byte[] {7}, cache.get(key).get());
+        assertEquals(1, calls.size(), calls.toString());
+        assertTrue(calls.get(0).startsWith("https://api.scryfall.com/cards/named?exact="), calls.get(0));
         assertEquals("", log(), "ein Bild, das ankommt, steht nicht im Log");
     }
 
