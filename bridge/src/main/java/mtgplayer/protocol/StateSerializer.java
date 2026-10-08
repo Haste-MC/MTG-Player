@@ -122,6 +122,9 @@ public final class StateSerializer {
         }
         CardStateView st = cv.getCurrentState();
         boolean creature = st.isCreature();
+        // Verdeckt: der aktuelle Zustand IST die Rueckseite (Name leer, Bildschluessel "t:hidden").
+        // Die echte Karte liegt daneben - siehe verdecktAus.
+        boolean verdeckt = cv.isFaceDown();
         List<Integer> attachments = new ArrayList<>();
         if (cv.hasCardAttachments()) {
             for (CardView a : cv.getAttachedCards()) {
@@ -132,7 +135,7 @@ public final class StateSerializer {
         boolean onBattlefield = cv.getZone() != null && cv.getZone().name().equals("Battlefield");
         return new Snapshot.CardSnap(
                 cv.getId(),
-                false,
+                verdeckt,
                 st.getName(),
                 st.getImageKey(),
                 cv.getController() == null ? null : cv.getController().getId(),
@@ -158,7 +161,26 @@ public final class StateSerializer {
                 ctx.highlighted().test(cv) ? Boolean.TRUE : null,
                 cv.isCommander() ? Boolean.TRUE : null,
                 cv.isImmutable() ? Boolean.TRUE : null,
-                cv.isEmblem() ? Boolean.TRUE : null);
+                cv.isEmblem() ? Boolean.TRUE : null,
+                verdeckt && ctx.mayLookUnder().test(cv) ? verdecktAus(cv) : null);
+    }
+
+    /**
+     * Was unter einer verdeckten Karte liegt: Forge haelt die echte Karte im anderen Zustand der
+     * Ansicht bereit ({@code getAlternateState()}), unabhaengig davon, wer hinsehen darf - die Frage
+     * nach der Erlaubnis ist schon beantwortet, wenn wir hier ankommen.
+     */
+    private static Snapshot.Verdeckt verdecktAus(CardView cv) {
+        CardStateView alt = cv.getAlternateState();
+        if (alt == null) {
+            return null;
+        }
+        return new Snapshot.Verdeckt(
+                alt.getName(),
+                alt.getImageKey(),
+                alt.getType() == null ? null : alt.getType().toString(),
+                alt.getManaCost() == null || alt.getManaCost().isNoCost() ? null : alt.getManaCost().getShortString(),
+                alt.getOracleText());
     }
 
     private static Map<String, Integer> counters(Multiset<CounterType> counters) {

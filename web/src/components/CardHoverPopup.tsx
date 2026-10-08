@@ -20,7 +20,9 @@ const VERZOEGERUNG_MS = 120;
 
 export default function CardHoverPopup() {
   const card = useStore((s) => (s.hover !== undefined ? s.state?.cards[String(s.hover)] : undefined));
-  const zeigbar = !!card && !card.faceDown && !!card.imageKey;
+  // Verdeckte Karte: das Bild kommt aus dem Zusatz, wenn ich darunter sehen darf - sonst gar keins.
+  const bild = card?.faceDown ? card.verdeckt?.imageKey : card?.imageKey;
+  const zeigbar = !!card && !!bild;
 
   // Letzte Mausposition: ein Zuhoerer, der immer liegt, aber nur dann ein Neuzeichnen ausloest,
   // wenn wirklich eine Karte angefahren ist. Ohne den gemerkten Wert haette die Vorschau im
@@ -56,7 +58,7 @@ export default function CardHoverPopup() {
   const { left, top } = vorschauPosition(maus, fenster, groesse);
   return (
     <div className="card-popup" style={{ left, top, width: groesse.breite }} aria-hidden>
-      <CardImage key={card.imageKey} imageKey={card.imageKey} className="card-popup-art" />
+      <CardImage key={bild} imageKey={bild} className="card-popup-art" />
     </div>
   );
 }

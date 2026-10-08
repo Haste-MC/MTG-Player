@@ -30,7 +30,31 @@ export default function CardBox({ card, stack, attached }: { card: CardSnap; sta
   // imageKey) angezeigt wird - z. B. wenn React den Card-Slot fuer eine neue Karte wiederverwendet.
   const [failedKey, setFailedKey] = useState<string>();
   const noImg = !card.imageKey || failedKey === card.imageKey;
-  if (card.faceDown) return <div className="card-slot"><div className="card-frame"><div className="card back" /></div></div>;
+  // Verdeckt: auf dem Tisch bleibt die Rueckseite - sie IST verdeckt, und der Gegner sieht sie
+  // nicht. Darf ich darunter sehen, traegt sie ein Auge und laesst sich anfahren; die echte Karte
+  // zeigen dann die grosse Vorschau und das Detail-Panel (Spec 2026-10-08-verdeckte-karten).
+  if (card.faceDown) {
+    const kenneIch = !!card.verdeckt;
+    return (
+      <div className="card-slot"
+           onMouseEnter={kenneIch ? () => setHover(card.id) : undefined}
+           onMouseLeave={kenneIch ? () => setHover(undefined) : undefined}>
+        <div className="card-frame">
+          <div className={"card back" + (kenneIch ? " gewusst" : "")}
+               title={kenneIch ? card.verdeckt?.name : undefined}>
+            {kenneIch && (
+              // Gezeichnetes Auge statt eines Emoji: ein Zeichen haengt an einer Schrift, die auf
+              // einem fremden Rechner fehlen kann - im Testlauf kam ein leeres Kaestchen heraus.
+              <svg className="verdeckt-auge" viewBox="0 0 24 16" aria-label={"verdeckt: " + (card.verdeckt?.name ?? "")}>
+                <path d="M1 8s4-6 11-6 11 6 11 6-4 6-11 6S1 8 1 8z" fill="none" stroke="currentColor" strokeWidth="1.8" />
+                <circle cx="12" cy="8" r="3" fill="currentColor" />
+              </svg>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
   const tokenFrame = noImg && !!card.token;
   const stacked = !!stack && stack.count > 1;
   // Tabletop-Stapel (groups.ts): bis zu 4 Ebenen hinter der obersten Karte, getappte Kopien liegen

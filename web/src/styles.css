@@ -1125,3 +1125,17 @@ button.match-toggle .icon { display: block; transition: transform .12s ease; }
   box-shadow: 0 18px 48px rgba(0, 0, 0, 0.7);
 }
 .card-popup-art { width: 100%; display: block; border-radius: 10px; }
+
+/* ---------- Verdeckte Karte, die ich ansehen darf ------------------------------------------ */
+/* Die Rueckseite bleibt die Rueckseite - das Auge sagt nur "die darfst du anfahren". */
+.card.back.gewusst { cursor: help; }
+.verdeckt-auge {
+  position: absolute; right: 4px; bottom: 4px; z-index: 2;
+  width: 18px; height: 12px; padding: 2px 3px; border-radius: 4px;
+  color: var(--gold); background: rgba(0, 0, 0, 0.6); border: 1px solid var(--gold-line);
+}
+.detail .verdeckt-marke {
+  margin-left: 6px; padding: 1px 5px; border-radius: 999px; vertical-align: middle;
+  font-size: 10px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
+  color: var(--gold); background: var(--gold-soft); border: 1px solid var(--gold-line);
+}

@@ -78,13 +78,29 @@ public record Snapshot(
             /** {@code true} nur fuer Forges Effekt-Hilfskarten (CardView.isImmutable, GamePieceType.EFFECT), sonst {@code null}. */
             Boolean effect,
             /** {@code true} nur fuer Embleme (CardView.isEmblem), sonst {@code null}. */
-            Boolean emblem) {
+            Boolean emblem,
+            /**
+             * Was unter einer VERDECKTEN Karte liegt - nur gefuellt, wenn der Betrachter sie ansehen
+             * darf (eigener Morph/Manifest, per Hideaway verbanntes Exil, Foretell ...). Die uebrigen
+             * Felder bleiben die des BRETTZUSTANDS: eine verdeckte Kreatur kaempft als 2/2, und genau
+             * das soll der Tisch auch zeigen.
+             */
+            Verdeckt verdeckt) {
 
         public static CardSnap hidden(int id) {
             return new CardSnap(id, true, null, null, null, null, null, null, null, null, null, null, null,
-                    null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
+                    null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
         }
     }
+
+    /**
+     * Die Identitaet unter einer verdeckten Karte (Forges {@code CardView.getAlternateState()}).
+     *
+     * <p>Eigenes Feld statt ueberschriebener Hauptfelder: der Tisch zeigt weiter die Rueckseite und
+     * den Brettzustand, nur die Vorschau und das Detail-Panel greifen hierauf zu. Siehe
+     * {@code docs/superpowers/specs/2026-10-08-verdeckte-karten-design.md}.</p>
+     */
+    public record Verdeckt(String name, String imageKey, String typeLine, String manaCost, String text) { }
 
     /** Ein Angreifer mit seinem Ziel und seinen Blockern. Genau eines von {@code defenderPlayer} und
      *  {@code defenderCard} ist gesetzt (Forges Verteidiger ist ein Spieler ODER eine Karte - Planeswalker,

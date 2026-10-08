@@ -8,9 +8,23 @@ export interface PromptSnap {
   seq: number;
 }
 
+/** Die Identitaet unter einer verdeckten Karte - nur da, wenn ich sie ansehen darf. */
+export interface Verdeckt {
+  name?: string;
+  imageKey?: string;
+  typeLine?: string;
+  manaCost?: string;
+  text?: string;
+}
+
 export interface CardSnap {
   id: number;
   faceDown: boolean;
+  /**
+   * Was unter der verdeckten Karte liegt (eigener Morph/Manifest, Hideaway-Exil, Foretell ...).
+   * Fehlt bei fremden verdeckten Karten - und dann weiss die Oberflaeche es auch nicht.
+   */
+  verdeckt?: Verdeckt;
   name?: string;
   imageKey?: string;
   controller?: number;

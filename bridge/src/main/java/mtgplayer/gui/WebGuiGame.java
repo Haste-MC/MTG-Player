@@ -126,7 +126,7 @@ public class WebGuiGame extends AbstractGuiGame {
         if (gv == null) return;
         boolean isSpectator = getLocalPlayers().isEmpty();
         PlayerView me = isSpectator ? null : getLocalPlayers().iterator().next();
-        ViewContext ctx = new ViewContext(me, this::mayView, this::isSelectable, this::isWeaklySelectable,
+        ViewContext ctx = new ViewContext(me, this::mayView, this::darfDarunterSehen, this::isSelectable, this::isWeaklySelectable,
                 this::isHighlighted, p -> isTargetingInput(), prompt,
                 new Messages.StopsMsg(Stops.names(stops.own()), Stops.names(stops.opp())), fullControl, isSpectator);
         Snapshot snap = StateSerializer.snapshot(gv, ctx);
@@ -191,6 +191,18 @@ public class WebGuiGame extends AbstractGuiGame {
             }
         }
         return false;
+    }
+
+    /**
+     * Darf ich sehen, was unter einer verdeckten Karte liegt?
+     *
+     * <p>Forge beantwortet das fuer jede Herkunft an einer Stelle - eigener Morph/Manifest, per
+     * Hideaway verbanntes Exil, Foretell, Cloak: {@code AbstractGuiGame.mayFlip} prueft, ob der
+     * andere Zustand der Ansicht gezeigt werden darf. Fuer eine NICHT verdeckte Karte sagt es auch
+     * ja (Transform, Meld), deshalb fragt {@code StateSerializer} vorher {@code isFaceDown}.</p>
+     */
+    private boolean darfDarunterSehen(CardView cv) {
+        return mayFlip(cv);
     }
 
     private Integer priorityPlayer() {
@@ -657,7 +669,7 @@ public class WebGuiGame extends AbstractGuiGame {
         if (choices == null) return out;
         ViewContext ctx = getGameView() == null ? null : new ViewContext(
                 getLocalPlayers().isEmpty() ? null : getLocalPlayers().iterator().next(),
-                this::mayView, c -> false, c -> false, e -> false, p -> false, Snapshot.PromptSnap.EMPTY,
+                this::mayView, this::darfDarunterSehen, c -> false, c -> false, e -> false, p -> false, Snapshot.PromptSnap.EMPTY,
                 new Messages.StopsMsg(List.of(), List.of()), false, getLocalPlayers().isEmpty());
         int i = 0;
         for (T t : choices) {
