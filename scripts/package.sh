@@ -9,7 +9,8 @@ set -euo pipefail
 # Plattform, ein Windows-Paket kann dieses Skript hier nicht erzeugen.
 #
 # Aufruf: scripts/package.sh <version> <ziel>
-#   <version>  Fassung, die in --app-version und version.txt landet (z.B. 1.2.0)
+#   <version>  Fassung, die in version.txt und den Zip-Namen landet (z.B. 1.2.0 oder 1.2.0-beta);
+#              jpackage bekommt davon nur den Zahlenteil, siehe app_version unten
 #   <ziel>     Arbeits- und Ausgabeverzeichnis; wird bei jedem Lauf neu angelegt
 
 if [ "$#" -ne 2 ]; then
@@ -19,6 +20,17 @@ fi
 
 version="$1"
 ziel="$2"
+
+# jpackage verlangt fuer --app-version reine Zahlen mit Punkten und bricht sonst ab
+# ("Version [0.10.0-beta] contains invalid component [0-beta]", gesehen am 2026-10-08 beim Tag
+# v0.10.0-beta). Die VOLLE Fassung bleibt ueberall sonst stehen - sie steht in version.txt, im
+# Jar-Manifest und im Namen des Zips, also in allem, was der Spieler sieht und was der Update-Weg
+# vergleicht. Nur jpackage bekommt den Zahlenteil davor.
+app_version="${version%%-*}"
+if ! printf '%s' "$app_version" | grep -qE '^[0-9]+(\.[0-9]+)*$'; then
+    echo "Fassung '$version' hat keinen Zahlenteil fuer jpackage (erwartet z.B. 1.2.0 oder 1.2.0-beta)" >&2
+    exit 1
+fi
 wurzel="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # <ziel> muss absolut sein, BEVOR unten in bridge/ hineingewechselt wird (Maven fuer
@@ -82,7 +94,7 @@ assets_staging="$ziel/assets-staging"
 bild="$ziel/image"
 mkdir -p "$bild"
 jpackage --type app-image --name MTG-Player --input "$eingabe" --dest "$bild" \
-    --main-jar "$hauptjar" --main-class mtgplayer.Main --app-version "$version" \
+    --main-jar "$hauptjar" --main-class mtgplayer.Main --app-version "$app_version" \
     --java-options "-Xmx4g" \
     --java-options "-Dmtgplayer.app=true" \
     --java-options "-Dmtgplayer.assets=\$APPDIR/../assets" \

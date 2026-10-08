@@ -34,6 +34,31 @@ class VersionTest {
         assertFalse(Version.isNewer("1.2", "1.2.0"));
     }
 
+    /**
+     * Vorab-Fassungen (Tag {@code v0.10.0-beta}, 2026-10-08). Vorher gab {@code parse} dafuer
+     * {@code null} und {@code isNewer} damit immer {@code false} - eine Beta haette stillschweigend
+     * nie einen Update-Hinweis bekommen.
+     */
+    @Test
+    void vorabFassungIstAelterAlsIhreVeroeffentlichung() {
+        assertTrue(Version.isNewer("0.10.0", "0.10.0-beta"), "die fertige Fassung ist neuer");
+        assertFalse(Version.isNewer("0.10.0-beta", "0.10.0"), "und nicht umgekehrt");
+    }
+
+    @Test
+    void vorabFassungenVergleichenSichUeberIhreZahlen() {
+        assertTrue(Version.isNewer("0.11.0-beta", "0.10.0-beta"));
+        assertTrue(Version.isNewer("0.11.0-beta", "0.10.0"));
+        assertFalse(Version.isNewer("0.10.0-beta", "0.11.0"));
+        assertFalse(Version.isNewer("0.10.0-beta", "0.10.0-beta"), "dieselbe Fassung ist nicht neuer");
+    }
+
+    @Test
+    void ohneZahlenteilBleibtEsBeiKeineAussage() {
+        assertFalse(Version.isNewer("-beta", "1.0.0"));
+        assertFalse(Version.isNewer("1.0.0", "-beta"));
+    }
+
     @Test
     void devIstNieAelterBekommtKeinenUpdateHinweis() {
         // Egal wie hoch der Tag ist: die eigene Entwicklungsfassung "dev" darf nie als veraltet gelten -

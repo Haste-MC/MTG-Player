@@ -58,24 +58,39 @@ public final class Version {
      * einen Sinn, und ein Murks-Wert darf nie einen Update-Hinweis ausloesen.
      */
     public static boolean isNewer(String a, String b) {
-        int[] va = parse(a);
-        int[] vb = parse(b);
+        Fassung va = parse(a);
+        Fassung vb = parse(b);
         if (va == null || vb == null) return false;
-        int len = Math.max(va.length, vb.length);
+        int len = Math.max(va.zahlen().length, vb.zahlen().length);
         for (int i = 0; i < len; i++) {
-            int xa = i < va.length ? va[i] : 0;
-            int xb = i < vb.length ? vb[i] : 0;
+            int xa = i < va.zahlen().length ? va.zahlen()[i] : 0;
+            int xb = i < vb.zahlen().length ? vb.zahlen()[i] : 0;
             if (xa != xb) return xa > xb;
         }
-        return false;
+        // Gleiche Zahlen: die fertige Fassung ist neuer als ihre Vorabfassung (1.2.0 > 1.2.0-beta),
+        // damit wer auf einer Beta sitzt die Veroeffentlichung angeboten bekommt.
+        return vb.vorab() && !va.vorab();
     }
 
     /** {@code null}, wenn sich die Fassung nicht sauber in Ziffern-Abschnitte zerlegen laesst. */
-    private static int[] parse(String v) {
+    /**
+     * Zahlen und, falls vorhanden, ein Vorab-Zusatz: {@code 1.2.0-beta} -> {@code [1,2,0]} + vorab.
+     *
+     * <p>Ohne das waere eine Vorab-Fassung gar nicht lesbar ({@code parse} gab {@code null}, und
+     * {@link #isNewer} damit immer {@code false}) - eine Beta haette also stillschweigend NIE einen
+     * Update-Hinweis bekommen.</p>
+     */
+    private record Fassung(int[] zahlen, boolean vorab) { }
+
+    private static Fassung parse(String v) {
         if (v == null) return null;
         String s = v.trim();
         if (s.isEmpty()) return null;
-        String[] teile = s.split("\\.", -1);
+        int strich = s.indexOf('-');
+        boolean vorab = strich >= 0;
+        String zahlen = vorab ? s.substring(0, strich) : s;
+        if (zahlen.isEmpty()) return null;
+        String[] teile = zahlen.split("\\.", -1);
         int[] out = new int[teile.length];
         for (int i = 0; i < teile.length; i++) {
             if (!teile[i].matches("\\d+")) return null;
@@ -85,6 +100,6 @@ public final class Version {
                 return null;
             }
         }
-        return out;
+        return new Fassung(out, vorab);
     }
 }
