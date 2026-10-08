@@ -29,7 +29,22 @@ function open(): void {
   socket.onclose = () => setTimeout(open, 1000);
 }
 
+/**
+ * Steuert dieser Browser? Wird aus der role-Nachricht gesetzt (siehe store). Vor der ersten Antwort
+ * der Bridge true, damit nichts haengt, falls eine aeltere Bridge gar keine role-Nachricht schickt.
+ */
+let steuert = true;
+
+export function setzeSteuerung(wert: boolean): void {
+  steuert = wert;
+}
+
 export function send(msg: Outbound): void {
+  // Zuschauer schicken nichts: die Bridge wuerde es ohnehin verwerfen, und so bleibt die Leitung
+  // ruhig. takeControl ist die eine Ausnahme - sonst kaeme man nie an die Steuerung.
+  if (!steuert && msg.type !== "takeControl") {
+    return;
+  }
   if (socket && socket.readyState === WebSocket.OPEN) {
     socket.send(JSON.stringify(msg));
   }

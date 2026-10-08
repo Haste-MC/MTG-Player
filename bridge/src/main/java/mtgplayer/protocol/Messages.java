@@ -114,6 +114,20 @@ public final class Messages {
         public ErrorMsg(String text) { this("error", text); }
     }
 
+    /**
+     * Wer steuert, und wie viele sehen zu.
+     *
+     * <p>Mehrere Browser koennen am selben Tisch haengen (siehe {@code WsServer}); genau einer darf
+     * klicken. Ohne diese Nachricht wuesste ein Zuschauer nicht, warum seine Eingaben nichts tun -
+     * und ein gesperrter Knopf ohne Begruendung ist schlimmer als gar keiner.</p>
+     *
+     * @param control  darf DIESER Browser steuern
+     * @param watchers wie viele weitere gerade zusehen
+     */
+    public record Role(String type, boolean control, int watchers) {
+        public Role(boolean control, int watchers) { this("role", control, watchers); }
+    }
+
     /** Phasen, in denen angehalten wird (Namen der PhaseType-Konstanten), je eigener/gegnerischer Zug. */
     public record StopsMsg(List<String> own, List<String> opp) { }
 

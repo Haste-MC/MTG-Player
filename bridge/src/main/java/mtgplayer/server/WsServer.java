@@ -10,6 +10,8 @@ import org.java_websocket.handshake.ClientHandshake;
 import org.java_websocket.server.WebSocketServer;
 
 import java.net.InetSocketAddress;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -17,16 +19,31 @@ import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 
 /**
- * Genau ein Browser-Client. Nachrichten vom Client gehen als JsonNode an {@code inbound};
- * {@link #send} ist thread-sicher (Java-WebSocket serialisiert intern). Ohne Client wird
- * gesendetes still verworfen – der Browser holt sich den Zustand per requestState.
+ * Mehrere Browser am selben Tisch: alle sehen denselben Zustand, genau EINER steuert.
+ *
+ * <p><b>Warum nicht mehr nur einer.</b> Bis zum 2026-10-08 hielt diese Klasse genau einen Klienten
+ * und warf bei einer neuen Verbindung die alte raus. Zusammen mit dem Wiederverbinden in
+ * {@code web/src/ws.ts} (eine Sekunde nach {@code onclose}) ergab das eine Schaukel: zwei offene
+ * Tabs warfen sich endlos gegenseitig raus, und beide zeigten dauerhaft "Verbinde mit der
+ * Bridge …". Genau so sah es aus, als Kevin einer anderen Sitzung beim Spielen zusehen wollte.</p>
+ *
+ * <p><b>Wer steuert.</b> Der erste Klient. Wer spaeter dazukommt, sieht zu - das ist der Fall, um
+ * den es geht: die spielende Sitzung ist schon dran, man setzt sich daneben. Geht der Steuernde,
+ * rueckt der am laengsten wartende Zuschauer nach, damit kein Tisch ohne Hand zurueckbleibt. Ein
+ * Zuschauer kann die Steuerung ausdruecklich holen ({@code {"type":"takeControl"}}), denn wer
+ * zuerst verbunden hat, ist nicht zwingend der, der spielen will.</p>
+ *
+ * <p>Nachrichten gehen nur vom Steuernden an {@code inbound}; {@link #send} ist thread-sicher
+ * (Java-WebSocket serialisiert intern) und geht an alle. Ohne Klient wird Gesendetes still
+ * verworfen - der Browser holt sich den Zustand per requestState.</p>
  */
 public final class WsServer extends WebSocketServer implements Transport {
 
     private final Consumer<JsonNode> inbound;
     private final Runnable onOpen;
     private final Runnable onClientGone;
-    private volatile WebSocket client;
+    /** Verbundene Browser in der Reihenfolge ihres Eintreffens; der erste steuert (siehe Klassendoc). */
+    private final List<WebSocket> clients = new CopyOnWriteArrayList<>();
     private final CompletableFuture<Void> started = new CompletableFuture<>();
 
     public WsServer(int port, Consumer<JsonNode> inbound, Runnable onOpen) {
@@ -34,7 +51,7 @@ public final class WsServer extends WebSocketServer implements Transport {
     }
 
     /**
-     * @param onClientGone laeuft, wenn der EINZIGE Klient die Verbindung verliert (siehe {@link #onClose}) -
+     * @param onClientGone laeuft, wenn der LETZTE Klient die Verbindung verliert (siehe {@link #onClose}) -
      *                     im App-Modus das Signal, dass das Fenster zu ist (siehe {@code IdleExit}).
      */
     public WsServer(int port, Consumer<JsonNode> inbound, Runnable onOpen, Runnable onClientGone) {
@@ -63,26 +80,45 @@ public final class WsServer extends WebSocketServer implements Transport {
 
     @Override
     public void send(Object message) {
-        WebSocket c = client;
-        if (c != null && c.isOpen()) {
-            try {
-                c.send(Json.toJson(message));
-            } catch (RuntimeException e) {
-                // deckt WebsocketNotConnectedException (Subklasse) mit ab - ein Client, der mitten im
-                // Senden abreisst, darf den Game-Thread nicht mitreissen. Nur ins Log: ein
-                // abgerissener Client ist kein Absturz, und die Meldung erreichte ihn ohnehin nicht.
-                CrashLog.note("ws", "Senden fehlgeschlagen: " + e, e);
-            }
+        String json = Json.toJson(message);
+        for (WebSocket c : clients) {
+            sendeAn(c, json);
+        }
+    }
+
+    /** Einer von mehreren: ein abgerissener Klient darf die uebrigen nicht um ihre Nachricht bringen. */
+    private static void sendeAn(WebSocket c, String json) {
+        if (c == null || !c.isOpen()) {
+            return;
+        }
+        try {
+            c.send(json);
+        } catch (RuntimeException e) {
+            // deckt WebsocketNotConnectedException (Subklasse) mit ab - ein Client, der mitten im
+            // Senden abreisst, darf den Game-Thread nicht mitreissen. Nur ins Log: ein
+            // abgerissener Client ist kein Absturz, und die Meldung erreichte ihn ohnehin nicht.
+            CrashLog.note("ws", "Senden fehlgeschlagen: " + e, e);
+        }
+    }
+
+    /** Der Steuernde, oder {@code null} wenn niemand verbunden ist. */
+    WebSocket steuernder() {
+        return clients.isEmpty() ? null : clients.get(0);
+    }
+
+    /** Jedem seine Rolle schicken - der Steuernde erfaehrt dabei, wie viele zusehen. */
+    private void rollenMelden() {
+        WebSocket chef = steuernder();
+        int zuschauer = Math.max(0, clients.size() - 1);
+        for (WebSocket c : clients) {
+            sendeAn(c, Json.toJson(new Messages.Role(c == chef, zuschauer)));
         }
     }
 
     @Override
     public void onOpen(WebSocket conn, ClientHandshake handshake) {
-        WebSocket old = client;
-        client = conn;
-        if (old != null && old.isOpen() && old != conn) {
-            old.close(1000, "neuer Client");
-        }
+        clients.add(conn);                       // hinten dran: der erste bleibt der Steuernde
+        rollenMelden();
         try {
             onOpen.run();
         } catch (RuntimeException e) {
@@ -95,27 +131,47 @@ public final class WsServer extends WebSocketServer implements Transport {
 
     @Override
     public void onClose(WebSocket conn, int code, String reason, boolean remote) {
-        // Nur fuer den AKTUELLEN Klienten melden: wird ein alter von einem neuen abgeloest (siehe
-        // onOpen), traegt "client" laengst den neuen - dann ist niemand weg, nur einer ersetzt.
-        if (client == conn) {
-            client = null;
+        if (!clients.remove(conn)) {
+            return;                              // kannten wir nicht (doppeltes onClose)
+        }
+        if (clients.isEmpty()) {
             try {
-                onClientGone.run();
+                onClientGone.run();              // erst beim LETZTEN: im App-Modus heisst das "Fenster zu"
             } catch (RuntimeException e) {
                 // wie onOpen/onMessage: kein Rueckruf darf den Socket-Thread mitreissen
-                e.printStackTrace();
+                CrashLog.note("ws", "onClientGone fehlgeschlagen: " + e, e);
             }
+            return;
         }
+        rollenMelden();                          // ging der Steuernde, rueckt der naechste nach
     }
 
     @Override
     public void onMessage(WebSocket conn, String message) {
         try {
-            inbound.accept(Json.parse(message));
+            JsonNode msg = Json.parse(message);
+            if ("takeControl".equals(msg.path("type").asText())) {
+                uebernehmen(conn);               // darf jeder - sonst kaeme man nie an die Steuerung
+                return;
+            }
+            if (conn != steuernder()) {
+                return;                          // Zuschauer schauen zu; die Oberflaeche sperrt das schon
+            }
+            inbound.accept(msg);
         } catch (RuntimeException e) {
-            conn.send(Json.toJson(new Messages.ErrorMsg("Bridge: " + e)));
-            e.printStackTrace();
+            sendeAn(conn, Json.toJson(new Messages.ErrorMsg("Bridge: " + e)));
+            CrashLog.note("ws", "Nachricht fehlgeschlagen: " + e, e);
         }
+    }
+
+    /** Diesen Klienten nach vorne holen; danach kennt jeder seine neue Rolle. */
+    private void uebernehmen(WebSocket conn) {
+        if (conn == steuernder() || !clients.contains(conn)) {
+            return;
+        }
+        clients.remove(conn);
+        clients.add(0, conn);
+        rollenMelden();
     }
 
     @Override

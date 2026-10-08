@@ -9,6 +9,8 @@ export default function Prompt({ state, dangerLabel = "Aufgeben", children }: { 
   const p = state.prompt;
   const choiceOpen = useStore((s) => s.choices.length > 0);
   const toast = useStore((s) => s.toast);
+  /** Zuschauer duerfen nicht klicken (siehe RoleBanner) - gesperrt statt wirkungslos. */
+  const control = useStore((s) => s.control);
   const clearToast = useStore((s) => s.clearToast);
   // Toast (z. B. "Das geht gerade nicht.") nach 2 s ausblenden; toast.n startet den Timer bei Wiederholung neu.
   useEffect(() => {
@@ -34,8 +36,8 @@ export default function Prompt({ state, dangerLabel = "Aufgeben", children }: { 
       {toast && <span className="toast" role="status" key={toast.n}>{toast.text}</span>}
       {children}
       <span className="actions">
-        <button className="primary" disabled={!p.okEnabled} onClick={() => send({ type: "ok", seq: p.seq })}>{p.okLabel}</button>
-        <button disabled={!p.cancelEnabled} onClick={() => send({ type: "cancel", seq: p.seq })}>{p.cancelLabel}</button>
+        <button className="primary" disabled={!p.okEnabled || !control} onClick={() => send({ type: "ok", seq: p.seq })}>{p.okLabel}</button>
+        <button disabled={!p.cancelEnabled || !control} onClick={() => send({ type: "cancel", seq: p.seq })}>{p.cancelLabel}</button>
         <button className="quiet danger" onClick={() => send({ type: "concede" })}>{dangerLabel}</button>
       </span>
     </div>

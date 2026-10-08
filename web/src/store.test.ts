@@ -36,6 +36,28 @@ const snap = (over: Partial<Snapshot> = {}): Snapshot => ({
   ...over,
 });
 
+describe("reduce: rolle am gemeinsamen tisch", () => {
+  it("vor der ersten Nachricht steuert man - sonst waere mit einer aelteren Bridge alles gesperrt", () => {
+    expect(initialState.control).toBe(true);
+    expect(initialState.watchers).toBe(0);
+  });
+
+  it("zuschauen und wieder uebernehmen", () => {
+    const zuschauer = reduce(initialState, { type: "role", control: false, watchers: 0 });
+    expect(zuschauer.control).toBe(false);
+    const wieder = reduce(zuschauer, { type: "role", control: true, watchers: 1 });
+    expect(wieder.control).toBe(true);
+    expect(wieder.watchers).toBe(1);
+  });
+
+  it("die Rolle laesst den uebrigen Zustand in Ruhe", () => {
+    const mitLog = reduce(initialState, { type: "log", text: "etwas", kind: "COMBAT", id: 1 } as never);
+    const nachher = reduce(mitLog, { type: "role", control: false, watchers: 2 });
+    expect(nachher.log).toEqual(mitLog.log);
+    expect(nachher.screen).toBe(mitLog.screen);
+  });
+});
+
 describe("reduce", () => {
   it("lobby setzt precons und screen", () => {
     const s = reduce(initialState, { type: "lobby", precons: [deck("A"), deck("B")] });

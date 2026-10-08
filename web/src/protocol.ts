@@ -380,7 +380,14 @@ export interface UpdateStateMsg {
   type: "updateState"; state: "laden" | "pruefen" | "entpacken" | "neustart" | "fehler"; text: string;
 }
 
-export type Inbound = Snapshot | Choice | Lobby | LogLine | Thinking | GameOver | ErrorMsg | ArchidektDecks | ArchidektProgress | Matches | MatchMsg | DeckAnalysisMsg | SparringProgress | CardSuggestionsMsg | CardStatsMsg | VersionMsg | UpdateStateMsg;
+/**
+ * Wer steuert, und wie viele sehen zu. Mehrere Browser koennen am selben Tisch haengen; genau einer
+ * darf klicken (siehe WsServer). Ohne diese Nachricht wuesste ein Zuschauer nicht, warum nichts
+ * passiert, wenn er klickt.
+ */
+export interface RoleMsg { type: "role"; control: boolean; watchers: number }
+
+export type Inbound = Snapshot | Choice | Lobby | LogLine | Thinking | GameOver | ErrorMsg | ArchidektDecks | ArchidektProgress | Matches | MatchMsg | DeckAnalysisMsg | SparringProgress | CardSuggestionsMsg | CardStatsMsg | VersionMsg | UpdateStateMsg | RoleMsg;
 
 export type Outbound =
   // humanDeck fehlt bei spectate:true (KI-only-Modus, kein eigener Sitz - siehe lobbyPayload.ts)
@@ -389,6 +396,7 @@ export type Outbound =
   | { type: "selectPlayer"; id: number; seq?: number }
   | { type: "ok"; seq?: number }
   | { type: "cancel"; seq?: number }
+  | { type: "takeControl" }
   | { type: "setStops"; own?: string[]; opp?: string[] }
   | { type: "fullControl"; value: boolean }
   | { type: "answer"; id: number; value: unknown }

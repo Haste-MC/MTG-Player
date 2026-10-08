@@ -1139,3 +1139,19 @@ button.match-toggle .icon { display: block; transition: transform .12s ease; }
   font-size: 10px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
   color: var(--gold); background: var(--gold-soft); border: 1px solid var(--gold-line);
 }
+
+/* ---------- Mehrere Browser am selben Tisch ------------------------------------------------ */
+/* Band ueber allem: ein Zuschauer, dem niemand sagt warum, haelt die Oberflaeche fuer kaputt. */
+.role-banner {
+  position: fixed; top: 0; left: 50%; transform: translateX(-50%); z-index: 80;
+  display: flex; align-items: center; gap: 10px;
+  padding: 6px 12px; border-radius: 0 0 var(--radius-md) var(--radius-md);
+  background: var(--gold-soft); border: 1px solid var(--gold-line); border-top: none;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45); font-size: 12px;
+}
+.role-banner .role-text b { color: var(--gold); }
+/* Der Steuernde braucht nur die Zahl, und die moeglichst leise. */
+.role-banner.watching-count {
+  background: var(--panel-2); border-color: var(--line); color: var(--muted);
+  padding: 3px 10px; font-size: 11px; box-shadow: none;
+}

@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import type { ArchidektEntry, ArchidektProgress, CardStatsMsg, CardSuggestionsMsg, Choice, DeckAnalysis, DeckInfo, Inbound, MatchRecord, Snapshot, StartGame, UpdateStateMsg, VersionMsg } from "./protocol";
 import { recordResult, type Series, startSeries } from "./series";
-import { send } from "./ws";
+import { send, setzeSteuerung } from "./ws";
 
 export interface LogEntry { text: string; kind?: string; card?: number; warn?: boolean; id?: number }
 
@@ -42,6 +42,10 @@ export function sparringOpponents(decks: DeckInfo[], deck?: string): SparringOpp
 
 export interface AppState {
   screen: "lobby" | "table" | "stats";
+  /** Darf DIESER Browser klicken? Mehrere koennen am selben Tisch haengen, genau einer steuert. */
+  control: boolean;
+  /** Wie viele sehen gerade ausserdem zu. */
+  watchers: number;
   precons: DeckInfo[];
   decks: DeckInfo[];
   /** Von der Bridge angebotene KI-Modi/-Profile und die Standard-Bedenkzeit (Sekunden) - siehe Lobby.tsx. */
@@ -145,6 +149,9 @@ export const initialState: AppState = {
   archidekt: { loading: false }, matches: [], matchesTotal: 0, matchDetails: {}, deckAnalyses: {},
   suggestions: {}, cardStats: {}, pendingMatch: [], pendingAnalysis: [], pendingSuggestions: [], pendingCards: [],
   updateDismissed: false,
+  // Vor der ersten role-Nachricht steuernd: eine aeltere Bridge schickt gar keine, und dann soll
+  // nicht alles gesperrt sein.
+  control: true, watchers: 0,
 };
 
 const LOG_MAX = 500;
@@ -159,6 +166,8 @@ function addChoice(choices: Choice[], c: Choice): Choice[] {
 /** Reine Übergangsfunktion – testbar ohne Socket oder React. */
 export function reduce(s: AppState, m: Inbound): AppState {
   switch (m.type) {
+    case "role":
+      return { ...s, control: m.control, watchers: m.watchers };
     case "lobby":
       return {
         ...s,
@@ -333,7 +342,13 @@ interface Store extends AppState {
 
 export const useStore = create<Store>((set, get) => ({
   ...initialState,
-  apply: (m) => set((s) => reduce(s, m)),
+  apply: (m) => set((s) => {
+    const next = reduce(s, m);
+    // Die Leitung still halten: ein Zuschauer schickt gar nicht erst (siehe ws.ts). Nebenwirkung
+    // hier statt in reduce, damit reduce eine reine Uebergangsfunktion bleibt.
+    if (next.control !== s.control) setzeSteuerung(next.control);
+    return next;
+  }),
   clearChoice: (id) => set((s) => ({ choices: s.choices.filter((c) => c.id !== id) })),
   backToLobby: () => set({
     screen: "lobby", state: undefined, winner: undefined, choices: [], thinking: undefined, seriesCountdown: undefined,
