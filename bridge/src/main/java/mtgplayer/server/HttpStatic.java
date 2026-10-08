@@ -52,7 +52,9 @@ public final class HttpStatic {
     public HttpStatic(int port, Path dir) throws IOException {
         this.dir = dir.toAbsolutePath().normalize();
         this.server = HttpServer.create(new InetSocketAddress(bindAddress(), port), 0);
-        this.executor = Executors.newFixedThreadPool(8, daemonThreads("http-static"));
+        // Wachsend statt acht feste Faeden: ein offener Ereignisstrom belegt dauerhaft einen davon
+        // (siehe Ereignisstrom), und beim Spielstart laufen viele Bildabrufe gleichzeitig.
+        this.executor = Executors.newCachedThreadPool(daemonThreads("http-static"));
         server.setExecutor(executor);
         server.createContext("/", ex -> {
             String p = ex.getRequestURI().getPath();
@@ -79,6 +81,17 @@ public final class HttpStatic {
     /** Bind-Adresse: -Dmtgplayer.bind, Standard 0.0.0.0 – noetig, damit Windows unter WSL2 den Server per localhost erreicht. */
     static String bindAddress() {
         return System.getProperty("mtgplayer.bind", "0.0.0.0");
+    }
+
+    /**
+     * Den Rueckfallweg fuer Browser anmelden, die keinen WebSocket herausbekommen - zwei
+     * gewoehnliche HTTP-Wege auf diesem Port (siehe {@link Ereignisstrom}).
+     */
+    public void ereignisstrom(Klienten klienten) {
+        Ereignisstrom strom = new Ereignisstrom(klienten);
+        addContext("/ereignisse", strom::ereignisse);
+        addContext("/eingabe", strom::eingabe);
+        closeables.add(strom);
     }
 
     public void addContext(String path, HttpHandler handler) {

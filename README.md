@@ -124,6 +124,13 @@ Kante ist hover-/klickbar. Flüche auf Spielern stehen als „Aura"-Chip im Pane
 Die Grab-/Exil-Liste öffnet zur Bildmitte hin.
 Alternative Bridge-Ports lassen sich per URL setzen: `?wsPort=8082` (gleicher Host) oder `?ws=ws://host:port` (eigene WebSocket-URL).
 
+**Nur ein Port nötig.** Normalerweise läuft die Verbindung über den WebSocket (8081). Bekommt ein
+Browser den nicht auf – manche eingebauten Browser erlauben nur Name und Port der Seite selbst –,
+schaltet die App selbsttätig auf zwei gewöhnliche HTTP-Wege **auf dem Seiten-Port** um:
+`GET /ereignisse` (Ereignisstrom) und `POST /eingabe`. Man merkt davon nichts außer, dass es
+funktioniert. Der WebSocket bleibt erste Wahl; umgeschaltet wird erst, wenn er nicht aufgeht und die
+Bridge fertig hochgefahren ist.
+
 **Mehrere Browser am selben Tisch.** Beliebig viele Fenster können dieselbe Bridge öffnen und sehen
 denselben Zustand – praktisch, um jemandem (oder einer Claude-Sitzung) beim Spielen zuzusehen.
 Klicken darf immer nur **einer**: der zuerst verbundene. Alle weiteren sehen oben ein Band „Du siehst

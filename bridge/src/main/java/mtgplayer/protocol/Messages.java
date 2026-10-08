@@ -124,6 +124,15 @@ public final class Messages {
      * @param control  darf DIESER Browser steuern
      * @param watchers wie viele weitere gerade zusehen
      */
+    /**
+     * Erste Nachricht des Ereignisstroms: das Token, mit dem der Browser seine Eingaben demselben
+     * Klienten zuordnet (siehe {@code Ereignisstrom}). Ueber den WebSocket gibt es das nicht - dort
+     * ist die Verbindung selbst die Identitaet.
+     */
+    public record Hello(String type, String token) {
+        public Hello(String token) { this("hello", token); }
+    }
+
     public record Role(String type, boolean control, int watchers) {
         public Role(boolean control, int watchers) { this("role", control, watchers); }
     }

@@ -304,6 +304,9 @@ public final class Main {
         printCardsLoaded(t0);
 
         Bridge bridge = new Bridge(wsPort);
+        // Rueckfallweg auf dem HTTP-Port, fuer Browser, die keinen WebSocket herausbekommen
+        // (eingebaute Browser mit einer Freigabe fuer genau Name und Port der Seite).
+        http.ereignisstrom(bridge.klienten());
         IdleExit idleExit = null;
         if (appMode) {
             // Das Fenster ist ein eigener Prozess (AppMode.openWindow) - ohne diese Regel liefe die

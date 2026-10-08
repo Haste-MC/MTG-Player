@@ -215,6 +215,14 @@ public final class Bridge {
         }
     }
 
+    /**
+     * Die Klientenbuchhaltung, damit sich auch der Ereignisstrom auf dem HTTP-Port dort eintraegt
+     * (siehe {@link Ereignisstrom}) - ein Browser am Strom zaehlt wie einer am Socket.
+     */
+    public Klienten klienten() {
+        return ws.klienten();
+    }
+
     public void start() {
         // Abbrueche des Spiel-Threads (Forge-BugReporter, uncaught) als Fehlerzeile in den Browser.
         CrashLog.setListener(text -> ws.send(new Messages.ErrorMsg(text)));

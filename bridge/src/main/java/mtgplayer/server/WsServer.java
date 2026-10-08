@@ -10,8 +10,8 @@ import org.java_websocket.handshake.ClientHandshake;
 import org.java_websocket.server.WebSocketServer;
 
 import java.net.InetSocketAddress;
-import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -39,11 +39,11 @@ import java.util.function.Consumer;
  */
 public final class WsServer extends WebSocketServer implements Transport {
 
-    private final Consumer<JsonNode> inbound;
     private final Runnable onOpen;
-    private final Runnable onClientGone;
-    /** Verbundene Browser in der Reihenfolge ihres Eintreffens; der erste steuert (siehe Klassendoc). */
-    private final List<WebSocket> clients = new CopyOnWriteArrayList<>();
+    /** Die gemeinsame Buchhaltung - auch der Ereignisstrom auf dem HTTP-Port traegt sich dort ein. */
+    private final Klienten klienten;
+    /** Zu jeder Verbindung ihr Klient, damit onClose/onMessage denselben Eintrag finden. */
+    private final Map<WebSocket, Klient> zuordnung = new ConcurrentHashMap<>();
     private final CompletableFuture<Void> started = new CompletableFuture<>();
 
     public WsServer(int port, Consumer<JsonNode> inbound, Runnable onOpen) {
@@ -56,10 +56,14 @@ public final class WsServer extends WebSocketServer implements Transport {
      */
     public WsServer(int port, Consumer<JsonNode> inbound, Runnable onOpen, Runnable onClientGone) {
         super(new InetSocketAddress(bindAddress(), port));
-        this.inbound = inbound;
         this.onOpen = onOpen;
-        this.onClientGone = onClientGone;
+        this.klienten = new Klienten(inbound, onClientGone);
         setReuseAddr(true);
+    }
+
+    /** Die Buchhaltung, damit sich auch der Ereignisstrom auf dem HTTP-Port dort eintragen kann. */
+    public Klienten klienten() {
+        return klienten;
     }
 
     /** Blockiert, bis der Port gebunden ist (oder das Binden scheitert) – kein Rennen mit Clients, die sofort verbinden. */
@@ -80,98 +84,50 @@ public final class WsServer extends WebSocketServer implements Transport {
 
     @Override
     public void send(Object message) {
-        String json = Json.toJson(message);
-        for (WebSocket c : clients) {
-            sendeAn(c, json);
-        }
+        klienten.sendeAllen(message);
     }
 
-    /** Einer von mehreren: ein abgerissener Klient darf die uebrigen nicht um ihre Nachricht bringen. */
-    private static void sendeAn(WebSocket c, String json) {
-        if (c == null || !c.isOpen()) {
-            return;
-        }
-        try {
-            c.send(json);
-        } catch (RuntimeException e) {
-            // deckt WebsocketNotConnectedException (Subklasse) mit ab - ein Client, der mitten im
-            // Senden abreisst, darf den Game-Thread nicht mitreissen. Nur ins Log: ein
-            // abgerissener Client ist kein Absturz, und die Meldung erreichte ihn ohnehin nicht.
-            CrashLog.note("ws", "Senden fehlgeschlagen: " + e, e);
-        }
-    }
-
-    /** Der Steuernde, oder {@code null} wenn niemand verbunden ist. */
-    WebSocket steuernder() {
-        return clients.isEmpty() ? null : clients.get(0);
-    }
-
-    /** Jedem seine Rolle schicken - der Steuernde erfaehrt dabei, wie viele zusehen. */
-    private void rollenMelden() {
-        WebSocket chef = steuernder();
-        int zuschauer = Math.max(0, clients.size() - 1);
-        for (WebSocket c : clients) {
-            sendeAn(c, Json.toJson(new Messages.Role(c == chef, zuschauer)));
-        }
+    /** Ein Browser am WebSocket. Die Umsetzung von {@link Klient} fuer diesen Weg. */
+    private record WsKlient(WebSocket conn) implements Klient {
+        @Override public void sende(String json) { conn.send(json); }
+        @Override public boolean offen() { return conn.isOpen(); }
+        @Override public void schliesse() { conn.close(1000, "Senden fehlgeschlagen"); }
     }
 
     @Override
     public void onOpen(WebSocket conn, ClientHandshake handshake) {
-        clients.add(conn);                       // hinten dran: der erste bleibt der Steuernde
-        rollenMelden();
+        Klient k = new WsKlient(conn);
+        zuordnung.put(conn, k);
+        klienten.dazu(k);
         try {
             onOpen.run();
         } catch (RuntimeException e) {
             // wie onMessage: ein Fehler beim Connect-Callback (z. B. Lobby-Aufbau) darf den Socket-Thread
             // nicht mitreissen - der Client erfaehrt es als "error" statt einer stillen Verbindung.
             conn.send(Json.toJson(new Messages.ErrorMsg("Bridge: " + e)));
-            e.printStackTrace();
+            CrashLog.note("ws", "Connect-Rueckruf fehlgeschlagen: " + e, e);
         }
     }
 
     @Override
     public void onClose(WebSocket conn, int code, String reason, boolean remote) {
-        if (!clients.remove(conn)) {
-            return;                              // kannten wir nicht (doppeltes onClose)
+        Klient k = zuordnung.remove(conn);
+        if (k != null) {
+            klienten.weg(k);
         }
-        if (clients.isEmpty()) {
-            try {
-                onClientGone.run();              // erst beim LETZTEN: im App-Modus heisst das "Fenster zu"
-            } catch (RuntimeException e) {
-                // wie onOpen/onMessage: kein Rueckruf darf den Socket-Thread mitreissen
-                CrashLog.note("ws", "onClientGone fehlgeschlagen: " + e, e);
-            }
-            return;
-        }
-        rollenMelden();                          // ging der Steuernde, rueckt der naechste nach
     }
 
     @Override
     public void onMessage(WebSocket conn, String message) {
         try {
-            JsonNode msg = Json.parse(message);
-            if ("takeControl".equals(msg.path("type").asText())) {
-                uebernehmen(conn);               // darf jeder - sonst kaeme man nie an die Steuerung
-                return;
+            Klient k = zuordnung.get(conn);
+            if (k != null) {
+                klienten.empfange(k, Json.parse(message));
             }
-            if (conn != steuernder()) {
-                return;                          // Zuschauer schauen zu; die Oberflaeche sperrt das schon
-            }
-            inbound.accept(msg);
         } catch (RuntimeException e) {
-            sendeAn(conn, Json.toJson(new Messages.ErrorMsg("Bridge: " + e)));
+            conn.send(Json.toJson(new Messages.ErrorMsg("Bridge: " + e)));
             CrashLog.note("ws", "Nachricht fehlgeschlagen: " + e, e);
         }
-    }
-
-    /** Diesen Klienten nach vorne holen; danach kennt jeder seine neue Rolle. */
-    private void uebernehmen(WebSocket conn) {
-        if (conn == steuernder() || !clients.contains(conn)) {
-            return;
-        }
-        clients.remove(conn);
-        clients.add(0, conn);
-        rollenMelden();
     }
 
     @Override
