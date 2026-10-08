@@ -2,6 +2,7 @@ package mtgplayer.gui;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -34,6 +35,18 @@ class WebGuiGameTest {
             JsonNode n = Json.parse(s);
             if ("choice".equals(n.get("type").asText())) return n;
         }
+    }
+
+    /**
+     * Der Sieger im Abschluss-Dialog, wenn Forge keinen nennt (siehe {@link WebGuiGame#gewinner}):
+     * genau ein Sitz, der nicht verloren hat. Bei mehreren bleibt es bei "Unentschieden" - ein Name
+     * waere dort eine Behauptung, keine Auskunft.
+     */
+    @Test
+    void genauEinUeberlebenderIstDerSieger() {
+        assertEquals("KI 4", WebGuiGame.einzigerUeberlebender(List.of("KI 4")));
+        assertNull(WebGuiGame.einzigerUeberlebender(List.of("KI 1", "KI 4")), "zwei uebrig: kein Sieger");
+        assertNull(WebGuiGame.einzigerUeberlebender(List.of()), "keiner uebrig: kein Sieger");
     }
 
     @Test

@@ -497,8 +497,7 @@ public class WebGuiGame extends AbstractGuiGame {
         if (abschlussGesendet) {
             return;
         }
-        GameView gv = getGameView();
-        String winner = gv == null ? null : gv.getWinningPlayerName();
+        String winner = gewinner(getGameView());
         broker.cancelAll();
         // pushState() statt push(): finishGame läuft auf dem UI-Thread (Forges Event-Handler), der finale
         // Snapshot muss den Client also synchron vor GameOver erreichen statt erst später über invokeInEdtLater.
@@ -506,6 +505,44 @@ public class WebGuiGame extends AbstractGuiGame {
         out.send(new Messages.GameOver(winner));
         abschlussGesendet = true;
         stopTicker();                            // beendet auch eine noch laufende Denk-Anzeige
+    }
+
+    /**
+     * Der Name fuer den Abschluss-Dialog, oder {@code null} wenn es keinen eindeutigen Sieger gibt.
+     *
+     * <p>Forge fuellt {@code GameView.getWinningPlayerName()} in {@code updateGameOver} nur, wenn
+     * {@code GameOutcome.getWinningLobbyPlayer()} einen Sitz findet, dessen Statistik auf "hat
+     * gewonnen" steht. In einer am 2026-10-08 durchgespielten Partie (vier Sitze, Grund
+     * {@code AllOpponentsLost}, drei Gegner auf 0 Leben) war das keiner: der Dialog zeigte "Spiel
+     * beendet", waehrend der Datensatz KI 4 voellig richtig als Sieger fuehrte. Fuer eine
+     * Zuschauer-Partie ist das die eine Auskunft, auf die man wartet.
+     *
+     * <p>Deshalb der Rueckfall auf die Sitze selbst.</p>
+     */
+    static String gewinner(GameView gv) {
+        if (gv == null) {
+            return null;
+        }
+        String name = gv.getWinningPlayerName();
+        if (name != null && !name.isBlank()) {
+            return name;
+        }
+        List<String> uebrig = new ArrayList<>();
+        for (PlayerView p : gv.getPlayers()) {
+            if (!p.getHasLost()) {
+                uebrig.add(p.getName());
+            }
+        }
+        return einzigerUeberlebender(uebrig);
+    }
+
+    /**
+     * Genau ein Sitz uebrig: der hat gewonnen. Keiner oder mehrere: kein Name - und damit bleibt es
+     * beim bisherigen "Spiel beendet"/"Unentschieden". Bewusst nicht "der erste Ueberlebende": bei
+     * einem echten Unentschieden stehen mehrere, und dann waere jeder Name eine Behauptung.
+     */
+    static String einzigerUeberlebender(List<String> nichtVerloren) {
+        return nichtVerloren.size() == 1 ? nichtVerloren.get(0) : null;
     }
 
     /**
