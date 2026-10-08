@@ -11,6 +11,8 @@ import Thinking from "./Thinking";
 import CardDetail from "./CardDetail";
 import CardImage from "./CardImage";
 import Combat from "./Combat";
+import CardHoverPopup from "./CardHoverPopup";
+import { begrenzeHoehe, geleseneHoehe, merkeHoehe } from "../tableLayout";
 
 /** Sekunden, die der Auto-Start-Countdown im Spielende-Dialog laeuft (Spec §1). */
 const COUNTDOWN_SECONDS = 5;
@@ -48,6 +50,20 @@ export default function Table() {
   // von der Bruecke abgelehnter Auto-Start (error statt Snapshot, expectNewMatch faellt zurueck auf
   // false) den Countdown endlos neu aufziehen - siehe shouldArmCountdown in series.ts.
   const [autoStarted, setAutoStarted] = useState(false);
+  /** Gezogene Hoehe der Gegner-Zeile; undefined = "so viel wie noetig" (bisheriges Verhalten). */
+  const [oppHoehe, setOppHoehe] = useState<number | undefined>(() =>
+    geleseneHoehe(typeof localStorage === "undefined" ? undefined : localStorage, window.innerHeight));
+  /** Sitz, der gerade gross ueber dem Tisch liegt; undefined = keiner. */
+  const [grosserSitz, setGrosserSitz] = useState<number | undefined>(undefined);
+  const tischRef = useRef<HTMLDivElement | null>(null);
+
+  // Esc schliesst den vergroesserten Sitz - ein Overlay ohne Tastaturweg ist eine Falle.
+  useEffect(() => {
+    if (grosserSitz === undefined) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setGrosserSitz(undefined); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [grosserSitz]);
   // Fehlertext eines abgelehnten Start-Versuchs (automatisch oder "Jetzt starten") - siehe startMarkRef/
   // lastWarnSince unten. Ein manueller Retry-Klick setzt ihn wieder zurueck.
   const [startError, setStartError] = useState<string>();
@@ -131,16 +147,45 @@ export default function Table() {
   const me = state.players.find((p) => p.id === state.me);
   const foes = state.players.filter((p) => p.id !== state.me);
   const stack = [...state.stack].reverse(); // oberstes Element (löst zuerst auf) zuerst
+  const speicher = typeof localStorage === "undefined" ? undefined : localStorage;
+  /**
+   * Ziehen der Trennlinie. Die Zuhoerer haengen am Griff selbst (mit Pointer-Capture) statt am
+   * Fenster: so endet das Ziehen auch dann sauber, wenn der Zeiger den Tisch verlaesst.
+   */
+  const zieheTrennlinie = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const griff = e.currentTarget;
+    const oben = tischRef.current?.getBoundingClientRect().top ?? 0;
+    const hoeheBei = (y: number) => begrenzeHoehe(y - oben, window.innerHeight);
+    const onMove = (ev: PointerEvent) => setOppHoehe(hoeheBei(ev.clientY));
+    const onUp = (ev: PointerEvent) => {
+      griff.removeEventListener("pointermove", onMove);
+      griff.removeEventListener("pointerup", onUp);
+      griff.releasePointerCapture(ev.pointerId);
+      merkeHoehe(speicher, hoeheBei(ev.clientY));
+    };
+    griff.setPointerCapture(e.pointerId);
+    griff.addEventListener("pointermove", onMove);
+    griff.addEventListener("pointerup", onUp);
+  };
+  const grossAnzeigen = state.players.find((p) => p.id === grosserSitz);
   return (
-    <div className={"table" + (spectator ? " spectator" : "")}>
+    <div ref={tischRef} className={"table" + (spectator ? " spectator" : "") + (!spectator && oppHoehe !== undefined ? " resized" : "")}
+         style={!spectator && oppHoehe !== undefined ? ({ "--opp-h": oppHoehe + "px" } as React.CSSProperties) : undefined}>
       {spectator ? (
         <div className={"spectator-grid players-" + state.players.length}>
           {state.players.map((p) => <PlayerZone key={p.id} p={p} state={state} compact={true} spectator={true} />)}
         </div>
       ) : (
-        <div className="opponents">
-          {foes.map((p) => <PlayerZone key={p.id} p={p} state={state} compact={true} />)}
-        </div>
+        <>
+          <div className="opponents">
+            {foes.map((p) => <PlayerZone key={p.id} p={p} state={state} compact={true} onEnlarge={() => setGrosserSitz(p.id)} />)}
+          </div>
+          <div className="splitter" role="separator" aria-label="Höhe der Gegner-Zeile"
+               title="Ziehen ändert die Höhe der Gegner-Zeile, Doppelklick setzt sie zurück"
+               onPointerDown={zieheTrennlinie}
+               onDoubleClick={() => { setOppHoehe(undefined); merkeHoehe(speicher, undefined); }} />
+        </>
       )}
       <div className="side">
         <CardDetail />
@@ -233,6 +278,14 @@ export default function Table() {
           </div>
         </div>
       )}
+      {grossAnzeigen && (
+        <div className="zoom-overlay" onClick={() => setGrosserSitz(undefined)}>
+          <div className="zoom-box" onClick={(e) => e.stopPropagation()}>
+            <PlayerZone p={grossAnzeigen} state={state} compact={false} />
+          </div>
+        </div>
+      )}
+      <CardHoverPopup />
     </div>
   );
 }

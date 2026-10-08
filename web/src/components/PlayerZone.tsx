@@ -86,7 +86,12 @@ function Effects({ effects, inline }: { effects: CardSnap[]; inline?: boolean })
   );
 }
 
-export default function PlayerZone({ p, state, compact, spectator }: { p: PlayerSnap; state: Snapshot; compact: boolean; spectator?: boolean }) {
+/**
+ * @param onEnlarge gesetzt: die Kopfzeile bekommt einen Knopf, der diesen Sitz gross ueber dem
+ *                  Tisch zeigt (siehe Table). Nur fuer Gegner im eigenen Spiel - die eigene Zone
+ *                  ist schon gross, und im Zuschauer-Raster sind alle Sitze gleich.
+ */
+export default function PlayerZone({ p, state, compact, spectator, onEnlarge }: { p: PlayerSnap; state: Snapshot; compact: boolean; spectator?: boolean; onEnlarge?: () => void }) {
   const seq = useStore((s) => s.state?.prompt.seq);
   const setHover = useStore((s) => s.setHover);
   const cards = (ids: number[]) => ids.map((id) => state.cards[String(id)]).filter(Boolean);
@@ -152,6 +157,11 @@ export default function PlayerZone({ p, state, compact, spectator }: { p: Player
   return (
     <div className={"player" + (active ? " active" : "") + (compact ? " compact" : " own") + (spectator ? " spectator" : "")} style={sizing}>
       <div className={"header" + (p.highlighted ? " highlighted" : "") + (p.targetable ? " targetable" : "")} onClick={() => send({ type: "selectPlayer", id: p.id, seq })}>
+        {onEnlarge && (
+          // stopPropagation wie bei den Aura-Chips: die Kopfzeile selbst waehlt den Spieler als Ziel.
+          <button type="button" className="zoom-btn" title="Sitz gross anzeigen" aria-label={p.name + " gross anzeigen"}
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); onEnlarge(); }}>⤢</button>
+        )}
         <span className="pname">{p.name}{p.isAi && <span className="ai-tag">KI</span>}</span>
         <span className="life" title="Lebenspunkte">{p.life}</span>
         {p.hasPriority && <span className="prio" title="Hat Priorität"><span className="dot" />Prio</span>}

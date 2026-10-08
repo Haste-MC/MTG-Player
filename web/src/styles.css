@@ -113,21 +113,44 @@ input[type="checkbox"] { accent-color: var(--accent); width: 14px; height: 14px;
 .table {
   display: grid;
   grid-template-columns: minmax(0, 1fr) var(--side-w);
-  grid-template-rows: auto minmax(0, 1fr);
+  /* Drei Zeilen im eigenen Spiel: Gegner, Trennlinie, eigene Zone. --opp-h setzt Table.tsx nur,
+     wenn jemand gezogen hat - ungezogen bleibt es bei "auto", also der bisherigen Ansicht. */
+  grid-template-rows: var(--opp-h, auto) 10px minmax(0, 1fr);
   height: 100vh;
   gap: var(--gap);
   padding: var(--gap);
   overflow: hidden;
 }
-.opponents { grid-column: 1; grid-row: 1; display: flex; gap: var(--gap); align-items: flex-start; min-width: 0; }
-.side { grid-column: 2; grid-row: 1 / span 2; display: flex; flex-direction: column; gap: var(--gap); min-height: 0; min-width: 0; }
-.mine { grid-column: 1; grid-row: 2; display: flex; flex-direction: column; gap: var(--gap); min-width: 0; min-height: 0; }
+.opponents { grid-column: 1; grid-row: 1; display: flex; gap: var(--gap); align-items: flex-start; min-width: 0; min-height: 0; }
+.side { grid-column: 2; grid-row: 1 / span 3; display: flex; flex-direction: column; gap: var(--gap); min-height: 0; min-width: 0; }
+.mine { grid-column: 1; grid-row: 3; display: flex; flex-direction: column; gap: var(--gap); min-width: 0; min-height: 0; }
+
+/* Gezogen: die Panels fuellen die eingestellte Hoehe aus, statt nur so hoch zu sein wie ihr Inhalt -
+   sonst brächte das Ziehen nur Leerraum statt groesserer Karten. */
+.table.resized .opponents { align-items: stretch; overflow: hidden; }
+
+/* ---------- Trennlinie zwischen Gegnern und eigener Zone ---------------------------------- */
+.splitter {
+  grid-column: 1; grid-row: 2; align-self: center;
+  height: 10px; border-radius: 5px; cursor: row-resize;
+  background: transparent; position: relative; touch-action: none;
+}
+/* Der sichtbare Strich ist schmaler als die Trefferflaeche - 10px sind zum Treffen noetig,
+   sehen als Linie aber nach Balken aus. */
+.splitter::after {
+  content: ""; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: 64px; height: 3px; border-radius: 2px; background: var(--line-2);
+  transition: background 120ms ease, width 120ms ease;
+}
+.splitter:hover::after, .splitter:active::after { background: var(--gold); width: 110px; }
 
 /* ---------- KI-only-Zuschauer ------------------------------------------------------------- */
 /* Kein eigener Sitz: die erste Zeile bekommt den ganzen verfuegbaren Platz, die zweite ist nur
    die Prompt-Leiste (Forges Pause/Resume/Step/Tempo-Buttons kommen ueber okLabel/cancelLabel).
    Raster: 2 Spalten bis 4 Spieler; 5-6 Spieler ab 1500px Breite 3 Spalten, sonst 2 Spalten mit Scroll. */
+/* Zuschauer: kein eigener Sitz, also auch nichts zu teilen - zwei Zeilen wie bisher. */
 .table.spectator { grid-template-rows: minmax(0, 1fr) auto; }
+.table.spectator .side { grid-row: 1 / span 2; }
 .spectator-grid {
   grid-column: 1; grid-row: 1; min-width: 0; min-height: 0; overflow: auto;
   display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: minmax(0, 1fr);
@@ -1070,3 +1093,35 @@ button.match-toggle .icon { display: block; transition: transform .12s ease; }
 .dc-name { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; font-weight: 600; }
 .dc-name .cost { font-weight: 400; color: var(--muted); }
 .dc-line { color: var(--muted); font-size: 11.5px; }
+
+/* ---------- Sitz gross anzeigen ------------------------------------------------------------ */
+/* Knopf in der Kopfzeile eines Gegner-Panels; die Kopfzeile selbst waehlt den Spieler als Ziel,
+   deshalb faengt der Knopf seinen Klick ab (siehe PlayerZone). */
+.zoom-btn {
+  flex: none; margin-right: 2px; padding: 0 5px; line-height: 18px;
+  border: 1px solid var(--line); border-radius: var(--radius-sm);
+  background: var(--panel-2); color: var(--muted); font-size: 12px; cursor: pointer;
+}
+.zoom-btn:hover { color: var(--text); border-color: var(--gold-line); background: var(--gold-soft); }
+
+.zoom-overlay {
+  position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center;
+  padding: 24px; background: rgba(0, 0, 0, 0.72); backdrop-filter: blur(2px);
+}
+/* Der Sitz wird in voller Kartengroesse gezeigt (compact=false), braucht also Platz und darf
+   notfalls scrollen statt abgeschnitten zu werden. */
+.zoom-box {
+  width: min(1200px, 100%); max-height: 100%; overflow: auto; scrollbar-width: thin;
+  border-radius: var(--radius-md); box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+}
+
+/* ---------- Grosse Kartenvorschau am Mauszeiger -------------------------------------------- */
+/* Liegt frei ueber dem Tisch und faengt nichts ab: pointer-events none, sonst wuerde sie beim
+   Daruebergleiten die Karte darunter "verlieren" und sofort wieder verschwinden. */
+.card-popup {
+  position: fixed; z-index: 70; pointer-events: none;
+  padding: 6px; border-radius: 14px;
+  background: rgba(0, 0, 0, 0.55); border: 1px solid var(--line-2);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.7);
+}
+.card-popup-art { width: 100%; display: block; border-radius: 10px; }
