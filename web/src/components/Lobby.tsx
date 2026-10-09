@@ -98,7 +98,7 @@ export default function Lobby() {
   const aiRefs = ais.map(toRef);
   const msg = buildStartGame(spectate, humanRef, aiRefs, aiPicks, aiTimeout);
   const ready = msg !== undefined;
-  const seatNames = [...(spectate ? [] : ["Du"]), ...ais.map((_, i) => "KI " + (i + 1))];
+  const seatNames = [...(spectate ? [] : ["You"]), ...ais.map((_, i) => "AI " + (i + 1))];
   // Jeder simulierende Sitz rechnet je Entscheidung bis zur vollen Bedenkzeit - ab zwei Sitzen summiert
   // sich das sichtbar (Spec §3). Nur ein Hinweis, kein Zwang und keine Aenderung der Voreinstellung.
   const simSeats = aiPicks.filter((p) => p.mode === "sim").length;
@@ -195,10 +195,10 @@ export default function Lobby() {
         </section>
         {ais.map((a, i) => (
           <section key={i} className="lobby-section">
-            <label>KI {i + 1} {ais.length > minAis && (
+            <label>AI {i + 1} {ais.length > minAis && (
               <button className="quiet small" title="Gegner entfernen" onClick={() => removeAi(i)}>entfernen</button>
             )}</label>
-            <DeckPicker pick={a} onChange={(n) => editAi(i, n)} label={"KI " + (i + 1)} />
+            <DeckPicker pick={a} onChange={(n) => editAi(i, n)} label={"AI " + (i + 1)} />
             <div className="ai-pick">
               <select
                 title="Standard: Forges Regel-KI. Hybrid: simuliert nur die Zauberwahl. Simulation: rechnet Züge vor – stärker, braucht je Entscheidung bis zur vollen Bedenkzeit"

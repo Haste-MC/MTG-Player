@@ -9,7 +9,7 @@ describe("buildStartGame", () => {
     expect(msg).toEqual({
       type: "startGame",
       humanDeck: { precon: "Abzan Armor [TDC] [2025]" },
-      opponents: [{ precon: "Adaptive Enchantment [C18] [2018]", name: "KI 1" }],
+      opponents: [{ precon: "Adaptive Enchantment [C18] [2018]", name: "AI 1" }],
     });
   });
 
@@ -29,8 +29,8 @@ describe("buildStartGame", () => {
       type: "startGame",
       spectate: true,
       opponents: [
-        { precon: "Abzan Armor [TDC] [2025]", name: "KI 1" },
-        { precon: "Adaptive Enchantment [C18] [2018]", name: "KI 2" },
+        { precon: "Abzan Armor [TDC] [2025]", name: "AI 1" },
+        { precon: "Adaptive Enchantment [C18] [2018]", name: "AI 2" },
       ],
     });
     expect(msg && "humanDeck" in msg).toBe(false);
@@ -51,7 +51,7 @@ describe("buildStartGame", () => {
     expect(msg).toEqual({
       type: "startGame",
       humanDeck: { precon: "Abzan Armor [TDC] [2025]" },
-      opponents: [{ precon: "Adaptive Enchantment [C18] [2018]", name: "KI 1" }],
+      opponents: [{ precon: "Adaptive Enchantment [C18] [2018]", name: "AI 1" }],
     });
   });
 
@@ -67,8 +67,8 @@ describe("buildStartGame", () => {
       type: "startGame",
       spectate: true,
       opponents: [
-        { precon: "Abzan Armor [TDC] [2025]", name: "KI 1", ai: { mode: "sim", profile: "Reckless" } },
-        { precon: "Adaptive Enchantment [C18] [2018]", name: "KI 2" },
+        { precon: "Abzan Armor [TDC] [2025]", name: "AI 1", ai: { mode: "sim", profile: "Reckless" } },
+        { precon: "Adaptive Enchantment [C18] [2018]", name: "AI 2" },
       ],
       aiTimeout: 10,
     });

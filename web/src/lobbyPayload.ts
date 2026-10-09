@@ -26,7 +26,7 @@ export function buildStartGame(
   if (ais.some((r) => r === undefined)) return undefined;
   const opponents = ais.map((r, i) => {
     const pick = aiPicks[i] ?? DEFAULT_AI;
-    return { ...(r as DeckRef), name: `KI ${i + 1}`, ...(isDefaultAi(pick) ? {} : { ai: pick }) };
+    return { ...(r as DeckRef), name: `AI ${i + 1}`, ...(isDefaultAi(pick) ? {} : { ai: pick }) };
   });
   const timeoutField = aiTimeout === 5 ? {} : { aiTimeout };
 
