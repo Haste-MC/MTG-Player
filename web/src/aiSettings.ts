@@ -1,21 +1,29 @@
 import type { AiPick } from "./protocol";
+import { NO_TEAM, TEAM_CHOICES } from "./lineup";
 import { DEFAULT_AI } from "./lobbyPayload";
 
 /** localStorage-Schlüssel für die zuletzt gewählten KI-Einstellungen der Lobby. */
 const KEY = "mtg.lobby.ai";
 
-const DEFAULTS: AiSettings = { picks: [], timeout: 5, bestOf: 0 };
+const DEFAULTS: AiSettings = { picks: [], timeout: 5, bestOf: 0, teams: [], revealPartner: false };
+
+/** Mensch plus hoechstens 5 KIs - mehr Sitze gibt es nicht, mehr Eintraege waeren Altlast. */
+const MAX_SEATS = 6;
 
 const VALID_MODES = new Set<AiPick["mode"]>(["standard", "hybrid", "sim"]);
 const VALID_BEST_OF: readonly AiSettings["bestOf"][] = [0, 3, 5, 7];
 
-/** bestOf: Laenge der Serie ("Best of n"), 0 = keine Serie (Default). */
-export interface AiSettings { picks: AiPick[]; timeout: number; bestOf: 0 | 3 | 5 | 7 }
+/**
+ * bestOf: Laenge der Serie ("Best of n"), 0 = keine Serie (Default).
+ * teams: Teamnummer je Sitz, der menschliche Sitz zuerst (auch wenn er gerade nicht mitspielt), NO_TEAM = keins.
+ * revealPartner: Partnerhand zeigen.
+ */
+export interface AiSettings { picks: AiPick[]; timeout: number; bestOf: 0 | 3 | 5 | 7; teams: number[]; revealPartner: boolean }
 
 /**
  * Lädt die zuletzt gespeicherte KI-Auswahl aus dem Storage - rein testbar mit injiziertem Storage.
  * Fehlendes/kaputtes/unlesbares Storage sowie ein ungültiger Wert je Feld fallen einzeln auf die
- * Defaults zurück (leere picks, Timeout 5, bestOf 0); ein Profilname, den es laut "profiles" nicht (mehr) gibt,
+ * Defaults zurück (leere picks, Timeout 5, bestOf 0, keine Teams, Partnerhand aus); ein Profilname, den es laut "profiles" nicht (mehr) gibt,
  * wird zu "Default".
  *
  * Nimmt einen Getter statt des Storage-Objekts direkt entgegen: schon der bloße Zugriff auf den
@@ -47,7 +55,14 @@ export function loadAiSettings(getStorage: () => Pick<Storage, "getItem">, profi
 
     const bestOf = VALID_BEST_OF.find((n) => n === parsed.bestOf) ?? DEFAULTS.bestOf;
 
-    return { picks, timeout, bestOf };
+    // Ein unlesbarer Eintrag heisst "kein Team" - die Lobby prueft die Aufstellung ohnehin vor dem Start.
+    const teams: number[] = Array.isArray(parsed.teams)
+      ? parsed.teams.slice(0, MAX_SEATS).map((t: unknown) => (TEAM_CHOICES.includes(t as number) ? (t as number) : NO_TEAM))
+      : DEFAULTS.teams;
+
+    const revealPartner = typeof parsed.revealPartner === "boolean" ? parsed.revealPartner : DEFAULTS.revealPartner;
+
+    return { picks, timeout, bestOf, teams, revealPartner };
   } catch {
     return DEFAULTS;
   }

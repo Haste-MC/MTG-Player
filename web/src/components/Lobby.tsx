@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { type AiSettings, loadAiSettings, restoreSlots, saveAiSettings } from "../aiSettings";
 import { EMPTY_PICK, type Pick, toRef } from "../deckref";
+import { fitTeams, lineupProblem, lineupText, NO_TEAM, seatTeams, splitSeats, TEAM_CHOICES, twoVsTwo, withoutSeat } from "../lineup";
 import { buildStartGame, DEFAULT_AI } from "../lobbyPayload";
 import { dropMissing, loadPicks, savePicks } from "../lobbyPicks";
 import type { AiPick } from "../protocol";
@@ -36,6 +37,12 @@ export default function Lobby() {
   const [aiTimeout, setAiTimeout] = useState(5);
   const [bestOf, setBestOf] = useState<AiSettings["bestOf"]>(0);
   const [spectate, setSpectate] = useState(false);
+  // Teams getrennt vom Sitzplan: die Zahl des Menschen und eine Liste im Gleichschritt mit `ais`. Die
+  // Reihenfolge der Nachricht entsteht erst unten (seatTeams) - so bleibt beim Umschalten des
+  // Zuschauer-Modus oder beim Hinzufuegen/Entfernen eines Sitzes kein Team fuer einen Sitz uebrig, den es nicht gibt.
+  const [humanTeam, setHumanTeam] = useState(NO_TEAM);
+  const [aiTeams, setAiTeams] = useState<number[]>([]);
+  const [revealPartner, setRevealPartner] = useState(false);
   const [shownError, setShownError] = useState<string>();
   // Erste echte "lobby"-Nachricht (precons gefuellt): einmalig die gespeicherte KI-Auswahl laden.
   const settingsLoaded = useRef(false);
@@ -61,10 +68,14 @@ export default function Lobby() {
     loadedPicks.current = loaded.picks;
     setAiTimeout(loaded.timeout);
     setBestOf(loaded.bestOf);
+    setRevealPartner(loaded.revealPartner);
     // AiSettings.picks.length ist die gespeicherte Slot-Zahl - so viele Slots (geklemmt auf min/max)
     // anlegen, nicht nur die Picks in die aktuell vorhandene (anfangs einzige) Zeile mappen.
     const picks = restoreSlots(loaded.picks, { min: minAis, max: maxAis });
     setAiPicks(picks);
+    // Gespeichert ist die Aufstellung mit dem Menschen vorn; die Teams der KI-Sitze folgen der Slot-Zahl.
+    setHumanTeam(loaded.teams[0] ?? NO_TEAM);
+    setAiTeams(fitTeams(loaded.teams.slice(1), picks.length));
     // Gemerkte Decks je Slot; ein Deck, das die Bridge nicht mehr anbietet, bleibt leer.
     const p = dropMissing(loadPicks(() => localStorage), precons, decks);
     setHuman(p.human);
@@ -85,8 +96,10 @@ export default function Lobby() {
   // Auswahl merken, sobald sie geladen ist (kein Ueberschreiben des Storage vor dem obigen Laden).
   useEffect(() => {
     if (!settingsLoaded.current) return;
-    saveAiSettings(() => localStorage, { picks: aiPicks, timeout: aiTimeout, bestOf });
-  }, [aiPicks, aiTimeout, bestOf]);
+    saveAiSettings(() => localStorage, {
+      picks: aiPicks, timeout: aiTimeout, bestOf, teams: [humanTeam, ...fitTeams(aiTeams, aiPicks.length)], revealPartner,
+    });
+  }, [aiPicks, aiTimeout, bestOf, humanTeam, aiTeams, revealPartner]);
   useEffect(() => {
     if (!settingsLoaded.current) return;
     savePicks(() => localStorage, { human, ais });
@@ -96,9 +109,18 @@ export default function Lobby() {
 
   const humanRef = toRef(human);
   const aiRefs = ais.map(toRef);
-  const msg = buildStartGame(spectate, humanRef, aiRefs, aiPicks, aiTimeout);
+  // Auch hier auf die Sitzzahl zugeschnitten: ein veralteter Eintrag darf nie in die Nachricht gelangen.
+  const teams = seatTeams(spectate, humanTeam, fitTeams(aiTeams, ais.length));
+  const lineupError = lineupProblem(teams);
+  // Eine ungueltige Aufstellung lehnt die Bridge mit einem Fehler ab - dann gar nicht erst senden.
+  const msg = lineupError === undefined
+    ? buildStartGame(spectate, humanRef, aiRefs, aiPicks, aiTimeout, teams, revealPartner)
+    : undefined;
   const ready = msg !== undefined;
+  // So heissen die Sitze am Tisch ("You", "AI 1" ...) - in der Lobby nicht umbenennen.
   const seatNames = [...(spectate ? [] : ["You"]), ...ais.map((_, i) => "AI " + (i + 1))];
+  const lineup = lineupText(seatNames, teams);
+  const quickLineup = twoVsTwo(seatNames.length);
   // Jeder simulierende Sitz rechnet je Entscheidung bis zur vollen Bedenkzeit - ab zwei Sitzen summiert
   // sich das sichtbar (Spec §3). Nur ein Hinweis, kein Zwang und keine Aenderung der Voreinstellung.
   const simSeats = aiPicks.filter((p) => p.mode === "sim").length;
@@ -111,7 +133,20 @@ export default function Lobby() {
     if (on && ais.length < 2) {
       setAis([...ais, EMPTY_PICK]);
       setAiPicks([...aiPicks, loadedPicks.current[ais.length] ?? DEFAULT_AI]);
+      setAiTeams([...fitTeams(aiTeams, ais.length), NO_TEAM]);
     }
+  };
+  const setSeatTeam = (seat: number, team: number) => {
+    // seat zaehlt in Sitzreihenfolge der Nachricht; im Zuschauer-Modus gibt es den Menschen nicht.
+    const next = splitSeats(spectate, teams.map((t, i) => (i === seat ? team : t)), humanTeam);
+    setHumanTeam(next.humanTeam);
+    setAiTeams(next.aiTeams);
+  };
+  const applyQuickLineup = () => {
+    if (!quickLineup) return;
+    const next = splitSeats(spectate, quickLineup, humanTeam);
+    setHumanTeam(next.humanTeam);
+    setAiTeams(next.aiTeams);
   };
   const editHuman = (n: Pick) => {
     setShownError(undefined);
@@ -128,11 +163,13 @@ export default function Lobby() {
     setShownError(undefined);
     setAis([...ais, EMPTY_PICK]);
     setAiPicks([...aiPicks, loadedPicks.current[ais.length] ?? DEFAULT_AI]);
+    setAiTeams([...fitTeams(aiTeams, ais.length), NO_TEAM]);
   };
   const removeAi = (i: number) => {
     setShownError(undefined);
     setAis(ais.filter((_, j) => j !== i));
     setAiPicks(aiPicks.filter((_, j) => j !== i));
+    setAiTeams(withoutSeat(fitTeams(aiTeams, ais.length), i));
   };
 
   const start = () => {
@@ -161,7 +198,10 @@ export default function Lobby() {
         {!spectate && (
           <section className="lobby-section">
             <label>Dein Deck</label>
-            <DeckPicker pick={human} onChange={editHuman} label="Dein Deck" />
+            <div className="seat-deck">
+              <DeckPicker pick={human} onChange={editHuman} label="Dein Deck" />
+              <TeamPick label="Team von You" value={humanTeam} onChange={(t) => setSeatTeam(0, t)} />
+            </div>
           </section>
         )}
         <section className="lobby-section">
@@ -198,7 +238,10 @@ export default function Lobby() {
             <label>AI {i + 1} {ais.length > minAis && (
               <button className="quiet small" title="Gegner entfernen" onClick={() => removeAi(i)}>entfernen</button>
             )}</label>
-            <DeckPicker pick={a} onChange={(n) => editAi(i, n)} label={"AI " + (i + 1)} />
+            <div className="seat-deck">
+              <DeckPicker pick={a} onChange={(n) => editAi(i, n)} label={"AI " + (i + 1)} />
+              <TeamPick label={`Team von AI ${i + 1}`} value={aiTeams[i] ?? NO_TEAM} onChange={(t) => setSeatTeam(spectate ? i : i + 1, t)} />
+            </div>
             <div className="ai-pick">
               <select
                 title="Standard: Forges Regel-KI. Hybrid: simuliert nur die Zauberwahl. Simulation: rechnet Züge vor – stärker, braucht je Entscheidung bis zur vollen Bedenkzeit"
@@ -221,6 +264,24 @@ export default function Lobby() {
         {ais.length < maxAis && (
           <button className="ghost" onClick={addAi}>+ Gegner hinzufügen</button>
         )}
+        <div className="lineup">
+          <div className="lineup-head">
+            <button className="quiet small" disabled={!quickLineup}
+              title={quickLineup ? "Sitze 1 und 2 gegen Sitze 3 und 4" : "Nur bei genau vier Sitzen"}
+              onClick={applyQuickLineup}>2v2</button>
+            <button className="quiet small" disabled={teams.every((t) => t === NO_TEAM)}
+              title="Alle Teams entfernen – jeder gegen jeden"
+              onClick={() => { setHumanTeam(NO_TEAM); setAiTeams(fitTeams([], ais.length)); }}>Teams löschen</button>
+            <span className="hint">{lineup || "ohne Teams – jeder gegen jeden"}</span>
+          </div>
+          {lineupError && <span className="hint warn">{lineupError}</span>}
+          {!spectate && humanTeam !== NO_TEAM && (
+            <label className="series-pick" title="Du siehst die Handkarten deines Partners">
+              <input type="checkbox" checked={revealPartner} onChange={(e) => setRevealPartner(e.target.checked)} />
+              Partnerhand zeigen
+            </label>
+          )}
+        </div>
         <div className="lobby-actions">
           <button className="primary big" disabled={!ready || expectNewMatch} onClick={start}>Spiel starten</button>
           <button className="ghost big" title="Bilanz und Kennzahlen der gespielten Partien" onClick={openStats}>Statistik</button>
@@ -234,6 +295,17 @@ export default function Lobby() {
         {shownError && <pre className="import-error">{shownError}</pre>}
       </div>
     </div>
+  );
+}
+
+/** Team-Auswahl eines Sitzes; "kein Team" ist Jeder gegen jeden. */
+function TeamPick({ label, value, onChange }: { label: string; value: number; onChange: (team: number) => void }) {
+  return (
+    <select className="team-pick" aria-label={label} title="Team des Sitzes; Partner greifen einander nicht an"
+      value={value} onChange={(e) => onChange(Number(e.target.value))}>
+      <option value={NO_TEAM}>kein Team</option>
+      {TEAM_CHOICES.map((t) => <option key={t} value={t}>Team {t}</option>)}
+    </select>
   );
 }
 

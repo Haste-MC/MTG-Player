@@ -722,6 +722,14 @@ input[type="checkbox"] { accent-color: var(--accent); width: 14px; height: 14px;
 .spectate-toggle { display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--muted); cursor: pointer; }
 .lobby-section { display: flex; flex-direction: column; gap: 8px; }
 .lobby-section > label { display: flex; gap: 10px; align-items: center; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.seat-deck { display: flex; gap: 8px; align-items: stretch; }
+.seat-deck > .deck-tile { flex: 1; width: auto; min-width: 0; }
+.seat-deck > .team-pick { flex: none; width: 112px; align-self: center; }
+.lineup { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--muted); }
+.lineup-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.lineup .hint { color: var(--muted); font-size: 12px; }
+.lineup .hint.warn { color: var(--gold); }
+.lineup .series-pick { display: flex; align-items: center; gap: 8px; }
 .ai-pick { display: flex; gap: 6px; }
 .ai-pick select { min-width: 0; flex: 1; }
 .ai-timeout { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }

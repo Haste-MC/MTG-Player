@@ -397,7 +397,8 @@ export type Inbound = Snapshot | Choice | Lobby | LogLine | Thinking | GameOver 
 
 export type Outbound =
   // humanDeck fehlt bei spectate:true (KI-only-Modus, kein eigener Sitz - siehe lobbyPayload.ts)
-  | { type: "startGame"; spectate?: boolean; humanDeck?: DeckRef; opponents: (DeckRef & { name: string; ai?: AiPick })[]; aiTimeout?: number }
+  | { type: "startGame"; spectate?: boolean; humanDeck?: DeckRef; humanTeam?: number; revealPartnerHand?: boolean;
+      opponents: (DeckRef & { name: string; ai?: AiPick; team?: number })[]; aiTimeout?: number }
   | { type: "selectCard"; id: number; alt?: boolean; seq?: number }
   | { type: "selectPlayer"; id: number; seq?: number }
   | { type: "ok"; seq?: number }

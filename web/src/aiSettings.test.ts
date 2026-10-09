@@ -10,12 +10,12 @@ function storageOf(value: string | null): Pick<Storage, "getItem"> {
 
 describe("loadAiSettings", () => {
   it("leeres Storage -> Defaults", () => {
-    expect(loadAiSettings(() => storageOf(null), PROFILES)).toEqual({ picks: [], timeout: 5, bestOf: 0 });
+    expect(loadAiSettings(() => storageOf(null), PROFILES)).toEqual({ picks: [], timeout: 5, bestOf: 0, teams: [], revealPartner: false });
   });
 
   it("gespeichertes JSON mit unbekanntem Profil -> faellt auf Default zurueck", () => {
     const raw = JSON.stringify({ picks: [{ mode: "sim", profile: "Nichtexistent" }], timeout: 10 });
-    expect(loadAiSettings(() => storageOf(raw), PROFILES)).toEqual({ picks: [{ mode: "sim", profile: "Default" }], timeout: 10, bestOf: 0 });
+    expect(loadAiSettings(() => storageOf(raw), PROFILES)).toEqual({ picks: [{ mode: "sim", profile: "Default" }], timeout: 10, bestOf: 0, teams: [], revealPartner: false });
   });
 
   it("bestOf wird uebernommen, ungueltig (4) -> 0", () => {
@@ -28,42 +28,82 @@ describe("loadAiSettings", () => {
     const throwing: Pick<Storage, "getItem"> = {
       getItem: () => { throw new Error("kaputt"); },
     };
-    expect(loadAiSettings(() => throwing, PROFILES)).toEqual({ picks: [], timeout: 5, bestOf: 0 });
+    expect(loadAiSettings(() => throwing, PROFILES)).toEqual({ picks: [], timeout: 5, bestOf: 0, teams: [], revealPartner: false });
   });
 
   it("kaputtes JSON -> Defaults", () => {
-    expect(loadAiSettings(() => storageOf("{nicht json"), PROFILES)).toEqual({ picks: [], timeout: 5, bestOf: 0 });
+    expect(loadAiSettings(() => storageOf("{nicht json"), PROFILES)).toEqual({ picks: [], timeout: 5, bestOf: 0, teams: [], revealPartner: false });
   });
 
   it("schon der Zugriff auf den Storage-Bezeichner wirft (z. B. blockierter Storage) -> Defaults", () => {
     // Simuliert, dass allein das Auswerten von `localStorage` wirft - nicht erst ein Methodenaufruf
     // darauf. Der Getter wird erst INNERHALB von loadAiSettings aufgerufen, also im try/catch.
     const getStorage = (): Pick<Storage, "getItem"> => { throw new DOMException("blockiert"); };
-    expect(loadAiSettings(getStorage, PROFILES)).toEqual({ picks: [], timeout: 5, bestOf: 0 });
+    expect(loadAiSettings(getStorage, PROFILES)).toEqual({ picks: [], timeout: 5, bestOf: 0, teams: [], revealPartner: false });
+  });
+});
+
+describe("loadAiSettings: Teams", () => {
+  const laden = (o: object) => loadAiSettings(() => storageOf(JSON.stringify({ picks: [], timeout: 5, bestOf: 0, ...o })), PROFILES);
+
+  it("gespeicherte Teams und Partnerhand werden wiederhergestellt", () => {
+    expect(laden({ teams: [1, 1, 2, 2], revealPartner: true })).toMatchObject({ teams: [1, 1, 2, 2], revealPartner: true });
+  });
+
+  it("kein Team (-1) bleibt erhalten", () => {
+    expect(laden({ teams: [-1, 2, 2] }).teams).toEqual([-1, 2, 2]);
+  });
+
+  it("kaputte Teams (kein Array) -> leer, die uebrigen Felder bleiben", () => {
+    expect(laden({ teams: "1,1,2,2", timeout: 9 })).toMatchObject({ teams: [], timeout: 9 });
+  });
+
+  it("ein ungueltiger Eintrag wird zu 'kein Team', die anderen bleiben", () => {
+    expect(laden({ teams: [1, "x", 2.5, 0, 9, 2] }).teams).toEqual([1, -1, -1, -1, -1, 2]);
+  });
+
+  it("zu viele Eintraege werden gekappt (hoechstens 6 Sitze)", () => {
+    expect(laden({ teams: [1, 1, 2, 2, 1, 1, 2, 2] }).teams).toHaveLength(6);
+  });
+
+  it("kaputte Partnerhand (kein Boolean) -> false", () => {
+    expect(laden({ revealPartner: "ja" }).revealPartner).toBe(false);
+  });
+
+  it("alte Einstellungen ohne Teamfelder -> Defaults", () => {
+    expect(loadAiSettings(() => storageOf(JSON.stringify({ picks: [], timeout: 7, bestOf: 3 })), PROFILES))
+      .toEqual({ picks: [], timeout: 7, bestOf: 3, teams: [], revealPartner: false });
+  });
+
+  it("Rundtrip ueber saveAiSettings", () => {
+    const setItem = vi.fn();
+    saveAiSettings(() => ({ setItem }), { picks: [], timeout: 5, bestOf: 0, teams: [1, 1, 2, 2], revealPartner: true });
+    expect(loadAiSettings(() => storageOf(setItem.mock.calls[0][1] as string), PROFILES))
+      .toMatchObject({ teams: [1, 1, 2, 2], revealPartner: true });
   });
 });
 
 describe("saveAiSettings", () => {
   it("schreibt JSON unter dem Schluessel mtg.lobby.ai", () => {
     const setItem = vi.fn();
-    saveAiSettings(() => ({ setItem }), { picks: [{ mode: "sim", profile: "Reckless" }], timeout: 10, bestOf: 3 });
-    expect(setItem).toHaveBeenCalledWith("mtg.lobby.ai", JSON.stringify({ picks: [{ mode: "sim", profile: "Reckless" }], timeout: 10, bestOf: 3 }));
+    saveAiSettings(() => ({ setItem }), { picks: [{ mode: "sim", profile: "Reckless" }], timeout: 10, bestOf: 3, teams: [], revealPartner: false });
+    expect(setItem).toHaveBeenCalledWith("mtg.lobby.ai", JSON.stringify({ picks: [{ mode: "sim", profile: "Reckless" }], timeout: 10, bestOf: 3, teams: [], revealPartner: false }));
   });
 
   it("bestOf Rundtrip", () => {
     const setItem = vi.fn();
-    saveAiSettings(() => ({ setItem }), { picks: [], timeout: 5, bestOf: 7 });
+    saveAiSettings(() => ({ setItem }), { picks: [], timeout: 5, bestOf: 7, teams: [], revealPartner: false });
     expect(loadAiSettings(() => storageOf(setItem.mock.calls[0][1] as string), PROFILES).bestOf).toBe(7);
   });
 
   it("setItem wirft -> kein Fehler nach aussen", () => {
     const setItem = () => { throw new Error("voll"); };
-    expect(() => saveAiSettings(() => ({ setItem }), { picks: [], timeout: 5, bestOf: 0 })).not.toThrow();
+    expect(() => saveAiSettings(() => ({ setItem }), { picks: [], timeout: 5, bestOf: 0, teams: [], revealPartner: false })).not.toThrow();
   });
 
   it("schon der Zugriff auf den Storage-Bezeichner wirft -> kein Fehler nach aussen", () => {
     const getStorage = (): Pick<Storage, "setItem"> => { throw new DOMException("blockiert"); };
-    expect(() => saveAiSettings(getStorage, { picks: [], timeout: 5, bestOf: 0 })).not.toThrow();
+    expect(() => saveAiSettings(getStorage, { picks: [], timeout: 5, bestOf: 0, teams: [], revealPartner: false })).not.toThrow();
   });
 });
 
