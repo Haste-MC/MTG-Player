@@ -808,11 +808,15 @@ public final class MatchRecorder {
      * ganz gewoehnlichen Jeder-gegen-jeden. Wer {@code Player.getTeam()} ungeprueft in den Datensatz
      * schriebe, bekaeme in JEDER Partie Teamnummern, und die Statistik hielte jedes Duell fuer eine
      * Team-Partie. Eine geteilte Nummer gibt es nur, wenn die Lobby sie vergeben hat.
+     *
+     * <p>Nimmt nur die Nummern (Sitzreihenfolge egal), nicht die Spieler, damit die Regel ohne
+     * {@code Game} als Tabelle testbar ist. Dieselbe Definition erzwingt {@code mtgplayer.match.Teams.parse}
+     * schon beim Start: eine Belegung, in der jeder Sitz allein steht, kommt gar nicht erst hierher.
      */
-    static boolean hasTeams(List<Player> players) {
+    static boolean hasTeams(List<Integer> teams) {
         Set<Integer> seen = new HashSet<>();
-        for (Player p : players) {
-            if (!seen.add(p.getTeam())) {
+        for (int t : teams) {
+            if (!seen.add(t)) {
                 return true;
             }
         }
@@ -841,7 +845,7 @@ public final class MatchRecorder {
         List<MatchRecord.Seat> out = new ArrayList<>();
         boolean conceded = false;
         boolean anyWinner = false;
-        boolean teamMatch = hasTeams(seats.stream().map(s -> s.player).toList());
+        boolean teamMatch = hasTeams(seats.stream().map(s -> s.player.getTeam()).toList());
         for (Seat s : seats) {
             MatchRecord.Seat seat = s.toRecord(turns, noWinners, teamMatch);
             conceded |= "Conceded".equals(seat.lossReason());

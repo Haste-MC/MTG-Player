@@ -17,6 +17,7 @@ import org.junit.jupiter.api.Timeout;
 
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 /**
  * Der Datensatz haelt die Teamnummer je Sitz - aber NUR in einer Team-Partie. Forges {@code Game}
@@ -65,6 +66,10 @@ class MatchRecorderTeamTest {
     @Timeout(value = 120, unit = TimeUnit.SECONDS)
     void dreiSitzeJederGegenJedenSchreibenKeinTeam() {
         Scene s = Scene.of(List.of(AiConfig.DEFAULT, AiConfig.DEFAULT, AiConfig.DEFAULT), 3);
+        // Die Voraussetzung des Tests: die Engine hat jedem Sitz eine eigene Nummer gegeben. Hoerte Forge
+        // auf zu nummerieren (alle -1 oder alle gleich), bliebe das Ergebnis unten aus dem falschen Grund gruen.
+        assertEquals(3, s.game().getPlayers().stream().map(Player::getTeam).collect(Collectors.toSet()).size(),
+                "Forge nummeriert jeden der drei Sitze selbst durch");
         MatchRecord r = new MatchRecorder(s.game(), "spectate", null).finish();
 
         assertEquals(3, r.seats().size());

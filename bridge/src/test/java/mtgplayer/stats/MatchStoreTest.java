@@ -42,6 +42,34 @@ class MatchStoreTest {
                 5, 14, "AllOpponentsLost", false, true, null, List.of(seat));
     }
 
+    /** Derselbe Sitz wie in {@link #record}, aber mit Team und ohne Zeitachse ({@code null}, nicht leer). */
+    private static MatchRecord.Seat seatMitTeamOhneTimeline(int team) {
+        return new MatchRecord.Seat("Du", "Titania, Gaea Incarnate", true, null, true, null,
+                null, 1, 7, List.of(0, 1, 2, 2, 3), 2, 4, 12, 34,
+                1, 0, 2, 9, 3, 6, 5, 2, 3, 4, 1, 2,
+                8, 5, 6, 3, 4, 2, 6, 6, 15, 6, 4, 7,
+                null,
+                2, 2, 4, 21, 18, 12, 22, 0, 5, 2, 3, team);
+    }
+
+    @Test
+    void teamUeberlebtDenWegDurchDenSpeicher_auchOhneTimeline(@TempDir Path dir) {
+        // timeline == null schickt jeden Sitz durch normalizeTimelines/withTimeline, das alle Komponenten
+        // neu zusammensetzt: eine vertauschte Stelle liesse die Teamnummer dort stillschweigend fallen.
+        List<MatchRecord.Seat> seats = List.of(seatMitTeamOhneTimeline(1), seatMitTeamOhneTimeline(1),
+                seatMitTeamOhneTimeline(2), seatMitTeamOhneTimeline(2));
+        MatchStore store = new MatchStore(dir.resolve("matches.json"));
+        store.add(new MatchRecord("teams", "2026-09-22T19:00:00Z", "2026-09-22T19:13:32Z", 812345, "live",
+                5, 14, "AllOpponentsLost", false, true, null, seats));
+
+        MatchRecord back = store.all().get(0);
+
+        assertEquals(List.of(1, 1, 2, 2), back.seats().stream().map(MatchRecord.Seat::team).toList(),
+                "die Teams muessen den Weg durch Speichern, Lesen und normalizeTimelines ueberleben");
+        assertTrue(back.seats().stream().allMatch(x -> x.timeline() != null && x.timeline().isEmpty()),
+                "Voraussetzung: die fehlende Timeline wurde tatsaechlich durch withTimeline ersetzt");
+    }
+
     @Test
     void addUndAllLiefernReihenfolge(@TempDir Path dir) {
         MatchStore store = new MatchStore(dir.resolve("matches.json"));

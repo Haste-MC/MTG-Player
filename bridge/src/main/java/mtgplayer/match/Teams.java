@@ -13,7 +13,9 @@ import java.util.Set;
  * Zuschauer-Modus nur die KI-Sitze).
  *
  * <p>Gueltig ist nur: entweder traegt KEIN Sitz ein Team (Jeder gegen jeden wie bisher), oder ALLE
- * tragen eins und es sind mindestens zwei verschiedene. Ein halb gesetztes Feld waere sonst eine
+ * tragen eins, es sind mindestens zwei verschiedene, und mindestens ein Team hat zwei oder mehr Sitze
+ * (ein Team aus einem Sitz ist ein Jeder-gegen-jeden-Sitz; so sieht es auch
+ * {@code MatchRecorder.hasTeams}). Ein halb gesetztes Feld waere sonst eine
  * Partie, in der ein Sitz keine Gegner hat - Forge beendet sie sofort mit
  * {@code AllOpposingTeamsLost}, und niemand wuesste warum.
  */
@@ -63,6 +65,12 @@ public final class Teams {
         Set<Integer> verschieden = new HashSet<>(teams);
         if (verschieden.size() < 2) {
             throw new IllegalArgumentException("Teams: mindestens zwei verschiedene Teams");
+        }
+        // Ein Team aus einem einzigen Sitz ist ein Jeder-gegen-jeden-Sitz. Sind alle allein, ist es kein
+        // Team-Spiel, und MatchRecorder.hasTeams hielte es im Datensatz fuer Jeder-gegen-jeden. Beide
+        // Stellen muessen dasselbe unter "Teams" verstehen, also lehnt schon die Lobby es ab.
+        if (verschieden.size() == teams.size()) {
+            throw new IllegalArgumentException("Teams: mindestens ein Team braucht zwei Sitze");
         }
         return List.copyOf(teams);
     }

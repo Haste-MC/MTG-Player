@@ -126,6 +126,11 @@ public record MatchRecord(int v, String id, String startedAt, String endedAt, lo
      * fehlt dann im JSON, weil {@code Json.MAPPER} NON_NULL schreibt, und jeder Datensatz bis v3 liest
      * sich genauso). {@code null} heisst "keine Teams", nie "Team 0". Warum nicht einfach die Nummer der
      * Engine: siehe {@code MatchRecorder.hasTeams}.
+     * Die Nummer ist die, die die Lobby vergeben hat, und nur innerhalb EINES Datensatzes als Gleichheit
+     * aussagekraeftig ("diese Sitze waren ein Team"); sie nie ueber Partien hinweg vergleichen - Team 1
+     * in einer Partie hat mit Team 1 in einer anderen nichts zu tun. Eine Belegung, in der jeder Sitz sein
+     * eigenes Team ist, wird als "keine Teams" ({@code null}) aufgezeichnet; die Lobby laesst sie seit
+     * {@code Teams.parse} ohnehin nicht mehr zu.
      *
      * <p><b>Drei Naeherungen, die man kennen muss</b> - sie heissen anders, als ihr Name vermuten
      * laesst, und eine Auswertung, die das nicht weiss, rechnet falsch:</p>

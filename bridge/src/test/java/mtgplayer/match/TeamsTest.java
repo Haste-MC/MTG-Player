@@ -35,8 +35,9 @@ class TeamsTest {
     @Test
     void zuschauerModusOhneMenschlichenSitz() {
         JsonNode m = msg("""
-                {"spectate":true,"opponents":[{"precon":"A","team":1},{"precon":"B","team":2}]}""");
-        assertEquals(List.of(1, 2), Teams.parse(m, true, 2));
+                {"spectate":true,"opponents":[{"precon":"A","team":1},{"precon":"B","team":1},{"precon":"C","team":2}]}""");
+        // Drei KI-Sitze und ein Paar: zwei Sitze allein waeren seit der Regel "ein Team braucht zwei Sitze" ungueltig.
+        assertEquals(List.of(1, 1, 2), Teams.parse(m, true, 3));
     }
 
     @Test
@@ -53,6 +54,28 @@ class TeamsTest {
                 {"humanTeam":1,"opponents":[{"precon":"B","team":1},{"precon":"C","team":1}]}""");
         IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> Teams.parse(m, false, 2));
         assertTrue(e.getMessage().contains("zwei verschiedene"), e.getMessage());
+    }
+
+    @Test
+    void jederSitzAlleinImTeamIstKeinTeamUndWirdAbgelehnt() {
+        // Drei Sitze, drei Nummern: "mindestens zwei verschiedene" stimmt, aber niemand hat einen
+        // Mitspieler. Der MatchRecorder schriebe das als Jeder-gegen-jeden in den Datensatz - die Lobby
+        // darf es deshalb gar nicht erst als Team-Partie starten.
+        JsonNode m = msg("""
+                {"humanTeam":1,"opponents":[{"precon":"B","team":2},{"precon":"C","team":3}]}""");
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> Teams.parse(m, false, 2));
+        assertTrue(e.getMessage().contains("ein Team braucht zwei Sitze"), e.getMessage());
+    }
+
+    @Test
+    void einsGegenZweiUndZweiGegenZweiBleibenGueltig() {
+        // Gegenprobe zur Ablehnung oben: ein einziges Zweier-Team genuegt, die uebrigen duerfen allein sein.
+        JsonNode eins = msg("""
+                {"humanTeam":1,"opponents":[{"precon":"B","team":2},{"precon":"C","team":2}]}""");
+        assertEquals(List.of(1, 2, 2), Teams.parse(eins, false, 2));
+        JsonNode zwei = msg("""
+                {"humanTeam":1,"opponents":[{"precon":"B","team":1},{"precon":"C","team":2},{"precon":"D","team":2}]}""");
+        assertEquals(List.of(1, 1, 2, 2), Teams.parse(zwei, false, 3));
     }
 
     @Test
