@@ -44,7 +44,9 @@ public record Snapshot(
             Map<String, Integer> manaPool,
             boolean hasPriority,
             Boolean highlighted,
-            Boolean targetable) { }
+            Boolean targetable,
+            /** Teamnummer des Sitzes; -1 = keine Teams (jeder gegen jeden). */
+            int team) { }
 
     public record CardSnap(
             int id,

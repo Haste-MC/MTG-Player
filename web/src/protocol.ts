@@ -75,6 +75,8 @@ export interface PlayerSnap {
   highlighted?: boolean;
   /** true, wenn der Spieler gerade als Ziel waehlbar ist (gestrichelter Rahmen statt vollem). */
   targetable?: boolean;
+  /** Teamnummer des Sitzes; -1 = keine Teams (jeder gegen jeden). */
+  team: number;
 }
 
 export interface StackSnap {

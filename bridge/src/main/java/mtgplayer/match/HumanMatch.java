@@ -96,6 +96,7 @@ public final class HumanMatch {
         rules.setWarnAboutAICards(false);
         hosted = new HostedMatch();
         gui.resetForNewMatch(); // sonst haengt Auswahl/Prompt-Zustand aus dem vorigen Spiel noch dran
+        gui.setTeams(teams);    // Teamnummern fuer die Snapshots dieses Spiels (null = keine Teams)
         // HostedMatch.startGame liest diese Preference beim Spielstart (setzt Game.AI_TIMEOUT) - kein save(),
         // die Aenderung soll nur diese JVM/Session betreffen.
         FModel.getPreferences().setPref(FPref.MATCH_AI_TIMEOUT, String.valueOf(aiTimeout));
@@ -153,6 +154,7 @@ public final class HumanMatch {
         rules.setWarnAboutAICards(false);
         hosted = new HostedMatch();
         gui.resetForNewMatch(); // sonst haengt Auswahl/Prompt-Zustand aus dem vorigen Spiel noch dran
+        gui.setTeams(teams);    // Teamnummern fuer die Snapshots dieses Spiels (null = keine Teams)
         FModel.getPreferences().setPref(FPref.MATCH_AI_TIMEOUT, String.valueOf(aiTimeout));
         record(gui, "spectate", aiTimeout, deckNames, sink, ownDecks, cardSink);
         hosted.startMatch(rules, null, players, Map.of(), null);

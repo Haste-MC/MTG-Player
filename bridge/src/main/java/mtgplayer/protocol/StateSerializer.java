@@ -102,7 +102,8 @@ public final class StateSerializer {
                 mana,
                 p.getHasPriority(),
                 ctx.highlighted().test(p) ? Boolean.TRUE : null,
-                ctx.targetable().test(p) ? Boolean.TRUE : null);
+                ctx.targetable().test(p) ? Boolean.TRUE : null,
+                ctx.teams().getOrDefault(p.getId(), -1));
     }
 
     /** Sammelt IDs einer Zone und legt jede Karte einmal im Wörterbuch ab. */

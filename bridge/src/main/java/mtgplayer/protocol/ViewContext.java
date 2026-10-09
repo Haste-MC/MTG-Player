@@ -5,11 +5,14 @@ import forge.game.card.CardView;
 import forge.game.player.PlayerView;
 
 import java.util.List;
+import java.util.Map;
 import java.util.function.Predicate;
 
 /** Alles, was der Serializer über den betrachtenden Sitz wissen muss. */
 public record ViewContext(
         PlayerView me,
+        /** Sitz-Id -> Teamnummer, leer wenn die Partie keine Teams hat (siehe WebGuiGame.teamsById). */
+        Map<Integer, Integer> teams,
         Predicate<CardView> mayView,
         /**
          * Darf der Betrachter sehen, was unter einer VERDECKTEN Karte liegt? Getrennt von
@@ -29,7 +32,7 @@ public record ViewContext(
 
     /** Sicht eines Spielers ohne UI-Zustand – für Tests und den Lobby-Fall. */
     public static ViewContext plain(PlayerView me) {
-        return new ViewContext(me, c -> c.canBeShownTo(me), c -> c.canFaceDownBeShownTo(me),
+        return new ViewContext(me, Map.of(), c -> c.canBeShownTo(me), c -> c.canFaceDownBeShownTo(me),
                 c -> false, c -> false, e -> false, p -> false,
                 Snapshot.PromptSnap.EMPTY, new Messages.StopsMsg(List.of(), List.of()), false, false);
     }

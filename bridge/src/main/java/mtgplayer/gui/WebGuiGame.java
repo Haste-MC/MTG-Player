@@ -62,6 +62,8 @@ public class WebGuiGame extends AbstractGuiGame {
     private volatile Snapshot.PromptSnap prompt = Snapshot.PromptSnap.EMPTY;
     private volatile Stops stops = Stops.defaults();
     private volatile boolean fullControl;
+    /** Teamnummern in Sitzreihenfolge, von {@code HumanMatch} gesetzt; {@code null} = keine Teams. */
+    private volatile List<Integer> teams;
     private volatile Consumer<Game> newGameHook;
     private volatile Game hookedGame;
     private final AtomicInteger seq = new AtomicInteger(1);
@@ -120,13 +122,41 @@ public class WebGuiGame extends AbstractGuiGame {
         }
     }
 
+    public void setTeams(List<Integer> teams) {
+        this.teams = teams;
+    }
+
+    /**
+     * Sitz-Id -> Teamnummer. {@code PlayerView} traegt kein Team, deshalb kommt die Zuordnung aus der
+     * Liste, mit der {@code HumanMatch} auch {@code setTeamNumber} gerufen hat; die Sitzreihenfolge von
+     * {@code GameView.getPlayers()} ist die Registrierungsreihenfolge (Forge befuellt die Liste einmal
+     * im Konstruktor von {@code Game} und kuerzt sie nicht, wenn ein Sitz ausscheidet). Passt die Laenge
+     * nicht, liefert die Methode eine leere Zuordnung - lieber keine Teams anzeigen als falsche.
+     */
+    public static Map<Integer, Integer> teamsById(List<Integer> teams, List<Integer> seatIds) {
+        if (teams == null || teams.size() != seatIds.size()) {
+            return Map.of();
+        }
+        Map<Integer, Integer> out = new LinkedHashMap<>();
+        for (int i = 0; i < seatIds.size(); i++) {
+            out.put(seatIds.get(i), teams.get(i));
+        }
+        return Map.copyOf(out);
+    }
+
+    /** Die Teamzuordnung fuer den aktuellen Snapshot: Sitz-Ids aus der Ansicht, Nummern aus {@link #teams}. */
+    private Map<Integer, Integer> teamMap(GameView gv) {
+        return teamsById(teams, gv.getPlayers() == null ? List.of()
+                : gv.getPlayers().stream().map(PlayerView::getId).toList());
+    }
+
     /** Sofort einen Snapshot senden (z. B. nach Reconnect). Auf dem UI-Thread aufrufen. */
     public void pushState() {
         GameView gv = getGameView();
         if (gv == null) return;
         boolean isSpectator = getLocalPlayers().isEmpty();
         PlayerView me = isSpectator ? null : getLocalPlayers().iterator().next();
-        ViewContext ctx = new ViewContext(me, this::mayView, this::darfDarunterSehen, this::isSelectable, this::isWeaklySelectable,
+        ViewContext ctx = new ViewContext(me, teamMap(gv), this::mayView, this::darfDarunterSehen, this::isSelectable, this::isWeaklySelectable,
                 this::isHighlighted, p -> isTargetingInput(), prompt,
                 new Messages.StopsMsg(Stops.names(stops.own()), Stops.names(stops.opp())), fullControl, isSpectator);
         Snapshot snap = StateSerializer.snapshot(gv, ctx);
@@ -669,6 +699,7 @@ public class WebGuiGame extends AbstractGuiGame {
         if (choices == null) return out;
         ViewContext ctx = getGameView() == null ? null : new ViewContext(
                 getLocalPlayers().isEmpty() ? null : getLocalPlayers().iterator().next(),
+                teamMap(getGameView()),
                 this::mayView, this::darfDarunterSehen, c -> false, c -> false, e -> false, p -> false, Snapshot.PromptSnap.EMPTY,
                 new Messages.StopsMsg(List.of(), List.of()), false, getLocalPlayers().isEmpty());
         int i = 0;

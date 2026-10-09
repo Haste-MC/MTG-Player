@@ -26,6 +26,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Map;
 
 class StateSerializerTest {
 
@@ -178,7 +179,7 @@ class StateSerializerTest {
     @Test
     void promptUndSelectableWerdenDurchgereicht() {
         Snapshot.PromptSnap p = new Snapshot.PromptSnap("Wähle", null, "Keep", "Mulligan", true, true, 1);
-        ViewContext ctx = new ViewContext(me.getView(), c -> c.canBeShownTo(me.getView()),
+        ViewContext ctx = new ViewContext(me.getView(), Map.of(), c -> c.canBeShownTo(me.getView()),
                 c -> c.canFaceDownBeShownTo(me.getView()),
                 c -> c.getId() == myHandCard.getId(), c -> false, e -> false, pv -> false, p,
                 new Messages.StopsMsg(List.of(), List.of()), false, false);
@@ -195,7 +196,7 @@ class StateSerializerTest {
         JsonNode humanJson = Json.parse(Json.toJson(human));
         assertFalse(humanJson.has("spectator"), "null-Feld wird weggelassen");
 
-        ViewContext spectatorCtx = new ViewContext(null, c -> true, c -> true, c -> false, c -> false,
+        ViewContext spectatorCtx = new ViewContext(null, Map.of(), c -> true, c -> true, c -> false, c -> false,
                 e -> false, p -> false, Snapshot.PromptSnap.EMPTY, new Messages.StopsMsg(List.of(), List.of()), false, true);
         Snapshot spectator = StateSerializer.snapshot(game.getView(), spectatorCtx);
         assertEquals(Boolean.TRUE, spectator.spectator());
@@ -205,7 +206,7 @@ class StateSerializerTest {
 
     @Test
     void targetableWirdDurchgereicht() {
-        ViewContext ctx = new ViewContext(me.getView(), c -> c.canBeShownTo(me.getView()),
+        ViewContext ctx = new ViewContext(me.getView(), Map.of(), c -> c.canBeShownTo(me.getView()),
                 c -> c.canFaceDownBeShownTo(me.getView()), c -> false, c -> false,
                 e -> false, p -> p.getId() == foe.getView().getId(), Snapshot.PromptSnap.EMPTY,
                 new Messages.StopsMsg(List.of(), List.of()), false, false);
