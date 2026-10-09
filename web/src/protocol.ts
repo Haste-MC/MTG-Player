@@ -194,7 +194,9 @@ export interface LogLine { type: "log"; text: string; kind?: string; card?: numb
  * die Dauer der bisherigen Stille, player der Sitz mit Prioritaet - er fehlt/ist null, wenn kein Snapshot
  * ihn hergibt. seconds: 0 beendet die Anzeige (kommt einmalig, sobald wieder etwas passiert). */
 export interface Thinking { type: "thinking"; player?: number | null; seconds: number }
-export interface GameOver { type: "gameOver"; winner?: string; }
+/** Bei einem Teamsieg ist winner das Kennzeichen ("Team 1"), winnerSeats die Sitz-Ids dahinter; aeltere
+ * Bridges senden kein winnerSeats. */
+export interface GameOver { type: "gameOver"; winner?: string; winnerSeats?: number[]; }
 export interface ErrorMsg { type: "error"; text: string; }
 
 /** Ein Punkt der Zeitachse eines Sitzes (MatchRecord.TurnPoint, ab v2): Stand zu Beginn eines EIGENEN

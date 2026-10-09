@@ -545,43 +545,102 @@ public class WebGuiGame extends AbstractGuiGame {
         if (abschlussGesendet) {
             return;
         }
-        String winner = gewinner(getGameView());
+        Ausgang ausgang = ausgang(getGameView(), teamMap(getGameView()));
         broker.cancelAll();
         // pushState() statt push(): finishGame läuft auf dem UI-Thread (Forges Event-Handler), der finale
         // Snapshot muss den Client also synchron vor GameOver erreichen statt erst später über invokeInEdtLater.
         pushState();
-        out.send(new Messages.GameOver(winner));
+        out.send(new Messages.GameOver(ausgang.winner(), ausgang.sitze()));
         abschlussGesendet = true;
         stopTicker();                            // beendet auch eine noch laufende Denk-Anzeige
     }
 
     /**
-     * Der Name fuer den Abschluss-Dialog, oder {@code null} wenn es keinen eindeutigen Sieger gibt.
-     *
-     * <p>Forge fuellt {@code GameView.getWinningPlayerName()} in {@code updateGameOver} nur, wenn
-     * {@code GameOutcome.getWinningLobbyPlayer()} einen Sitz findet, dessen Statistik auf "hat
-     * gewonnen" steht. In einer am 2026-10-08 durchgespielten Partie (vier Sitze, Grund
-     * {@code AllOpponentsLost}, drei Gegner auf 0 Leben) war das keiner: der Dialog zeigte "Spiel
-     * beendet", waehrend der Datensatz KI 4 voellig richtig als Sieger fuehrte. Fuer eine
-     * Zuschauer-Partie ist das die eine Auskunft, auf die man wartet.
-     *
-     * <p>Deshalb der Rueckfall auf die Sitze selbst.</p>
+     * Wer die Partie gewonnen hat, wie der Abschluss-Dialog es braucht: {@code winner} ist der Name oder
+     * das Teamkennzeichen ("Team 1"), {@code sitze} die Sitz-Ids dahinter. Ohne Sieger ist {@code winner}
+     * {@code null} und {@code sitze} leer, nie {@code null} - der Browser muss nichts abfangen.
      */
-    static String gewinner(GameView gv) {
-        if (gv == null) {
-            return null;
+    record Ausgang(String winner, List<Integer> sitze) {
+        static final Ausgang KEIN_SIEGER = new Ausgang(null, List.of());
+    }
+
+    /**
+     * Der Name fuer den Abschluss-Dialog, oder {@code null} wenn es keinen eindeutigen Sieger gibt.
+     * Siehe {@link #ausgang(GameView, Map)} fuer die Gruende.
+     */
+    static String gewinner(GameView gv, Map<Integer, Integer> teams) {
+        return ausgang(gv, teams).winner();
+    }
+
+    /**
+     * Sieger und Sitze fuer den Abschluss-Dialog.
+     *
+     * <p>Mit Teams zuerst {@link #teamWinner(List, Map)}: in einer Team-Partie bleiben am Ende zwei Sitze
+     * "nicht verloren" stehen, und Forges {@code getWinningPlayerName()} nennte dann hoechstens einen
+     * von beiden - das Team hat aber gewonnen, nicht der Einzelne.</p>
+     *
+     * <p>Sonst Forges Namen, und wenn der fehlt: Forge fuellt {@code GameView.getWinningPlayerName()} in
+     * {@code updateGameOver} nur, wenn {@code GameOutcome.getWinningLobbyPlayer()} einen Sitz findet,
+     * dessen Statistik auf "hat gewonnen" steht. In einer am 2026-10-08 durchgespielten Partie (vier
+     * Sitze, Grund {@code AllOpponentsLost}, drei Gegner auf 0 Leben) war das keiner: der Dialog zeigte
+     * "Spiel beendet", waehrend der Datensatz KI 4 voellig richtig als Sieger fuehrte. Fuer eine
+     * Zuschauer-Partie ist das die eine Auskunft, auf die man wartet. Deshalb der Rueckfall auf die
+     * Sitze selbst ({@link #einzigerUeberlebender(List)}).</p>
+     */
+    static Ausgang ausgang(GameView gv, Map<Integer, Integer> teams) {
+        if (gv == null || gv.getPlayers() == null) {
+            return Ausgang.KEIN_SIEGER;
         }
-        String name = gv.getWinningPlayerName();
-        if (name != null && !name.isBlank()) {
-            return name;
-        }
-        List<String> uebrig = new ArrayList<>();
+        List<Integer> uebrigeIds = new ArrayList<>();
+        List<String> uebrigeNamen = new ArrayList<>();
         for (PlayerView p : gv.getPlayers()) {
             if (!p.getHasLost()) {
-                uebrig.add(p.getName());
+                uebrigeIds.add(p.getId());
+                uebrigeNamen.add(p.getName());
             }
         }
-        return einzigerUeberlebender(uebrig);
+        String team = teamWinner(uebrigeIds, teams);
+        if (team != null) {
+            return new Ausgang(team, List.copyOf(uebrigeIds));
+        }
+        String name = gv.getWinningPlayerName();
+        if (name == null || name.isBlank()) {
+            name = einzigerUeberlebender(uebrigeNamen);
+        }
+        if (name == null) {
+            return Ausgang.KEIN_SIEGER;
+        }
+        // Die Sitze zum Namen: ein einzelner Sitz, auch wenn Forge ihn nennt, waehrend ein zweiter
+        // "nicht verloren" ist - der Dialog soll keinen zweiten Namen erfinden.
+        List<Integer> sitze = new ArrayList<>();
+        for (PlayerView p : gv.getPlayers()) {
+            if (name.equals(p.getName())) {
+                sitze.add(p.getId());
+            }
+        }
+        return new Ausgang(name, List.copyOf(sitze));
+    }
+
+    /**
+     * Gewinnt ein ganzes Team, sind mehrere Sitze "nicht verloren" - dann ist der Sieger das Team, sofern
+     * alle Ueberlebenden dasselbe tragen. Ohne Teams (leere Zuordnung) bleibt es bei
+     * {@link #einzigerUeberlebender(List)}: mehrere Ueberlebende sind dort ein Unentschieden, und
+     * Ueberlebende aus verschiedenen Teams ebenso.
+     */
+    static String teamWinner(List<Integer> ueberlebendeIds, Map<Integer, Integer> teams) {
+        if (teams.isEmpty() || ueberlebendeIds.isEmpty()) {
+            return null;
+        }
+        Integer first = teams.get(ueberlebendeIds.get(0));
+        if (first == null || first < 0) {
+            return null;
+        }
+        for (int id : ueberlebendeIds) {
+            if (!first.equals(teams.get(id))) {
+                return null;
+            }
+        }
+        return "Team " + first;
     }
 
     /**

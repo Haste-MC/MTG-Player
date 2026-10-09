@@ -13,6 +13,7 @@ import CardImage from "./CardImage";
 import Combat from "./Combat";
 import CardHoverPopup from "./CardHoverPopup";
 import { begrenzeHoehe, geleseneHoehe, merkeHoehe } from "../tableLayout";
+import { gameOverText } from "../teams";
 
 /** Sekunden, die der Auto-Start-Countdown im Spielende-Dialog laeuft (Spec §1). */
 const COUNTDOWN_SECONDS = 5;
@@ -30,6 +31,7 @@ const lastWarnSince = (log: LogEntry[], mark: LogMark): string | undefined => {
 export default function Table() {
   const state = useStore((s) => s.state);
   const winner = useStore((s) => s.winner);
+  const winnerSeats = useStore((s) => s.winnerSeats);
   const backToLobby = useStore((s) => s.backToLobby);
   const lastStart = useStore((s) => s.lastStart);
   const series = useStore((s) => s.series);
@@ -234,7 +236,7 @@ export default function Table() {
       {dialogOpen && (
         <div className="overlay">
           <div className="dialog">
-            <h3>{winner ? `${winner} wins` : state.gameOver ? "Game over" : "Draw"}</h3>
+            <h3>{winner ? gameOverText(state, winner, winnerSeats) : state.gameOver ? "Game over" : "Draw"}</h3>
             {series && (series.games > 1 || bestOf > 0) && (
               <p className="series">Serie: {formatSeries(series, names)}{bestOf > 0 && ` · Best of ${bestOf}`}
                 {step.kind === "decided" && <b> – {step.winner} gewinnt die Serie</b>}</p>

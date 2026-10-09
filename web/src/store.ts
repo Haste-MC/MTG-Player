@@ -61,6 +61,8 @@ export interface AppState {
    *  (Zeilen mit id <= lastLogId sind schon im Log und werden verworfen). */
   lastLogId: number;
   winner?: string | null;
+  /** Sitz-Ids hinter winner (bei einem Teamsieg mehrere); leer ohne Sieger. */
+  winnerSeats: number[];
   hover?: number;
   /** Kurzer Hinweis am Prompt (z. B. Forges flashIncorrectAction) statt einer Log-Zeile; n zaehlt hoch,
    *  damit ein wiederholter Hinweis den Ausblend-Timer neu startet (siehe Prompt.tsx). */
@@ -144,7 +146,7 @@ export interface AppState {
 }
 
 export const initialState: AppState = {
-  screen: "lobby", precons: [], decks: [], choices: [], log: [], hiddenKinds: ["MANA", "PHASE"], lastLogId: 0,
+  screen: "lobby", precons: [], decks: [], choices: [], winnerSeats: [], log: [], hiddenKinds: ["MANA", "PHASE"], lastLogId: 0,
   aiModes: ["standard", "hybrid", "sim"], aiProfiles: ["Default"], aiTimeout: 5, bestOf: 0, expectNewMatch: false,
   archidekt: { loading: false }, matches: [], matchesTotal: 0, matchDetails: {}, deckAnalyses: {},
   suggestions: {}, cardStats: {}, pendingMatch: [], pendingAnalysis: [], pendingSuggestions: [], pendingCards: [],
@@ -196,6 +198,7 @@ export function reduce(s: AppState, m: Inbound): AppState {
         ...s, state: m, screen: s.screen === "stats" && !isNewMatch ? "stats" : "table",
         log: freshLog, lastLogId, expectNewMatch: false, thinking: undefined,
         winner: isNewMatch ? undefined : s.winner,
+        winnerSeats: isNewMatch ? [] : s.winnerSeats,
       };
     }
     case "choice":
@@ -216,7 +219,7 @@ export function reduce(s: AppState, m: Inbound): AppState {
       // Spielende-Dialog faengt immer frisch an (Table.tsx startet ihn per nextSeriesStep neu) - sonst
       // koennte ein alter Countdown-Stand kurz aufblitzen, bevor der Effekt ihn neu setzt.
       return {
-        ...s, winner: m.winner ?? null, choices: [], thinking: undefined, seriesCountdown: undefined,
+        ...s, winner: m.winner ?? null, winnerSeats: m.winnerSeats ?? [], choices: [], thinking: undefined, seriesCountdown: undefined,
         series: s.series ? recordResult(s.series, m.winner ?? null) : s.series,
       };
     case "error": {
@@ -351,7 +354,7 @@ export const useStore = create<Store>((set, get) => ({
   }),
   clearChoice: (id) => set((s) => ({ choices: s.choices.filter((c) => c.id !== id) })),
   backToLobby: () => set({
-    screen: "lobby", state: undefined, winner: undefined, choices: [], thinking: undefined, seriesCountdown: undefined,
+    screen: "lobby", state: undefined, winner: undefined, winnerSeats: [], choices: [], thinking: undefined, seriesCountdown: undefined,
   }),
   openStats: () => set({ screen: "stats" }),
   setHover: (id) => set({ hover: id }),

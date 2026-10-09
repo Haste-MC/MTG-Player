@@ -155,6 +155,23 @@ describe("reduce", () => {
     expect(s.state).toBeDefined();
   });
 
+  it("gameOver behaelt die Siegersitze eines Teamsiegs", () => {
+    const s = reduce(reduce(initialState, snap()), { type: "gameOver", winner: "Team 1", winnerSeats: [0, 1] });
+    expect(s.winner).toBe("Team 1");
+    expect(s.winnerSeats).toEqual([0, 1]);
+  });
+
+  it("gameOver ohne winnerSeats (aeltere Bridge) ergibt eine leere Liste, nie undefined", () => {
+    const s = reduce(reduce(initialState, snap()), { type: "gameOver", winner: "KI 1" });
+    expect(s.winnerSeats).toEqual([]);
+  });
+
+  it("eine neue Partie leert die Siegersitze der alten", () => {
+    let s = reduce(reduce(initialState, snap()), { type: "gameOver", winner: "Team 1", winnerSeats: [0, 1] });
+    s = reduce({ ...s, expectNewMatch: true }, snap({ turn: 0 }));
+    expect(s.winnerSeats).toEqual([]);
+  });
+
   it("gameOver loescht eine laufende denk-anzeige", () => {
     const laufend = reduce(reduce(initialState, snap()), { type: "thinking", player: 2, seconds: 31 });
     expect(laufend.thinking).toBeDefined();

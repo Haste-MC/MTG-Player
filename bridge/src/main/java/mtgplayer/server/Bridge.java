@@ -440,7 +440,7 @@ public final class Bridge {
                         });
                         match.end();
                         GuiBase.getInterface().invokeInEdtLater(gui::pushState);
-                        ws.send(new Messages.GameOver(null));
+                        ws.send(new Messages.GameOver(null, List.of()));
                     });
                 } else {
                     GuiBase.getInterface().runBackgroundTask("concede", () -> {

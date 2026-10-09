@@ -106,8 +106,13 @@ public final class Messages {
         public Thinking(Integer player, int seconds) { this("thinking", player, seconds); }
     }
 
-    public record GameOver(String type, String winner) {
-        public GameOver(String winner) { this("gameOver", winner); }
+    /**
+     * Spielende. {@code winner} ist ein Spielername oder bei einem Teamsieg das Kennzeichen "Team 1" (den
+     * Satz setzt der Browser zusammen); {@code winnerSeats} sind die Sitz-Ids dahinter und eine leere
+     * Liste, wenn es keinen Sieger gibt - nie {@code null}.
+     */
+    public record GameOver(String type, String winner, List<Integer> winnerSeats) {
+        public GameOver(String winner, List<Integer> winnerSeats) { this("gameOver", winner, winnerSeats); }
     }
 
     public record ErrorMsg(String type, String text) {
