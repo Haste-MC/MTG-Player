@@ -162,7 +162,7 @@ export default function PlayerZone({ p, state, compact, spectator, onEnlarge }: 
           <button type="button" className="zoom-btn" title="Sitz gross anzeigen" aria-label={p.name + " gross anzeigen"}
             onClick={(e) => { e.preventDefault(); e.stopPropagation(); onEnlarge(); }}>⤢</button>
         )}
-        <span className="pname">{p.name}{p.isAi && <span className="ai-tag">KI</span>}</span>
+        <span className="pname">{p.name}{p.isAi && <span className="ai-tag">AI</span>}</span>
         <span className="life" title="Life total">{p.life}</span>
         {p.hasPriority && <span className="prio" title="Has priority"><span className="dot" />Prio</span>}
         <span className="badges">
