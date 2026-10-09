@@ -49,6 +49,42 @@ class WebGuiGameTest {
         assertNull(WebGuiGame.einzigerUeberlebender(List.of()), "keiner uebrig: kein Sieger");
     }
 
+    /**
+     * Das Rettungsnetz fuer verlorene Spielenden darf nicht an einer fehlenden Ansicht scheitern:
+     * {@code finishGame()} ist idempotent und der letzte Weg, dem Browser "gameOver" zu schicken. Mit
+     * der Team-Zuordnung wurde dort {@code getGameView()} dereferenziert, ohne Ansicht warf der Aufruf
+     * vor dem Senden und vor dem Merker "Abschluss gesendet" - das Spielende ging verloren, genau wie
+     * zuvor im Protokoll vom 2026-10-07. Eine Ansicht ohne Sitzliste ist derselbe Fall in klein.
+     */
+    @Test
+    void finishGameOhneAnsichtSendetGenauEinSpielendeUndWirftNicht() {
+        assertNull(gui.getGameView(), "Voraussetzung: noch keine Partie angemeldet");
+
+        gui.finishGame();
+        gui.finishGame();                            // idempotent: das zweite Mal bleibt still
+
+        List<JsonNode> over = sent.stream().map(Json::parse)
+                .filter(n -> "gameOver".equals(n.get("type").asText())).toList();
+        assertEquals(1, over.size(), "genau ein gameOver, auch nach zwei Aufrufen");
+        assertTrue(over.get(0).path("winner").isMissingNode() || over.get(0).get("winner").isNull(), "ohne Ansicht kein Sieger");
+        assertEquals(0, over.get(0).get("winnerSeats").size());
+    }
+
+    @Test
+    void teamZuordnungOhneAnsichtOderSitzlisteIstLeer() {
+        gui.setTeams(List.of(1, 1, 2, 2));
+        assertTrue(gui.teamMap(null).isEmpty(), "keine Ansicht: keine Zuordnung, aber auch keine Ausnahme");
+        forge.game.Game spiel = mtgplayer.scene.Scene.ofTeams(
+                List.of(mtgplayer.ai.AiConfig.DEFAULT, mtgplayer.ai.AiConfig.DEFAULT), List.of(1, 2), 3).game();
+        forge.game.GameView ohneSitze = new forge.game.GameView(spiel) {
+            @Override
+            public forge.trackable.TrackableCollection<forge.game.player.PlayerView> getPlayers() {
+                return null;
+            }
+        };
+        assertTrue(gui.teamMap(ohneSitze).isEmpty(), "Ansicht ohne Sitzliste (getPlayers() == null): ebenfalls leer");
+    }
+
     @Test
     void confirmWirdZuConfirmChoice() throws Exception {
         CompletableFuture<Boolean> r = CompletableFuture.supplyAsync(

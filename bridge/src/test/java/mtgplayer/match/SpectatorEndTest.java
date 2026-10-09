@@ -1,5 +1,6 @@
 package mtgplayer.match;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -8,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 import forge.deck.Deck;
 import forge.game.Game;
 import forge.game.GameEndReason;
+import forge.game.player.Player;
 import forge.gui.control.WatchLocalGame;
 import forge.gui.GuiBase;
 import mtgplayer.ai.AiConfig;
@@ -86,6 +88,47 @@ class SpectatorEndTest {
 
         Object over = warteAuf(Messages.GameOver.class, 60);
         assertNotNull(over, "keine gameOver-Nachricht beim Zuschauer angekommen");
+    }
+
+    /**
+     * Die Verdrahtung des Teamsiegs bis zum Browser. {@code TeamGewinnerTest} prueft {@code ausgang}
+     * und {@code teamWinner} nur einzeln - ersetzte man in {@code finishGame()} die Team-Zuordnung durch
+     * {@code Map.of()}, blieben alle gruen, und der Dialog meldete beim Teamsieg wieder "Spiel beendet".
+     * Hier laeuft der echte Weg: vier KI-Sitze ueber {@code HumanMatch.startSpectator} mit Teams
+     * 1/1/2/2, Team 2 scheidet aus, und die {@code GameOver}-Nachricht der echten Oberflaeche muss das
+     * Teamkennzeichen und genau die beiden Sitze des Gewinnerteams tragen. Nur die Stellung wird
+     * hergerichtet (Leben 0, Zustandspruefung), gespielt wird nichts zu Ende.
+     */
+    @Test
+    @Timeout(value = 5, unit = TimeUnit.MINUTES)
+    void einTeamSiegErreichtDenBrowserMitTeamUndSitzen() throws Exception {
+        List<Deck> decks = List.of(Precons.load("Abzan Armor [TDC] [2025]"),
+                Precons.load("Adaptive Enchantment [C18] [2018]"),
+                Precons.load("Abzan Armor [TDC] [2025]"),
+                Precons.load("Adaptive Enchantment [C18] [2018]"));
+        WebGuiGame gui = new WebGuiGame(gesendet::add);
+        ((WebGuiBase) GuiBase.getInterface()).setGuiSupplier(() -> gui);
+        match = new HumanMatch();
+        match.startSpectator(decks, List.of("KI 1", "KI 2", "KI 3", "KI 4"),
+                Collections.nCopies(4, AiConfig.DEFAULT), List.of(1, 1, 2, 2), 3, gui, null,
+                java.util.Set.of(), null);
+        Game game = warteAufSpiel();
+        List<Player> sitze = List.copyOf(game.getRegisteredPlayers());
+        gesendet.clear();
+
+        // Auf Forges Spiel-Thread, wie bei einer gewinnenden KI: Team 2 geht auf 0 Leben, die
+        // Zustandspruefung setzt "verloren" und beendet die Partie - Forges eigener Weg zu finishGame().
+        game.getAction().invoke(() -> {
+            sitze.get(2).setLife(0, null);
+            sitze.get(3).setLife(0, null);
+            game.getAction().checkStateEffects(true);
+        });
+
+        Messages.GameOver over = (Messages.GameOver) warteAuf(Messages.GameOver.class, 60);
+        assertNotNull(over, "keine gameOver-Nachricht angekommen");
+        assertEquals("Team 1", over.winner(), "das Teamkennzeichen, nicht der Name eines einzelnen Sitzes");
+        assertEquals(List.of(sitze.get(0).getId(), sitze.get(1).getId()), over.winnerSeats(),
+                "genau die beiden Sitze des Gewinnerteams, in Sitzreihenfolge");
     }
 
     /** Wartet, bis Forge das Spiel erzeugt hat und es laeuft. */

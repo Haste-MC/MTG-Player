@@ -16,8 +16,8 @@ export function teamMembers(state: Snapshot, team: number): PlayerSnap[] {
 }
 
 /**
- * Der andere Sitz im Team von `me` (Standard: der eigene Sitz; im Zuschauer-Sitz gibt es keinen) - ohne Teams, ohne den Sitz oder allein im
- * Team: undefined.
+ * Der andere Sitz im Team von `me` (Standard: der eigene Sitz; im Zuschauer-Sitz gibt es keinen).
+ * Ohne Teams, ohne den Sitz oder allein im Team: undefined.
  */
 export function partnerOf(state: Snapshot, me: number | undefined = state.me): PlayerSnap | undefined {
   const seat = state.players.find((p) => p.id === me);
@@ -26,16 +26,16 @@ export function partnerOf(state: Snapshot, me: number | undefined = state.me): P
 }
 
 /**
- * Satz im Spielende-Dialog. Mit mehreren Siegersitzen nennt er die Mitglieder einmal
- * ("Team 1 wins — You and AI 1"), sonst bleibt es beim einzelnen Sieger; ohne Sieger steht weiter
+ * Satz im Spielende-Dialog. Gewinnt ein Team, nennt er die Siegersitze einmal ("Team 1 wins — You and
+ * AI 1"), auch wenn nur einer uebrig ist ("Team 1 wins — You"); ein ausgeschiedener Partner steht nicht
+ * darin, denn er ist kein Sieger. Ein einzelner Sieger bleibt "You wins", ohne Sieger steht weiter
  * "Game over" (der Aufrufer entscheidet, ob daraus "Draw" wird). Die Bridge schickt nur das Kennzeichen
  * ("Team 1"), den Satz setzt der Browser zusammen.
  */
 export function gameOverText(state: Snapshot, winner: string | null | undefined, winnerSeats: number[]): string {
   if (!winner) return "Game over";
-  if (winnerSeats.length > 1) {
-    const names = state.players.filter((p) => winnerSeats.includes(p.id)).map((p) => p.name);
-    return `${winner} wins — ${names.join(" and ")}`;
-  }
+  const names = state.players.filter((p) => winnerSeats.includes(p.id)).map((p) => p.name);
+  const teamWin = state.players.some((p) => winnerSeats.includes(p.id) && inTeam(p) && winner === `Team ${p.team}`);
+  if (teamWin && names.length > 0) return `${winner} wins — ${names.join(" and ")}`;
   return `${winner} wins`;
 }

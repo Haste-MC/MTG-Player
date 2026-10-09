@@ -47,7 +47,20 @@ describe("teams", () => {
     expect(gameOverText(state, null, [])).toBe("Game over");
   });
 
-  it("nennt bei einem Teamsieg mit nur einem Ueberlebenden das Team, ohne Namen zu erfinden", () => {
-    expect(gameOverText(state, "Team 2", [2])).toBe("Team 2 wins");
+  it("nennt bei einem Teamsieg auch einen einzelnen Ueberlebenden - und keinen toten Partner", () => {
+    // Sitz 2 (Team 2) lebt allein: der Satz bleibt gleich gebaut wie bei zwei Siegern, nur mit einem Namen.
+    expect(gameOverText(state, "Team 2", [2])).toBe("Team 2 wins — AI 2");
+    // Sitz 1 ist ausgeschieden: er steht weder im Satz noch unter den Siegern des Datensatzes.
+    expect(gameOverText(state, "Team 1", [0])).toBe("Team 1 wins — You");
+  });
+
+  it("haengt einem einzelnen Sieger ohne Team keinen zweiten Namen an", () => {
+    expect(gameOverText(free, "You", [0])).toBe("You wins");
+    // auch in einer Team-Partie: heisst der Sieger wie ein Sitz und nicht wie ein Team, ist er ein Einzelner
+    expect(gameOverText(state, "You", [0])).toBe("You wins");
+  });
+
+  it("bleibt bei einem Teamsieg ohne Sitzliste beim Teamnamen", () => {
+    expect(gameOverText(state, "Team 1", [])).toBe("Team 1 wins");
   });
 });

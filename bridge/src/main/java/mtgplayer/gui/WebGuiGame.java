@@ -150,10 +150,18 @@ public class WebGuiGame extends AbstractGuiGame {
         return Map.copyOf(out);
     }
 
-    /** Die Teamzuordnung fuer den aktuellen Snapshot: Sitz-Ids aus der Ansicht, Nummern aus {@link #teams}. */
-    private Map<Integer, Integer> teamMap(GameView gv) {
-        return teamsById(teams, gv.getPlayers() == null ? List.of()
-                : gv.getPlayers().stream().map(PlayerView::getId).toList());
+    /**
+     * Die Teamzuordnung fuer den aktuellen Snapshot: Sitz-Ids aus der Ansicht, Nummern aus {@link #teams}.
+     *
+     * <p>Ohne Ansicht (oder ohne Sitzliste) leer statt Ausnahme: {@link #finishGame()} ruft das auch dann,
+     * wenn die Partie nie angemeldet wurde, und darf davor nicht scheitern - sonst ginge genau das
+     * Spielende verloren, fuer das {@code finishGame()} und {@link #spielendeNachliefern()} da sind.</p>
+     */
+    Map<Integer, Integer> teamMap(GameView gv) {
+        if (gv == null || gv.getPlayers() == null) {
+            return Map.of();
+        }
+        return teamsById(teams, gv.getPlayers().stream().map(PlayerView::getId).toList());
     }
 
     /** Sofort einen Snapshot senden (z. B. nach Reconnect). Auf dem UI-Thread aufrufen. */
