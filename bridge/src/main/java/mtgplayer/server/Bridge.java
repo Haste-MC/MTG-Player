@@ -867,6 +867,11 @@ public final class Bridge {
      * "name" bei einem Gegner-Eintrag ist der Spielername, nicht der Speichername des Decks.
      * "ai" (optional, je Gegner) und "aiTimeout" (optional, ganze Nachricht) – fehlt beides,
      * gilt AiConfig.DEFAULT bzw. 5 s.
+     * Teams (optional): "humanTeam" (Teamnummer des menschlichen Sitzes, entfaellt im Zuschauer-Modus)
+     * und je Gegner "team", jeweils 1..6. Entweder tragen ALLE Sitze eine Nummer oder KEINER (dann
+     * Jeder gegen jeden), und es muessen mindestens zwei verschiedene Teams sein - sonst antwortet die
+     * Bridge mit einer error-Nachricht (siehe Teams.parse). Ein Team verliert erst, wenn alle seine
+     * Sitze draussen sind.
      */
     private void startGame(JsonNode msg) {
         if (match.isRunning()) {

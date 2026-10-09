@@ -160,8 +160,10 @@ public final class HumanMatch {
 
     /**
      * Setzt die Teamnummer je Sitz. {@code teams} ist {@code null}, wenn die Partie keine Teams hat -
-     * dann bleibt Forges Vorgabe {@code -1} stehen und {@code Player.isOpponentOf} behandelt jeden als
-     * Gegner (Jeder gegen jeden wie bisher).
+     * dann bleibt Forges Vorgabe {@code -1} am {@code RegisteredPlayer} stehen. Jeder gegen jeden
+     * (wie bisher) kommt dabei nicht von {@code Player.isOpponentOf}, sondern aus dem Konstruktor von
+     * {@code Game}: der ersetzt jedes {@code -1} durch eine eigene, je Sitz verschiedene Nummer, sodass
+     * jeder Sitz allein in seinem Team ist und jeder andere ein Gegner.
      */
     static void applyTeams(List<RegisteredPlayer> players, List<Integer> teams) {
         if (teams == null) {

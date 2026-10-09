@@ -53,4 +53,14 @@ class TeamSceneTest {
         assertTrue(s.game().getOutcome().isWinner(s.player(0).getRegisteredPlayer()), "Sitz 0 gewinnt mit");
         assertTrue(s.game().getOutcome().isWinner(s.player(1).getRegisteredPlayer()), "Sitz 1 gewinnt mit");
     }
+
+    @Test
+    @Timeout(value = 120, unit = TimeUnit.SECONDS)
+    void einLebenderPartnerHaeltDasTeamAmLeben() {
+        Scene s = vierSitzeZweiTeams();
+        s.player(2).setLife(0, null);                // nur Sitz 2 stirbt, Sitz 3 (gleiches Team) lebt
+        s.step(1);
+        assertFalse(s.game().isGameOver(),
+                "solange ein Partner lebt, ist das Team nicht draussen - die Partie laeuft weiter");
+    }
 }
