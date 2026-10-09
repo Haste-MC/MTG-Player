@@ -33,8 +33,12 @@ public record MatchRecord(int v, String id, String startedAt, String endedAt, lo
      * Zaehlung, der Client unterscheidet daran und beschriftet entsprechend (siehe
      * {@code protocol.TurnPoint} und {@code MatchTimeline.tsx}). Jede vorhandene Pruefung der Form
      * {@code v >= 2} gilt unveraendert weiter fuer {@code v: 3}.
+     *
+     * <p>v4 fuegt {@link Seat#team()} hinzu - rein additiv. Das Feld steht nur in einer Team-Partie
+     * (siehe dort); in jedem aelteren Datensatz fehlt es und liest sich als {@code null} = "keine
+     * Teams", nicht als eine erfundene Nummer.
      */
-    public static final int VERSION = 3;
+    public static final int VERSION = 4;
 
     /**
      * Ein fehlendes {@code v} (Jackson liefert dann 0) heisst v1: so liest {@link MatchStore} die vor
@@ -117,6 +121,12 @@ public record MatchRecord(int v, String id, String startedAt, String endedAt, lo
      * {@code removalCast} zaehlt eigene Zauber, deren Faehigkeitskette eine Entfernung enthaelt;
      * die Abgrenzung und ihre Grenzen stehen bei {@code MatchRecorder.classifyCast}.
      *
+     * <p><b>team</b> (ab {@code v: 4}) ist die Teamnummer des Sitzes aus der Engine und steht NUR in einer
+     * Team-Partie, also wenn sich mindestens zwei Sitze eine Nummer teilen; sonst {@code null} (das Feld
+     * fehlt dann im JSON, weil {@code Json.MAPPER} NON_NULL schreibt, und jeder Datensatz bis v3 liest
+     * sich genauso). {@code null} heisst "keine Teams", nie "Team 0". Warum nicht einfach die Nummer der
+     * Engine: siehe {@code MatchRecorder.hasTeams}.
+     *
      * <p><b>Drei Naeherungen, die man kennen muss</b> - sie heissen anders, als ihr Name vermuten
      * laesst, und eine Auswertung, die das nicht weiss, rechnet falsch:</p>
      * <ul>
@@ -149,7 +159,7 @@ public record MatchRecord(int v, String id, String startedAt, String endedAt, lo
                        int commanderCasts, int commanderTax, Integer firstCommanderTurn,
                        int damageDealt, int damageTaken,
                        int combatDamageTaken, int lifeEnd, int poisonEnd,
-                       int handEnd, int openingLands, int removalCast) {
+                       int handEnd, int openingLands, int removalCast, Integer team) {
 
         /**
          * {@code timeline} ist bei jedem ueber {@code MatchRecorder} aufgezeichneten oder ueber
@@ -184,7 +194,7 @@ public record MatchRecord(int v, String id, String startedAt, String endedAt, lo
                     damageTakenTrample, damageTakenOther, damageTakenNonCombat, damageDealtCombat,
                     damageDealtNonCombat, commanderDamageTaken, lifeGained, timeline, commanderCasts,
                     commanderTax, firstCommanderTurn, damageDealt, damageTaken, combatDamageTaken, lifeEnd,
-                    poisonEnd, handEnd, openingLands, removalCast);
+                    poisonEnd, handEnd, openingLands, removalCast, team);
         }
     }
 

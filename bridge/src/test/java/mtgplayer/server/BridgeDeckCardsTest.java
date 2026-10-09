@@ -63,7 +63,7 @@ class BridgeDeckCardsTest {
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                 List.of(),
-                0, 0, null, 0, 0, 0, 0, 0, 0, 0, 0);
+                0, 0, null, 0, 0, 0, 0, 0, 0, 0, 0, null);
     }
 
     private static MatchRecord match(String id, boolean counted, MatchRecord.Seat... seats) {

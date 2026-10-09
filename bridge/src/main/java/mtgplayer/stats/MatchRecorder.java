@@ -800,6 +800,25 @@ public final class MatchRecorder {
         return cardLog;
     }
 
+    /**
+     * Ob die Partie Teams hat: nur dann, wenn sich mindestens zwei Sitze eine Teamnummer teilen.
+     *
+     * <p>Das ist bewusst NICHT "irgendein Sitz hat eine Nummer": Forges {@code Game}-Konstruktor ersetzt
+     * den Standard {@code -1} fuer jeden Sitz durch eine frische, eigene Nummer (0, 1, 2 ...), auch im
+     * ganz gewoehnlichen Jeder-gegen-jeden. Wer {@code Player.getTeam()} ungeprueft in den Datensatz
+     * schriebe, bekaeme in JEDER Partie Teamnummern, und die Statistik hielte jedes Duell fuer eine
+     * Team-Partie. Eine geteilte Nummer gibt es nur, wenn die Lobby sie vergeben hat.
+     */
+    static boolean hasTeams(List<Player> players) {
+        Set<Integer> seen = new HashSet<>();
+        for (Player p : players) {
+            if (!seen.add(p.getTeam())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /** @return der frisch gebaute Datensatz, oder {@code null}, wenn schon einer stand */
     private synchronized MatchRecord build() {
         if (finished != null) {
@@ -822,8 +841,9 @@ public final class MatchRecorder {
         List<MatchRecord.Seat> out = new ArrayList<>();
         boolean conceded = false;
         boolean anyWinner = false;
+        boolean teamMatch = hasTeams(seats.stream().map(s -> s.player).toList());
         for (Seat s : seats) {
-            MatchRecord.Seat seat = s.toRecord(turns, noWinners);
+            MatchRecord.Seat seat = s.toRecord(turns, noWinners, teamMatch);
             conceded |= "Conceded".equals(seat.lossReason());
             anyWinner |= seat.winner();
             out.add(seat);
@@ -1367,7 +1387,7 @@ public final class MatchRecorder {
         }
 
         /** @param noWinners Abbruch/Absturz: kein Sitz gilt als Sieger (siehe {@link MatchRecorder#build}) */
-        private MatchRecord.Seat toRecord(int turns, boolean noWinners) {
+        private MatchRecord.Seat toRecord(int turns, boolean noWinners, boolean teamMatch) {
             PlayerOutcome o = player.getOutcome();
             boolean winner = !noWinners && o != null && o.hasWon();
             String lossReason = o == null || o.lossState == null ? null : o.lossState.name();
@@ -1386,7 +1406,7 @@ public final class MatchRecorder {
                     commanderCasts, commanderTax(),
                     firstCommanderTurn, damageDealt, damageTaken, combatDamageTaken,
                     player.getLife(), player.getPoisonCounters(),
-                    handEnd, openingLands, removalCast);
+                    handEnd, openingLands, removalCast, teamMatch ? player.getTeam() : null);
         }
 
         /**

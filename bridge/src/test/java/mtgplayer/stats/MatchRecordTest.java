@@ -24,7 +24,7 @@ class MatchRecordTest {
                 8, 5, 6, 3, 4, 2, 6, 6, 15, 6, 4, 7,
                 List.of(new MatchRecord.TurnPoint(1, 1, 0, 40, 6, 2),
                         new MatchRecord.TurnPoint(3, 2, 1, 38, 5, 1)),
-                2, 2, 4, 21, 18, 12, 22, 0, 5, 2, 3);
+                2, 2, 4, 21, 18, 12, 22, 0, 5, 2, 3, null);
         return new MatchRecord(id, "2026-09-22T19:00:00Z", "2026-09-22T19:13:32Z", 812345, "live",
                 5, 14, "AllOpponentsLost", false, true, null, List.of(seat));
     }

@@ -398,7 +398,7 @@ class MatchRecorderCombatTest {
         s.game().fireEvent(new GameEventTurnBegan(a.getView(), 7));   // A's 3. eigener Zug
 
         MatchRecord r = rec.finish();
-        assertEquals(3, r.v(), "Formatversion 3 - ab hier zaehlt die Zeitachse eigene Zuege");
+        assertTrue(r.v() >= 3, "ab Formatversion 3 zaehlt die Zeitachse eigene Zuege (v4 behaelt das bei): v" + r.v());
         List<Integer> turnsA = seat(r, "A").timeline().stream().map(MatchRecord.TurnPoint::turn).toList();
         assertEquals(List.of(1, 2, 3), turnsA,
                 "A's eigene Zuege 1, 2, 3 - NICHT Forges globale Zugnummern 1, 4, 7 (drei Sitze am Tisch): " + turnsA);

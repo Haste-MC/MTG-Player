@@ -231,6 +231,8 @@ export interface MatchSeat {
   landsByTurn: number[]; missedLandDrops: number; firstMissedLandDrop?: number | null; spells: number; spellMana: number;
   commanderCasts: number; commanderTax: number; firstCommanderTurn?: number | null; damageDealt: number;
   damageTaken: number; combatDamageTaken: number; lifeEnd: number; poisonEnd: number;
+  /** Teamnummer des Sitzes; fehlt = keine Teams (auch alle Datensaetze bis v3). */
+  team?: number;
   // --- ab v2 (Runde B), siehe oben: in einem v1-Datensatz bedeutungslos.
   /** Eigene Zauber, die gekontert wurden bzw. mangels Ziel verpufften. */
   spellsCountered?: number; spellsFizzled?: number;

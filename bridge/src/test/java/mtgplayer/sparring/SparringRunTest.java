@@ -71,7 +71,7 @@ class SparringRunTest {
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                 List.of(),
-                0, 0, null, 0, 0, 0, 40, 0, 0, 0, 0);
+                0, 0, null, 0, 0, 0, 40, 0, 0, 0, 0, null);
     }
 
     private static SparringArgs args(int games) {

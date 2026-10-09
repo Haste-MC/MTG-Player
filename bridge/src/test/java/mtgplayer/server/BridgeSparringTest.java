@@ -132,7 +132,7 @@ class BridgeSparringTest {
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                 List.of(),
-                0, 0, null, 0, 0, 0, 40, 0, 0, 0, 0);
+                0, 0, null, 0, 0, 0, 40, 0, 0, 0, 0, null);
         return new MatchRecord("sp-" + opponent, "2026-09-24T10:00:00Z", "2026-09-24T10:12:00Z", 720_000,
                 "sparring", 5, 12, "AllOpponentsLost", false, true, null, List.of(seat));
     }
