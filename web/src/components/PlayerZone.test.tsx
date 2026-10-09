@@ -48,6 +48,14 @@ describe("PlayerZone mit Teams", () => {
     expect(container.querySelector(".player")!.className).not.toMatch(/team-edge/);
   });
 
+  // Die Bridge nimmt Teamnummern bis 6 an (Teams.java), die Lobby bietet heute nur 1-3. Ohne diesen Fall
+  // koennte jemand die Marke spaeter aus einer Tabelle fuer 1-3 ableiten, ohne dass ein Test rot wird.
+  it("teamnummer jenseits der lobby-auswahl wird weiter angezeigt", () => {
+    const sechs = snapshot([seat(0, "You", 5), seat(1, "AI 1", 5), seat(2, "AI 2", 6)]);
+    render(<PlayerZone p={sechs.players[2]} state={sechs} compact />);
+    expect(screen.getByTitle("Team 6")).toHaveTextContent("T6");
+  });
+
   it("Gegner aus dem anderen Team traegt seine Marke, aber nicht das Wort Partner", () => {
     render(<PlayerZone p={state.players[2]} state={state} compact />);
     expect(screen.getByTitle("Team 2")).toHaveTextContent("T2");

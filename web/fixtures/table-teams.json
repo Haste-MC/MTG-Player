@@ -128,8 +128,7 @@
       "battlefield": [],
       "manaPool": {},
       "hasPriority": false,
-      "team": 2,
-      "targetable": false
+      "team": 2
     }
   ],
   "stack": [
