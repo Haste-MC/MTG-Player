@@ -22,6 +22,7 @@ import mtgplayer.forge.WebGuiBase;
 import mtgplayer.gui.Stops;
 import mtgplayer.gui.WebGuiGame;
 import mtgplayer.match.HumanMatch;
+import mtgplayer.match.Teams;
 import mtgplayer.protocol.Json;
 import mtgplayer.protocol.Messages;
 import mtgplayer.sparring.GameRunner;
@@ -883,6 +884,7 @@ public final class Bridge {
         List<AiConfig> configs = new ArrayList<>();
         List<Runnable> saves = new ArrayList<>();
         int aiTimeout;
+        List<Integer> teams = null;
         try {
             aiTimeout = AiConfig.timeout(msg);
             if (!spectate) {
@@ -898,6 +900,7 @@ public final class Bridge {
                 names.add(o.path("name").asText("AI " + i++));
                 configs.add(AiConfig.fromJson(o.path("ai")));
             }
+            teams = Teams.parse(msg, spectate, names.size());
         } catch (IllegalArgumentException e) {
             ws.send(new Messages.ErrorMsg(e.getMessage()));
             return;
@@ -908,6 +911,7 @@ public final class Bridge {
         ws.send(new Messages.Lobby(Precons.infos(), store.infos())); // ggf. neu gespeichertes Deck
         Deck humanDeck = human;
         int timeout = aiTimeout;
+        final List<Integer> teamList = teams;
         // Sink: die beendete Partie landet im Speicher, der Client bekommt zusaetzlich zu gameOver
         // (siehe WebGuiGame) die aktualisierte "matches"-Liste.
         Consumer<MatchRecord> sink = r -> {
@@ -954,9 +958,9 @@ public final class Bridge {
         ui(() -> {
             try {
                 if (spectate) {
-                    match.startSpectator(ai, names, configs, timeout, gui, sink, ownDecks, cardSink);
+                    match.startSpectator(ai, names, configs, teamList, timeout, gui, sink, ownDecks, cardSink);
                 } else {
-                    match.start("You", humanDeck, ai, names, configs, timeout, gui, sink, ownDecks, cardSink);
+                    match.start("You", humanDeck, ai, names, configs, teamList, timeout, gui, sink, ownDecks, cardSink);
                 }
             } catch (RuntimeException e) {
                 ws.send(new Messages.ErrorMsg("Spielstart fehlgeschlagen: " + e));

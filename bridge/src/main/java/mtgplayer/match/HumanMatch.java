@@ -52,10 +52,12 @@ public final class HumanMatch {
     /** @param sink bekommt den Datensatz der Partie, sobald sie vorbei ist (siehe {@link #record}) */
     public void start(String humanName, Deck humanDeck, List<Deck> aiDecks, List<String> aiNames,
                        List<AiConfig> aiConfigs, int aiTimeout, WebGuiGame gui, Consumer<MatchRecord> sink) {
-        start(humanName, humanDeck, aiDecks, aiNames, aiConfigs, aiTimeout, gui, sink, Set.of(), null);
+        start(humanName, humanDeck, aiDecks, aiNames, aiConfigs, null, aiTimeout, gui, sink, Set.of(), null);
     }
 
     /**
+     * @param teams    Teamnummer je Sitz in Sitzreihenfolge (Mensch zuerst), siehe {@link #applyTeams};
+     *                 {@code null} = Jeder gegen jeden
      * @param sink     bekommt den Datensatz der Partie, sobald sie vorbei ist (siehe {@link #record})
      * @param ownDecks Decknamen (aus dem {@code DeckStore} des Aufrufers), fuer die eine Kartenbiografie
      *                 gefuehrt wird - siehe {@code MatchRecorder}
@@ -63,8 +65,8 @@ public final class HumanMatch {
      *                 {@link #record}); {@code null} wenn der Aufrufer keine will
      */
     public void start(String humanName, Deck humanDeck, List<Deck> aiDecks, List<String> aiNames,
-                       List<AiConfig> aiConfigs, int aiTimeout, WebGuiGame gui, Consumer<MatchRecord> sink,
-                       Set<String> ownDecks, Consumer<CardLog> cardSink) {
+                       List<AiConfig> aiConfigs, List<Integer> teams, int aiTimeout, WebGuiGame gui,
+                       Consumer<MatchRecord> sink, Set<String> ownDecks, Consumer<CardLog> cardSink) {
         if (aiDecks.size() != aiNames.size() || aiDecks.size() != aiConfigs.size() || aiDecks.isEmpty() || aiDecks.size() > 5) {
             throw new IllegalArgumentException("1–5 KI-Decks mit gleich vielen Namen");
         }
@@ -85,6 +87,7 @@ public final class HumanMatch {
             players.add(rp);
             deckNames.put(rp, aiDecks.get(i).getName());
         }
+        applyTeams(players, teams);
         Map<RegisteredPlayer, IGuiGame> guis = new HashMap<>();
         guis.put(human, gui);
 
@@ -117,19 +120,20 @@ public final class HumanMatch {
     /** @param sink bekommt den Datensatz der Partie, sobald sie vorbei ist (siehe {@link #record}) */
     public void startSpectator(List<Deck> aiDecks, List<String> aiNames, List<AiConfig> aiConfigs, int aiTimeout,
                                WebGuiGame gui, Consumer<MatchRecord> sink) {
-        startSpectator(aiDecks, aiNames, aiConfigs, aiTimeout, gui, sink, Set.of(), null);
+        startSpectator(aiDecks, aiNames, aiConfigs, null, aiTimeout, gui, sink, Set.of(), null);
     }
 
     /**
+     * @param teams    Teamnummer je KI-Sitz, siehe {@link #applyTeams}; {@code null} = Jeder gegen jeden
      * @param sink     bekommt den Datensatz der Partie, sobald sie vorbei ist (siehe {@link #record})
      * @param ownDecks Decknamen (aus dem {@code DeckStore} des Aufrufers), fuer die eine Kartenbiografie
      *                 gefuehrt wird - siehe {@code MatchRecorder}
      * @param cardSink bekommt die Kartenbiografie der Partie, sobald sie vorbei ist (siehe
      *                 {@link #record}); {@code null} wenn der Aufrufer keine will
      */
-    public void startSpectator(List<Deck> aiDecks, List<String> aiNames, List<AiConfig> aiConfigs, int aiTimeout,
-                               WebGuiGame gui, Consumer<MatchRecord> sink, Set<String> ownDecks,
-                               Consumer<CardLog> cardSink) {
+    public void startSpectator(List<Deck> aiDecks, List<String> aiNames, List<AiConfig> aiConfigs,
+                               List<Integer> teams, int aiTimeout, WebGuiGame gui, Consumer<MatchRecord> sink,
+                               Set<String> ownDecks, Consumer<CardLog> cardSink) {
         if (aiDecks.size() != aiNames.size() || aiDecks.size() != aiConfigs.size() || aiDecks.size() < 2 || aiDecks.size() > 6) {
             throw new IllegalArgumentException("2–6 KI-Decks mit gleich vielen Namen");
         }
@@ -143,6 +147,7 @@ public final class HumanMatch {
             players.add(rp);
             deckNames.put(rp, aiDecks.get(i).getName());
         }
+        applyTeams(players, teams);
 
         GameRules rules = CommanderRules.create();
         rules.setWarnAboutAICards(false);
@@ -151,6 +156,24 @@ public final class HumanMatch {
         FModel.getPreferences().setPref(FPref.MATCH_AI_TIMEOUT, String.valueOf(aiTimeout));
         record(gui, "spectate", aiTimeout, deckNames, sink, ownDecks, cardSink);
         hosted.startMatch(rules, null, players, Map.of(), null);
+    }
+
+    /**
+     * Setzt die Teamnummer je Sitz. {@code teams} ist {@code null}, wenn die Partie keine Teams hat -
+     * dann bleibt Forges Vorgabe {@code -1} stehen und {@code Player.isOpponentOf} behandelt jeden als
+     * Gegner (Jeder gegen jeden wie bisher).
+     */
+    static void applyTeams(List<RegisteredPlayer> players, List<Integer> teams) {
+        if (teams == null) {
+            return;
+        }
+        if (teams.size() != players.size()) {
+            throw new IllegalArgumentException("je Sitz eine Teamnummer: " + players.size()
+                    + " Sitze, " + teams.size() + " Nummern");
+        }
+        for (int i = 0; i < players.size(); i++) {
+            players.get(i).setTeamNumber(teams.get(i));
+        }
     }
 
     /**

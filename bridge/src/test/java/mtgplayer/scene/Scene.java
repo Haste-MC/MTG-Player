@@ -75,6 +75,27 @@ public final class Scene {
         return s;
     }
 
+    /** Wie {@link #of(List, int)}, zusaetzlich mit Teamnummer je Sitz (gleich lange Liste, 1..6). */
+    public static Scene ofTeams(List<AiConfig> configs, List<Integer> teams, int aiTimeout) {
+        if (teams.size() != configs.size()) {
+            throw new IllegalArgumentException("je Sitz eine Teamnummer");
+        }
+        List<RegisteredPlayer> players = new ArrayList<>();
+        for (int i = 0; i < configs.size(); i++) {
+            RegisteredPlayer rp = new RegisteredPlayer(new Deck()).setPlayer(configs.get(i).newLobbyPlayer(NAMES[i]));
+            rp.setTeamNumber(teams.get(i));
+            players.add(rp);
+        }
+        GameRules rules = CommanderRules.create();
+        Match match = new Match(rules, players, "Scene");
+        Game game = new Game(players, rules, match);
+        game.AI_TIMEOUT = aiTimeout;
+        game.setAge(GameStage.Play);
+        Scene s = new Scene(game);
+        s.setPhase(PhaseType.MAIN1, game.getPlayers().get(0));
+        return s;
+    }
+
     public Game game() {
         return game;
     }
