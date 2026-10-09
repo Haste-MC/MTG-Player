@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -23,28 +24,35 @@ public final class Teams {
 
     private Teams() { }
 
+    /** Draht-Wert fuer "kein Team"; entspricht dem Platzhalter, den die Lobby fuer Jeder-gegen-jeden sendet. */
+    private static final int KEIN_TEAM = -1;
+
+    /**
+     * Liest die Teamnummern aller Sitze.
+     *
+     * @return {@code null}, wenn kein Sitz ein Team traegt; sonst die Nummern in Sitzreihenfolge
+     * @throws IllegalArgumentException bei ungueltiger Belegung (Text siehe Meldung)
+     */
     public static List<Integer> parse(JsonNode msg, boolean spectate, int opponents) {
+        // null steht fuer "nicht gesetzt"; so bleibt 0 als echte, aber ungueltige Zahl erkennbar.
         List<Integer> teams = new ArrayList<>();
-        List<Boolean> gesetzt = new ArrayList<>();
         if (!spectate) {
-            JsonNode human = msg.path("humanTeam");
-            gesetzt.add(!human.isMissingNode() && !human.isNull());
-            teams.add(human.asInt(-1));
+            teams.add(lesen(msg.path("humanTeam")));
         }
         int i = 0;
         for (JsonNode o : msg.path("opponents")) {
-            JsonNode team = o.path("team");
-            gesetzt.add(!team.isMissingNode() && !team.isNull());
-            teams.add(team.asInt(-1));
+            teams.add(lesen(o.path("team")));
             i++;
         }
+        if (teams.stream().allMatch(Objects::isNull)) {
+            // Eine Nachricht ohne Teams ist Jeder-gegen-jeden; die Sitzzahl pruefen dann andere Stellen.
+            return null;
+        }
+        // Erst hier ist klar, dass Teams gemeint sind - nur dann muss jeder Gegner eine Nummer haben.
         if (i != opponents) {
             throw new IllegalArgumentException("Teams: " + opponents + " Gegner erwartet, " + i + " gelesen");
         }
-        if (gesetzt.stream().noneMatch(Boolean::booleanValue)) {
-            return null;
-        }
-        if (gesetzt.stream().anyMatch(b -> !b)) {
+        if (teams.stream().anyMatch(Objects::isNull)) {
             throw new IllegalArgumentException("Teams: entweder alle Sitze oder keiner");
         }
         for (int t : teams) {
@@ -57,5 +65,21 @@ public final class Teams {
             throw new IllegalArgumentException("Teams: mindestens zwei verschiedene Teams");
         }
         return List.copyOf(teams);
+    }
+
+    /**
+     * Liest die Teamnummer eines Sitzes. Fehlend, {@code null} und {@code -1} heissen alle "kein Team"
+     * (ergibt {@code null}). Alles ausser einer ganzen Zahl wird abgelehnt statt umgedeutet: {@code asInt}
+     * machte aus {@code "2"}, {@code true} und {@code 1.9} stillschweigend eine Teamnummer.
+     */
+    private static Integer lesen(JsonNode n) {
+        if (n.isMissingNode() || n.isNull()) {
+            return null;
+        }
+        if (!n.isIntegralNumber() || !n.canConvertToInt()) {
+            throw new IllegalArgumentException("Teams: Nummer 1 bis " + MAX + ", nicht " + n);
+        }
+        int wert = n.intValue();
+        return wert == KEIN_TEAM ? null : wert;
     }
 }

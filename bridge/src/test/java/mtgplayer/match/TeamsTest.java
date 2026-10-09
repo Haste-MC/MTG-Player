@@ -57,8 +57,53 @@ class TeamsTest {
 
     @Test
     void nummerAusserhalbEinsBisSechs() {
+        // Die anderen Sitze sind gueltig und verschieden, damit nur die Bereichspruefung greifen kann.
+        JsonNode null0 = msg("""
+                {"humanTeam":0,"opponents":[{"precon":"B","team":1},{"precon":"C","team":2}]}""");
+        IllegalArgumentException e0 = assertThrows(IllegalArgumentException.class, () -> Teams.parse(null0, false, 2));
+        assertTrue(e0.getMessage().contains("Nummer 1 bis 6, nicht 0"), e0.getMessage());
+
+        JsonNode sieben = msg("""
+                {"humanTeam":1,"opponents":[{"precon":"B","team":7},{"precon":"C","team":2}]}""");
+        IllegalArgumentException e7 = assertThrows(IllegalArgumentException.class, () -> Teams.parse(sieben, false, 2));
+        assertTrue(e7.getMessage().contains("Nummer 1 bis 6, nicht 7"), e7.getMessage());
+    }
+
+    @Test
+    void minusEinsHeisstKeinTeam() {
+        JsonNode alle = msg("""
+                {"humanTeam":-1,"opponents":[{"precon":"B","team":-1},{"precon":"C","team":-1}]}""");
+        assertNull(Teams.parse(alle, false, 2), "-1 auf allen Sitzen ist ein legaler Jeder-gegen-jeden-Start");
+
+        JsonNode gemischt = msg("""
+                {"humanTeam":1,"opponents":[{"precon":"B","team":-1},{"precon":"C","team":2}]}""");
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> Teams.parse(gemischt, false, 2));
+        assertTrue(e.getMessage().contains("alle Sitze"), "-1 zaehlt als nicht gesetzt: " + e.getMessage());
+    }
+
+    @Test
+    void sitzzahlOhneTeamsWirdNichtGeprueft() {
         JsonNode m = msg("""
-                {"humanTeam":0,"opponents":[{"precon":"B","team":0},{"precon":"C","team":2}]}""");
-        assertThrows(IllegalArgumentException.class, () -> Teams.parse(m, false, 2));
+                {"humanDeck":{"precon":"A"},"opponents":[{"precon":"B"}]}""");
+        assertNull(Teams.parse(m, false, 3), "ohne Teams darf die Sitzzahl keine Ausnahme ausloesen");
+    }
+
+    @Test
+    void sitzzahlMitTeamsWirdGeprueft() {
+        JsonNode m = msg("""
+                {"humanTeam":1,"opponents":[{"precon":"B","team":2}]}""");
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> Teams.parse(m, false, 3));
+        assertTrue(e.getMessage().contains("3 Gegner erwartet, 1 gelesen"), e.getMessage());
+    }
+
+    @Test
+    void nichtGanzzahligeTeamwerteWerdenAbgelehnt() {
+        for (String wert : List.of("\"2\"", "true", "1.9", "2.0", "99999999999")) {
+            JsonNode m = msg("{\"humanTeam\":1,\"opponents\":[{\"precon\":\"B\",\"team\":" + wert
+                    + "},{\"precon\":\"C\",\"team\":2}]}");
+            IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                    () -> Teams.parse(m, false, 2), "Wert " + wert + " haette abgelehnt werden muessen");
+            assertTrue(e.getMessage().contains("Nummer 1 bis 6, nicht " + wert), e.getMessage());
+        }
     }
 }
