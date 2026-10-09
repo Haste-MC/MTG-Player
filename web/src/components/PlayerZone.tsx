@@ -7,6 +7,7 @@ import { attachedBy, groupCards } from "../groups";
 import type { Group } from "../groups";
 import { useStore } from "../store";
 import { send } from "../ws";
+import { inTeam, partnerOf } from "../teams";
 import { slotHeadroom, slotUnits, useBoardSize } from "../boardSize";
 import type { RowSpec } from "../boardSize";
 
@@ -111,6 +112,10 @@ export default function PlayerZone({ p, state, compact, spectator, onEnlarge }: 
   const exile = cards(p.exile);
   const hand = cards(p.hand);
   const active = state.activePlayer === p.id;
+  // Teams: nur eine Marke und ein Rahmenton, die Sitzordnung bleibt wie sie ist. Der Partner gilt nur fuer den
+  // eigenen Sitz; im Zuschauer-Sitz (me fehlt) liefert partnerOf nichts.
+  const teamed = inTeam(p);
+  const partner = teamed ? partnerOf(state) : undefined;
   const mana = Object.entries(p.manaPool).filter(([, v]) => v > 0).map(([k, v]) => `${k}${v}`).join(" ");
   const cmdEntries = Object.entries(p.commanderDamage);
   const cmdTitle = cmdEntries.map(([id, v]) => `${state.cards[id]?.name ?? id}: ${v}`).join(", ");
@@ -155,7 +160,7 @@ export default function PlayerZone({ p, state, compact, spectator, onEnlarge }: 
     ...(spectator ? { "--n": hand.length } : {}),
   } as CSSProperties;
   return (
-    <div className={"player" + (active ? " active" : "") + (compact ? " compact" : " own") + (spectator ? " spectator" : "")} style={sizing}>
+    <div className={"player" + (active ? " active" : "") + (compact ? " compact" : " own") + (spectator ? " spectator" : "") + (teamed ? " team-edge-" + p.team : "")} style={sizing}>
       <div className={"header" + (p.highlighted ? " highlighted" : "") + (p.targetable ? " targetable" : "")} onClick={() => send({ type: "selectPlayer", id: p.id, seq })}>
         {onEnlarge && (
           // stopPropagation wie bei den Aura-Chips: die Kopfzeile selbst waehlt den Spieler als Ziel.
@@ -163,6 +168,11 @@ export default function PlayerZone({ p, state, compact, spectator, onEnlarge }: 
             onClick={(e) => { e.preventDefault(); e.stopPropagation(); onEnlarge(); }}>⤢</button>
         )}
         <span className="pname">{p.name}{p.isAi && <span className="ai-tag">AI</span>}</span>
+        {teamed && (
+          <span className={"team-tag team-" + p.team} title={"Team " + p.team}>
+            T{p.team}{partner?.id === p.id && <b>Partner</b>}
+          </span>
+        )}
         <span className="life" title="Life total">{p.life}</span>
         {p.hasPriority && <span className="prio" title="Has priority"><span className="dot" />Prio</span>}
         <span className="badges">

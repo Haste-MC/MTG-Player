@@ -1,7 +1,7 @@
 import type { PlayerSnap, Snapshot } from "./protocol";
 
 /** Hat der Sitz ein Team? Das Feld fehlt in Partien ohne Teams ganz, -1 heisst ebenfalls "kein Team". */
-function inTeam(p: PlayerSnap): boolean {
+export function inTeam(p: PlayerSnap): boolean {
   return (p.team ?? -1) >= 0;
 }
 

@@ -181,6 +181,18 @@ input[type="checkbox"] { accent-color: var(--accent); width: 14px; height: 14px;
 .player .header.targetable { outline: 2px dashed var(--gold); outline-offset: 4px; border-radius: var(--radius-sm); cursor: crosshair; }
 .player .pname { font-weight: 600; font-size: 15px; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
 .player .ai-tag { font-size: 10px; color: var(--muted); font-weight: 500; border: 1px solid var(--line-2); border-radius: 4px; padding: 0 4px; line-height: 15px; letter-spacing: 0.04em; }
+/* Teams am Tisch: feste Farbe je Teamnummer, nur als schmale Marke in der Kopfzeile und als Rahmenton am linken
+   Rand - die Anordnung der Sitze bleibt unveraendert (Spec 2026-10-09, Weg A). Gold (aktiver Spieler, Ziel),
+   Gruen (Prioritaet, Mana), Rot (Angriff, CMD) und Blau (Blocker, Auren) sind am Tisch schon vergeben,
+   deshalb Violett / Rosa / Tuerkis. Die Marke traegt zusaetzlich die Nummer als Text, Farbe allein reicht nicht. */
+.player .team-tag { --tc: 154, 165, 173; display: inline-flex; align-items: center; flex: none; font-size: 10px; line-height: 15px; padding: 0 6px; border-radius: 8px; font-weight: 700; letter-spacing: 0.04em; white-space: nowrap; color: rgb(var(--tc)); background: rgba(var(--tc), 0.16); border: 1px solid rgba(var(--tc), 0.4); }
+.player .team-tag b { font-weight: 600; margin-left: 5px; padding-left: 5px; border-left: 1px solid rgba(var(--tc), 0.4); letter-spacing: 0.02em; }
+.player .team-tag.team-1 { --tc: 183, 156, 255; }
+.player .team-tag.team-2 { --tc: 244, 124, 186; }
+.player .team-tag.team-3 { --tc: 52, 211, 196; }
+.player.team-edge-1 { box-shadow: inset 3px 0 0 rgba(183, 156, 255, 0.7), var(--shadow); }
+.player.team-edge-2 { box-shadow: inset 3px 0 0 rgba(244, 124, 186, 0.7), var(--shadow); }
+.player.team-edge-3 { box-shadow: inset 3px 0 0 rgba(52, 211, 196, 0.7), var(--shadow); }
 .player .life { font-size: 27px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1; letter-spacing: -0.02em; min-width: 32px; }
 .player.compact .life { font-size: 26px; }
 .player .prio { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted); }
