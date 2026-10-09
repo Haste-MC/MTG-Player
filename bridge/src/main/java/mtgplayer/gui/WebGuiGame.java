@@ -15,6 +15,7 @@ import forge.game.player.DelayedReveal;
 import forge.game.player.IHasIcon;
 import forge.game.player.PlayerView;
 import forge.game.spellability.SpellAbilityView;
+import forge.game.zone.ZoneType;
 import forge.gamemodes.match.AbstractGuiGame;
 import forge.gamemodes.match.input.InputSelectTargets;
 import forge.gui.GuiBase;
@@ -64,6 +65,8 @@ public class WebGuiGame extends AbstractGuiGame {
     private volatile boolean fullControl;
     /** Teamnummern in Sitzreihenfolge, von {@code HumanMatch} gesetzt; {@code null} = keine Teams. */
     private volatile List<Integer> teams;
+    /** Haken "Partnerhand zeigen" aus der Lobby, von {@code Bridge.startGame} je Partie gesetzt; Standard: aus. */
+    private volatile boolean revealPartnerHand;
     private volatile Consumer<Game> newGameHook;
     private volatile Game hookedGame;
     private final AtomicInteger seq = new AtomicInteger(1);
@@ -162,6 +165,60 @@ public class WebGuiGame extends AbstractGuiGame {
             return Map.of();
         }
         return teamsById(teams, gv.getPlayers().stream().map(PlayerView::getId).toList());
+    }
+
+    /**
+     * Schaltet "Partnerhand zeigen" fuer die naechste Partie. Gehoert hierher und nicht in {@code HumanMatch}:
+     * die Teams sind eine Spielregel (die Engine braucht sie), der Haken nur eine Frage, was der Tisch
+     * anzeigt - er beruehrt das Spiel nicht und wirkt allein in {@link #mayView}. {@code Bridge.startGame}
+     * setzt ihn bei JEDEM Start, auch mit {@code false}, damit er nicht aus der Vorpartie haengen bleibt.
+     * Ohne Teams und ohne menschlichen Sitz bleibt er wirkungslos.
+     */
+    public void setRevealPartnerHand(boolean on) {
+        this.revealPartnerHand = on;
+    }
+
+    /**
+     * Gehoert die Karte in die HAND eines Sitzes, der mit dem Betrachter im selben Team sitzt (und nicht
+     * er selbst ist)? Bewusst eng: nur die Hand - nicht Bibliothek, nicht verdeckte Karten im Exil -,
+     * nur ein echtes Team (Nummer {@code >= 0}, sonst saessen zwei Sitze "ohne Team" als Partner da) und
+     * nur mit menschlichem Sitz ({@code meId != null}).
+     */
+    static boolean istPartnerhand(int controllerId, ZoneType zone, Integer meId, Map<Integer, Integer> teams) {
+        if (zone != ZoneType.Hand || meId == null || teams.isEmpty() || controllerId == meId) {
+            return false;
+        }
+        Integer meines = teams.get(meId);
+        Integer seines = teams.get(controllerId);
+        return meines != null && meines >= 0 && meines.equals(seines);
+    }
+
+    /**
+     * Darf der Tisch diese Karte zeigen? Forges Antwort gilt unveraendert; dazu kommt, wenn der Haken
+     * "Partnerhand zeigen" an ist, die Hand des Teampartners.
+     *
+     * <p>Das ist ABSICHTLICH unsere Entscheidung in der Bridge und nicht Forges: {@code CardView.canBeShownTo}
+     * zeigt eine Hand nur ihrem Beherrscher und wuerde hier Nein sagen. Wer das "angleichen" will, nimmt
+     * dem Spieler die Partnerhand wieder weg - die Abweichung ist gewollt (Kevins Wunsch, Team-Modi).</p>
+     *
+     * <p>Der Haken gilt fuer den ganzen Tisch: alle Browser teilen einen Spielzustand, ein zweiter,
+     * mitschauender Browser sieht die Partnerhand also ebenfalls. Das ist bekannt und angenommen - es gibt
+     * hier nur einen menschlichen Sitz und keine geheimen Haende zwischen Browsern.</p>
+     */
+    @Override
+    public boolean mayView(CardView c) {
+        if (super.mayView(c)) {
+            return true;
+        }
+        if (!revealPartnerHand || c == null || c.getZone() != ZoneType.Hand || c.getController() == null) {
+            return false;
+        }
+        GameView gv = getGameView();
+        if (gv == null || getLocalPlayers().isEmpty()) {
+            return false;
+        }
+        return istPartnerhand(c.getController().getId(), c.getZone(),
+                getLocalPlayers().iterator().next().getId(), teamMap(gv));
     }
 
     /** Sofort einen Snapshot senden (z. B. nach Reconnect). Auf dem UI-Thread aufrufen. */

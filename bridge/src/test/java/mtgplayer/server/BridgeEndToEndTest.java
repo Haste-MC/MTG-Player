@@ -477,4 +477,90 @@ class BridgeEndToEndTest {
         JsonNode err = await("error", n -> n.path("text").asText().startsWith("Kartenvorschläge gibt es nicht:"), 10);
         assertEquals("Kartenvorschläge gibt es nicht: unbekanntes Deck", err.path("text").asText());
     }
+
+    /**
+     * Wartet auf einen Zustand, in dem alle Sitze ihre volle Starthand (7 Karten) haben - ohne auf den Keep-Prompt zu
+     * bestehen: {@link #awaitMulliganPrompt} kann nach dem "Play"-Klick am Zustandsbuendel vorbeilaufen
+     * (siehe dessen Kommentar, "der Test hat sich selbst durch den Mulligan geklickt") und wartet dann
+     * 90 s ins Leere. Hier genuegt jeder Zustand mit gefuellten Haenden; geklickt wird hoechstens der
+     * Muenzwurf-Prompt (Play bzw. Startspieler waehlen), und das einmal.
+     */
+    private static JsonNode awaitAlleHaende(int seconds) throws InterruptedException {
+        long end = System.currentTimeMillis() + seconds * 1000L;
+        boolean playClicked = false;
+        JsonNode letzter = null;
+        int portraitSeq = -1;
+        while (System.currentTimeMillis() < end) {
+            JsonNode n = inbox.poll(Math.max(1, end - System.currentTimeMillis()), TimeUnit.MILLISECONDS);
+            if (n == null) break;
+            if (!"state".equals(n.path("type").asText())) continue;
+            letzter = n;
+            boolean alleMitHand = n.path("players").size() == 4;
+            for (JsonNode p : n.path("players")) {
+                alleMitHand &= p.path("hand").size() >= 7;
+            }
+            if (alleMitHand) return n;
+            // Mit mehr als zwei Sitzen waehlt der Muenzwurf-Gewinner den Startspieler per Klick aufs Portrait
+            // (kein "Play"-Prompt): sich selbst waehlen. Je Prompt-Version einmal - ein veralteter Klick wird
+            // verworfen, der naechste Zustand traegt die neue seq.
+            int seq = n.path("prompt").path("seq").asInt();
+            if (seq != portraitSeq && n.path("prompt").path("message").asText().contains("Who would you like to start")) {
+                portraitSeq = seq;
+                send("{\"type\":\"selectPlayer\",\"id\":" + n.get("me").asInt() + ",\"seq\":" + seq + "}");
+            }
+            if (!playClicked && "Play".equals(n.path("prompt").path("okLabel").asText())
+                    && n.path("prompt").path("okEnabled").asBoolean()) {
+                playClicked = true;
+                send("{\"type\":\"ok\"}");
+            }
+        }
+        throw new AssertionError("kein Zustand mit vier gefuellten Haenden innerhalb " + seconds + " s; letzter: "
+                + (letzter == null ? "keiner" : letzter.path("prompt") + " haende="
+                + letzter.path("players").findValues("hand").stream().map(JsonNode::size).toList()));
+    }
+
+    /**
+     * "Partnerhand zeigen" ueber das echte Protokoll: der Haken geht vom startGame bis in den Snapshot,
+     * den der Browser bekommt. Gleiche Stellung zweimal (2v2, Mensch + Sitz 1 gegen zwei KI), einmal mit,
+     * einmal ohne Haken - die Starthand liegt beide Male auf dem Tisch, nur die Sicht darauf unterscheidet
+     * sich. Der Gegner bleibt in beiden Faellen verdeckt. Die zweite Partie ohne Haken beweist auch, dass
+     * der Haken nicht aus der ersten haengen bleibt (die WebGuiGame-Instanz lebt ueber Partien hinweg).
+     */
+    @Test
+    @Order(14)
+    @Timeout(value = 8, unit = TimeUnit.MINUTES)
+    void partnerHandHakenGehtVomStartGameBisInDenSnapshot() throws Exception {
+        for (boolean haken : new boolean[] {true, false}) {
+            send("{\"type\":\"startGame\",\"humanTeam\":1,\"revealPartnerHand\":" + haken
+                    + ",\"humanDeck\":{\"precon\":\"Abzan Armor [TDC] [2025]\"},\"opponents\":["
+                    + "{\"precon\":\"Adaptive Enchantment [C18] [2018]\",\"name\":\"Partner\",\"team\":1},"
+                    + "{\"precon\":\"Adaptive Enchantment [C18] [2018]\",\"name\":\"Gegner 1\",\"team\":2},"
+                    + "{\"precon\":\"Adaptive Enchantment [C18] [2018]\",\"name\":\"Gegner 2\",\"team\":2}]}");
+            JsonNode mull = awaitAlleHaende(90);
+            int me = mull.get("me").asInt();
+            int checked = 0;
+            for (JsonNode p : mull.get("players")) {
+                if (p.get("id").asInt() == me) continue;
+                boolean partner = p.path("team").asInt() == 1;
+                assertTrue(p.get("hand").size() > 0, "Voraussetzung: die Hand ist gefuellt");
+                for (JsonNode id : p.get("hand")) {
+                    JsonNode card = mull.get("cards").get(id.asText());
+                    boolean offen = partner && haken;
+                    assertEquals(!offen, card.path("faceDown").asBoolean(),
+                            (partner ? "Partnerhand" : "Gegnerhand") + " mit Haken=" + haken + ": " + card);
+                    assertEquals(offen, card.hasNonNull("name"), "Name nur bei offener Karte: " + card);
+                    checked++;
+                }
+            }
+            assertTrue(checked >= 21, "drei fremde Haende gesehen: " + checked);
+            // Aufgeben beendete hier nichts: in einer 2v2-Partie lebt das Team des Menschen mit dem Partner
+            // weiter, die KI spielte die Partie zu Ende. Deshalb von aussen beenden (HumanMatch.end()).
+            bridge.match().end();
+            assertTrue(bridge.match().lastGameOver(), "die Partie ist wirklich beendet");
+            // Was die beendete Partie noch auf den Draht schickt (Keep-Zustaende, gameOver), darf der
+            // naechsten Runde nicht als deren Mulligan-Zustand erscheinen - sonst pruefte sie die alte Partie.
+            Thread.sleep(1500);
+            inbox.clear();
+        }
+    }
 }

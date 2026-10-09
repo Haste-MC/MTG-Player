@@ -872,6 +872,9 @@ public final class Bridge {
      * Jeder gegen jeden), und es muessen mindestens zwei verschiedene Teams sein - sonst antwortet die
      * Bridge mit einer error-Nachricht (siehe Teams.parse). Ein Team verliert erst, wenn alle seine
      * Sitze draussen sind.
+     * "revealPartnerHand" (optional, Standard false): der Mensch sieht die Handkarten seines Teampartners.
+     * Wirkt nur mit menschlichem Sitz und echtem Team (siehe WebGuiGame.mayView); im Zuschauer-Modus
+     * wird es verworfen.
      */
     private void startGame(JsonNode msg) {
         if (match.isRunning()) {
@@ -890,6 +893,7 @@ public final class Bridge {
         List<Runnable> saves = new ArrayList<>();
         int aiTimeout;
         List<Integer> teams = null;
+        boolean partnerHand;
         try {
             aiTimeout = AiConfig.timeout(msg);
             if (!spectate) {
@@ -906,6 +910,7 @@ public final class Bridge {
                 configs.add(AiConfig.fromJson(o.path("ai")));
             }
             teams = Teams.parse(msg, spectate, names.size());
+            partnerHand = !spectate && msg.path("revealPartnerHand").asBoolean(false);
         } catch (IllegalArgumentException e) {
             ws.send(new Messages.ErrorMsg(e.getMessage()));
             return;
@@ -960,8 +965,11 @@ public final class Bridge {
                 CrashLog.note("Bridge", "Kartendaten fuer " + log.id() + " nicht geschrieben: " + e);
             }
         };
+        final boolean revealPartnerHand = partnerHand;
         ui(() -> {
             try {
+                // Bei JEDEM Start setzen, auch mit false: die eine WebGuiGame-Instanz lebt ueber Partien hinweg.
+                gui.setRevealPartnerHand(revealPartnerHand);
                 if (spectate) {
                     match.startSpectator(ai, names, configs, teamList, timeout, gui, sink, ownDecks, cardSink);
                 } else {
