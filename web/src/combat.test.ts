@@ -12,7 +12,7 @@ const snap = (combat: Snapshot["combat"], cards: CardSnap[], players = [
   type: "state", turn: 5, gameOver: false,
   players: players.map((p) => ({
     ...p, isAi: p.id !== 1, life: 40, commanderDamage: {}, hand: [], librarySize: 60,
-    graveyard: [], exile: [], command: [], battlefield: [], manaPool: {}, hasPriority: false, team: -1,
+    graveyard: [], exile: [], command: [], battlefield: [], manaPool: {}, hasPriority: false,
   })),
   stack: [],
   cards: Object.fromEntries(cards.map((c) => [String(c.id), c])),

@@ -45,8 +45,8 @@ public record Snapshot(
             boolean hasPriority,
             Boolean highlighted,
             Boolean targetable,
-            /** Teamnummer des Sitzes; -1 = keine Teams (jeder gegen jeden). */
-            int team) { }
+            /** Teamnummer des Sitzes; {@code null} (Feld fehlt im JSON) = die Partie hat keine Teams. */
+            Integer team) { }
 
     public record CardSnap(
             int id,

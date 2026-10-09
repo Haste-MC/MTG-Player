@@ -103,7 +103,7 @@ public final class StateSerializer {
                 p.getHasPriority(),
                 ctx.highlighted().test(p) ? Boolean.TRUE : null,
                 ctx.targetable().test(p) ? Boolean.TRUE : null,
-                ctx.teams().getOrDefault(p.getId(), -1));
+                ctx.teams().get(p.getId()));
     }
 
     /** Sammelt IDs einer Zone und legt jede Karte einmal im Wörterbuch ab. */

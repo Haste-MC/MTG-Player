@@ -122,6 +122,7 @@ public class WebGuiGame extends AbstractGuiGame {
         }
     }
 
+    /** Muss vor dem Spielstart gerufen werden, sonst zeigt der Snapshot keine Teams. */
     public void setTeams(List<Integer> teams) {
         this.teams = teams;
     }
@@ -132,6 +133,11 @@ public class WebGuiGame extends AbstractGuiGame {
      * {@code GameView.getPlayers()} ist die Registrierungsreihenfolge (Forge befuellt die Liste einmal
      * im Konstruktor von {@code Game} und kuerzt sie nicht, wenn ein Sitz ausscheidet). Passt die Laenge
      * nicht, liefert die Methode eine leere Zuordnung - lieber keine Teams anzeigen als falsche.
+     *
+     * <p>Die Zuordnung setzt voraus, dass der menschliche Sitz zuerst registriert ist ({@code
+     * HostedMatch.startMatch} sortiert {@code LobbyPlayerHuman} stabil nach vorn, {@code HumanMatch.start}
+     * legt den Menschen ohnehin zuerst an, {@code startSpectator} hat keinen) - eine kuenftige
+     * Sitzreihenfolge, die das bricht, widerspraeche der Engine stillschweigend.
      */
     public static Map<Integer, Integer> teamsById(List<Integer> teams, List<Integer> seatIds) {
         if (teams == null || teams.size() != seatIds.size()) {
@@ -697,6 +703,8 @@ public class WebGuiGame extends AbstractGuiGame {
     private <T> List<Messages.Option> options(List<T> choices, FSerializableFunction<T, String> display) {
         List<Messages.Option> out = new ArrayList<>();
         if (choices == null) return out;
+        // Die Teamzuordnung bleibt unbenutzt: dieser Dialogweg baut nie einen PlayerSnap. Sie steht hier der
+        // Einheitlichkeit mit pushState wegen - kein toter Code, bitte nicht loeschen (ViewContext verlangt sie).
         ViewContext ctx = getGameView() == null ? null : new ViewContext(
                 getLocalPlayers().isEmpty() ? null : getLocalPlayers().iterator().next(),
                 teamMap(getGameView()),
