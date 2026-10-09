@@ -22,8 +22,8 @@ function splitRows(bf: CardSnap[]) {
 
 /** Wo der Commander steckt, wenn er nicht in der Kommandozone liegt (Forge liefert ZoneType-Namen, Fixtures Kleinschreibung). */
 const ZONE_TEXT: Record<string, string> = {
-  battlefield: "im Spiel", stack: "auf dem Stack", graveyard: "im Friedhof", exile: "im Exil",
-  hand: "auf der Hand", library: "in der Bibliothek",
+  battlefield: "in play", stack: "on the stack", graveyard: "in the graveyard", exile: "in exile",
+  hand: "in hand", library: "in the library",
 };
 
 /** Friedhof/Exil als kleiner Stapel: Bild der obersten Karte + Zähler; Klick klappt die Liste auf. */
@@ -47,7 +47,7 @@ function Pile({ label, cards }: { label: string; cards: CardSnap[] }) {
       </summary>
       <div className={"pile-list" + (openRight ? " open-right" : "")}>
         <div className="pile-list-title">{label} · {cards.length}</div>
-        {cards.length === 0 && <div className="muted">leer</div>}
+        {cards.length === 0 && <div className="muted">empty</div>}
         <div className="zone">{cards.map((c) => <CardBox key={c.id} card={c} />)}</div>
       </div>
     </details>
@@ -73,7 +73,7 @@ function Effects({ effects, inline }: { effects: CardSnap[]; inline?: boolean })
   if (effects.length === 0) return null;
   return (
     <div className={"effects" + (inline ? " inline" : "")}>
-      <span className="zone-label">Effekte</span>
+      <span className="zone-label">Effects</span>
       {effects.map((c) => (
         <button key={c.id} type="button" className={"effect-chip" + (c.emblem ? " emblem" : "")} title={c.text ?? ""}
           onClick={(e) => { e.preventDefault(); e.stopPropagation(); send({ type: "selectCard", id: c.id, alt: e.button === 2, seq }); }}
@@ -120,7 +120,7 @@ export default function PlayerZone({ p, state, compact, spectator, onEnlarge }: 
   const awayCommander = command.length === 0
     ? Object.values(state.cards).find((c) => c.commander && c.owner === p.id && c.zone)
     : undefined;
-  const placeholder = awayCommander ? ZONE_TEXT[awayCommander.zone!.toLowerCase()] ?? "leer" : "leer";
+  const placeholder = awayCommander ? ZONE_TEXT[awayCommander.zone!.toLowerCase()] ?? "empty" : "empty";
   // Kompakte Panels: Friedhof/Exil nur, wenn etwas drin liegt – leere Platzhalter sind nur Rauschen
   // (die Zahlen stehen ohnehin im Kopf). In der eigenen Zone bleiben beide Stapel als Ziel sichtbar.
   const showGrave = !compact || graveyard.length > 0;
@@ -163,19 +163,19 @@ export default function PlayerZone({ p, state, compact, spectator, onEnlarge }: 
             onClick={(e) => { e.preventDefault(); e.stopPropagation(); onEnlarge(); }}>⤢</button>
         )}
         <span className="pname">{p.name}{p.isAi && <span className="ai-tag">KI</span>}</span>
-        <span className="life" title="Lebenspunkte">{p.life}</span>
-        {p.hasPriority && <span className="prio" title="Hat Priorität"><span className="dot" />Prio</span>}
+        <span className="life" title="Life total">{p.life}</span>
+        {p.hasPriority && <span className="prio" title="Has priority"><span className="dot" />Prio</span>}
         <span className="badges">
           <span className="badge" title="Hand">Hand <b>{p.hand.length}</b></span>
-          <span className="badge" title="Bibliothek">Bib <b>{p.librarySize}</b></span>
-          <span className="badge" title="Friedhof">Grab <b>{p.graveyard.length}</b></span>
-          {p.exile.length > 0 && <span className="badge" title="Exil">Exil <b>{p.exile.length}</b></span>}
-          {!!p.counters?.POISON && <span className="badge cmd" title="Gift">Gift <b>{p.counters.POISON}</b></span>}
-          {mana && <span className="badge mana" title="Mana im Pool">Mana <b>{mana}</b></span>}
-          {cmdDmg && <span className="badge cmd" title={"Commander-Schaden: " + cmdTitle}>CMD <b>{cmdDmg}</b></span>}
+          <span className="badge" title="Library">Lib <b>{p.librarySize}</b></span>
+          <span className="badge" title="Graveyard">Grave <b>{p.graveyard.length}</b></span>
+          {p.exile.length > 0 && <span className="badge" title="Exile">Exile <b>{p.exile.length}</b></span>}
+          {!!p.counters?.POISON && <span className="badge cmd" title="Poison">Poison <b>{p.counters.POISON}</b></span>}
+          {mana && <span className="badge mana" title="Mana pool">Mana <b>{mana}</b></span>}
+          {cmdDmg && <span className="badge cmd" title={"Commander damage: " + cmdTitle}>CMD <b>{cmdDmg}</b></span>}
           {auras.map((c) => {
             const by = state.players.find((q) => q.id === c.controller)?.name;
-            const auraTitle = [c.text, by ? `Aura von ${by}` : undefined].filter(Boolean).join("\n");
+            const auraTitle = [c.text, by ? `Aura by ${by}` : undefined].filter(Boolean).join("\n");
             return (
               <button key={c.id} type="button" className="effect-chip aura" title={auraTitle}
                 onClick={(e) => { e.preventDefault(); e.stopPropagation(); send({ type: "selectCard", id: c.id, alt: e.button === 2, seq }); }}
@@ -188,8 +188,8 @@ export default function PlayerZone({ p, state, compact, spectator, onEnlarge }: 
         {inlineEffects && <Effects effects={effects} inline />}
       </div>
       <div className="zone battlefield">
-        <div className="command" title="Kommandozone">
-          <div className="zone-label">Kommando&shy;zone</div>
+        <div className="command" title="Command zone">
+          <div className="zone-label">Command zone</div>
           <div className="row">
             {command.map((c) => <CardBox key={c.id} card={c} />)}
             {command.length === 0 && <div className="cmd-placeholder"><span>{placeholder}</span></div>}
@@ -200,7 +200,7 @@ export default function PlayerZone({ p, state, compact, spectator, onEnlarge }: 
             {creatures.length > 0 && <div className="row bf-creatures"><Stacks groups={creatures} hosted={hosted} /></div>}
             {other.length > 0 && <div className="row bf-other"><Stacks groups={other} hosted={hosted} /></div>}
             {lands.length > 0 && <div className="row bf-lands"><Stacks groups={lands} hosted={hosted} /></div>}
-            {creatures.length + other.length + lands.length === 0 && <div className="bf-empty">keine bleibenden Karten</div>}
+            {creatures.length + other.length + lands.length === 0 && <div className="bf-empty">no permanents</div>}
           </div>
         ) : (
           <div className="rows">
@@ -210,8 +210,8 @@ export default function PlayerZone({ p, state, compact, spectator, onEnlarge }: 
         )}
         {(showGrave || showExile) && (
           <div className="piles">
-            {showGrave && <Pile label="Grab" cards={graveyard} />}
-            {showExile && <Pile label="Exil" cards={exile} />}
+            {showGrave && <Pile label="Grave" cards={graveyard} />}
+            {showExile && <Pile label="Exile" cards={exile} />}
           </div>
         )}
         {spectator && (

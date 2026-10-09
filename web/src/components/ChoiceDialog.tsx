@@ -56,8 +56,8 @@ export default function ChoiceDialog({ choice }: { choice: Choice }) {
       case "confirm":
         return (
           <div className="buttons">
-            <button onClick={() => answer(false)}>{choice.options[1]?.label ?? "Nein"}</button>
-            <button className="primary" onClick={() => answer(true)}>{choice.options[0]?.label ?? "Ja"}</button>
+            <button onClick={() => answer(false)}>{choice.options[1]?.label ?? "No"}</button>
+            <button className="primary" onClick={() => answer(true)}>{choice.options[0]?.label ?? "Yes"}</button>
           </div>
         );
       case "number":
@@ -66,7 +66,7 @@ export default function ChoiceDialog({ choice }: { choice: Choice }) {
           <form onSubmit={(e) => { e.preventDefault(); answer(choice.kind === "number" ? Number(text || 0) : text); }}>
             <input autoFocus type={choice.kind === "number" ? "number" : "text"} value={text} onChange={(e) => setText(e.target.value)} />
             <div className="buttons">
-              <button type="button" onClick={() => answer(null)}>Abbrechen</button>
+              <button type="button" onClick={() => answer(null)}>Cancel</button>
               <button type="submit" className="primary">OK</button>
             </div>
           </form>
@@ -96,11 +96,11 @@ export default function ChoiceDialog({ choice }: { choice: Choice }) {
             </ul>
             {!single && (
               <div className="buttons">
-                {choice.min === 0 && <button onClick={() => answer([])}>Keine</button>}
+                {choice.min === 0 && <button onClick={() => answer([])}>None</button>}
                 <button className="primary" disabled={!ok} onClick={() => answer(picked)}>OK</button>
               </div>
             )}
-            {single && choice.min === 0 && <div className="buttons"><button onClick={() => answer(bare ? null : [])}>Keine</button></div>}
+            {single && choice.min === 0 && <div className="buttons"><button onClick={() => answer(bare ? null : [])}>None</button></div>}
           </>
         );
       }
@@ -119,7 +119,7 @@ export default function ChoiceDialog({ choice }: { choice: Choice }) {
                   <div className="grow">
                     <div className="opt-label-row">
                       <span className="opt-label">{label(o)}</span>
-                      {o.lethal !== undefined && <span className="chip lethal">tödlich {o.lethal}</span>}
+                      {o.lethal !== undefined && <span className="chip lethal">lethal {o.lethal}</span>}
                       {o.max !== undefined && <span className="chip">max {o.max}</span>}
                     </div>
                     {o.detail && (
@@ -131,14 +131,14 @@ export default function ChoiceDialog({ choice }: { choice: Choice }) {
                   </div>
                   <div className="amount-input">
                     <input type="number" min={0} max={o.max ?? total} value={amounts[i]} onChange={(e) => set(i, Number(e.target.value))} />
-                    {o.lethal !== undefined && <button onClick={() => set(i, Math.min(o.lethal!, remaining(amounts, total) + amounts[i]))}>tödlich</button>}
+                    {o.lethal !== undefined && <button onClick={() => set(i, Math.min(o.lethal!, remaining(amounts, total) + amounts[i]))}>Lethal</button>}
                   </div>
                 </li>
               ))}
             </ul>
             <div className="buttons">
-              <span className="hint grow">Rest: <b>{remaining(amounts, total)}</b> von {total}</span>
-              <button onClick={() => answer(null)}>Automatisch</button>
+              <span className="hint grow">Left: <b>{remaining(amounts, total)}</b> of {total}</span>
+              <button onClick={() => answer(null)}>Auto</button>
               <button className="primary" disabled={!ok} onClick={() => answer(amounts)}>OK</button>
             </div>
           </>
@@ -186,8 +186,8 @@ export default function ChoiceDialog({ choice }: { choice: Choice }) {
       <div className="dialog">
         <h3>{choice.title}</h3>
         {choice.message !== choice.title && <p className="dialog-message">{choice.message}</p>}
-        {choice.kind === "order" && <p className="hint">In gewünschter Reihenfolge anklicken (oben zuerst).</p>}
-        {choice.kind === "many" && <p className="hint">{choice.min}–{choice.max <= 0 ? "beliebig" : choice.max} auswählen</p>}
+        {choice.kind === "order" && <p className="hint">Click in the order you want (top first).</p>}
+        {choice.kind === "many" && <p className="hint">Choose {choice.min}–{choice.max <= 0 ? "any" : choice.max}</p>}
         {body()}
       </div>
     </div>

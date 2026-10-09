@@ -2,8 +2,8 @@
   "type": "choice",
   "id": 900,
   "kind": "many",
-  "title": "Bibliothek durchsuchen",
-  "message": "Wähle eine Karte, die auf deine Hand kommt.",
+  "title": "Search your library",
+  "message": "Choose a card to put into your hand.",
   "min": 1,
   "max": 1,
   "options": [

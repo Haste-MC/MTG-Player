@@ -127,11 +127,11 @@ describe("reduce", () => {
   });
 
   it("'das geht gerade nicht' wird ein toast statt einer log-zeile", () => {
-    const s = reduce(initialState, { type: "error", text: "Das geht gerade nicht." });
+    const s = reduce(initialState, { type: "error", text: "You can't do that right now." });
     expect(s.log).toEqual([]);
-    expect(s.toast?.text).toBe("Das geht gerade nicht.");
+    expect(s.toast?.text).toBe("You can't do that right now.");
     // ein zweiter Hinweis zaehlt hoch, damit der Ausblend-Timer neu startet
-    const s2 = reduce(s, { type: "error", text: "Das geht gerade nicht." });
+    const s2 = reduce(s, { type: "error", text: "You can't do that right now." });
     expect(s2.toast?.n).toBe(2);
   });
 

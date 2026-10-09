@@ -41,18 +41,18 @@ export default function Combat({ state }: { state: Snapshot }) {
   const attackers = groups.reduce((n, g) => n + g.attackers.length, 0);
   return (
     <div className="combat-panel">
-      <div className="panel-title">Kampf<span className="count">{attackers}</span></div>
+      <div className="panel-title">Combat<span className="count">{attackers}</span></div>
       {groups.map((g) => (
         <div key={g.key} className="combat-group">
           <div className="combat-target">
-            {g.key === "none" ? g.label : <>Angriff auf <b>{g.label}</b></>}
+            {g.key === "none" ? g.label : <>Attacking <b>{g.label}</b></>}
             {g.sub && <span className="muted"> · {g.sub}</span>}
           </div>
           {g.attackers.map((a) => (
             <div key={a.card.id} className="combat-row">
               <CombatCard card={a.card} kind="atk" />
               {a.blockers.length === 0
-                ? <div className="combat-unblocked">ungeblockt</div>
+                ? <div className="combat-unblocked">unblocked</div>
                 : <div className="combat-blockers">
                     {a.blockers.map((b) => <CombatCard key={b.id} card={b} kind="blk" />)}
                   </div>}

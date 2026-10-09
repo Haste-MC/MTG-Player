@@ -229,11 +229,11 @@ public class WebGuiGame extends AbstractGuiGame {
         }
         String name = s.players().stream()
                 .filter(p -> Integer.valueOf(p.id()).equals(s.priorityPlayer()))
-                .map(Snapshot.PlayerSnap::name).findFirst().orElse("unbekannt");
+                .map(Snapshot.PlayerSnap::name).findFirst().orElse("unknown");
         GameView gv = getGameView();
         String over = gv != null && gv.isGameOver()
-                ? " – ACHTUNG: GameView meldet das Spiel als BEENDET" : "";
-        return "Priorität: " + name + ", Phase: " + s.phase() + ", Zug " + s.turn() + over;
+                ? " - WARNING: GameView reports the game as OVER" : "";
+        return "Priority: " + name + ", phase: " + s.phase() + ", turn " + s.turn() + over;
     }
 
     /** Forge markiert Spieler nicht als wählbar – wir leiten es aus dem aktiven Input ab. */
@@ -469,7 +469,7 @@ public class WebGuiGame extends AbstractGuiGame {
     @Override public void setPlayerAvatar(LobbyPlayer player, IHasIcon ihi) { }
     @Override public void enableOverlay() { }
     @Override public void disableOverlay() { }
-    @Override public void flashIncorrectAction() { out.send(new Messages.ErrorMsg("Das geht gerade nicht.")); }
+    @Override public void flashIncorrectAction() { out.send(new Messages.ErrorMsg("You can't do that right now.")); }
     @Override public void alertUser() { }
     @Override public void showManaPool(PlayerView player) { push(); }
     @Override public void hideManaPool(PlayerView player) { push(); }
@@ -814,7 +814,7 @@ public class WebGuiGame extends AbstractGuiGame {
         if (abilities == null || abilities.isEmpty()) return null;
         if (abilities.size() == 1) return abilities.get(0);
         JsonNode v = broker.ask("ability", hostCard == null ? "" : hostCard.getCurrentState().getName(),
-                "Welche Fähigkeit?", options(abilities, null), 0, 1, hostCard == null ? null : hostCard.getId());
+                "Which ability?", options(abilities, null), 0, 1, hostCard == null ? null : hostCard.getId());
         List<Integer> idx = indices(v, 0, 1, abilities.size());
         return idx.isEmpty() ? null : abilities.get(idx.get(0));
     }
@@ -856,7 +856,7 @@ public class WebGuiGame extends AbstractGuiGame {
             opts.add(new Messages.Option(i, b.label(), b.card(), null, b.detail(), null, null,
                     movable.contains(all.get(i).getId()) ? Boolean.TRUE : null));
         }
-        String where = toAnywhere ? "beliebig" : (toTop && toBottom ? "oben oder unten" : toTop ? "nur oben" : "nur unten");
+        String where = toAnywhere ? "anywhere" : (toTop && toBottom ? "top or bottom" : toTop ? "top only" : "bottom only");
         List<String> flags = new ArrayList<>();
         if (toAnywhere) {
             flags.add("anywhere");
@@ -864,7 +864,7 @@ public class WebGuiGame extends AbstractGuiGame {
             if (toTop) flags.add("top");
             if (toBottom) flags.add("bottom");
         }
-        JsonNode v = broker.ask("cardlist", title, "Verschiebbare Karten: " + where + ". Oberste Karte zuerst.",
+        JsonNode v = broker.ask("cardlist", title, "Movable cards: " + where + ". Top card first.",
                 opts, all.size(), all.size(), null, null, null, flags);
         List<Integer> idx = indices(v, all.size(), all.size(), all.size());
         if (idx.size() != all.size()) return all; // keine gültige Permutation → unverändert
@@ -913,12 +913,12 @@ public class WebGuiGame extends AbstractGuiGame {
         if (trample) {
             Integer pid = defender instanceof PlayerView pv ? pv.getId() : null;
             Integer cid = defender instanceof CardView dc ? dc.getId() : null;
-            opts.add(new Messages.Option(i++, "Verteidiger (Trample)", cid, pid, null, null, null, null));
+            opts.add(new Messages.Option(i++, "Defender (trample)", cid, pid, null, null, null, null));
             maxPer.add(null);
         }
         if (opts.isEmpty()) return out; // keine Blocker, kein Trample-Ziel → nichts zu fragen
-        String title = (attacker == null ? "Angreifer" : attacker.getCurrentState().getName()) + " – " + damage + " Schaden verteilen";
-        JsonNode v = broker.ask("damage", title, "Schaden frei auf Blocker verteilen (tödlich = Hinweis, keine Pflichtreihenfolge).",
+        String title = (attacker == null ? "Attacker" : attacker.getCurrentState().getName()) + " - assign " + damage + " damage";
+        JsonNode v = broker.ask("damage", title, "Assign damage freely among blockers (lethal is only a hint, no required order).",
                 opts, opts.size(), opts.size(), attacker == null ? null : attacker.getId(), damage, Boolean.FALSE);
         List<Integer> a = amounts(v, opts.size(), damage, maxPer, false);
         if (a == null) {
@@ -988,12 +988,12 @@ public class WebGuiGame extends AbstractGuiGame {
 
     private static String colorName(forge.card.MagicColor.Color col) {
         return switch (col) {
-            case WHITE -> "Weiß";
-            case BLUE -> "Blau";
-            case BLACK -> "Schwarz";
-            case RED -> "Rot";
-            case GREEN -> "Grün";
-            case COLORLESS -> "Farblos";
+            case WHITE -> "White";
+            case BLUE -> "Blue";
+            case BLACK -> "Black";
+            case RED -> "Red";
+            case GREEN -> "Green";
+            case COLORLESS -> "Colorless";
             default -> col.name();
         };
     }

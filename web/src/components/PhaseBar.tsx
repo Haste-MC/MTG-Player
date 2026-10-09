@@ -17,7 +17,7 @@ export default function PhaseBar({ state }: { state: Snapshot }) {
   };
   return (
     <div className="phasebar">
-      <span className="side">{ownTurn ? "Eigener Zug" : "Gegnerzug"}</span>
+      <span className="side">{ownTurn ? "Your turn" : "Opponent's turn"}</span>
       {series && (series.games > 1 || bestOf > 0) && (
         // Serienstand waehrend der Partie (Spec §1) - dieselbe Anzeige wie im Spielende-Dialog/Zuschauer-
         // Fusszeile (Table.tsx), damit "Serie: …" ueberall gleich aussieht.
@@ -27,7 +27,7 @@ export default function PhaseBar({ state }: { state: Snapshot }) {
         {PHASES.map((ph) => (
           <button
             key={ph.id}
-            title={ph.id + (stops.has(ph.id) ? " – Stop" : " – wird übersprungen")}
+            title={ph.id + (stops.has(ph.id) ? " – Stop" : " – skipped")}
             className={"phase" + (state.phase === ph.id ? " current" : "") + (stops.has(ph.id) ? " stop" : "")}
             onClick={() => toggle(ph.id)}
           >{ph.short}</button>
@@ -35,7 +35,7 @@ export default function PhaseBar({ state }: { state: Snapshot }) {
       </span>
       <label className="fullcontrol">
         <input type="checkbox" checked={state.fullControl} onChange={(e) => send({ type: "fullControl", value: e.target.checked })} />
-        Volle Kontrolle
+        Full control
       </label>
     </div>
   );

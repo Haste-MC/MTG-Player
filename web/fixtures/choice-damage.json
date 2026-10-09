@@ -2,8 +2,8 @@
   "type": "choice",
   "id": 901,
   "kind": "damage",
-  "title": "Schaden zuweisen",
-  "message": "Weise 6 Kampfschaden zu.",
+  "title": "Managorger Hydra - assign 6 damage",
+  "message": "Assign damage freely among blockers (lethal is only a hint, no required order).",
   "min": 0,
   "max": 0,
   "amount": 6,
@@ -25,7 +25,7 @@
     },
     {
       "index": 2,
-      "label": "Verteidiger (Trample)",
+      "label": "Defender (trample)",
       "player": 3
     }
   ]

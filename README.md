@@ -1,493 +1,505 @@
 # MTG-Player
 
-Lokaler Commander-Tisch mit KI-Gegnern auf Basis von Forge, mit eigener Browser-UI.
+Local Commander table with AI opponents, built on Forge, with its own browser UI.
 Design: `docs/superpowers/specs/2026-09-16-mtg-player-design.md`.
 
-## Herunterladen und starten
+Note on language: the documentation is English, and so is the table vocabulary in the app. The surrounding
+UI (lobby, statistics board) is still German, so German button labels in this README are quoted the way the
+app shows them.
 
-Keine Installation, kein Java, keine Konsole: das ZIP liegt unter den **Assets** des neuesten Releases auf
-<https://github.com/Haste-MC/MTG-Player/releases/latest> (z. B. `MTG-Player-1.2.0-win.zip`). Entpacke es in
-einen eigenen, leeren Ordner (nicht direkt nach „Downloads" – die Selbst-Aktualisierung ersetzt genau diesen
-Ordner später komplett) und starte darin `MTG-Player.exe` per Doppelklick.
+## Download and start
 
-Windows warnt beim allerersten Start mit „Der Computer wurde durch Windows geschützt" (SmartScreen, weil die
-`.exe` nicht signiert ist – dagegen hilft nur ein gekauftes Zertifikat, das es hier nicht gibt). Auf
-„Weitere Informationen" klicken, dann „Trotzdem ausführen". Das erscheint nur beim ersten Start dieser
-Fassung.
+No installation, no Java, no console: the ZIP sits under the **Assets** of the latest release at
+<https://github.com/Haste-MC/MTG-Player/releases/latest> (for example `MTG-Player-1.2.0-win.zip`). Unpack it
+into its own empty folder (not straight into "Downloads" — the self-update later replaces exactly that
+folder) and double-click `MTG-Player.exe` inside it.
 
-Der erste Start dauert spürbar länger als jeder weitere: Forge liest dabei rund 30.000 Karten ein. Ein
-Ladehinweis im Fenster zeigt an, dass die App arbeitet – einfach abwarten.
+On the very first start Windows warns with "Windows protected your PC" (SmartScreen, because the `.exe` is
+not signed — the only remedy is a bought certificate, which this project does not have). Click "More info",
+then "Run anyway". This appears only on the first start of a given version.
 
-Eigene Daten (Decks, Partien, Kartenauswertung) liegen getrennt vom Programmordner unter
-`%USERPROFILE%\.mtg-player` und überleben jedes Update sowie ein Löschen/Neuentpacken des Programmordners.
-Deinstallieren heißt: Programmordner löschen (die eigenen Daten bleiben davon unberührt und müssen bei
-Bedarf separat gelöscht werden).
+The first start takes noticeably longer than every later one: Forge reads about 30,000 cards. A loading
+notice in the window shows that the app is working — just wait.
 
-## Voraussetzungen
+Your own data (decks, matches, card records) lives apart from the program folder under
+`%USERPROFILE%\.mtg-player` and survives every update as well as deleting and re-unpacking the program
+folder. Uninstalling means deleting the program folder (your own data is untouched by that and has to be
+deleted separately if you want it gone).
+
+## Requirements
 
 - Java 17, Maven ≥ 3.8.1 (`sudo apt install openjdk-17-jdk-headless maven`)
-- Node ≥ 20 (für das Frontend, ab M2)
+- Node ≥ 20 (for the frontend, from M2 on)
 
-## Einmalig: Forge bauen
+## One-time: build Forge
 
 ```bash
-git submodule update --init --depth 1   # Fork Haste-MC/forge, Zweig mtg-player-2.0.15 (Basis: Tag forge-2.0.15)
-cd forge && mvn -q -pl forge-gui -am install -DskipTests -Dcheckstyle.skip -Dmaven.javadoc.skip=true   # installiert 2.0.15-mtgplayer nach ~/.m2
+git submodule update --init --depth 1   # fork Haste-MC/forge, branch mtg-player-2.0.15 (base: tag forge-2.0.15)
+cd forge && mvn -q -pl forge-gui -am install -DskipTests -Dcheckstyle.skip -Dmaven.javadoc.skip=true   # installs 2.0.15-mtgplayer into ~/.m2
 ```
 
-## Spielen
+## Playing
 
-Einmalig das Frontend bauen, dann die Bridge starten:
+Build the frontend once, then start the bridge:
 
 ```bash
 cd web && npm install && npm run build && cd ..
 cd bridge && mvn -q compile exec:java
 ```
 
-Browser: <http://127.0.0.1:8080>. Lobby → je Sitz eine Deck-Kachel (Commander-Bild) anklicken öffnet ein
-Panel mit den Reitern „Precons" / „Eigene Decks" / „Import" und einer Suche (Deck- oder Commander-Name);
-1–5 KI-Gegner, dazu optional eine Serie (Best of 3/5/7, sonst aus) → Spiel starten. Die letzte Wahl je Sitz
-bleibt im Browser gemerkt (auch nach „Zur Lobby").
-Steuerung: leuchtende Karten sind klickbar, Rechtsklick = andere Fähigkeit, Enter/Leertaste = OK,
-Esc = Abbrechen. Forge passt automatisch, wenn du nichts tun kannst (Arena-Stil).
+Browser: <http://127.0.0.1:8080>. Lobby → clicking a deck tile per seat (commander art) opens a panel with
+the tabs „Precons" / „Eigene Decks" / „Import" and a search box (deck or commander name); 1–5 AI opponents,
+optionally a series (best of 3/5/7, off otherwise) → start the game. The last choice per seat is remembered
+in the browser (even after „Zur Lobby").
+Controls: glowing cards are clickable, right-click = another ability, Enter/Space = OK, Esc = cancel. Forge
+passes automatically when there is nothing you can do (Arena style).
 
-Eigene Decks: im Panel unter „Import" einen Archidekt- oder Arena-Export einfügen (`1 Sol Ring (c21) 263`,
-Sektion `Commander` oder erste legendäre Kreatur als Commander). Das Deck wird unter `~/.mtg-player/decks/`
-gespeichert und erscheint danach unter „Eigene Decks". Unbekannte Karten werden mit Zeile gemeldet, das
-Spiel startet dann nicht.
+Your own decks: under „Import" in the panel, paste an Archidekt or Arena export (`1 Sol Ring (c21) 263`,
+section `Commander` or the first legendary creature as the commander). The deck is saved under
+`~/.mtg-player/decks/` and then appears under „Eigene Decks". Unknown cards are reported with their line and
+the game does not start.
 
-Archidekt: Deck-URL (oder nur die ID) einfügen – öffentliche Decks; der Deckname wird übernommen. Die
-Archidekt-Id steht als Tag (`archidekt:<id>`) in der gespeicherten `.dck`-Datei; die Deck-Kachel unter
-„Eigene Decks" bekommt dadurch einen „↻ Resync"-Knopf, der das Deck neu von Archidekt lädt (z. B. nach
-Änderungen an der Liste dort), ohne dass du erneut importieren musst.
+Archidekt: paste a deck URL (or just the id) — public decks; the deck name is taken over. The Archidekt id
+sits as a tag (`archidekt:<id>`) in the saved `.dck` file; that gives the deck tile under „Eigene Decks" a
+„↻ Resync" button which reloads the deck from Archidekt (after changes to the list there, for example)
+without importing again.
 
-Archidekt-Konto: der Reiter „Archidekt" im Deck-Panel holt mit dem Benutzernamen (Enter oder „Decks laden",
-der Name bleibt im Browser gemerkt) die Liste der öffentlichen Commander-Decks des Kontos – nur öffentliche
-und ungelistete Decks, private sieht Archidekt ohne Login nicht. Jede Kachel trägt eine Marke: **neu** (noch
-nicht importiert), **aktuell** (der gespeicherte Stand entspricht Archidekt) oder **geändert** (auf Archidekt
-seither bearbeitet); die geänderten sind vorab angehakt. „Ausgewählte holen (n)" importiert bzw. aktualisiert
-die angehakten Decks nacheinander (neue mit ihrem Archidekt-Namen, bekannte unter dem gespeicherten Namen),
-„Alle aktualisieren" nimmt alle schon importierten Decks des Kontos. Während des Laufs zeigt die Fußzeile
-„3/7 · Deckname …", danach „7/7 fertig" und rot die Decks, die nicht geladen werden konnten – der Lauf geht
-bei Fehlern weiter. Dafür stehen in der `.dck`-Datei zwei Tags: `archidekt:<id>` und
-`archidekt-updated:<Stand>` (Archidekts `updatedAt` beim Import). Decks, die vor dieser Funktion importiert
-wurden (nur Tag `archidekt:`), erscheinen einmal als **geändert** und sind vorab angehakt; nach dem ersten
-Aktualisieren tragen sie den Stand. Auch ein einfacher „↻ Resync" unter „Eigene Decks" schreibt jetzt
-`archidekt-updated`. Heißt ein lokales Deck ohne Archidekt-Tag (z. B. ein früherer Textimport) genauso wie
-ein neu zu importierendes Archidekt-Deck, zeigt die Kachel die Marke **übernehmen**: der Import ersetzt den
-Inhalt dieses Decks und versieht es mit den Tags – nicht vorab angehakt, auch nicht bei „Alle
-aktualisieren". Trägt das gleichnamige Deck dagegen das Tag eines anderen Archidekt-Decks, speichert der
-Import unter „<Name> (<Id>)" – überschrieben wird nichts.
+Archidekt account: the „Archidekt" tab in the deck panel fetches the account's public Commander decks by
+user name (Enter or „Decks laden", the name is remembered in the browser) — public and unlisted decks only,
+Archidekt does not show private ones without a login. Every tile carries a mark: **neu** (not imported yet),
+**aktuell** (the saved state matches Archidekt) or **geändert** (edited on Archidekt since); the changed
+ones are checked in advance. „Ausgewählte holen (n)" imports or updates the checked decks one after another
+(new ones under their Archidekt name, known ones under the saved name), „Alle aktualisieren" takes every
+already imported deck of the account. During the run the footer shows „3/7 · deck name …", afterwards „7/7
+fertig" and, in red, the decks that could not be loaded — the run continues past failures. Two tags in the
+`.dck` file carry this: `archidekt:<id>` and `archidekt-updated:<state>` (Archidekt's `updatedAt` at import
+time). Decks imported before this feature existed (only the `archidekt:` tag) show up once as **geändert**
+and are checked in advance; after the first update they carry the state. A plain „↻ Resync" under „Eigene
+Decks" now writes `archidekt-updated` as well. If a local deck without an Archidekt tag (an earlier text
+import, say) has the same name as a deck about to be imported, the tile shows the mark **übernehmen**: the
+import replaces that deck's contents and adds the tags — not checked in advance, not even under „Alle
+aktualisieren". If the deck of the same name carries the tag of a *different* Archidekt deck, the import
+saves under "<name> (<id>)" — nothing is overwritten.
 
-Löschen: jede Kachel unter „Eigene Decks" hat einen Papierkorb-Knopf; der erste Klick wird zu „Wirklich löschen?"
-(nach 4 s oder einem Klick daneben wieder weg), der zweite löscht die Datei. Nur eigene Decks, keine Precons.
-War das Deck in einem Sitz gewählt, ist der Sitz danach leer.
+Deleting: every tile under „Eigene Decks" has a trash button; the first click turns it into „Wirklich
+löschen?" (gone again after 4 s or a click elsewhere), the second deletes the file. Only your own decks,
+never a precon. If the deck was chosen in a seat, that seat is empty afterwards.
 
-Spielende: Der Dialog bietet neben „Zur Lobby" auch „Nochmal spielen" – startet dieselbe Deck-/KI-
-Konstellation direkt neu, ohne den Umweg über die Lobby. Läuft eine Serie (Lobby-Einstellung „Serie"), zeigt
-der Dialog den Stand (z. B. „Du 2 · KI 1 1") und der Knopf wird zu „Neue Serie", sobald jemand die nötigen
-Siege hat.
+End of a game: besides „Zur Lobby" the dialog offers „Nochmal spielen" — it restarts the same deck and AI
+constellation directly, without the detour through the lobby. During a series (lobby setting „Serie") the
+dialog shows the score (for example „Du 2 · KI 1 1") and the button becomes „Neue Serie" as soon as someone
+has the required wins.
 
-Steht in der Serie noch ein Spiel aus, startet es **von selbst**: der Dialog zählt „Spiel 3 von 5 startet in
-5 …" herunter und schickt dann dasselbe `startGame` wie „Nochmal spielen". Solange der Countdown läuft, stehen
-statt „Nochmal spielen" zwei Knöpfe: **„Jetzt starten"** (überspringt den Rest des Countdowns) und **„Serie
-beenden"** (hält den Auto-Start an, ohne den Stand zu verwerfen – danach bleibt nur noch „Zur Lobby" stehen).
-Lehnt die Bridge den Start ab, ersetzt ihre Fehlermeldung den Countdown und es wird nichts von selbst noch
-einmal versucht. Eine nicht gewertete Partie (Abbruch, Absturz) zieht kein neues Spiel nach.
+If a game of the series is still outstanding, it starts **by itself**: the dialog counts down „Spiel 3 von 5
+startet in 5 …" and then sends the same `startGame` as „Nochmal spielen". While the countdown runs, two
+buttons stand in place of „Nochmal spielen": **„Jetzt starten"** (skips the rest of the countdown) and
+**„Serie beenden"** (stops the auto-start without discarding the score — only „Zur Lobby" remains
+afterwards). If the bridge rejects the start, its error message replaces the countdown and nothing is
+retried by itself. A match that does not count (abort, crash) does not pull a new game after it.
 
-Kartenbilder kommen von Scryfall und werden unter `~/.mtg-player/cache/images/` gecacht (erstes Spiel mit
-neuen Karten lädt ein paar Sekunden nach; ohne Internet bleiben es Textboxen). Spielsteine holen ihr Bild aus
-Scryfalls Token-Set der Edition (z. B. `tc21`); Token ohne Editionseintrag bleiben Textboxen.
+Card images come from Scryfall and are cached under `~/.mtg-player/cache/images/` (the first game with new
+cards loads for a few seconds; without internet they stay text boxes). Tokens take their image from
+Scryfall's token set for the edition (`tc21`, for example); tokens without an edition entry stay text boxes.
 
-Phasenleiste über dem Prompt: Klick auf eine Phase setzt/entfernt einen Stop – dort wird angehalten, sofern du
-etwas spielen kannst; ohne Volle Kontrolle passt Forge weiterhin automatisch, wenn nichts spielbar ist
-(getrennt für eigene und gegnerische Züge, je nachdem wessen Zug gerade ist). "Volle Kontrolle" hält in
-jeder Phase an und schaltet das automatische Passen ab. Tutor-Effekte (Bibliothek durchsuchen) öffnen einen Listen-Dialog mit Kartendetails.
-Veraltete Klicks (Prompt hat inzwischen gewechselt) werden von der Bridge ignoriert.
+Phase bar above the prompt: clicking a phase sets or clears a stop — the game halts there as long as you can
+play something; without full control Forge still passes automatically when nothing is playable (kept
+separately for your own and your opponents' turns, depending on whose turn it is). "Full control" halts in
+every phase and switches the automatic passing off. Tutor effects (searching the library) open a list dialog
+with card details.
+Stale clicks (the prompt has moved on since) are ignored by the bridge.
 
-Entwicklung am Frontend: `cd web && npm run dev` (Vite auf :5173, verbindet sich mit der Bridge auf :8081).
-`npm run shot -- http://127.0.0.1:8080 out.png fixtures/table.json` erzeugt einen Playwright-Screenshot (Fixture-Zustand, `?debug=1` wird automatisch angehängt).
+Frontend development: `cd web && npm run dev` (Vite on :5173, connects to the bridge on :8081).
+`npm run shot -- http://127.0.0.1:8080 out.png fixtures/table.json` produces a Playwright screenshot (fixture
+state, `?debug=1` is appended automatically).
 
-Log unten rechts: Kategorie-Chips blenden Zeilen ein/aus (Mana und Phase sind standardmäßig ausgeblendet).
-Spieler, die gerade als Ziel wählbar sind, bekommen einen gestrichelten Rahmen um den Kopfbereich.
+Log at the bottom right: category chips show and hide lines (mana and phase are hidden by default).
+Players that can currently be targeted get a dashed frame around their header area.
 
-Gleiche Länder/Token liegen als Stapel (bis zu vier sichtbare Ebenen, ×N); getappte Karten des Stapels
-liegen gedreht darunter. Klick tappt die erste ungetappte. Sobald eine Karte des Stapels wählbar, im Kampf
-oder mit Marken ist, werden alle einzeln gezeigt. Getappte Karten drehen sich in der eigenen Zone und in den
-Zuschauer-Panels; nur die kompakten Gegnerzeilen der Tischansicht zeigen sie abgedunkelt mit ⟳. Forges
-Effekt-Hilfskarten und Embleme erscheinen als Chips in der Zeile "Effekte"
-(Gegner: im Panelkopf), Hover zeigt den Text im Detail-Panel rechts.
-Zuschauer-Panels und eigene Zone: Kreaturen oben, übrige bleibende Karten in der Mitte, Länder unten; die
-Kartengröße passt sich der Panelgröße an.
-Angelegte Auren/Equipment liegen hinter ihrem Wirt und schauen oben heraus (in der Gegnerzeile seitlich); jede
-Kante ist hover-/klickbar. Flüche auf Spielern stehen als „Aura"-Chip im Panelkopf des verzauberten Spielers.
-Die Grab-/Exil-Liste öffnet zur Bildmitte hin.
-Alternative Bridge-Ports lassen sich per URL setzen: `?wsPort=8082` (gleicher Host) oder `?ws=ws://host:port` (eigene WebSocket-URL).
+Identical lands and tokens lie as a stack (up to four visible layers, ×N); tapped cards of the stack lie
+rotated underneath. A click taps the first untapped one. As soon as a card of the stack becomes selectable,
+enters combat or carries counters, all of them are shown individually. Tapped cards rotate in your own zone
+and in the spectator panels; only the compact opponent rows of the table view show them dimmed with ⟳.
+Forge's effect helper cards and emblems appear as chips in the "Effects" row (opponents: in the panel
+header), hovering shows their text in the detail panel on the right.
+Spectator panels and your own zone: creatures on top, other permanents in the middle, lands at the bottom;
+the card size follows the panel size.
+Attached auras and equipment lie behind their host and peek out at the top (to the side in the opponent row);
+every edge is hoverable and clickable. Curses on players appear as an "Aura by" chip in the enchanted
+player's panel header.
+The graveyard and exile list opens towards the middle of the screen.
+Alternative bridge ports can be set via the URL: `?wsPort=8082` (same host) or `?ws=ws://host:port` (your own
+WebSocket URL).
 
-**Nur ein Port nötig.** Normalerweise läuft die Verbindung über den WebSocket (8081). Bekommt ein
-Browser den nicht auf – manche eingebauten Browser erlauben nur Name und Port der Seite selbst –,
-schaltet die App selbsttätig auf zwei gewöhnliche HTTP-Wege **auf dem Seiten-Port** um:
-`GET /ereignisse` (Ereignisstrom) und `POST /eingabe`. Man merkt davon nichts außer, dass es
-funktioniert. Der WebSocket bleibt erste Wahl; umgeschaltet wird erst, wenn er nicht aufgeht und die
-Bridge fertig hochgefahren ist.
+**Only one port needed.** Normally the connection runs over the WebSocket (8081). If a browser cannot open
+it — some embedded browsers allow only the host and port of the page itself — the app switches by itself to
+two ordinary HTTP routes **on the page's port**: `GET /ereignisse` (event stream) and `POST /eingabe`. You
+notice nothing except that it works. The WebSocket stays the first choice; the switch happens only once it
+fails to open and the bridge has finished starting up.
 
-**Mehrere Browser am selben Tisch.** Beliebig viele Fenster können dieselbe Bridge öffnen und sehen
-denselben Zustand – praktisch, um jemandem (oder einer Claude-Sitzung) beim Spielen zuzusehen.
-Klicken darf immer nur **einer**: der zuerst verbundene. Alle weiteren sehen oben ein Band „Du siehst
-zu" mit dem Knopf **Steuerung übernehmen**; wer ihn drückt, bekommt die Steuerung, der bisherige
-Steuernde sieht ab dann zu. Verlässt der Steuernde den Tisch, rückt der am längsten wartende
-Zuschauer nach.
+**Several browsers at the same table.** Any number of windows can open the same bridge and see the same
+state — handy for watching someone (or a Claude session) play. Only **one** of them may click: whoever
+connected first. All the others see a banner at the top, "You are watching", with the button **Take
+control**; whoever presses it takes control, and the previous controller becomes a spectator. If the
+controller leaves the table, the spectator who has waited longest takes over.
 
-## Kartendaten-Abgleich
+## Card data sync
 
-Der Ablauf `.github/workflows/kartendaten.yml` gleicht Forges Kartendaten wöchentlich mit upstream ab
-und legt das Ergebnis als Pull Request in `Haste-MC/forge` vor.
+The workflow `.github/workflows/kartendaten.yml` syncs Forge's card data with upstream every week and files
+the result as a pull request in `Haste-MC/forge`.
 
-Dafür braucht er ein Geheimnis `FORK_TOKEN` in diesem Repository: ein fein granuliertes
-Personal Access Token auf `Haste-MC/forge` mit **Contents: Read and write** und
-**Pull requests: Read and write**. Ohne das Token scheitert bereits das Schieben in den Fork, und die
-Fortschreibung der Ausschlussliste entfällt; Abgleich und Prüfung laufen trotzdem, und der Befund hängt
-als Artefakt am Lauf.
+For that it needs a secret `FORK_TOKEN` in this repository: a fine-grained personal access token on
+`Haste-MC/forge` with **Contents: Read and write** and **Pull requests: Read and write**. Without the token
+even pushing to the fork fails and the exclusion list is not carried forward; sync and check still run, and
+the report is attached to the run as an artifact.
 
-Reihenfolge: erst den Pull Request im Fork mergen, dann `.github/workflows/submodul.yml` starten, und erst
-danach wieder abgleichen – sonst baut der nächste Abgleich auf einem veralteten Submodul-Zeiger auf.
-`submodul.yml` legt einen Pull Request im Hauptrepo an; dafür muss in dessen Einstellungen
-„Allow GitHub Actions to create and approve pull requests“ eingeschaltet sein, sonst hinterlässt der
-Ablauf einen Zweig ohne Pull Request.
+Order of operations: first merge the pull request in the fork, then start
+`.github/workflows/submodul.yml`, and only then sync again — otherwise the next sync builds on a stale
+submodule pointer. `submodul.yml` opens a pull request in the main repository; for that, "Allow GitHub
+Actions to create and approve pull requests" has to be enabled in its settings, otherwise the workflow
+leaves a branch without a pull request behind.
 
 ## Bridge
 
 ```bash
 cd bridge
-mvn -q test                                # alle Tests inkl. KI-Spiel und End-to-End über WebSocket (Minuten)
-mvn -q compile exec:java                   # Bridge-Server (WebSocket 8081, HTTP 8080)
-mvn -q compile exec:java -Dexec.args="--ai-demo 42"   # headless KI-Spiel wie in M1
-mvn -q compile exec:java -Dexec.args="--bench"         # N Spiele KI gegen KI, siehe Abschnitt "Bench"
+mvn -q test                                # all tests incl. AI game and end-to-end over WebSocket (minutes)
+mvn -q compile exec:java                   # bridge server (WebSocket 8081, HTTP 8080)
+mvn -q compile exec:java -Dexec.args="--ai-demo 42"   # headless AI game as in M1
+mvn -q compile exec:java -Dexec.args="--bench"         # N games AI vs. AI, see the "Bench" section
 ```
 
-Ports: `-Dmtgplayer.wsPort=…`, `-Dmtgplayer.httpPort=…`; Bind-Adresse `-Dmtgplayer.bind=…` (Standard `0.0.0.0`, damit Windows unter WSL2 per localhost rankommt); Frontend-Verzeichnis: `-Dmtgplayer.web=…` (Standard `../web/dist`).
-`ForgeBoot.init()` schreibt bei jedem Start `bridge/assets/forge.profile.properties` (generiert, git-ignoriert) und lenkt
-Forges Nutzerdaten damit nach `~/.mtg-player/`; `bridge/assets/res` ist ein Symlink auf `forge/forge-gui/res`.
-Der Assets-Pfad ist mit `-Dmtgplayer.assets=<dir>` überschreibbar; Maven setzt ihn für `test` und `exec:java` automatisch.
-`mvn test` schreibt Log, `matches.json`, Bench-Ausgaben und Forge-Profil aller Tests nach `bridge/target/test-data`
-statt nach `~/.mtg-player/`; `-Dmtgplayer.data=<dir>` lenkt diese Ablage auch für eigene Läufe (z. B. `--bench`) um.
+Ports: `-Dmtgplayer.wsPort=…`, `-Dmtgplayer.httpPort=…`; bind address `-Dmtgplayer.bind=…` (default
+`0.0.0.0`, so that Windows can reach it via localhost under WSL2); frontend directory: `-Dmtgplayer.web=…`
+(default `../web/dist`).
+`ForgeBoot.init()` writes `bridge/assets/forge.profile.properties` on every start (generated, git-ignored)
+and thereby points Forge's user data at `~/.mtg-player/`; `bridge/assets/res` is a symlink to
+`forge/forge-gui/res`.
+The assets path can be overridden with `-Dmtgplayer.assets=<dir>`; Maven sets it automatically for `test` and
+`exec:java`.
+`mvn test` writes the log, `matches.json`, bench output and the Forge profile of all tests to
+`bridge/target/test-data` instead of `~/.mtg-player/`; `-Dmtgplayer.data=<dir>` redirects that storage for
+your own runs too (`--bench`, for example).
 
-Protokoll (WebSocket, JSON, Feld `type`, Details in `docs/superpowers/specs/2026-09-16-mtg-player-design.md`):
-die `lobby`-Nachricht listet Precons und eigene Decks als `DeckInfo` (Name, Commander mit Bild, bei
-Archidekt-Importen die `archidekt`-Id); die Client-Nachricht `resyncDeck` (Deckname) lädt ein solches Deck
-neu von Archidekt und die Bridge antwortet mit einer frischen `lobby`- oder mit einer `error`-Nachricht;
-`deleteDeck` (Deckname) löscht ein eigenes Deck (nie ein Precon) und antwortet ebenso mit `lobby` oder `error`.
-`archidektList` (Benutzername) liefert `archidektDecks` (Id, Name, `updatedAt`, Vorschaubild je öffentlichem
-Commander-Deck des Kontos) oder `error`; `archidektImport` (Ids) importiert/aktualisiert die Decks nacheinander
-und meldet je Deck `archidektProgress` (`done`, `total`, `current` = gespeicherter Name des laufenden Decks bzw.
-`Deck <id>` bei einem Neuimport – der Client zeigt dafür den Namen aus der Konto-Liste, `errors`), nach
-jedem Deck eine frische `lobby`-Nachricht und zum Schluss `archidektProgress` mit `current: null`; ein zweiter
-`archidektImport` während eines Laufs wird mit `error` abgewiesen.
-`thinking` (`player` = Sitz mit Priorität oder `null`, `seconds`) meldet ab 3 s ohne sichtbaren Fortschritt
-je Sekunde, dass gerechnet wird; `seconds: 0` löscht die Anzeige wieder (kommt einmal, sobald es weitergeht
-oder das Spiel endet). Wartet die Bridge auf eine Eingabe **von dir**, schweigt sie – die eigene Bedenkzeit
-ist kein Rechnen.
+Protocol (WebSocket, JSON, field `type`, details in
+`docs/superpowers/specs/2026-09-16-mtg-player-design.md`): the `lobby` message lists precons and your own
+decks as `DeckInfo` (name, commander with image, and for Archidekt imports the `archidekt` id); the client
+message `resyncDeck` (deck name) reloads such a deck from Archidekt and the bridge answers with a fresh
+`lobby` or with an `error` message; `deleteDeck` (deck name) deletes one of your own decks (never a precon)
+and likewise answers with `lobby` or `error`.
+`archidektList` (user name) returns `archidektDecks` (id, name, `updatedAt`, preview image per public
+Commander deck of the account) or `error`; `archidektImport` (ids) imports or updates the decks one after
+another and reports `archidektProgress` per deck (`done`, `total`, `current` = saved name of the running deck
+or `Deck <id>` for a new import — the client shows the name from the account list for that, `errors`), a
+fresh `lobby` message after each deck and finally `archidektProgress` with `current: null`; a second
+`archidektImport` during a run is rejected with `error`.
+`thinking` (`player` = seat with priority or `null`, `seconds`) reports once per second, starting after 3 s
+without visible progress, that computation is happening; `seconds: 0` clears the display again (it arrives
+once, as soon as things move on or the game ends). While the bridge waits for input **from you**, it stays
+quiet — your own thinking time is not computation.
 
-## Statistik
+## Statistics
 
-Jede beendete Partie (eigenes Spiel, Zuschauer-Modus und Sparring) wird mitgeschrieben: je Sitz
-Deckname, Sieger bzw. Verlustgrund, Mulligans, Länder je Zug und verpasste Landabgaben, Zauber und Mana-Summe,
-Commander-Casts samt Steuer und Zug des ersten Commanders, Schaden gemacht/genommen sowie Leben und Gift am
-Ende; dazu Dauer, Züge und Quelle der Partie. Die Datensätze liegen als JSON-Array in
-`~/.mtg-player/matches.json` (neueste zuletzt, Deckel 2000 Partien, atomar geschrieben); eine kaputte Datei
-wird beim nächsten Schreiben ersetzt, statt den Start zu verhindern.
+Every finished match (your own game, spectator mode and sparring) is recorded: per seat the deck name, winner
+or reason for the loss, mulligans, lands per turn and missed land drops, spells and total mana, commander
+casts including tax and the turn of the first commander, damage dealt and taken as well as life and poison at
+the end; plus duration, turns and the source of the match. The records live as a JSON array in
+`~/.mtg-player/matches.json` (newest last, capped at 2000 matches, written atomically); a broken file is
+replaced on the next write instead of blocking the start.
 
-Seit Runde B kommen vier Gruppen an **Vorfall-Kennzahlen** je Sitz dazu: **Zauber und Karten** – gekonterte und
-verpuffte eigene Zauber, selbst gewirkte Counterspells, gezogene, abgeworfene und gemillte Karten; **Brett und
-Verluste** – verlorene bleibende Karten (davon Kreaturen im Kampf bzw. außerhalb des Kampfes), die größte
-Massenentfernung in einem Auflösungsfenster samt Anzahl solcher Fenster, und erzeugte Spielsteine; **Kampf und
-Schaden** – eigene Angriffe und Angriffszüge, gegnerische Angreifer und eigene Blocks, Kampfschaden am Sitz nach
-Fliegen/Trampelschaden/sonstiger Quelle, Nicht-Kampfschaden, ausgeteilter Schaden im und außerhalb des Kampfes,
-Commander-Schaden und Lebensgewinn; **Zeitachse** – je eigenem Zug (gedeckelt auf 60 Punkte) Länder, Kreaturen,
-Leben, Handkarten und die in diesem Zugabschnitt gewirkten Zauber, als Grundlage für spätere Kurven wie „wann
-bist du zurückgefallen". Dazu je Sitz die Handkarten beim Ausscheiden („mit voller Hand gestorben"), die Länder
-der nach den Mulligans behaltenen Eröffnungshand und die Zahl gewirkter Entfernungszauber. Diese
-Kennzahlen werden erst **ab jetzt** gesammelt (Formatversion `v: 2`) – ältere Partien haben sie nicht und lesen
-sich für die Auswertung als **keine Daten**, nicht als 0.
+Since round B there are four groups of **incident metrics** per seat: **spells and cards** — your countered
+and fizzled spells, counterspells you cast yourself, cards drawn, discarded and milled; **board and losses**
+— permanents lost (creatures in combat and outside combat among them), the largest sweep in one resolution
+window plus the number of such windows, and tokens created; **combat and damage** — your attacks and attack
+turns, opposing attackers and your own blocks, combat damage to the seat split by flying, trample and other
+sources, non-combat damage, damage dealt in and outside combat, commander damage and life gained;
+**timeline** — per own turn (capped at 60 points) lands, creatures, life, hand cards and the spells cast in
+that turn segment, as the basis for later curves such as "when did you fall behind". In addition, per seat
+the hand cards at the time of elimination ("died with a full hand"), the lands of the opening hand kept after
+the mulligans and the number of removal spells cast. These metrics are only collected **from now on** (format
+version `v: 2`) — older matches do not have them and read as **no data** for the evaluation, not as 0.
 
-Drei davon sind Näherungen, die anders heißen, als sie zählen: „abgeworfene Karten" ist jeder Weg von der Hand in
-den Friedhof (auch als Kosten); **Infektschaden steht im genommenen Schaden, kostet aber kein Leben** – wer Leben
-rechnet, rechnet mit dem Leben am Ende, nicht mit dem Schaden; und der Commander-Schaden ist die Summe über alle
-gegnerischen Commander zusammen, die 21-Punkte-Regel lässt sich daraus nicht ableiten. Die gewirkte Entfernung
-zählt die Absicht, nicht den Erfolg.
+Three of them are approximations that are named differently from what they count: "discarded cards" is any
+path from hand to graveyard (including as a cost); **infect damage sits in the damage taken but costs no
+life** — whoever reasons about life has to use the life at the end, not the damage; and commander damage is
+the sum over all opposing commanders together, so the 21-point rule cannot be derived from it. Removal cast
+counts the intent, not the success.
 
-Nicht jede Partie soll in die Bewertung fließen. Automatisch **nicht gewertet** werden Partien unter drei Zügen
-(„zu kurz"), Partien mit einer Aufgabe („aufgegeben"), am Zugdeckel abgeschnittene Partien („Zugdeckel"),
-abgebrochene Partien („abgebrochen": die Partie wurde
-über „Aufgeben"/„Beenden" oder einen Neustart abgebrochen) und abgestürzte Partien („Absturz") – sie stehen mit
-dem Grund in der Liste, zählen aber nicht in den Kennzahlen. Bei „abgebrochen" und „Absturz" gilt kein Sitz als
-Sieger, ein nachträgliches „gewertet" kann daraus also keine Siege erfinden.
+Not every match should feed the evaluation. Automatically **not counted** are matches under three turns ("zu
+kurz"), matches with a concession ("aufgegeben"), matches cut off at the turn cap ("Zugdeckel"), aborted
+matches ("abgebrochen": the match was aborted via „Aufgeben"/„Beenden" or a restart) and crashed matches
+("Absturz") — they stand in the list with their reason but do not count towards the metrics. For
+"abgebrochen" and "Absturz" no seat counts as the winner, so marking them as counted afterwards cannot invent
+wins.
 
-„Zugdeckel" ist die Notbremse der headless Partien (Bench, Sparring): nach der maximalen Zugzahl setzt die Bridge
-alle Sitze auf ein vereinbartes Remis und beendet das Spiel, sonst liefe eine festgefahrene KI-Partie endlos.
-Technisch ist das ein Remis, fachlich hat sich aber niemand darauf geeinigt – die Partie wurde abgeschnitten,
-deshalb zählt sie nicht. Der echte Ausgang (Remis, kein Sieger) bleibt trotzdem im Datensatz stehen. Wie oft ein
-Deck dort hineinläuft, ist selbst eine Kennzahl und steht als eigene Kachel „Partien am Zugdeckel" (Anteil an den
-gewerteten plus den Zugdeckel-Partien dieses Decks, darunter „n von m"): ein Deck, das regelmäßig in den Deckel läuft, hat keine
-verlässliche Siegbedingung.
+"Zugdeckel" is the emergency brake of the headless matches (bench, sparring): after the maximum number of
+turns the bridge sets all seats to an agreed draw and ends the game, otherwise a stuck AI match would run
+forever. Technically that is a draw, but nobody actually agreed to it — the match was cut off, so it does not
+count. The real outcome (draw, no winner) still stays in the record. How often a deck runs into it is a
+metric of its own and stands as its own tile „Partien am Zugdeckel" (share of this deck's counted plus
+turn-cap matches, with „n von m" underneath): a deck that regularly hits the cap has no reliable win
+condition.
 
-Der Knopf „Statistik" in der Lobby öffnet das **Statistik-Board** über die volle Fensterbreite. Im Kopf stehen
-drei Format-Schalter – **Alle / 1 vs 1 / Pod (3+)**, je mit der Zahl der gewerteten Partien – und der Schalter
-**„Erklärungen"** (an): er blendet unter jedem Block und jeder Kachel den Satz ein, der sagt, was die Zahl
-bedeutet und worüber sie gerechnet ist. Das Format trennt die Auswertung durchgehend, denn dieselbe Zahl
-bedeutet im Pod etwas anderes als im Duell (dort verliert man überwiegend, Schaden verteilt sich auf drei
-Gegner). Links die Decks mit Commander-Bild, Bilanz und – falls vorhanden – ihren Zugdeckel-Partien:
-**alle eigenen (gespeicherten) Decks** und dazu jedes Deck, zu dem es gewertete oder Zugdeckel-Partien gibt.
-Erst die Decks mit Partien (nach Partienzahl), dann die übrigen eigenen alphabetisch – ein frisch importiertes
-Deck steht also ohne eine einzige Partie in der Liste, und genau dort startet man sein erstes Sparring. Ein Deck,
-das nur als **Gegner** vorkam (kein eigenes, z. B. ein Precon), bleibt mit seinen Partien in der Liste, sagt das
-im Tooltip und bekommt keinen Sparring-Knopf.
+The „Statistik" button in the lobby opens the **statistics board** across the full window width. The header
+holds three format switches — **Alle / 1 vs 1 / Pod (3+)**, each with the number of counted matches — and the
+switch **„Erklärungen"** (on): it shows the sentence under every block and every tile that says what the
+number means and what it is computed over. The format separates the evaluation throughout, because the same
+number means something different in a pod than in a duel (there you lose most of the time, and damage spreads
+over three opponents). On the left the decks with commander art, record and — where present — their turn-cap
+matches: **all of your own (saved) decks** plus every deck that has counted or turn-cap matches. First the
+decks with matches (by match count), then the rest of your own alphabetically — so a freshly imported deck
+stands in the list without a single match, and that is exactly where you start its first sparring. A deck
+that only appeared as an **opponent** (not your own, a precon for example) stays in the list with its
+matches, says so in the tooltip and gets no sparring button.
 
-Rechts, für das gewählte Deck im gewählten Format:
+On the right, for the selected deck in the selected format:
 
-* **Auffälligkeiten** – die Kacheln in Sätze übersetzt: Mana-Screw, Landflut, Mulligans, erlittene
-  Massenentfernung, Flieger, gekonterte Zauber, Zugdeckel und (nur im Pod) „früh raus". Jede Regel nennt Zahl
-  **und Stichprobe**, hält eine Mindeststichprobe ein und meldet sich erst **über** ihrer Schwelle. Regeln, die
-  den Deckinhalt brauchen („und du hast nichts dagegen"), schweigen ohne Deckanalyse. Kartenvorschläge sind
-  noch nicht dabei – sie kommen im nächsten Stück.
-* **Fünf Kennzahlen-Blöcke** – Bilanz, Mana & Start, Tempo & Commander, Kampf & Überleben, Interaktion &
-  Verluste. Kacheln ohne Grundlage zeigen „–" statt einer 0 und sagen im Erklärtext, warum (z. B. „keine Partie
-  lief so lange"). Kacheln aus den Vorfall-Daten nennen ihre eigene Stichprobe: „gerechnet über 7 von 12
-  Partien der Auswahl" – und wo noch enger gerechnet wird (Mana-Screw zählt nur Partien mit einem 3. eigenen
-  Zug), steht genau diese Zahl da.
-* **Deck** – die Deckanalyse aus der Kartendatenbank, ohne Partien: Karten, Länder (davon Standardländer),
-  Ø Manabetrag, Farbidentität, Manakurve, Farbquellen und „Karten je Aufgabe" (Ramp, Kartenziehen, Entfernung,
-  Massenentfernung, Konter, Fliegerabwehr, Schutz vor Massenentfernung, Rückholer, Tutoren). Die Einordnung
-  liest Kartentexte mit Mustern – Größenordnungen, keine Wahrheit.
-* **Gegner** – gegen welche Decks wie oft gespielt und gewonnen wurde.
+* **„Auffälligkeiten"** — the tiles translated into sentences: mana screw, flood, mulligans, sweepers
+  suffered, fliers, countered spells, turn cap and (in the pod only) "out early". Every rule names the number
+  **and the sample**, keeps to a minimum sample size and only speaks up **above** its threshold. Rules that
+  need the deck contents ("and you have nothing against it") stay silent without a deck analysis. Card
+  suggestions are not part of it yet — they come in the next piece.
+* **Five metric blocks** — record, mana & start, tempo & commander, combat & survival, interaction & losses.
+  Tiles without a basis show "–" instead of a 0 and say in the explanation why (for example "no match ran
+  that long"). Tiles from the incident data name their own sample: "computed over 7 of 12 matches of the
+  selection" — and where the computation is narrower still (mana screw only counts matches with a third own
+  turn), exactly that number is there.
+* **Deck** — the deck analysis from the card database, without matches: cards, lands (basics among them),
+  average mana value, color identity, mana curve, color sources and "cards per job" (ramp, card draw,
+  removal, sweepers, counters, anti-flier, protection from sweepers, recursion, tutors). The classification
+  reads card texts with patterns — orders of magnitude, not truth.
+* **Gegner** — which decks were played against how often, and won against.
 
-Darunter die Partienliste. Je Zeile setzt die Checkbox „gewertet" eine Partie wieder hinein oder heraus, der
-Papierkorb löscht sie (zwei Klicks, wie beim Deck-Löschen); der Filter „nur gewertete" steht standardmäßig an,
-der Format-Schalter gilt auch hier. Der Pfeil links klappt die Partie auf und lädt ihre **Zeitachse** nach
-(zwei kleine Kurven je Sitz: Leben oben, Länder und Kreaturen unten, je eigenem Zug) – die Liste selbst trägt
-sie nicht.
+Below that the match list. Per row the „gewertet" checkbox puts a match back into the evaluation or out of it,
+the trash can deletes it (two clicks, as with deleting a deck); the filter „nur gewertete" is on by default,
+and the format switch applies here too. The arrow on the left expands the match and loads its **timeline**
+(two small curves per seat: life above, lands and creatures below, per own turn) — the list itself does not
+carry it.
 
-Ausgewertet wird **deckbezogen**: wer das Deck gespielt hat – du oder eine KI – spielt keine Rolle, damit die
-Sparring-Partien (KI spielt dein Deck) mitzählen; je Partie zählt höchstens ein Sitz je Deck, ein
-Spiegel bleibt also eine Partie.
+The evaluation is **per deck**: who played the deck — you or an AI — does not matter, so that the sparring
+matches (AI plays your deck) count; per match at most one seat counts per deck, so a mirror stays one match.
 
-Je Partie hält der Datensatz auch die eingestellte KI-Bedenkzeit (`aiTimeout`, Sekunden je Entscheidung); in
-der Partienliste steht sie als kleines Feld „<n> s" neben der Quelle. Sie gehört zum Vergleich von Dauern dazu –
-eine lange Partie kann an der hohen Bedenkzeit liegen und nicht am Deck. Ältere Datensätze kennen den Wert
-nicht, dort fehlt das Feld.
+Per match the record also holds the configured AI thinking time (`aiTimeout`, seconds per decision); in the
+match list it stands as a small field "<n> s" next to the source. It belongs to any comparison of durations —
+a long match may be down to the high thinking time rather than the deck. Older records do not know the value,
+and there the field is missing.
 
-Protokoll: die Bridge schickt bei Verbindung, nach jeder Änderung und nach jedem Spielende `matches` – die
-**letzten 300** Datensätze (älteste zuerst), je **ohne Zeitachse**, dazu `total` mit der tatsächlich
-gespeicherten Partienzahl; liegen mehr Partien vor als geschickt, sagt das der Kopf des Boards. Der Client
-schickt `deleteMatch` (`id`) und `setMatchCounted` (`id`, `counted`) – beide antworten mit einer frischen
-`matches`-Liste – sowie zwei Nachfragen: `matchDetail` (`id`) holt **eine** Partie vollständig samt Zeitachse
-zurück (Antwort `match`), `analyzeDeck` (`deck`) die Deckanalyse aus der Kartendatenbank (Antwort
-`deckAnalysis`). Beide werden erst bei Bedarf gestellt (aufgeklappte Zeile, gewähltes Deck) und nicht noch
-einmal, solange die Antwort schon vorliegt oder unterwegs ist. Fehler kommen als `error` („Partie <id>: …",
-„Deckanalyse <name>: …") und stehen im Screen über der Liste; die aufgeklappte Zeile bzw. das Deck-Panel sagen
-dann, dass nichts geladen wurde, statt ewig „wird geladen …" zu zeigen.
+Protocol: on connect, after every change and after every game end the bridge sends `matches` — the **last
+300** records (oldest first), each **without the timeline**, plus `total` with the number of matches actually
+stored; if there are more matches than were sent, the board's header says so. The client sends `deleteMatch`
+(`id`) and `setMatchCounted` (`id`, `counted`) — both answer with a fresh `matches` list — as well as two
+follow-up questions: `matchDetail` (`id`) fetches **one** match in full including the timeline (answer
+`match`), `analyzeDeck` (`deck`) the deck analysis from the card database (answer `deckAnalysis`). Both are
+asked only on demand (expanded row, selected deck) and not again while the answer is already there or on its
+way. Errors arrive as `error` („Partie <id>: …", „Deckanalyse <name>: …") and stand in the screen above the
+list; the expanded row or the deck panel then says that nothing was loaded instead of showing „wird geladen
+…" forever.
 
 ## Sparring
 
-Sparring spielt ein gespeichertes Deck **im Hintergrund** gegen deine eigenen anderen Decks, damit die Statistik
-nicht erst nach Wochen etwas zu sagen hat: im Statistik-Board über den Kacheln 5, 10, 20 oder 50 Partien wählen
-und „Sparring starten". Jede Partie ist ein **1 vs 1** (Pod kommt später), und jede beendete Partie landet sofort
-als Datensatz mit der Quelle **„Sparring"** in der Liste – das Board rechnet sich also während des Laufs weiter.
+Sparring plays a saved deck **in the background** against your other decks, so that the statistics have
+something to say before weeks have passed: in the statistics board, pick 5, 10, 20 or 50 matches above the
+tiles and press „Sparring starten". Every match is a **1 vs 1** (pod comes later), and every finished match
+lands in the list as a record with the source **„Sparring"** right away — so the board keeps recomputing
+during the run.
 
-Gespielt wird **immer mit der Standard-KI**, ohne Auswahl: sie ist schnell und konsistent, und gemessen werden
-soll das Deck, nicht die KI. Ein Simulations-Sitz braucht je Entscheidung bis zur vollen Bedenkzeit und macht aus
-einem Lauf über 20 Partien Stunden statt Minuten. Als Option kann er später kommen.
+Play is **always with the standard AI**, without a choice: it is fast and consistent, and what is to be
+measured is the deck, not the AI. A simulation seat needs up to the full thinking time per decision and turns
+a run of 20 matches into hours instead of minutes. It may come as an option later.
 
-Die **Gegner** kommen zufällig (mit Zurücklegen) aus demselben **Bracket**: so werden über viele Partien auch
-seltene Paarungen getestet. Sind im eigenen Bracket weniger als drei andere Decks, wird auf Bracket ±1
-erweitert; gibt es dann immer noch keinen Gegner, lehnt die Bridge den Start ab („keine Gegner im Bracket 3:
-Bracket setzen oder Decks importieren"). Ein Deck ohne Bracket spielt gegen die Decks ohne Bracket. Unter dem
-Knopf steht, woraus gezogen wird („zufällig aus Bracket 3: 7 Decks").
+The **opponents** are drawn at random (with replacement) from the same **bracket**: that way rare pairings get
+tested over many matches too. If there are fewer than three other decks in your own bracket, it widens to
+bracket ±1; if there is still no opponent then, the bridge rejects the start („keine Gegner im Bracket 3:
+Bracket setzen oder Decks importieren"). A deck without a bracket plays against the decks without a bracket.
+Underneath the button it says what is being drawn from („zufällig aus Bracket 3: 7 Decks").
 
-Ein Deck **ohne** gespielte Partie lässt sich genauso sparren: es steht unten in der Deckliste, rechts steht
-statt der Kacheln „Noch keine Partie", und der Knopf darüber tut seine Arbeit.
+A deck **without** a single played match can be sparred just the same: it stands at the bottom of the deck
+list, on the right „Noch keine Partie" stands in place of the tiles, and the button above does its work.
 
-Der **Bracket** (Commander-Bracket 1–5) kommt beim Import aus Archidekt (`edhBracket`) und lässt sich von Hand
-ändern: im Deck-Panel unter „Eigene Decks" trägt jede Kachel oben links eine kleine Marke („B3", „B ?"), ein
-Klick öffnet die Auswahl 1–5 / „unbekannt". Precons haben keinen Bracket.
+The **bracket** (Commander bracket 1–5) comes from Archidekt on import (`edhBracket`) and can be changed by
+hand: in the deck panel under „Eigene Decks" every tile carries a small mark at the top left („B3", „B ?"),
+and a click opens the choice 1–5 / „unbekannt". Precons have no bracket.
 
-Während des Laufs steht statt der Auswahl eine Fortschrittszeile („3/20 · gegen Koma, World-Eater …") mit
-**„Abbrechen"**; ein Abbruch beendet die laufende Partie sofort (ihr Kindprozess wird abgeschossen) und lässt
-keine weitere mehr antreten. Gescheiterte Partien stehen rot darunter (mit der Zeile aus stderr, die nach der Ursache aussieht – der
-letzten Ausnahme, nicht dem letzten Stacktrace-Rahmen), zählen mit und **beenden den Lauf nicht** –
-jede Partie läuft in einem **eigenen JVM-Kindprozess**, damit ein Forge-Absturz weder den Lauf noch deine
-nebenher laufende Bridge mitnimmt. Es läuft immer nur **ein** Sparring; ein zweiter Start meldet „Sparring läuft
-noch".
+During the run a progress line („3/20 · gegen Koma, World-Eater …") with **„Abbrechen"** stands in place of
+the selection; cancelling ends the running match immediately (its child process is killed) and lets no
+further one start. Failed matches stand under it in red (with the line from stderr that looks like the cause
+— the last exception, not the last stack frame), count along and do **not end the run** — every match runs in
+its **own JVM child process**, so that a Forge crash takes down neither the run nor the bridge you have
+running alongside. Only **one** sparring runs at a time; a second start reports „Sparring läuft noch".
 
-Partien, die in den **Zugdeckel** laufen (Voreinstellung 60 Züge), zählen wie überall als „Zugdeckel" und fließen
-**nicht** in die Bilanz – sie stehen mit dem Grund in der Liste (siehe „Statistik"). Ausgabe der Kindprozesse:
-`~/.mtg-player/sparring/sparring-<Zeitpunkt>-<Nr>-<Gegner>.log` (stderr) bzw. `.out.log` (Forges Spielprotokoll).
+Matches that run into the **turn cap** (60 turns by default) count as "Zugdeckel" like everywhere else and do
+**not** feed the record — they stand in the list with their reason (see "Statistics"). Output of the child
+processes: `~/.mtg-player/sparring/sparring-<timestamp>-<no>-<opponent>.log` (stderr) and `.out.log` (Forge's
+game log).
 
-Protokoll: `sparringStart` (`deck`, `games`, optional `ai`, `timeout`, `maxTurns`) startet den Lauf,
-`sparringCancel` bricht ihn ab. Die Bridge meldet `sparringProgress` (`done`, `total`, `current`, `errors`,
-`running`) einmal zu Beginn und nach jedem Spielende – die letzte Meldung eines Laufs trägt `running: false`.
-Den Bracket setzt `setDeckBracket` (`name`, `bracket` 1–5 oder `null`); die Antwort ist eine frische
-`lobby`-Nachricht.
+Protocol: `sparringStart` (`deck`, `games`, optional `ai`, `timeout`, `maxTurns`) starts the run,
+`sparringCancel` aborts it. The bridge reports `sparringProgress` (`done`, `total`, `current`, `errors`,
+`running`) once at the beginning and after every game end — the last report of a run carries
+`running: false`. The bracket is set by `setDeckBracket` (`name`, `bracket` 1–5 or `null`); the answer is a
+fresh `lobby` message.
 
-Als Nächstes: aus den so gefüllten Kennzahlen eine Schwächen-Analyse mit Kartenvorschlägen.
+Next up: a weakness analysis with card suggestions out of the metrics filled this way.
 
-## Wenn der Tisch einfriert
+## When the table freezes
 
-Friert ein Spiel ein (kein Prompt mehr, Log steht), ist meist ein Thread mit einer Ausnahme abgebrochen.
-Die Bridge schreibt jeden solchen Abbruch mit Stacktrace nach `~/.mtg-player/logs/bridge.log` und als rote
-Zeile ins Browser-Log („Spiel abgebrochen …"). Für einen Bugreport reicht der letzte Block aus der Datei.
+If a game freezes (no prompt any more, the log stands still), usually a thread died with an exception. The
+bridge writes every such abort with its stack trace to `~/.mtg-player/logs/bridge.log` and as a red line into
+the browser log („Spiel abgebrochen …"). For a bug report the last block from the file is enough.
 
-Das gilt für **alle drei** Wege, auf denen eine Partie sterben kann: den Spiel-Thread, den UI-Thread
-(`uncaught in bridge-ui` – über ihn läuft Forges ganze Zustandsverarbeitung samt Spielende) und einen
-Abonnenten am Ereignisbus (`eventbus` – Guava fängt die Ausnahme ab, damit der Bus nicht zerbricht).
-Die letzten zwei landeten bis zum 2026-10-07 nur im Terminal; zwei Vorfälle vom 2026-10-06 ließen sich
-deshalb nicht aufklären.
+That holds for **all three** ways a match can die: the game thread, the UI thread (`uncaught in bridge-ui` —
+Forge's entire state processing including the game end runs over it) and a subscriber on the event bus
+(`eventbus` — Guava swallows the exception so that the bus does not break). The last two only reached the
+terminal until 2026-10-07; two incidents from 2026-10-06 could not be cleared up because of that.
 
-Steht dort nichts, rechnet vermutlich nur die KI. Ein Sitz im Simulations-Modus braucht je Entscheidung bis zur
-vollen Bedenkzeit, und gemessen kosten **vier Simulations-Sitze 20–31 s je Entscheidung** – in dieser Zeit
-erreicht den Browser nichts. Deshalb steht ab 3 s Stille „… denkt" in der Prompt-Leiste (Zuschauer-Modus: in
-der Fußzeile); solange die Sekunden dort hochlaufen, ist alles in Ordnung.
+If nothing is there, the AI is probably just computing. A seat in simulation mode needs up to the full
+thinking time per decision, and measured, **four simulation seats cost 20–31 s per decision** — nothing
+reaches the browser in that time. That is why "… is thinking" appears in the prompt bar after 3 s of silence
+(spectator mode: in the footer); as long as the seconds keep counting up there, everything is fine.
 
-Bleibt der Tisch trotzdem stehen, hilft der Wachhund: nach 120 s Stille legt die Bridge **einmal je Vorfall**
-einen Thread-Abzug im Log ab (nur dort, nicht im Browser):
+If the table still stands still, the watchdog helps: after 120 s of silence the bridge writes a thread dump
+to the log **once per incident** (only there, not in the browser):
 
 ```bash
 grep -A60 Wachhund ~/.mtg-player/logs/bridge.log | tail -80
 ```
 
-Im Abzug stehen der gemerkte Spiel-Thread, `bridge-ui`, Forges `Game-*`-Pool und `bridge-bg` – nicht nur
-einer, weil in den Vorfällen vom 2026-10-06 genau der Spiel-Thread schon tot war und ein toter Thread
-keinen Stack hat. Was der Abzug sagt:
+The dump holds the remembered game thread, `bridge-ui`, Forge's `Game-*` pool and `bridge-bg` — not just one
+of them, because in the incidents of 2026-10-06 it was precisely the game thread that was already dead, and a
+dead thread has no stack. What the dump tells you:
 
-* `GameSimulator` / `GameCopier` (auch `SpellAbilityPicker`, `AiController`) – die KI rechnet. Kein Fehler,
-  höchstens ein Grund, die Bedenkzeit zu senken oder weniger Simulations-Sitze zu setzen.
-* `ChoiceBroker` / `CompletableFuture.get` – **echter Hänger**: der Spiel-Thread wartet auf eine Antwort, die
-  nie kommt (verlorene Frage, abgerissene Verbindung). Das gehört in den Bugreport.
-* `TERMINATED` beim Spiel-Thread – die Partie rechnet nicht mehr. Dann sagt der Rest des Abzugs, wer sie
-  festhält; hängt `bridge-ui` in einem `send` oder einem `get`, ist er der Schuldige.
-* `VERKLEMMUNG erkannt zwischen:` als erste Zeile – die JVM hat einen Deadlock gefunden und nennt beide
-  Threads und das Schloss. Keine weitere Deutung nötig.
-* `ACHTUNG: GameView meldet das Spiel als BEENDET` in der Kopfzeile – die Partie ist vorbei und die Bridge
-  hat es nicht mitbekommen (es fehlt `finishGame()`). Kein Hänger, ein verlorenes Spielende.
+* `GameSimulator` / `GameCopier` (also `SpellAbilityPicker`, `AiController`) — the AI is computing. Not a
+  fault, at most a reason to lower the thinking time or to set fewer simulation seats.
+* `ChoiceBroker` / `CompletableFuture.get` — a **real hang**: the game thread waits for an answer that never
+  comes (lost question, broken connection). That belongs in the bug report.
+* `TERMINATED` for the game thread — the match is not computing any more. Then the rest of the dump says who
+  is holding it; if `bridge-ui` hangs in a `send` or a `get`, it is the culprit.
+* `VERKLEMMUNG erkannt zwischen:` as the first line — the JVM found a deadlock and names both threads and the
+  lock. No further interpretation needed.
+* `WARNING: GameView reports the game as OVER` in the header line — the match is over and the bridge did not
+  notice (`finishGame()` is missing). Not a hang, a lost game end.
 
-Während die Bridge auf *deine* Eingabe wartet, ruhen Anzeige und Wachhund – sonst stünde nach zwei Minuten
-Nachdenken ein `ChoiceBroker`-Stack im Log, also genau die Signatur des echten Hängers.
+While the bridge waits for *your* input, the display and the watchdog rest — otherwise two minutes of
+thinking would put a `ChoiceBroker` stack in the log, which is exactly the signature of the real hang.
 
-## Forge-Fork
+## Forge fork
 
-Seit dem KI-Paket Stufe 2 läuft die Bridge gegen einen Fork von Forge (`Haste-MC/forge`, Branch `mtg-player`,
-Maven-Version `2.0.15-mtgplayer`, damit der Fork-Build das Original in `~/.m2` nicht überschreibt). Im Submodule
-ist `origin` der Fork und `upstream` Card-Forge; neue Forge-Versionen kommen per `git fetch upstream && git merge
-forge-<version>` auf den Branch. Nach jeder Änderung an Forge: obiges `mvn install` erneut, dann Bridge neu bauen.
-Was der Fork ändert, steht kommitweise in `docs/forge-fork.md`: Zeitbudget für die Voll-Simulation (die
-KI-Bedenkzeit gilt für alle KI-Modi), `GameCopier` robust gegen Monarch-Effektkarte, `<Nothing>`-Kampfplatzhalter,
-erinnerte Token, ausgeschiedene Spieler, gemeldete Karten und Goad; Kandidaten nach Nützlichkeit sortiert; die KI
-arbeitet auf eigene Meld-Bedingungen hin und lehnt Goad-Marken ab, die in einen verlorenen Pflichtangriff führen;
-Mulligan mit Farb-/Kurvenprüfung (`MULLIGAN_CHECK_COLORS`, Vergleichsprofil `Legacy` = altes Verhalten); Landgewicht
-in der Sim-Bewertung; Debug-Flag `-Dforge.ai.sim.debug`.
+Since AI package level 2 the bridge runs against a fork of Forge (`Haste-MC/forge`, branch `mtg-player`,
+Maven version `2.0.15-mtgplayer`, so that the fork build does not overwrite the original in `~/.m2`). In the
+submodule `origin` is the fork and `upstream` is Card-Forge; new Forge versions come onto the branch via
+`git fetch upstream && git merge forge-<version>`. After every change to Forge: run the `mvn install` above
+again, then rebuild the bridge.
+What the fork changes is listed commit by commit in `docs/forge-fork.md`: time budget for the full simulation
+(the AI thinking time applies to all AI modes), `GameCopier` made robust against the monarch effect card,
+`<Nothing>` combat placeholders, remembered tokens, eliminated players, reported cards and goad; candidates
+sorted by usefulness; the AI works towards its own meld conditions and refuses goad counters that would lead
+into a lost mandatory attack; mulligan with a color and curve check (`MULLIGAN_CHECK_COLORS`, comparison
+profile `Legacy` = the old behavior); land weight in the simulation evaluation; debug flag
+`-Dforge.ai.sim.debug`.
 
-## Bench (KI gegen KI)
+## Bench (AI vs. AI)
 
-Stufe 4: Mulligan prüft Farben und Kurve (Fork-Property `MULLIGAN_CHECK_COLORS`, Vergleichsprofil `Legacy`) →
-Abzan-Spiegel 28:12, Ahoy 24:16 gegen das alte Verhalten, davon nach Kontrolle mit gleichen Seeds ~5–8 Punkte
-Effekt: [docs/bench/2026-09-20-stufe-4-mulligan.md](docs/bench/2026-09-20-stufe-4-mulligan.md).
+Level 4: the mulligan checks colors and curve (fork property `MULLIGAN_CHECK_COLORS`, comparison profile
+`Legacy`) → Abzan mirror 28:12, Ahoy 24:16 against the old behavior, of which ~5–8 points of effect remain
+after controlling with identical seeds:
+[docs/bench/2026-09-20-stufe-4-mulligan.md](docs/bench/2026-09-20-stufe-4-mulligan.md).
 
-Stufe 4: Landgewicht in der Bewertung → Ahoy-Spiegel 30:10 = 75 % [60–86] (vorher 28:12); die anderen drei
-Bewertungs-Schritte waren neutral und sind zurückgenommen: [docs/bench/2026-09-20-stufe-4-bewertung.md](docs/bench/2026-09-20-stufe-4-bewertung.md).
+Level 4: land weight in the evaluation → Ahoy mirror 30:10 = 75 % [60–86] (28:12 before); the other three
+evaluation steps were neutral and have been reverted:
+[docs/bench/2026-09-20-stufe-4-bewertung.md](docs/bench/2026-09-20-stufe-4-bewertung.md).
 
-Stufe 3: Kandidaten unter Budget sortiert → 70 % [55–82] im Spiegel; 30 s Budget bringt nichts (59 %):
+Level 3: candidates sorted under the budget → 70 % [55–82] in the mirror; a 30 s budget brings nothing (59 %):
 [docs/bench/2026-09-20-stufe-3-kandidaten.md](docs/bench/2026-09-20-stufe-3-kandidaten.md).
 
-Erster Messlauf und Einordnung: [docs/bench/2026-09-20-sim-vs-standard.md](docs/bench/2026-09-20-sim-vs-standard.md)
-(Simulations-KI gewinnt das Spiegel-Match zu ~76 %, aber 28 % der Spiele enden in Timeout/Absturz). Stufe-2-Nachweise
-zu den beiden Fixes: [docs/bench/2026-09-20-stufe-2-zeitbudget.md](docs/bench/2026-09-20-stufe-2-zeitbudget.md)
-(0 Timeouts statt 9) und [docs/bench/2026-09-20-stufe-2-copier.md](docs/bench/2026-09-20-stufe-2-copier.md)
-(0 Abstürze an Monarch/`<Nothing>`; Siegquote gegenüber dem Ausgangslauf statistisch unverändert, andere
-Grundgesamtheit).
+First measurement run and its interpretation:
+[docs/bench/2026-09-20-sim-vs-standard.md](docs/bench/2026-09-20-sim-vs-standard.md) (the simulation AI wins
+the mirror match at ~76 %, but 28 % of the games end in a timeout or crash). Level 2 evidence for the two
+fixes: [docs/bench/2026-09-20-stufe-2-zeitbudget.md](docs/bench/2026-09-20-stufe-2-zeitbudget.md) (0 timeouts
+instead of 9) and [docs/bench/2026-09-20-stufe-2-copier.md](docs/bench/2026-09-20-stufe-2-copier.md) (0
+crashes on monarch/`<Nothing>`; win rate statistically unchanged against the baseline run, different
+population).
 
-Misst, ob eine KI-Einstellung gegen eine andere gewinnt: N Spiele 1-gegen-1, headless, mit Seed. Ohne Zeitbudget
-(`--timeout 0`) ist ein Sim-Sitz je Spiel-Index reproduzierbar wie ein Standard-Sitz; mit Zeitbudget hängt die
-Deadline jeder Simulations-Entscheidung an der Wanduhr, nicht am Seed – ein Wiederholungslauf auf einer anderen
-Maschine oder unter Last kann andere Kandidaten abbrechen und damit einen anderen Zug wählen. Bench-Läufe mit
-Zeitbudget sind ab einer gewissen Boardkomplexität als Verteilung (mehrere Seeds, Konfidenzintervall) zu lesen,
-nicht als wiederholbares Einzelspiel-Ergebnis.
+Measures whether one AI setting beats another: N games one on one, headless, with a seed. Without a time
+budget (`--timeout 0`) a sim seat is as reproducible per game index as a standard seat; with a time budget the
+deadline of every simulation decision hangs on the wall clock, not on the seed — a repeat run on another
+machine or under load can cut off different candidates and thereby pick a different play. From a certain
+board complexity on, bench runs with a time budget are to be read as a distribution (several seeds,
+confidence interval), not as a repeatable single-game result.
 
 ```bash
 cd bridge && mvn -q compile exec:java -Dexec.args="--bench --games 40 --a sim:Default --b std:Default --deck-a 'precon:Abzan Armor [TDC] [2025]' --deck-b 'precon:Adaptive Enchantment [C18] [2018]' --seed 1"
 ```
 
-Precon-Namen mit Leerzeichen müssen in `-Dexec.args` in Anführungszeichen stehen (Maven trennt sonst am Leerzeichen).
+Precon names with spaces have to be quoted inside `-Dexec.args` (Maven splits at the space otherwise).
 
-| Option | Bedeutung | Standard |
+| Option | Meaning | Default |
 |---|---|---|
-| `--games N` | Zahl der Spiele | 40 |
-| `--a spec` / `--b spec` | KI-Sitze, `AiConfig.parse`, z. B. `sim:Reckless`, `std`, `hybrid:Cautious` | `sim:Default` / `std:Default` |
-| `--deck-a ref` / `--deck-b ref` | Deck: `precon:<Name>` oder `saved:<Name>` | erste zwei Precons alphabetisch |
-| `--turns N` | Zugdeckel (Spielerzüge) → Unentschieden | 200 |
-| `--timeout s` | KI-Bedenkzeit in Sekunden; Richtwert je Entscheidung, kann bis etwa das Doppelte überschreiten (gilt auch für die Simulation) | 5 |
-| `--seed n` | Basis-Seed; Spiel i nutzt `seed + i` | aktuelle Zeit |
-| `--out dir` | Ausgabeverzeichnis | `~/.mtg-player/bench/` |
-| `--game-timeout min` | Zeitlimit je Spiel im Kindprozess (danach `destroyForcibly`, Spiel zählt als Absturz) | 30 |
-| `--in-process` | jedes Spiel im aufrufenden Thread statt in einem eigenen JVM-Kindprozess (Flag, kein Wert) | aus |
+| `--games N` | number of games | 40 |
+| `--a spec` / `--b spec` | AI seats, `AiConfig.parse`, e.g. `sim:Reckless`, `std`, `hybrid:Cautious` | `sim:Default` / `std:Default` |
+| `--deck-a ref` / `--deck-b ref` | deck: `precon:<name>` or `saved:<name>` | the first two precons alphabetically |
+| `--turns N` | turn cap (player turns) → draw | 200 |
+| `--timeout s` | AI thinking time in seconds; a guide value per decision, may be exceeded by up to about double (applies to the simulation as well) | 5 |
+| `--seed n` | base seed; game i uses `seed + i` | current time |
+| `--out dir` | output directory | `~/.mtg-player/bench/` |
+| `--game-timeout min` | time limit per game in the child process (then `destroyForcibly`, the game counts as a crash) | 30 |
+| `--in-process` | every game in the calling thread instead of its own JVM child process (flag, no value) | off |
 
-Ausgabe: `<out>/<yyyy-MM-dd-HHmmss>-<a>-vs-<b>.md` (Tabelle, Siegquote mit 95-%-Wilson-Intervall, Parameter, Seed,
-eine Zeile je Spiel, Spalte „Nichtstun" = Sitze mit ≥ 5 gespielten Ländern und ≤ 2 gewirkten Zaubern, aus den
-Forge-Logzeilen `<Sitz> played …`/`<Sitz> cast …` gezählt; Summenzeile `Nichtstun A x / B y`) und die gleichnamige
-`.json` mit allen Einzelspielen (`fewSpells` je Spiel, `fewSpellsA/B` in der Summary). Nach jedem Spiel eine Fortschrittszeile
-auf stdout. Läuft Minuten bis Stunden; Ctrl-C schreibt den Zwischenstand.
+Output: `<out>/<yyyy-MM-dd-HHmmss>-<a>-vs-<b>.md` (table, win rate with a 95 % Wilson interval, parameters,
+seed, one line per game, column „Nichtstun" = seats with ≥ 5 lands played and ≤ 2 spells cast, counted from
+the Forge log lines `<seat> played …`/`<seat> cast …`; total line `Nichtstun A x / B y`) and the `.json` of
+the same name with all individual games (`fewSpells` per game, `fewSpellsA/B` in the summary). After every
+game a progress line on stdout. Runs for minutes to hours; Ctrl-C writes the intermediate state.
 
-**Ein JVM-Kindprozess je Spiel.** Ein Forge-eigener Absturz während der Simulation (z. B. `GameCopier`
-"Couldn't map \<Nothing\>", ausgelöst wenn `Combat.removeFromCombat` beim Verlassen eines angegriffenen
-Planeswalkers/einer Battle eine dem Kopierer unbekannte Platzhalterkarte anlegt) vergiftet dabei nicht nur
-das eine Spiel, sondern unbekannten globalen Zustand für den Rest der JVM – Folgespiele stürzen danach
-reihenweise ab oder "enden" nach Sekunden ohne echten Zug. Deshalb läuft standardmäßig jedes Bench-Spiel in
-einem frischen `java`-Kindprozess (`mtgplayer.Main --bench-one <i> <dieselben Bench-Optionen>`, mit
-frischem Heap als Nebeneffekt): stdout des Kindprozesses liefert die Zeile `BENCH_RESULT <json>`, stderr
-geht nach `<out>/game-<i>.log`. Kein Ergebnis, Exit ≠ 0 oder Ablauf von `--game-timeout` zählen als Absturz
-nur dieses einen Spiels, nicht als Abbruch des ganzen Laufs; Ctrl-C beendet einen noch laufenden
-Kindprozess mit. `--in-process` schaltet zurück auf das alte Verhalten (ein Thread, keine Isolation) – für
-schnelle lokale Tests, wenn ein Forge-Absturz kein Risiko ist (z. B. ein einzelnes Spiel oder Decks, die
-bekanntermaßen stabil laufen).
+**One JVM child process per game.** A Forge-internal crash during the simulation (for example `GameCopier`
+"Couldn't map \<Nothing\>", triggered when `Combat.removeFromCombat` creates a placeholder card unknown to the
+copier as an attacked planeswalker or battle leaves) poisons not just that one game but unknown global state
+for the rest of the JVM — later games then crash one after another or "end" after seconds without a real
+turn. That is why every bench game runs in a fresh `java` child process by default (`mtgplayer.Main
+--bench-one <i> <the same bench options>`, with a fresh heap as a side effect): the child's stdout delivers
+the line `BENCH_RESULT <json>`, its stderr goes to `<out>/game-<i>.log`. No result, an exit code ≠ 0 or
+`--game-timeout` running out count as a crash of that one game, not as an abort of the whole run; Ctrl-C ends
+a still running child process too. `--in-process` switches back to the old behavior (one thread, no
+isolation) — for quick local tests, when a Forge crash is no risk (a single game, say, or decks that are
+known to run stably).
 
-`sim` (`USE_FULL_SIMULATION`) simuliert Angriffe/Blocks/Ziele voraus und ist entsprechend rechenintensiv;
-der Speicherverbrauch ist inzwischen unkritisch (`AiConfig.newLobbyPlayer` leert Forges `AiCache` nach jeder
-Simulationskopie, siehe `.superpowers/sdd/sim-oom-investigation.md` – ohne den Fix wuchs der Heap pro
-Entscheidung unbegrenzt; gilt auch für menschliche Spiele mit Sim-KI, nicht nur für den Bench). `--timeout`
-gilt auch für die Simulation: der Fork gibt jeder Zauberwahl-Entscheidung ein Zeitbudget von `--timeout`
-Sekunden (`SimulationController`-Deadline, siehe `docs/forge-fork.md`) – nach Ablauf werden keine weiteren
-Kandidaten, Ziele, Modi oder tieferen Ebenen mehr bewertet, mindestens ein Kandidat wird aber immer
-durchgerechnet und das Ergebnis ist der beste bis dahin gefundene Zug. Ohne Budget (Upstream-Forge) hing
-eine einzelne Entscheidung im Bench über 30 Minuten. `hybrid` (`USE_HYBRID_SIMULATION`, nur Zauberauswahl
-simuliert) ist deutlich schneller. KI-Sitze spielen inzwischen das Profil `Default` (Datei `res/ai/Default.ai`) statt
-Forges eingebauter Standard-Heuristiken – `AiConfig.newLobbyPlayer` ruft immer `setAiProfile`.
+`sim` (`USE_FULL_SIMULATION`) simulates attacks, blocks and targets ahead and is correspondingly expensive;
+memory use is no longer critical (`AiConfig.newLobbyPlayer` clears Forge's `AiCache` after every simulation
+copy, see `.superpowers/sdd/sim-oom-investigation.md` — without the fix the heap grew without bound per
+decision; this also applies to human games with a sim AI, not just to the bench). `--timeout` applies to the
+simulation too: the fork gives every spell-choice decision a time budget of `--timeout` seconds
+(`SimulationController` deadline, see `docs/forge-fork.md`) — once it runs out, no further candidates,
+targets, modes or deeper levels are evaluated, but at least one candidate is always computed through and the
+result is the best play found so far. Without a budget (upstream Forge) a single decision in the bench hung
+for over 30 minutes. `hybrid` (`USE_HYBRID_SIMULATION`, only the spell choice simulated) is considerably
+faster. AI seats now play the profile `Default` (file `res/ai/Default.ai`) instead of Forge's built-in
+standard heuristics — `AiConfig.newLobbyPlayer` always calls `setAiProfile`.
 
-**Sim-Entscheidungen nachlesen:** `-Dforge.ai.sim.debug=true` (Fork-Flag) lässt den Picker jede Top-Level-
-Entscheidung auf stdout schreiben – Phase, Hand, jeden bewerteten Kandidaten mit Wert, gewählten Zug und Plan.
-Beim `--bench` gibt der Elternprozess das Flag an die Kindprozesse weiter (Ausgabe in `<out>/game-<i>.out.log`);
-ein einzelnes Spiel spielt man direkt nach: `java -Dforge.ai.sim.debug=true -cp … mtgplayer.Main --bench-one <i>
-<Bench-Optionen>` (Seed = `--seed` + i, Sitzreihenfolge wie im Lauf). Befund zur vermeintlichen Nichtstun-Schwäche:
+**Reading sim decisions:** `-Dforge.ai.sim.debug=true` (fork flag) makes the picker write every top-level
+decision to stdout — phase, hand, every evaluated candidate with its value, the chosen play and the plan.
+With `--bench` the parent process passes the flag on to the child processes (output in
+`<out>/game-<i>.out.log`); a single game can be replayed directly: `java -Dforge.ai.sim.debug=true -cp …
+mtgplayer.Main --bench-one <i> <bench options>` (seed = `--seed` + i, seat order as in the run). Report on the
+supposed do-nothing weakness:
 [docs/bench/2026-09-20-stufe-2-nichtstun.md](docs/bench/2026-09-20-stufe-2-nichtstun.md).
 
-## Offen
+## Open
 
-Gleiche Länder im Deckbau stapeln, 5–6-Spieler-Raster im Zuschauer-Modus nur per CSS vorbereitet (kein Fixture),
-sehr volle Zuschauer-Boards bei 1280×720 werden klein (Karten bis 42 px), Moxfield bewusst nicht.
+Stacking identical lands in deck building, the 5–6 player grid in spectator mode only prepared in CSS (no
+fixture), very full spectator boards get small at 1280×720 (cards down to 42 px), Moxfield deliberately left
+out.
 
-## Lizenz und Herkunft
+## License and provenance
 
 Copyright (C) 2026 Haste-MC
 
-MTG-Player baut auf [Forge](https://github.com/Card-Forge/forge) auf, einer freien Magic-Regel-Engine unter
-der GNU General Public License v3, und wird deshalb selbst unter der **GPLv3** verteilt – der vollständige
-Lizenztext steht in [LICENSE](LICENSE). Das heißt für jeden, der eine gebaute Fassung weitergibt: Lizenztext
-mitliefern, Quelltext verfügbar halten, Änderungen kenntlich machen.
+MTG-Player builds on [Forge](https://github.com/Card-Forge/forge), a free Magic rules engine under the GNU
+General Public License v3, and is therefore distributed under the **GPLv3** itself — the full license text is
+in [LICENSE](LICENSE). For anyone who passes a built version on, that means: ship the license text, keep the
+source available, mark your changes.
 
-Die Engine steckt als Submodul unter `forge/` und ist ein **veränderter** Forge: Fork
-[Haste-MC/forge](https://github.com/Haste-MC/forge), der Zeiger steht auf dem Zweig `mtg-player-2.0.15` (Basis
-Tag `forge-2.0.15`; der Zweig `mtg-player` ist bis zum Abschluss des Wechsels weiter 2.0.14-basiert). Was
-gegenüber dem Original anders ist, steht commitweise in `git log forge-2.0.15..mtg-player-2.0.15` und zusammengefasst
-in `forge/MODIFICATIONS.md` – im Kern Fehlerbehebungen und Verbesserungen an der KI.
+The engine sits as a submodule under `forge/` and is a **modified** Forge: the fork
+[Haste-MC/forge](https://github.com/Haste-MC/forge), with the pointer on the branch `mtg-player-2.0.15` (base
+tag `forge-2.0.15`; the branch `mtg-player` stays 2.0.14-based until the switch is finished). What differs
+from the original is in `git log forge-2.0.15..mtg-player-2.0.15` commit by commit and summarized in
+`forge/MODIFICATIONS.md` — at its core bug fixes and improvements to the AI.
 
-Magic: The Gathering ist ein Markenzeichen von Wizards of the Coast; dieses Projekt steht in keiner Verbindung
-zu Wizards und ist kostenlos. Kartenbilder werden nicht mitgeliefert, sondern beim Spielen von
-[Scryfall](https://scryfall.com) geladen.
+Magic: The Gathering is a trademark of Wizards of the Coast; this project has no connection to Wizards and is
+free of charge. Card images are not shipped but loaded from [Scryfall](https://scryfall.com) while playing.

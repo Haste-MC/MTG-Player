@@ -138,7 +138,7 @@ describe("combatTag", () => {
     expect(combatTag(s, 10)).toEqual({
       kind: "atk", label: "→ Teferi, Hero…", title: "greift Teferi, Hero of Dominaria an",
     });
-    expect(combatTag(s, 30)).toEqual({ kind: "blk", label: "blockt Krenko", title: "blockt Krenko" });
+    expect(combatTag(s, 30)).toEqual({ kind: "blk", label: "blocks Krenko", title: "blocks Krenko" });
   });
 
   it("zaehlt beim Mehrfachblock die weiteren Angreifer mit", () => {
@@ -147,7 +147,7 @@ describe("combatTag", () => {
       [card(10, "Krenko"), card(11, "Goblin"), card(30, "Mauer")],
     );
     expect(combatTag(s, 30)).toEqual({
-      kind: "blk", label: "blockt Krenko +1", title: "blockt Krenko und 1 weiteren Angreifer",
+      kind: "blk", label: "blocks Krenko +1", title: "blocks Krenko and 1 more attacker",
     });
   });
 
@@ -166,6 +166,6 @@ describe("combatTag", () => {
     // Verdeckter Angreifer (Morph/Manifest): faceDown ohne name, real erreichbar - siehe Combat.tsx.
     const s = snap([{ attacker: 10, defenderPlayer: 1, blockers: [30] }],
       [{ id: 10, faceDown: true }, card(30, "Mauer")]);
-    expect(combatTag(s, 30)).toEqual({ kind: "blk", label: "Block", title: "blockt" });
+    expect(combatTag(s, 30)).toEqual({ kind: "blk", label: "Block", title: "blocks" });
   });
 });

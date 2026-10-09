@@ -5,7 +5,7 @@ import { send } from "../ws";
 
 /** children stehen zwischen Nachricht und Knoepfen in der Leiste (Table.tsx haengt dort die Denk-Anzeige
  *  ein - in der Leiste statt darueber, damit nichts umbricht oder das Spielfeld umskaliert). */
-export default function Prompt({ state, dangerLabel = "Aufgeben", children }: { state: Snapshot; dangerLabel?: string; children?: ReactNode }) {
+export default function Prompt({ state, dangerLabel = "Concede", children }: { state: Snapshot; dangerLabel?: string; children?: ReactNode }) {
   const p = state.prompt;
   const choiceOpen = useStore((s) => s.choices.length > 0);
   const toast = useStore((s) => s.toast);
@@ -31,7 +31,7 @@ export default function Prompt({ state, dangerLabel = "Aufgeben", children }: { 
   }, [p.okEnabled, p.cancelEnabled, choiceOpen, p.seq]);
   return (
     <div className="prompt">
-      <span className="phase-chip"><span className="turn">Zug {state.turn}</span><span className="sep">·</span>{state.phase ?? ""}</span>
+      <span className="phase-chip"><span className="turn">Turn {state.turn}</span><span className="sep">·</span>{state.phase ?? ""}</span>
       <span className="message">{p.message}</span>
       {toast && <span className="toast" role="status" key={toast.n}>{toast.text}</span>}
       {children}

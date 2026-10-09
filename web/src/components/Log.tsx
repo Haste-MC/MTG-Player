@@ -47,7 +47,7 @@ export default function Log() {
           <div className="log-filter">
             {kinds.map((k) => (
               <button key={k} type="button" className={"chip" + (hiddenKinds.includes(k) ? " off" : "")}
-                title={`${k} ein-/ausblenden`} onClick={() => toggleKind(k)}>
+                title={`show/hide ${k}`} onClick={() => toggleKind(k)}>
                 {k}
               </button>
             ))}
@@ -55,7 +55,7 @@ export default function Log() {
         )}
       </div>
       <div className="log-lines" ref={ref} onScroll={onScroll}>
-        {visible.length === 0 && <div className="empty">noch nichts passiert</div>}
+        {visible.length === 0 && <div className="empty">nothing yet</div>}
         {visible.map((l, i) => {
           const hoverable = l.card !== undefined && !!cards?.[String(l.card)];
           return (

@@ -18,15 +18,15 @@ export default function RoleBanner() {
   if (control) {
     return (
       <div className="role-banner watching-count" role="status">
-        {watchers === 1 ? "1 Browser sieht zu" : `${watchers} Browser sehen zu`}
+        {watchers === 1 ? "1 browser is watching" : `${watchers} browsers are watching`}
       </div>
     );
   }
   return (
     <div className="role-banner" role="status">
-      <span className="role-text"><b>Du siehst zu.</b> Ein anderer Browser steuert diesen Tisch.</span>
+      <span className="role-text"><b>You are watching.</b> Another browser controls this table.</span>
       <button type="button" className="primary small" onClick={() => send({ type: "takeControl" })}>
-        Steuerung übernehmen
+        Take control
       </button>
     </div>
   );

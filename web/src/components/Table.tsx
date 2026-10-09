@@ -192,9 +192,9 @@ export default function Table() {
         <Combat state={state} />
         <div className="stack">
           <div className="panel-title">Stack{state.stack.length > 0 && <span className="count">{state.stack.length}</span>}
-            {state.stack.length > 1 && <span className="muted">oben löst zuerst auf</span>}
+            {state.stack.length > 1 && <span className="muted">top resolves first</span>}
           </div>
-          {state.stack.length === 0 && <div className="empty">leer</div>}
+          {state.stack.length === 0 && <div className="empty">empty</div>}
           {stack.map((s, i) => {
             const src = s.sourceCard !== undefined ? state.cards[String(s.sourceCard)] : undefined;
             const owner = s.controller !== undefined ? state.players.find((p) => p.id === s.controller)?.name : undefined;
@@ -217,7 +217,7 @@ export default function Table() {
       {spectator ? (
         // Zuschauer: die Prompt-Leiste ist die Fusszeile - Serienstand und Denk-Anzeige stehen neben den
         // Steuerknoepfen (Spec §1: der Serienstand soll waehrend der Partie sichtbar sein).
-        <Prompt state={state} dangerLabel="Beenden">
+        <Prompt state={state} dangerLabel="End game">
           {series && (series.games > 1 || bestOf > 0) && (
             <span className="series-status compact">Serie: {formatSeries(series, names)}{bestOf > 0 && ` · Best of ${bestOf}`}</span>
           )}
@@ -234,7 +234,7 @@ export default function Table() {
       {dialogOpen && (
         <div className="overlay">
           <div className="dialog">
-            <h3>{winner ? `${winner} gewinnt` : state.gameOver ? "Spiel beendet" : "Unentschieden"}</h3>
+            <h3>{winner ? `${winner} wins` : state.gameOver ? "Game over" : "Draw"}</h3>
             {series && (series.games > 1 || bestOf > 0) && (
               <p className="series">Serie: {formatSeries(series, names)}{bestOf > 0 && ` · Best of ${bestOf}`}
                 {step.kind === "decided" && <b> – {step.winner} gewinnt die Serie</b>}</p>

@@ -226,22 +226,22 @@ jobs:
           forgeCommit="$(git -C forge rev-parse HEAD)"
           cat > "$RUNNER_TEMP/notes.md" <<EOF
           $MARKE
-          SHA-256 von \`$ZIP_NAME\` (liegt auch als eigenes Anhaengsel \`SHA256SUMS\` bei):
+          SHA-256 of \`$ZIP_NAME\` (also attached as its own asset \`SHA256SUMS\`):
 
           \`$SHA256  $ZIP_NAME\`
 
-          Windows warnt beim allerersten Start mit "Der Computer wurde durch Windows geschuetzt"
-          (SmartScreen, weil die \`.exe\` nicht signiert ist). Auf "Weitere Informationen" klicken, dann
-          "Trotzdem ausfuehren" - das erscheint nur beim ersten Start dieser Fassung.
+          On the very first start Windows warns with "Windows protected your PC" (SmartScreen, because
+          the \`.exe\` is not signed). Click "More info", then "Run anyway" - this appears only on the
+          first start of this version.
 
-          ## Quelltext und Lizenz
+          ## Source and license
 
-          MTG-Player ist freie Software unter der GNU General Public License v3 (GPLv3) - der volle
-          Lizenztext liegt als \`LICENSE\` bei diesem Release UND im Repository:
-          - Quelltext dieser Fassung (Tag \`${{ github.ref_name }}\`): <https://github.com/Haste-MC/MTG-Player/tree/${{ github.ref_name }}>
-          - Die Engine ist ein **veraenderter** Forge: Fork [Haste-MC/forge](https://github.com/Haste-MC/forge),
-            Branch \`mtg-player\`, Submodul-Commit \`$forgeCommit\` fuer genau dieses Release. Was gegenueber
-            dem Original anders ist: \`forge/MODIFICATIONS.md\` im Quelltext oben, bzw.
+          MTG-Player is free software under the GNU General Public License v3 (GPLv3) - the full license
+          text is attached to this release as \`LICENSE\` AND lives in the repository:
+          - Source of this version (tag \`${{ github.ref_name }}\`): <https://github.com/Haste-MC/MTG-Player/tree/${{ github.ref_name }}>
+          - The engine is a **modified** Forge: fork [Haste-MC/forge](https://github.com/Haste-MC/forge),
+            branch \`mtg-player\`, submodule commit \`$forgeCommit\` for exactly this release. What differs
+            from the original: \`forge/MODIFICATIONS.md\` in the source above, or
             <https://github.com/Haste-MC/forge/blob/mtg-player/MODIFICATIONS.md>.
           EOF
           echo "NOTES_PATH=$RUNNER_TEMP/notes.md" >> "$GITHUB_ENV"

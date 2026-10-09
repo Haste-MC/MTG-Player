@@ -156,7 +156,7 @@ export const initialState: AppState = {
 
 const LOG_MAX = 500;
 /** Forges flashIncorrectAction kommt als error mit genau diesem Text (WebGuiGame) – ist kein Log-Ereignis. */
-export const INCORRECT_ACTION_TEXT = "Das geht gerade nicht.";
+export const INCORRECT_ACTION_TEXT = "You can't do that right now.";
 
 /** Fügt eine choice ein (oder ersetzt dieselbe id), aufsteigend nach id sortiert. */
 function addChoice(choices: Choice[], c: Choice): Choice[] {

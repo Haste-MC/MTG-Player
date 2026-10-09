@@ -895,7 +895,7 @@ public final class Bridge {
                 DeckSource.Resolved r = decks.resolve(o);
                 ai.add(r.deck());
                 saves.add(r.save());
-                names.add(o.path("name").asText("KI " + i++));
+                names.add(o.path("name").asText("AI " + i++));
                 configs.add(AiConfig.fromJson(o.path("ai")));
             }
         } catch (IllegalArgumentException e) {
@@ -956,7 +956,7 @@ public final class Bridge {
                 if (spectate) {
                     match.startSpectator(ai, names, configs, timeout, gui, sink, ownDecks, cardSink);
                 } else {
-                    match.start("Du", humanDeck, ai, names, configs, timeout, gui, sink, ownDecks, cardSink);
+                    match.start("You", humanDeck, ai, names, configs, timeout, gui, sink, ownDecks, cardSink);
                 }
             } catch (RuntimeException e) {
                 ws.send(new Messages.ErrorMsg("Spielstart fehlgeschlagen: " + e));

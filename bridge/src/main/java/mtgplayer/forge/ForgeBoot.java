@@ -77,7 +77,7 @@ public final class ForgeBoot {
             // headless: keine Musik/Sounds, kein Namensdialog beim Spielstart
             prefs.setPref(FPref.UI_ENABLE_MUSIC, false);
             prefs.setPref(FPref.UI_ENABLE_SOUNDS, false);
-            prefs.setPref(FPref.PLAYER_NAME, "Du");
+            prefs.setPref(FPref.PLAYER_NAME, "You");
             return null;
         });
         if (Thread.getDefaultUncaughtExceptionHandler() == null) {

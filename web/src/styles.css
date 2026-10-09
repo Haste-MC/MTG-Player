@@ -264,7 +264,7 @@ input[type="checkbox"] { accent-color: var(--accent); width: 14px; height: 14px;
 .player.compact:not(.spectator) .bf-lands .card-slot.has-attach { position: relative; z-index: 1; }
 .player.compact:not(.spectator) .bf-lands .card-slot.has-attach:hover { z-index: 6; }
 .player.compact:not(.spectator) .bf-lands:empty { display: none; }
-.player.compact:not(.spectator) .bf-main:empty::before { content: "keine bleibenden Karten"; color: var(--faint); font-size: 11px; align-self: center; padding: 0 4px; }
+.player.compact:not(.spectator) .bf-main:empty::before { content: "no permanents"; color: var(--faint); font-size: 11px; align-self: center; padding: 0 4px; }
 
 /* Effekt-Chips unter dem Spielfeld (Forges Hilfskarten, CardSnap.effect) */
 .effects { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 6px; margin-top: 6px; padding-top: 5px; border-top: 1px dashed var(--line); }
@@ -387,7 +387,7 @@ input[type="checkbox"] { accent-color: var(--accent); width: 14px; height: 14px;
 .spectator-hand .card-slot:last-child { flex: none; height: var(--h); }
 .spectator-hand .card-slot:hover { z-index: 6; }
 .spectator-hand .card-slot:hover .card-frame { transform: translateY(-2px) scale(1.04); }
-.spectator-hand .row:empty::before { content: "keine Handkarten"; color: var(--faint); font-size: 11px; padding: 2px 4px; white-space: nowrap; }
+.spectator-hand .row:empty::before { content: "no cards in hand"; color: var(--faint); font-size: 11px; padding: 2px 4px; white-space: nowrap; }
 
 /* ---------- Karten ------------------------------------------------------------------------ */
 .card-slot { --h: calc(var(--w, var(--card-w)) * 1.4); flex: none; width: var(--w, var(--card-w)); height: var(--h); display: flex; align-items: center; justify-content: center; }
@@ -556,7 +556,7 @@ input[type="checkbox"] { accent-color: var(--accent); width: 14px; height: 14px;
   border: 1px solid var(--line);
   border-bottom-color: transparent;
 }
-.hand:empty::before { content: "keine Handkarten"; color: var(--faint); font-size: 12px; align-self: center; }
+.hand:empty::before { content: "no cards in hand"; color: var(--faint); font-size: 12px; align-self: center; }
 .fan-slot { position: relative; flex: none; transform-origin: 50% 130%; transform: rotate(calc((var(--i) - var(--mid)) * var(--spread))) translateY(calc((var(--i) - var(--mid)) * (var(--i) - var(--mid)) * var(--spread) / 1deg * 0.35px)); transition: transform .18s ease; z-index: var(--i); }
 .fan-slot + .fan-slot { margin-left: calc(var(--card-w) * -1 * var(--overlap, 0.35)); }
 .fan-slot:hover { z-index: 40; transform: none; }

@@ -100,11 +100,11 @@ export function combatTag(state: Snapshot, cardId: number): CombatTag | undefine
   const blocked = combat.filter((a) => (a.blockers ?? []).includes(cardId));
   if (blocked.length === 0) return undefined;
   const first = cardOf(state, blocked[0].attacker)?.name;
-  if (!first) return { kind: "blk", label: "Block", title: "blockt" };
+  if (!first) return { kind: "blk", label: "Block", title: "blocks" };
   const more = blocked.length - 1;
   return {
     kind: "blk",
-    label: "blockt " + short(first) + (more > 0 ? " +" + more : ""),
-    title: "blockt " + first + (more > 0 ? ` und ${more} weitere${more === 1 ? "n" : ""} Angreifer` : ""),
+    label: "blocks " + short(first) + (more > 0 ? " +" + more : ""),
+    title: "blocks " + first + (more > 0 ? ` and ${more} more attacker${more === 1 ? "" : "s"}` : ""),
   };
 }

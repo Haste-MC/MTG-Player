@@ -45,7 +45,7 @@ export default function CardBox({ card, stack, attached }: { card: CardSnap; sta
             {kenneIch && (
               // Gezeichnetes Auge statt eines Emoji: ein Zeichen haengt an einer Schrift, die auf
               // einem fremden Rechner fehlen kann - im Testlauf kam ein leeres Kaestchen heraus.
-              <svg className="verdeckt-auge" viewBox="0 0 24 16" aria-label={"verdeckt: " + (card.verdeckt?.name ?? "")}>
+              <svg className="verdeckt-auge" viewBox="0 0 24 16" aria-label={"face down: " + (card.verdeckt?.name ?? "")}>
                 <path d="M1 8s4-6 11-6 11 6 11 6-4 6-11 6S1 8 1 8z" fill="none" stroke="currentColor" strokeWidth="1.8" />
                 <circle cx="12" cy="8" r="3" fill="currentColor" />
               </svg>
@@ -135,7 +135,7 @@ export default function CardBox({ card, stack, attached }: { card: CardSnap; sta
         {(tag || card.attacking || card.blocking) && (
           <div className={"tag combat-tag " + (tag ? tag.kind : card.attacking ? "atk" : "blk")}
             title={tag ? tag.title : undefined}>
-            {tag ? tag.label : card.attacking ? "Angriff" : "Block"}
+            {tag ? tag.label : card.attacking ? "Attack" : "Block"}
           </div>
         )}
         {card.emblem && <div className="tag emblem-tag" title="Emblem">Emblem</div>}

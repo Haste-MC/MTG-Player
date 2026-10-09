@@ -23,17 +23,17 @@ export default function Thinking({ compact = false }: { compact?: boolean }) {
   // mit Prioritaet, nicht ob der ein Mensch ist). „Du denkt ... 42 s", sobald man kurz ueberlegt, waere
   // falsch und stuende im Normalfall dauernd da - also nichts anzeigen, wenn der eigene Sitz dran ist.
   if (me !== undefined && thinking.player === me) return null;
-  const name = players?.find((p) => p.id === thinking.player)?.name ?? "KI";
+  const name = players?.find((p) => p.id === thinking.player)?.name ?? "AI";
   return (
     // role="status" meldet den Beginn des Rechnens einmal; Punkte und Sekundenzahl sind aria-hidden,
     // sonst spraeche ein Screenreader jede Sekunde neu.
     <span className={"thinking" + (compact ? " compact" : "")} role="status">
       <span className="line">
-        <span className="who">{name} denkt</span>
+        <span className="who">{name} is thinking</span>
         <span className="dots" aria-hidden="true"><i /><i /><i /></span>
         <span className="secs" aria-hidden="true">{thinking.seconds} s</span>
       </span>
-      {thinking.seconds >= LONG_SECONDS && <span className="hint">Simulation in einer 4er-Runde kann Minuten dauern</span>}
+      {thinking.seconds >= LONG_SECONDS && <span className="hint">a simulation in a four-player game can take minutes</span>}
     </span>
   );
 }
