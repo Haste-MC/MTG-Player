@@ -10,6 +10,20 @@ describe("series", () => {
     expect(seriesKey(msg)).toBe(seriesKey(other));
     expect(seriesKey(msg)).not.toBe(seriesKey({ ...msg, opponents: [{ precon: "C", name: "KI 1" }] }));
   });
+  it("key unterscheidet Aufstellungen, die sich nur im Team des Menschen unterscheiden: sonst liefe eine "
+    + "Best-of-5 mit [1,1,2,2] nach dem Wechsel des Menschen zu [2,1,2,2] mit den alten Siegen in einer anderen Aufstellung weiter", () => {
+    const opp = (team: number) => ({ precon: "B", name: "KI", team });
+    const vierSitze: StartGame = { ...msg, humanTeam: 1, opponents: [opp(1), opp(2), opp(2)] };
+    const menschWechselt: StartGame = { ...vierSitze, humanTeam: 2 };
+    expect(seriesKey(vierSitze)).not.toBe(seriesKey(menschWechselt));
+    const s = recordResult(startSeries(undefined, vierSitze), "Team 1");
+    expect(startSeries(s, menschWechselt)).toEqual({ key: seriesKey(menschWechselt), wins: {}, games: 0 });
+  });
+  it("key ignoriert Partnerhand zeigen: das aendert nur, was man sieht, nicht die Aufstellung", () => {
+    const opp = (team: number) => ({ precon: "B", name: "KI", team });
+    const offen: StartGame = { ...msg, humanTeam: 1, opponents: [opp(1), opp(2), opp(2)] };
+    expect(seriesKey(offen)).toBe(seriesKey({ ...offen, revealPartnerHand: true }));
+  });
   it("startSeries behaelt eine serie mit gleichem key und setzt sonst zurueck", () => {
     const s = recordResult(startSeries(undefined, msg), "Du");
     expect(startSeries(s, msg)).toBe(s);

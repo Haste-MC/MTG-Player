@@ -1,4 +1,4 @@
-import { NO_TEAM } from "./lineup";
+import { humanHasPartner, NO_TEAM } from "./lineup";
 import type { AiPick, DeckRef, StartGame } from "./protocol";
 
 /** Wird nicht mitgeschickt, wenn ein Gegner genau darauf steht - Forge nimmt Standard/Default selbst an. */
@@ -18,7 +18,7 @@ function isDefaultAi(p: AiPick): boolean {
  * mitgeschickt (Payload bleibt für den Normalfall byte-identisch zum alten Format).
  * teams: Teamnummern in Sitzreihenfolge (Mensch zuerst, im Zuschauer-Modus nur KIs), NO_TEAM = keins.
  * Was nicht gesetzt ist, fehlt in der Nachricht ganz (kein team/humanTeam); revealPartnerHand geht nur
- * mit, wenn der menschliche Sitz in einem Team ist. Ob die Aufstellung gueltig ist, prueft lineupValid.
+ * mit, wenn der menschliche Sitz einen Partner hat (ein anderer Sitz im selben Team). Ob die Aufstellung gueltig ist, prueft lineupValid.
  */
 export function buildStartGame(
   spectate: boolean,
@@ -54,7 +54,7 @@ export function buildStartGame(
     type: "startGame",
     humanDeck: human,
     ...(humanTeam !== NO_TEAM ? { humanTeam } : {}),
-    ...(humanTeam !== NO_TEAM && revealPartnerHand ? { revealPartnerHand: true } : {}),
+    ...(humanHasPartner(teams) && revealPartnerHand ? { revealPartnerHand: true } : {}),
     opponents,
     ...timeoutField,
   };

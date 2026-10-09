@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { type AiSettings, loadAiSettings, restoreSlots, saveAiSettings } from "../aiSettings";
 import { EMPTY_PICK, type Pick, toRef } from "../deckref";
-import { fitTeams, lineupProblem, lineupText, NO_TEAM, seatTeams, splitSeats, TEAM_CHOICES, twoVsTwo, withoutSeat } from "../lineup";
+import { fitTeams, humanHasPartner, lineupProblem, lineupText, NO_TEAM, seatTeams, splitSeats, TEAM_CHOICES, twoVsTwo, withoutSeat } from "../lineup";
 import { buildStartGame, DEFAULT_AI } from "../lobbyPayload";
 import { dropMissing, loadPicks, savePicks } from "../lobbyPicks";
 import type { AiPick } from "../protocol";
@@ -275,7 +275,7 @@ export default function Lobby() {
             <span className="hint">{lineup || "ohne Teams – jeder gegen jeden"}</span>
           </div>
           {lineupError && <span className="hint warn">{lineupError}</span>}
-          {!spectate && humanTeam !== NO_TEAM && (
+          {!spectate && humanHasPartner(teams) && (
             <label className="series-pick" title="Du siehst die Handkarten deines Partners">
               <input type="checkbox" checked={revealPartner} onChange={(e) => setRevealPartner(e.target.checked)} />
               Partnerhand zeigen

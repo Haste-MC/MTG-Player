@@ -4,11 +4,14 @@ import type { StartGame } from "./protocol";
  * (GameOver.winner); games zaehlt auch Partien ohne Sieger (Unentschieden/Abbruch). */
 export interface Series { key: string; wins: Record<string, number>; games: number }
 
-/** Identitaet einer Serie: Sitzmodus und Decks - Spielernamen ("KI 1") und Bedenkzeit gehoeren nicht dazu. */
+/** Identitaet einer Serie: Sitzmodus, Decks und Teams (humanTeam hier, team der Gegner im Spread unten) -
+ * Spielernamen ("KI 1") und Bedenkzeit gehoeren nicht dazu. revealPartnerHand ebenso nicht: es aendert nur,
+ * was der Mensch sieht, nicht die Aufstellung, und die Siege aus den bisherigen Partien bleiben gueltig. */
 export function seriesKey(msg: StartGame): string {
   return JSON.stringify({
     spectate: msg.spectate,
     humanDeck: msg.humanDeck,
+    humanTeam: msg.humanTeam,
     opponents: msg.opponents.map(({ name: _name, ...deck }) => deck),
   });
 }

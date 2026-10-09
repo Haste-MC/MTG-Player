@@ -50,6 +50,13 @@ export function lineupText(names: string[], teams: number[]): string {
     .join(" — ");
 }
 
+/** Ob der menschliche Sitz (teams[0]) einen Partner hat: ein anderer Sitz mit derselben Teamnummer.
+ * Allein in seinem Team ([1,2,2]) gibt es keine Partnerhand, die man zeigen koennte. */
+export function humanHasPartner(teams: number[]): boolean {
+  const mensch = teams[0] ?? NO_TEAM;
+  return mensch !== NO_TEAM && teams.slice(1).some((t) => t === mensch);
+}
+
 /** Schnellwahl: genau vier Sitze werden zu 1/1/2/2, sonst gibt es nichts zu setzen. */
 export function twoVsTwo(seatCount: number): number[] | undefined {
   return seatCount === 4 ? [1, 1, 2, 2] : undefined;

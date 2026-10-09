@@ -105,6 +105,12 @@ describe("buildStartGame", () => {
     expect(ohneHaken).toHaveProperty("humanTeam", 1);
   });
 
+  it("Partnerhand geht nicht mit, wenn der Mensch allein in seinem Team ist ([1,2,2]): kein Partner, dessen Hand man sehen koennte", () => {
+    const msg = buildStartGame(false, precon("A"), [precon("B"), precon("C")], [DEFAULT_AI, DEFAULT_AI], 5, [1, 2, 2], true);
+    expect(msg).toHaveProperty("humanTeam", 1);
+    expect(msg).not.toHaveProperty("revealPartnerHand");
+  });
+
   it("Zuschauer-Modus: Teams gehoeren den KI-Sitzen, kein humanTeam, keine Partnerhand", () => {
     const msg = buildStartGame(true, undefined, drei, dreimalStandard, 5, [1, 1, 2], true);
     expect(msg).toEqual({

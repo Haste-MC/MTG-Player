@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fitTeams, lineupProblem, lineupText, lineupValid, seatTeams, splitSeats, twoVsTwo, withoutSeat } from "./lineup";
+import { fitTeams, humanHasPartner, lineupProblem, lineupText, lineupValid, seatTeams, splitSeats, twoVsTwo, withoutSeat } from "./lineup";
 
 describe("lineup", () => {
   it("ohne Teams gueltig", () => {
@@ -57,6 +57,16 @@ describe("lineup", () => {
     expect(twoVsTwo(4)).toEqual([1, 1, 2, 2]);
     expect(twoVsTwo(3)).toBeUndefined();
     expect(twoVsTwo(6)).toBeUndefined();
+  });
+});
+
+describe("humanHasPartner", () => {
+  it("Partner nur, wenn ein anderer Sitz die Teamnummer des Menschen teilt", () => {
+    expect(humanHasPartner([1, 1, 2, 2])).toBe(true);
+    expect(humanHasPartner([2, 1, 2, 2])).toBe(true);
+    expect(humanHasPartner([1, 2, 2])).toBe(false); // allein in Team 1
+    expect(humanHasPartner([-1, 1, 1])).toBe(false); // der Mensch hat kein Team, die KIs schon
+    expect(humanHasPartner([])).toBe(false);
   });
 });
 

@@ -204,6 +204,42 @@ describe("Lobby: Teams", () => {
     expect(start()).toBeDisabled();
   });
 
+  it("Teams löschen setzt jeden Sitz zurueck (Mensch und KIs) und ist ohne gesetztes Team gesperrt: "
+    + "sonst bliebe ein halb geloeschtes Team stehen oder der Knopf taete scheinbar nichts", () => {
+    lobbyMit(3, { teams: [1, 1, 2, 2] });
+    const loeschen = screen.getByRole("button", { name: "Teams löschen" });
+    expect(loeschen).not.toBeDisabled();
+    fireEvent.click(loeschen);
+    for (const sitz of ["You", "AI 1", "AI 2", "AI 3"]) expect(wahl(`Team von ${sitz}`).value).toBe("-1");
+    expect(screen.getByText("ohne Teams – jeder gegen jeden")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Teams löschen" })).toBeDisabled();
+    // Danach startet die Partie wieder ohne jedes Team-Feld.
+    fireEvent.click(start());
+    expect(JSON.stringify(vi.mocked(send).mock.calls[0][0])).not.toMatch(/team|Team/);
+  });
+
+  it("Teams löschen ist von Anfang an gesperrt, wenn kein Team gesetzt ist", () => {
+    lobbyMit(2);
+    expect(screen.getByRole("button", { name: "Teams löschen" })).toBeDisabled();
+  });
+
+  it("Partnerhand zeigen gibt es nur, wenn ein anderer Sitz das Team des Menschen teilt: "
+    + "allein in Team 1 ([1,2,2]) gibt es keinen Partner, dessen Hand man zeigen koennte", () => {
+    lobbyMit(2, { teams: [1, 2, 2], revealPartner: true });
+    expect(screen.queryByLabelText("Partnerhand zeigen")).not.toBeInTheDocument();
+    // Auch ein frueher gesetzter Haken darf dann nicht mehr mitgesendet werden.
+    fireEvent.click(start());
+    const msg = vi.mocked(send).mock.calls[0][0];
+    expect(msg).toHaveProperty("humanTeam", 1);
+    expect(msg).not.toHaveProperty("revealPartnerHand");
+  });
+
+  it("Partnerhand zeigen erscheint, sobald ein KI-Sitz das Team des Menschen teilt", () => {
+    lobbyMit(2, { teams: [1, 2, 2] });
+    fireEvent.change(wahl("Team von AI 1"), { target: { value: "1" } });
+    expect(screen.getByLabelText("Partnerhand zeigen")).toBeInTheDocument();
+  });
+
   it("die Teamwahl wird gemerkt", () => {
     lobbyMit(3);
     fireEvent.click(screen.getByRole("button", { name: "2v2" }));

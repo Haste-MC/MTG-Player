@@ -18,6 +18,11 @@ import java.util.Set;
  * {@code MatchRecorder.hasTeams}). Ein halb gesetztes Feld waere sonst eine
  * Partie, in der ein Sitz keine Gegner hat - Forge beendet sie sofort mit
  * {@code AllOpposingTeamsLost}, und niemand wuesste warum.
+ *
+ * <p>ACHTUNG, Gegenstueck: dieselbe Regel steht ein zweites Mal in {@code web/src/lineup.ts}
+ * ({@code lineupProblem}, samt {@code MAX_TEAM}) - die Lobby sperrt damit "Spiel starten", bevor die
+ * Bridge etwas ablehnen muesste. Beide Seiten teilen keine gemeinsamen Testfaelle; wer hier etwas aendert, muss
+ * {@code lineup.ts} (und {@code lineup.test.ts}) im selben Zug anpassen, und umgekehrt.
  */
 public final class Teams {
 
