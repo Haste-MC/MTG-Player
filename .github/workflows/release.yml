@@ -211,7 +211,12 @@ jobs:
 
       - name: Freigabetext schreiben (Pruefsumme auch als Text-Rueckfall, siehe UpdateCheck.shaFromBody)
         if: github.event_name != 'workflow_dispatch'
+        env:
+          # Trennt den selbst geschriebenen Teil eines von Hand angelegten Releases von dem, was
+          # dieser Ablauf beisteuert - siehe den letzten Schritt.
+          MARKE: '<!-- von scripts/release.yml, darunter nichts von Hand aendern -->'
         run: |
+          echo "MARKE=$MARKE" >> "$GITHUB_ENV"
           # Review-Befund, Punkt 10: die Release-Seite nannte bisher nur die Pruefsumme - wer das ZIP
           # von den Assets herunterlaedt, landet nicht zwangslaeufig vorher im README. GPLv3 verlangt
           # fuer eine weitergegebene gebaute Fassung Lizenztext, Quelltext-Zugriff UND kenntlich gemachte
@@ -220,6 +225,7 @@ jobs:
           # demselben Grund (unsignierte .exe, siehe README "Herunterladen und starten").
           forgeCommit="$(git -C forge rev-parse HEAD)"
           cat > "$RUNNER_TEMP/notes.md" <<EOF
+          $MARKE
           SHA-256 von \`$ZIP_NAME\` (liegt auch als eigenes Anhaengsel \`SHA256SUMS\` bei):
 
           \`$SHA256  $ZIP_NAME\`
@@ -240,12 +246,28 @@ jobs:
           EOF
           echo "NOTES_PATH=$RUNNER_TEMP/notes.md" >> "$GITHUB_ENV"
 
-      - name: Release anlegen und ZIP + Pruefsumme anhaengen
+      - name: Release anlegen oder ergaenzen, ZIP + Pruefsumme anhaengen
         if: github.event_name != 'workflow_dispatch'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "${{ github.ref_name }}" \
-            "$ZIP_PATH" "$SHA_PATH" \
-            --title "MTG-Player ${{ steps.version.outputs.value }}" \
-            --notes-file "$NOTES_PATH"
+          tag="${{ github.ref_name }}"
+          # Wer das Release auf GitHub von Hand anlegt, legt damit auch den Tag an - und der Tag
+          # startet diesen Ablauf. "gh release create" bricht dann ab ("a release with the same tag
+          # name already exists"), und das ZIP haengt an gar nichts: genau so standen am 2026-10-08
+          # zwei leere Releases da. Gibt es das Release schon, wird es ERGAENZT statt neu angelegt.
+          if ! gh release view "$tag" >/dev/null 2>&1; then
+            gh release create "$tag" "$ZIP_PATH" "$SHA_PATH" \
+              --title "MTG-Player ${{ steps.version.outputs.value }}" \
+              --notes-file "$NOTES_PATH"
+            exit 0
+          fi
+          echo "Release $tag gibt es schon - Anhaenge und Freigabetext werden ergaenzt."
+          gh release upload "$tag" "$ZIP_PATH" "$SHA_PATH" --clobber
+          # Titel und selbst geschriebener Text bleiben stehen; nur der Teil ab der Marke wird
+          # ersetzt. Dadurch ist ein zweiter Lauf desselben Tags unschaedlich: der Text waechst
+          # nicht, und Pruefsumme und GPL-Hinweis stehen danach genau einmal da.
+          vorher="$(gh release view "$tag" --json body -q .body)"
+          eigen="${vorher%%"$MARKE"*}"
+          { printf '%s' "$eigen"; cat "$NOTES_PATH"; } > "$RUNNER_TEMP/notes-ergaenzt.md"
+          gh release edit "$tag" --notes-file "$RUNNER_TEMP/notes-ergaenzt.md"
