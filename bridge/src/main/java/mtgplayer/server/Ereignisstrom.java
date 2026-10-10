@@ -90,7 +90,10 @@ public final class Ereignisstrom implements AutoCloseable {
             if (k == null) {
                 // Unbekanntes Token: der Browser baut daraufhin den Strom neu auf (ws.ts). Die Zeile im
                 // Log ist die Spur, falls er das nicht tut - sonst ist eine verlorene Eingabe unsichtbar.
-                CrashLog.note("sse", "Eingabe abgewiesen: Token " + token(ex.getRequestURI().getQuery())
+                // Geloggt wird der ROHE Wert, gekappt: getQuery() dekodiert, und ein %0A im Token schriebe
+                // sonst eine zweite, erfundene Zeile - diese Route verlangt ja keine Anmeldung. Gekappt,
+                // weil sonst jeder Aufrufer bridge.log beliebig wachsen lassen koennte.
+                CrashLog.note("sse", "Eingabe abgewiesen: Token " + kappen(token(ex.getRequestURI().getRawQuery()))
                         + " unbekannt (Strom beendet oder Bridge neu gestartet); Antwort 404");
                 ex.sendResponseHeaders(404, -1);
                 return;
@@ -117,6 +120,13 @@ public final class Ereignisstrom implements AutoCloseable {
             }
         }
         return "";
+    }
+
+    /** So viele Zeichen eines (unbekannten, fremden) Tokens kommen hoechstens ins Log. */
+    private static final int LOG_TOKEN_MAX = 40;
+
+    static String kappen(String roh) {
+        return roh.length() <= LOG_TOKEN_MAX ? roh : roh.substring(0, LOG_TOKEN_MAX) + "...";
     }
 
     /** Haelt die Stroeme offen und entfernt die, die stillschweigend abgerissen sind. */

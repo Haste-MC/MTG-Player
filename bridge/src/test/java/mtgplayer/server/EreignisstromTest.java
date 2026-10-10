@@ -154,6 +154,38 @@ class EreignisstromTest {
         assertTrue(log.contains("unbekannt"), "und der Grund steht dabei: " + log);
     }
 
+    private String logNachAbgewiesenerEingabe(String tokenImQuery) throws Exception {
+        client.send(
+                HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + PORT + "/eingabe?token=" + tokenImQuery))
+                        .POST(HttpRequest.BodyPublishers.ofString("{\"type\":\"requestState\"}")).build(),
+                HttpResponse.BodyHandlers.discarding());
+        return Files.exists(logDatei) ? Files.readString(logDatei) : "";
+    }
+
+    /**
+     * Die Eingabe-Route braucht keine Anmeldung, also kann jeder Aufrufer das Token waehlen. Wuerde der
+     * dekodierte Wert geloggt, schriebe ein {@code %0A} im Token eine zweite, erfundene Logzeile.
+     */
+    @Test
+    @Timeout(value = 30, unit = TimeUnit.SECONDS)
+    void zeilenumbruchImTokenSchreibtKeineZweiteLogzeile() throws Exception {
+        String log = logNachAbgewiesenerEingabe("abc%0A2026-01-01%20sse%20FAELSCHUNG");
+        assertTrue(log.contains("Eingabe abgewiesen"), "die echte Zeile ist da: " + log);
+        assertFalse(log.lines().anyMatch(z -> z.contains("FAELSCHUNG") && !z.contains("Eingabe abgewiesen")),
+                "der Rest des Tokens steht nicht als eigene Zeile im Log: " + log);
+        assertEquals(1, log.lines().filter(z -> z.contains("Eingabe abgewiesen")).count(), log);
+    }
+
+    /** Ohne Kappung wuechse bridge.log mit jeder Anfrage um beliebig viel - ohne Anmeldung. */
+    @Test
+    @Timeout(value = 30, unit = TimeUnit.SECONDS)
+    void langesTokenWirdImLogGekappt() throws Exception {
+        String log = logNachAbgewiesenerEingabe("x".repeat(5000));
+        assertTrue(log.contains("Eingabe abgewiesen"), log);
+        assertFalse(log.contains("x".repeat(41)), "hoechstens 40 Zeichen des Tokens: " + log.length() + " Zeichen im Log");
+        assertTrue(log.contains("x".repeat(40)), "die ersten 40 bleiben lesbar");
+    }
+
     /**
      * Die gepackte App waehlt freie Ports; die Seite kann den WebSocket-Port nicht raten. Wer die
      * Seite ausliefert, nennt ihn - auf demselben Ursprung, also nie an einer fremden Bridge.

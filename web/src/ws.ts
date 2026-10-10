@@ -12,30 +12,45 @@ const STANDARD_WS_PORT = "8081";
  * <p>Warum /ports: die gepackte App waehlt freie Ports, 8081 ist dort falsch - und im Netz landet ein
  * geratener 8081 leicht an einer FREMDEN Bridge (so lief einmal das Spiel eines Kollegen auf dem Rechner
  * des Entwicklers). Die Bridge liefert die Seite aus, also nennt sie auf demselben Ursprung ihren
- * eigenen Port. Eine aeltere Bridge kennt /ports nicht; dann bleibt es beim bisherigen 8081.</p>
+ * eigenen Port.</p>
+ *
+ * <p>Auf 8081 zurueck faellt es NUR, wenn /ports nachweislich nicht existiert (eine aeltere Bridge):
+ * HTTP 404, oder 200 mit etwas, das kein JSON ist (der Datei-Server liefert dort die index.html). Ein
+ * Netzfehler, ein 5xx oder ein abgebrochenes Lesen beweisen das nicht - /ports antwortet ab dem ersten
+ * Byte der Bridge. Dann liefert diese Funktion {@code undefined}, und der Aufrufer fragt spaeter erneut.
+ * Ein geratener 8081 nach einem einzigen Aussetzer waere genau der Fehler, der an einer fremden Bridge
+ * landete.</p>
  *
  * <p>Wird bei jedem Verbindungsversuch neu gefragt und nichts gemerkt: waehrend die Bridge hochfaehrt
  * (Forge liest die Karten), liefert /ports noch die index.html - das waere sonst fuer immer als
  * "aeltere Bridge" im Gedaechtnis.</p>
  */
-async function socketUrl(): Promise<string> {
+async function socketUrl(): Promise<string | undefined> {
   const params = new URLSearchParams(location.search);
   const wsParam = params.get("ws");
   if (wsParam && /^wss?:\/\//.test(wsParam)) return wsParam;
   const wsPortParam = params.get("wsPort");
   const port = wsPortParam && /^\d{1,5}$/.test(wsPortParam) ? wsPortParam : await entdeckterPort();
+  if (port === undefined) return undefined;
   return `ws://${location.hostname}:${port}`;
 }
 
-async function entdeckterPort(): Promise<string> {
+async function entdeckterPort(): Promise<string | undefined> {
+  let res: Response;
   try {
-    const res = await fetch("/ports");
-    if (!res.ok) return STANDARD_WS_PORT;
-    const ws = ((await res.json()) as { ws?: unknown }).ws;
-    return typeof ws === "number" && Number.isInteger(ws) && ws > 0 && ws < 65536 ? String(ws) : STANDARD_WS_PORT;
+    res = await fetch("/ports");
   } catch {
-    // Netzfehler, oder die Antwort war die index.html des Datei-Servers (kein JSON): aeltere Bridge.
-    return STANDARD_WS_PORT;
+    return undefined;                              // Netzfehler: keine Antwort, also kein Beweis
+  }
+  if (res.status === 404) return STANDARD_WS_PORT; // die Bridge kennt /ports nicht: aeltere Bridge
+  if (!res.ok) return undefined;                   // 5xx u. a.: die Bridge ist da, aber gerade nicht in Form
+  try {
+    const ws = ((await res.json()) as { ws?: unknown } | null)?.ws;
+    return typeof ws === "number" && Number.isInteger(ws) && ws > 0 && ws < 65536 ? String(ws) : STANDARD_WS_PORT;
+  } catch (e) {
+    // Ein SyntaxError heisst: es kam etwas an, das kein JSON ist - die index.html des Datei-Servers, also
+    // eine aeltere Bridge. Jeder andere Fehler (Abbruch beim Lesen des Bodys) ist ein Aussetzer.
+    return e instanceof SyntaxError ? STANDARD_WS_PORT : undefined;
   }
 }
 
@@ -49,13 +64,6 @@ let token: string | undefined;
 let strom: EventSource | undefined;
 /** Wartet jemand (der Neuaufbau nach einem 404) auf das naechste hello? Dann bekommt er dessen Token. */
 let aufHello: ((t: string) => void) | undefined;
-
-/**
- * Wurde der Strom neu gebaut, und seither ging noch keine Eingabe durch? Dann baut ein weiteres 404 ihn
- * NICHT noch einmal: sonst loeste jedes hello (es schickt selbst ein requestState) bei einer Bridge, die
- * dauernd 404 sagt, den naechsten Neuaufbau aus - eine Endlosschleife statt einer Fehlermeldung.
- */
-let stromFrisch = false;
 
 /** So lange wartet ein Neuaufbau des Stroms auf das hello, bevor die Eingabe als verloren gilt. */
 const HELLO_FRIST_MS = 8000;
@@ -71,7 +79,9 @@ function melde(roh: string): void {
     // Erst mit dem Token lassen sich Eingaben schicken - und der Zustand holen.
     token = (m as { token: string }).token;
     aufHello?.(token);
-    send({ type: "requestState" });
+    // Das requestState gehoert nicht dem Nutzer und baut den Strom nie neu auf: sonst loeste jedes hello
+    // bei einer Bridge, die dauernd 404 sagt, den naechsten Neuaufbau aus - eine Endlosschleife.
+    schicke({ type: "requestState" }, false);
     return;
   }
   listener?.(m as Inbound);
@@ -81,6 +91,12 @@ async function open(): Promise<void> {
   if (strom) return;                             // auf dem Rueckfallweg bleiben wir
   const url = await socketUrl();
   if (strom) return;                             // waehrend der Frage nach dem Port umgeschaltet
+  if (url === undefined) {
+    // /ports hat nicht geantwortet. Nicht raten (siehe socketUrl), sondern mit demselben Zeitgeber wie
+    // nach einem gescheiterten Socket noch einmal fragen.
+    setTimeout(open, 1000);
+    return;
+  }
   try {
     socket = new WebSocket(url);
   } catch {
@@ -154,13 +170,17 @@ async function baueStromNeu(altesToken: string): Promise<string | undefined> {
   if (token !== undefined && token !== altesToken) return token;
   strom?.close();
   token = undefined;
-  stromFrisch = true;
-  const hello = new Promise<string | undefined>((fertig) => {
+  const hello = warteAufHello();
+  oeffneStrom();
+  return hello;
+}
+
+/** Das naechste Token, oder {@code undefined}, wenn binnen {@link HELLO_FRIST_MS} keins kommt. */
+function warteAufHello(): Promise<string | undefined> {
+  return new Promise<string | undefined>((fertig) => {
     const frist = setTimeout(() => { aufHello = undefined; fertig(undefined); }, HELLO_FRIST_MS);
     aufHello = (t) => { clearTimeout(frist); aufHello = undefined; fertig(t); };
   });
-  oeffneStrom();
-  return hello;
 }
 
 /**
@@ -177,15 +197,25 @@ export function setzeSteuerung(wert: boolean): void {
 let schlange: Promise<unknown> = Promise.resolve();
 
 export function send(msg: Outbound): void {
+  schicke(msg, true);
+}
+
+/**
+ * @param darfNeuBauen darf ein 404 auf diese Eingabe den Strom neu aufbauen? Je Eingabe hoechstens einmal
+ *        (siehe {@link liefere}); das vom hello selbst ausgeloeste requestState gar nicht.
+ */
+function schicke(msg: Outbound, darfNeuBauen: boolean): void {
   // Zuschauer schicken nichts: die Bridge wuerde es ohnehin verwerfen, und so bleibt die Leitung
   // ruhig. takeControl ist die eine Ausnahme - sonst kaeme man nie an die Steuerung.
   if (!steuert && msg.type !== "takeControl") {
     return;
   }
   if (strom) {
-    if (!token) return;                          // vor dem hello gibt es niemanden, dem das gehoert
+    // Auch ohne Token (vor dem ersten hello, oder mitten im Neuaufbau) wird eingereiht, nicht verworfen:
+    // ein Klick in diesem Fenster waere sonst genau die stille Eingabe, die es nicht geben soll. liefere()
+    // liest das Token erst, wenn die Eingabe an der Reihe ist, und wartet notfalls auf das hello.
     const rumpf = JSON.stringify(msg);
-    schlange = schlange.then(() => liefere(msg.type, rumpf));
+    schlange = schlange.then(() => liefere(msg.type, rumpf, darfNeuBauen));
     return;
   }
   if (socket && socket.readyState === WebSocket.OPEN) {
@@ -195,17 +225,25 @@ export function send(msg: Outbound): void {
 
 /**
  * Eine Eingabe auf dem Rueckfallweg zustellen. Das Token wird erst hier gelesen, nicht beim send():
- * ein Neuaufbau weiter vorn in der Schlange hat es womoeglich erneuert.
+ * ein Neuaufbau weiter vorn in der Schlange hat es womoeglich erneuert - oder es fehlt noch ganz, dann
+ * wartet die Eingabe auf das hello.
  *
  * <p>Nichts davon darf still enden - eine verschluckte Eingabe sieht fuer den Nutzer aus wie ein toter
  * Knopf ("Spiel starten" tut nichts, fuer immer). Also: bei 404 einmal neu aufbauen und erneut senden,
  * jeder andere Misserfolg wird als Fehlerzeile gemeldet (wie ein error der Bridge, siehe store).</p>
+ *
+ * <p>"Einmal" gilt je Eingabe (der lokale Zustand dieses Aufrufs), nicht global: eine globale Sperre, die
+ * nur ein Erfolg loest, schaltete die Heilung fuer immer ab, sobald das erneute Senden aus einem anderen
+ * Grund scheitert. Gegen die Endlosschleife reicht es, dass eine Eingabe nur einmal neu baut.</p>
  */
-async function liefere(art: string, rumpf: string): Promise<void> {
-  const erstes = token;
-  if (!erstes) return;
+async function liefere(art: string, rumpf: string, darfNeuBauen: boolean): Promise<void> {
+  const erstes = token ?? await warteAufHello();
+  if (!erstes) {
+    meldeFehler(`Eingabe „${art}“ nicht zugestellt: die Bridge hat sich noch nicht gemeldet (kein hello). Seite neu laden.`);
+    return;
+  }
   let res = await sende(erstes, rumpf);
-  if (res === 404 && !stromFrisch) {
+  if (res === 404 && darfNeuBauen) {
     const frisch = await baueStromNeu(erstes);
     if (!frisch) {
       meldeFehler(`Eingabe „${art}“ nicht zugestellt: die Bridge kennt diese Verbindung nicht mehr und meldet sich nicht neu. Seite neu laden.`);
@@ -214,10 +252,10 @@ async function liefere(art: string, rumpf: string): Promise<void> {
     res = await sende(frisch, rumpf);
   }
   if (typeof res === "number" && res >= 200 && res < 300) {
-    stromFrisch = false;
+    return;
   } else if (res === "netz") {
     meldeFehler(`Eingabe „${art}“ nicht zugestellt: keine Verbindung zur Bridge.`);
-  } else if (typeof res === "number") {
+  } else {
     meldeFehler(`Eingabe „${art}“ von der Bridge abgewiesen (HTTP ${res}).`);
   }
 }
