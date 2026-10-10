@@ -462,14 +462,17 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 - Modify: `bridge/src/main/java/mtgplayer/bench/BenchArgs.java`
 - Modify: `bridge/src/main/java/mtgplayer/bench/SubprocessRunner.java` (the method that builds the child's
   argument list, around line 110)
-- Test: `bridge/src/test/java/mtgplayer/bench/BenchArgsTest.java` (extend),
-  `bridge/src/test/java/mtgplayer/bench/SubprocessArgsTest.java` (new, if no test covers the child args yet —
-  check first and extend the existing one instead of adding a second)
+- Test: `bridge/src/test/java/mtgplayer/bench/BenchArgsTest.java` (extend) and
+  `bridge/src/test/java/mtgplayer/bench/BenchSubprocessTest.java` (extend — it already exercises the child
+  process path; put the `childArgs` cases there instead of adding a second class)
 
 **Interfaces:**
 - Consumes: nothing.
 - Produces: `BenchArgs` gains a trailing component `boolean teams`; `BenchArgs.parse` accepts `--teams` as a
   flag without a value (like `--in-process`).
+- No new validation: `--teams` without usable deck references fails exactly where a two-seat run fails today,
+  in `Bench.loadDeck` ("Deck-Referenz muss mit 'precon:' oder 'saved:' beginnen"). Do not add a second check
+  that would drift from it.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -508,7 +511,7 @@ and for the child process:
 
 - [ ] **Step 2: Run them and watch them fail**
 
-Run: `cd bridge && mvn -o -q -Dtest='BenchArgsTest,SubprocessArgsTest' test`
+Run: `cd bridge && mvn -o -q -Dtest='BenchArgsTest,BenchSubprocessTest' test`
 Expected: compile error (`teams()` / `childArgs` missing).
 
 - [ ] **Step 3: Implement**
@@ -531,7 +534,7 @@ unchanged) and append:
 
 - [ ] **Step 4: Run them and watch them pass**
 
-Run: `cd bridge && mvn -o -q -Dtest='BenchArgsTest,SubprocessArgsTest,BenchStatsTest' test`
+Run: `cd bridge && mvn -o -q -Dtest='BenchArgsTest,BenchSubprocessTest,BenchStatsTest' test`
 Expected: green.
 
 - [ ] **Step 5: Commit**
@@ -679,8 +682,8 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 **Files:**
 - Modify: `bridge/src/main/java/mtgplayer/bench/Bench.java` (`markdown(...)`, around line 219, and the JSON
   writer next to it)
-- Test: `bridge/src/test/java/mtgplayer/bench/BenchReportTest.java` (new, or extend the existing report test if
-  there is one — check first)
+- Test: `bridge/src/test/java/mtgplayer/bench/BenchReportTest.java` (new — die vorhandenen Bench-Tests sind
+  `BenchArgsTest`, `BenchStatsTest`, `BenchSubprocessTest` und `BenchSmokeTest`; keiner liest den Bericht)
 
 **Interfaces:**
 - Consumes: `BenchArgs.teams()`, `Bench.besetzung(...)`.
@@ -758,14 +761,14 @@ Expected: `Tests run: …, Failures: 0, Errors: 0`. Note the count in your repor
 - [ ] **Step 2: Run a real 2v2 bench, four games**
 
 ```bash
-cd bridge && mvn -o -q compile exec:java -Dmtgplayer.data=<scratchpad>/bench-data \
+cd bridge && mvn -o -q compile exec:java -Dmtgplayer.data="$PWD/../.bench-live" \
   -Dexec.args="--bench --teams --games 4 --a std:Default --b std:Default \
   --deck-a 'precon:Abzan Armor [TDC] [2025]' --deck-b 'precon:Adaptive Enchantment [C18] [2018]' \
   --seed 1 --turns 60 --timeout 2"
 ```
 
 Standard AI on both sides and a low turn cap keep it to minutes. Then **read the report** under
-`<scratchpad>/bench-data/bench/` and check, in your own words in the report:
+`.bench-live/bench/` im Arbeitsbaum (Kratzverzeichnis, vor dem Commit loeschen) and check, in your own words in the report:
 - four games ran, each with four seats;
 - the per-game rows name a winning **team**, not a seat;
 - the seat line-up rotates across the four games;
