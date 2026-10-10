@@ -88,7 +88,10 @@ public final class Ereignisstrom implements AutoCloseable {
             }
             StromKlient k = nachToken.get(token(ex.getRequestURI().getQuery()));
             if (k == null) {
-                // Unbekanntes Token: der Browser baut daraufhin den Strom neu auf.
+                // Unbekanntes Token: der Browser baut daraufhin den Strom neu auf (ws.ts). Die Zeile im
+                // Log ist die Spur, falls er das nicht tut - sonst ist eine verlorene Eingabe unsichtbar.
+                CrashLog.note("sse", "Eingabe abgewiesen: Token " + token(ex.getRequestURI().getQuery())
+                        + " unbekannt (Strom beendet oder Bridge neu gestartet); Antwort 404");
                 ex.sendResponseHeaders(404, -1);
                 return;
             }

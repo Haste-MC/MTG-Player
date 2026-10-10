@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import mtgplayer.forge.CrashLog;
 import mtgplayer.protocol.Messages;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -33,19 +34,25 @@ import java.util.function.BooleanSupplier;
 class EreignisstromTest {
 
     private static final int PORT = 18089;
+    /** Bewusst nicht der Standard 8081 und nicht der HTTP-Port: so faellt ein geratener Wert auf. */
+    private static final int WS_PORT = 18090;
     private final List<String> gehoert = Collections.synchronizedList(new ArrayList<>());
     private final List<String> zeilen = Collections.synchronizedList(new ArrayList<>());
     private Klienten klienten;
     private HttpStatic http;
     private final HttpClient client = HttpClient.newHttpClient();
     private Thread leser;
+    private Path logDatei;
 
     @BeforeEach
     void start(@TempDir Path dir) throws Exception {
         Files.writeString(dir.resolve("index.html"), "<html></html>");
+        // bridge.log in den Testordner: der Test liest die Zeile nach, und ~/.mtg-player bleibt unberuehrt.
+        logDatei = dir.resolve("logs").resolve("bridge.log");
+        CrashLog.setFile(logDatei);
         klienten = new Klienten(m -> gehoert.add(m.path("type").asText()), () -> { });
         http = new HttpStatic(PORT, dir);
-        http.ereignisstrom(klienten);
+        http.ereignisstrom(klienten, WS_PORT);
         http.start();
     }
 
@@ -53,6 +60,7 @@ class EreignisstromTest {
     void stop() {
         if (leser != null) leser.interrupt();
         http.stop();
+        CrashLog.setFile(null);
     }
 
     /** Oeffnet den Strom im Hintergrund und sammelt seine Zeilen. */
@@ -126,6 +134,48 @@ class EreignisstromTest {
                 HttpResponse.BodyHandlers.discarding());
         assertEquals(404, res.statusCode(), "sonst wuerde eine verwaiste Eingabe stillschweigend wirken");
         assertFalse(gehoert.contains("requestState"));
+    }
+
+    /**
+     * Der Browser soll nach einem 404 den Strom neu aufbauen - sieht er dabei nichts, bleibt als
+     * einzige Spur eine Zeile in bridge.log. Ohne sie ist "Spiel starten tut nichts" eine Suche im Dunkeln.
+     */
+    @Test
+    @Timeout(value = 30, unit = TimeUnit.SECONDS)
+    void abgewiesenesTokenHinterlaesstEineZeileImLog() throws Exception {
+        client.send(
+                HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + PORT + "/eingabe?token=gibtsnicht"))
+                        .POST(HttpRequest.BodyPublishers.ofString("{\"type\":\"requestState\"}")).build(),
+                HttpResponse.BodyHandlers.discarding());
+        String log = Files.exists(logDatei) ? Files.readString(logDatei) : "";
+        assertTrue(log.contains("sse") && log.contains("gibtsnicht"), "Token samt Grund im Log: " + log);
+        assertTrue(log.contains("unbekannt"), "und der Grund steht dabei: " + log);
+    }
+
+    /**
+     * Die gepackte App waehlt freie Ports; die Seite kann den WebSocket-Port nicht raten. Wer die
+     * Seite ausliefert, nennt ihn - auf demselben Ursprung, also nie an einer fremden Bridge.
+     */
+    @Test
+    @Timeout(value = 30, unit = TimeUnit.SECONDS)
+    void portsNenntDenWebSocketPortDerBridge() throws Exception {
+        HttpResponse<String> res = client.send(
+                HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + PORT + "/ports")).GET().build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, res.statusCode());
+        assertTrue(res.headers().firstValue("Content-Type").orElse("").startsWith("application/json"),
+                "als JSON gekennzeichnet, sonst liefert der Datei-Server die index.html");
+        assertEquals(WS_PORT, mtgplayer.protocol.Json.parse(res.body()).path("ws").asInt(), res.body());
+    }
+
+    @Test
+    @Timeout(value = 30, unit = TimeUnit.SECONDS)
+    void portsNimmtNurGetAn() throws Exception {
+        HttpResponse<Void> res = client.send(
+                HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + PORT + "/ports"))
+                        .POST(HttpRequest.BodyPublishers.noBody()).build(),
+                HttpResponse.BodyHandlers.discarding());
+        assertEquals(405, res.statusCode());
     }
 
     /**

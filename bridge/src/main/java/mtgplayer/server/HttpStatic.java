@@ -1,11 +1,15 @@
 package mtgplayer.server;
 
+import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
+
+import mtgplayer.protocol.Json;
 
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -86,12 +90,37 @@ public final class HttpStatic {
     /**
      * Den Rueckfallweg fuer Browser anmelden, die keinen WebSocket herausbekommen - zwei
      * gewoehnliche HTTP-Wege auf diesem Port (siehe {@link Ereignisstrom}).
+     *
+     * <p>Meldet ausserdem {@code GET /ports}: den WebSocket-Port dieser Bridge. Die gepackte App
+     * waehlt freie Ports, die Seite kann den WebSocket also nicht raten - und ein geratener 8081
+     * landet im Netz leicht an einer FREMDEN Bridge. Wer die Seite ausliefert, kennt den richtigen.</p>
+     *
+     * @param wsPort der Port, auf dem der WebSocket dieser Bridge tatsaechlich horcht
      */
-    public void ereignisstrom(Klienten klienten) {
+    public void ereignisstrom(Klienten klienten, int wsPort) {
         Ereignisstrom strom = new Ereignisstrom(klienten);
         addContext("/ereignisse", strom::ereignisse);
         addContext("/eingabe", strom::eingabe);
+        addContext("/ports", ex -> ports(ex, wsPort));
         closeables.add(strom);
+    }
+
+    /** {@code GET /ports} - {@code {"ws": <Port>}}; anderes als GET ist 405. */
+    private static void ports(HttpExchange ex, int wsPort) throws IOException {
+        try {
+            if (!"GET".equals(ex.getRequestMethod())) {
+                ex.sendResponseHeaders(405, -1);
+                return;
+            }
+            byte[] body = Json.toJson(Map.of("ws", wsPort))
+                    .getBytes(StandardCharsets.UTF_8);
+            ex.getResponseHeaders().add("Content-Type", "application/json; charset=utf-8");
+            ex.getResponseHeaders().add("Cache-Control", "no-store");
+            ex.sendResponseHeaders(200, body.length);
+            try (OutputStream os = ex.getResponseBody()) { os.write(body); }
+        } finally {
+            ex.close();
+        }
     }
 
     public void addContext(String path, HttpHandler handler) {

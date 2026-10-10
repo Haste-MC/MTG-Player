@@ -127,8 +127,9 @@ Attached auras and equipment lie behind their host and peek out at the top (to t
 every edge is hoverable and clickable. Curses on players appear as an "Aura by" chip in the enchanted
 player's panel header.
 The graveyard and exile list opens towards the middle of the screen.
-Alternative bridge ports can be set via the URL: `?wsPort=8082` (same host) or `?ws=ws://host:port` (your own
-WebSocket URL).
+The page asks the bridge that served it for its WebSocket port (`GET /ports`), so the packaged app, which picks
+free ports, needs no setup. Older bridges without `/ports` fall back to 8081. Alternative bridge ports can be set via
+the URL and win over that: `?wsPort=8082` (same host) or `?ws=ws://host:port` (your own WebSocket URL).
 
 **Only one port needed.** Normally the connection runs over the WebSocket (8081). If a browser cannot open
 it — some embedded browsers allow only the host and port of the page itself — the app switches by itself to
