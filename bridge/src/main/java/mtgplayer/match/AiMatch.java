@@ -81,9 +81,54 @@ public final class AiMatch {
      * @param cardSink bekommt die Kartenbiografie der Partie, sobald sie vorbei ist; {@code null} wenn
      *                 der Aufrufer keine will
      */
-    @SuppressWarnings("deprecation")
     public static Result play(List<Deck> decks, List<String> names, List<AiConfig> configs, int aiTimeout,
                                int maxTurns, Consumer<String> log, Consumer<MatchRecord> sink,
+                               Set<String> ownDecks, Consumer<CardLog> cardSink) {
+        return play(decks, names, configs, null, aiTimeout, maxTurns, log, sink, ownDecks, cardSink);
+    }
+
+    /**
+     * Wie oben, mit Teams ohne Aufzeichnung (Bench-Laeufe).
+     *
+     * @param teams Teamnummer je Deck/Name/Config (gleiche Laenge wie decks), {@code null} = Jeder gegen
+     *              jeden. Die Sitze werden abwechselnd nach Team gesetzt ({@link Seating#interleave}).
+     */
+    public static Result play(List<Deck> decks, List<String> names, List<AiConfig> configs, List<Integer> teams,
+                               int aiTimeout, int maxTurns, Consumer<String> log) {
+        return play(decks, names, configs, teams, aiTimeout, maxTurns, log, null, Set.of(), null);
+    }
+
+    /**
+     * Sitzliste der Partie. Mit Teams ({@code teams != null}) wechseln sich die Teams ab
+     * ({@link Seating#interleave}), und Name, Deck, KI-Einstellung und Teamnummer wandern gemeinsam mit
+     * dem Sitz - eine der vier Listen nicht mitzudrehen hiesse, dass hinterher der falsche Sitz das
+     * falsche Team (oder Deck) traegt.
+     */
+    static List<RegisteredPlayer> registered(List<Deck> decks, List<String> names, List<AiConfig> configs,
+                                             List<Integer> teams, Map<RegisteredPlayer, String> deckNames) {
+        List<Integer> order = teams == null ? null : Seating.interleave(teams);
+        List<RegisteredPlayer> players = new ArrayList<>();
+        List<Integer> sortierteTeams = teams == null ? null : new ArrayList<>();
+        for (int pos = 0; pos < decks.size(); pos++) {
+            int i = order == null ? pos : order.get(pos);
+            RegisteredPlayer rp = RegisteredPlayer.forCommander(decks.get(i));
+            rp.setPlayer(configs.get(i).newLobbyPlayer(names.get(i)));
+            players.add(rp);
+            deckNames.put(rp, decks.get(i).getName());
+            if (sortierteTeams != null) {
+                sortierteTeams.add(teams.get(i));
+            }
+        }
+        HumanMatch.applyTeams(players, sortierteTeams);
+        return players;
+    }
+
+    /**
+     * @param teams wie oben; {@code null} = keine Teams
+     */
+    @SuppressWarnings("deprecation")
+    public static Result play(List<Deck> decks, List<String> names, List<AiConfig> configs, List<Integer> teams,
+                               int aiTimeout, int maxTurns, Consumer<String> log, Consumer<MatchRecord> sink,
                                Set<String> ownDecks, Consumer<CardLog> cardSink) {
         if (maxTurns <= 0) {
             throw new IllegalArgumentException("maxTurns muss > 0 sein");
@@ -91,17 +136,14 @@ public final class AiMatch {
         if (decks.size() != names.size() || decks.size() != configs.size() || decks.size() < 2 || decks.size() > 6) {
             throw new IllegalArgumentException("2–6 Decks mit gleich vielen Namen");
         }
-        List<RegisteredPlayer> players = new ArrayList<>();
+        if (teams != null && teams.size() != decks.size()) {
+            throw new IllegalArgumentException("Teams brauchen gleich viele Eintraege wie Decks");
+        }
         // Rohe Decknamen VOR RegisteredPlayer.forCommander(...) sichern und dem Recorder mitgeben - siehe
         // MatchRecorder(..., deckNames, ...): Forges eigene Kopie (RegisteredPlayer.getDeck()) saniert
         // Schraegstriche im Namen zu Unterstrichen, das Original (decks.get(i)) noch nicht.
         Map<RegisteredPlayer, String> deckNames = new HashMap<>();
-        for (int i = 0; i < decks.size(); i++) {
-            RegisteredPlayer rp = RegisteredPlayer.forCommander(decks.get(i));
-            rp.setPlayer(configs.get(i).newLobbyPlayer(names.get(i)));
-            players.add(rp);
-            deckNames.put(rp, decks.get(i).getName());
-        }
+        List<RegisteredPlayer> players = registered(decks, names, configs, teams, deckNames);
 
         GameRules rules = CommanderRules.create();
         Match match = new Match(rules, players, "AI Commander");
