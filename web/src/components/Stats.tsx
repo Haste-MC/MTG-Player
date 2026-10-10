@@ -29,8 +29,9 @@ const MATCH_ERROR = /^⚠ Partie /;
 const SPARRING_ERROR = /^⚠ Sparring/;
 /** Partienzahlen im Sparring-Block (Spec §4). */
 const SPARRING_GAMES = [5, 10, 20, 50];
-/** Titel der Deck-Kachel eines Decks, das wir nur als Gegner gesehen haben (nicht in `decks`). */
-const FOREIGN_DECK_HINT = "nur als Gegner gesehen – kein eigenes Deck, also kein Sparring";
+/** Titel der Deck-Kachel eines fremden Decks (nicht in `decks`): es kann als Gegner ODER im Teamspiel
+ *  als Partner mitgespielt haben - "nur als Gegner" waere seit den Team-Modi nicht mehr wahr. */
+const FOREIGN_DECK_HINT = "fremdes Deck – keines deiner gespeicherten Decks, also kein Sparring";
 /** Die vier Format-Schalter im Kopf. "all" rechnet ueber alle - fuer die Bilanz brauchbar, fuer alles
  * Formatabhaengige mit Vorsicht (im Pod verliert man ueberwiegend, Schaden verteilt sich auf drei Gegner;
  * in der Team-Partie gewinnt der Partner mit). */
@@ -490,7 +491,7 @@ function NoGames({ own }: { own: boolean }) {
       <p className="muted">
         {own
           ? "Mit diesem Deck wurde noch nichts gespielt – starte oben ein Sparring, dann stehen die Kennzahlen in ein paar Minuten hier."
-          : "Dieses Deck kennen wir nur als Gegner: es ist keines deiner gespeicherten Decks, darum gibt es dafür keine eigene Bilanz und kein Sparring."}
+          : "Dieses Deck hat nur mitgespielt – als Gegner oder als Partner: es ist keines deiner gespeicherten Decks, darum gibt es dafür keine eigene Bilanz und kein Sparring."}
       </p>
     </section>
   );
