@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.io.OutputStream;
 import java.io.PrintStream;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 import mtgplayer.ai.AiConfig;
 import mtgplayer.forge.ForgeBoot;
@@ -32,7 +33,7 @@ class BenchSubprocessTest {
     void spielImKindprozessLiefertErgebnis(@TempDir Path tmp) {
         BenchArgs args = new BenchArgs(1, AiConfig.parse("std:Default"), AiConfig.parse("std:Default"),
                 "precon:Abzan Armor [TDC] [2025]", "precon:Adaptive Enchantment [C18] [2018]",
-                10, 2, System.currentTimeMillis(), tmp, 3, false);
+                10, 2, System.currentTimeMillis(), tmp, 3, false, false);
         SubprocessRunner runner = new SubprocessRunner(new PrintStream(OutputStream.nullOutputStream()),
                 args.gameTimeoutMinutes());
 
@@ -47,7 +48,7 @@ class BenchSubprocessTest {
     void kindprozessAbsturzBeiUnbekanntemDeckWirdAlsCrashGemeldet(@TempDir Path tmp) {
         BenchArgs args = new BenchArgs(1, AiConfig.parse("std:Default"), AiConfig.parse("std:Default"),
                 "precon:Gibt Es Nicht", "precon:Adaptive Enchantment [C18] [2018]",
-                10, 2, 1, tmp, 3, false);
+                10, 2, 1, tmp, 3, false, false);
         SubprocessRunner runner = new SubprocessRunner(new PrintStream(OutputStream.nullOutputStream()),
                 args.gameTimeoutMinutes());
 
@@ -56,5 +57,20 @@ class BenchSubprocessTest {
         assertTrue(record.crashed(), "erwarte Absturz, war: " + record);
         assertTrue(record.reason().contains("Kindprozess"),
                 "Grund sollte 'Kindprozess' enthalten, war: " + record.reason());
+    }
+
+    @Test
+    void teamsErreichtDenKindprozess() {
+        BenchArgs a = BenchArgs.parse(new String[] {"--teams", "--games", "2"});
+
+        List<String> kindArgs = SubprocessRunner.childArgs(a, 0);
+
+        assertTrue(kindArgs.contains("--teams"),
+                "ohne den Schalter wuerde das Kind ein Spiel ohne Teams spielen und der Lauf misst das Falsche");
+    }
+
+    @Test
+    void ohneTeamsKeinSchalterImKindprozess() {
+        assertFalse(SubprocessRunner.childArgs(BenchArgs.parse(new String[] {"--games", "2"}), 0).contains("--teams"));
     }
 }

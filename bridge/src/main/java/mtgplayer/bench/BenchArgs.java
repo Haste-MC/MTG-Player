@@ -15,9 +15,12 @@ import mtgplayer.forge.Precons;
  * @param inProcess          {@code true}: jedes Spiel im aufrufenden Thread statt in einem eigenen
  *                           JVM-Kindprozess (kein Isolationsschutz gegen einen Forge-eigenen Absturz,
  *                           s. {@code Bench}-Klassenkommentar) - {@code --in-process}
+ * @param teams              {@code true}: 2v2 statt Freie-fuer-alle - {@code --teams}, Schalter ohne Wert;
+ *                           {@code SubprocessRunner.childArgs} reicht ihn an jeden Kindprozess weiter
  */
 public record BenchArgs(int games, AiConfig a, AiConfig b, String deckA, String deckB, int turns, int timeout,
-                         long seed, Path out, int gameTimeoutMinutes, boolean inProcess) {
+                         long seed, Path out, int gameTimeoutMinutes, boolean inProcess,
+                         boolean teams) {
 
     private static final int DEFAULT_GAMES = 40;
     private static final int DEFAULT_TURNS = 200;
@@ -42,6 +45,7 @@ public record BenchArgs(int games, AiConfig a, AiConfig b, String deckA, String 
         Path out = ForgeBoot.dataDir().resolve("bench");
         int gameTimeoutMinutes = DEFAULT_GAME_TIMEOUT_MINUTES;
         boolean inProcess = false;
+        boolean teams = false;
 
         int i = 0;
         while (i < args.length) {
@@ -52,6 +56,12 @@ public record BenchArgs(int games, AiConfig a, AiConfig b, String deckA, String 
             if (token.equals("--in-process")) {
                 // Flag ohne Wert, anders als alle anderen Optionen unten.
                 inProcess = true;
+                i += 1;
+                continue;
+            }
+            if (token.equals("--teams")) {
+                // Ebenfalls ein Flag ohne Wert; ein fehlerhaftes Deck faellt wie bisher in Bench.loadDeck auf.
+                teams = true;
                 i += 1;
                 continue;
             }
@@ -108,6 +118,6 @@ public record BenchArgs(int games, AiConfig a, AiConfig b, String deckA, String 
                 deckB = "precon:" + precons.get(1);
             }
         }
-        return new BenchArgs(games, a, b, deckA, deckB, turns, timeout, seed, out, gameTimeoutMinutes, inProcess);
+        return new BenchArgs(games, a, b, deckA, deckB, turns, timeout, seed, out, gameTimeoutMinutes, inProcess, teams);
     }
 }

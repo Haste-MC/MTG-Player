@@ -1,7 +1,9 @@
 package mtgplayer.bench;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
 import mtgplayer.ai.AiConfig;
@@ -21,5 +23,15 @@ class BenchArgsTest {
         assertEquals(10, p.gameTimeoutMinutes()); assertEquals(true, p.inProcess());
         assertThrows(IllegalArgumentException.class, () -> BenchArgs.parse(new String[] {"--games", "0"}));
         assertThrows(IllegalArgumentException.class, () -> BenchArgs.parse(new String[] {"--game-timeout", "0"}));
+    }
+
+    @Test void teamsIstEinSchalterOhneWert() {
+        BenchArgs a = BenchArgs.parse(new String[] {"--teams", "--games", "8"});
+        assertTrue(a.teams());
+        assertEquals(8, a.games(), "der naechste Schalter wird nicht als Wert von --teams verschluckt");
+    }
+
+    @Test void ohneSchalterKeineTeams() {
+        assertFalse(BenchArgs.parse(new String[] {"--games", "8"}).teams());
     }
 }

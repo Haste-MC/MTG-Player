@@ -40,7 +40,7 @@ class BenchSmokeTest {
         // Semantik noetig) - Kindprozess-Isolation deckt BenchSubprocessTest ab.
         BenchArgs args = new BenchArgs(2, AiConfig.parse("hybrid:Default"), AiConfig.parse("std:Default"),
                 "precon:Abzan Armor [TDC] [2025]", "precon:Adaptive Enchantment [C18] [2018]",
-                30, 2, 1, tmp, 30, true);
+                30, 2, 1, tmp, 30, true, false);
 
         Summary summary = Bench.run(args, new PrintStream(OutputStream.nullOutputStream()));
 

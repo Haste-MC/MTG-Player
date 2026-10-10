@@ -49,10 +49,7 @@ final class SubprocessRunner implements GameRunner {
         Path logFile = args.out().resolve("game-" + i + ".log");
         Path outLog = args.out().resolve("game-" + i + ".out.log");
 
-        List<String> mainArgs = new ArrayList<>();
-        mainArgs.add("--bench-one");
-        mainArgs.add(Integer.toString(i));
-        mainArgs.addAll(cliArgs(args));
+        List<String> mainArgs = childArgs(args, i);
 
         int[] simErrors = {0};
         ChildJvm.Result result;
@@ -101,12 +98,17 @@ final class SubprocessRunner implements GameRunner {
         }
     }
 
-    /** {@link BenchArgs} als CLI-Argumente, so wie {@link BenchArgs#parse} sie wieder einliest -
-     *  {@code --bench-one} braucht dieselben Parameter wie der Elternlauf, ausser dem Spielindex, der
-     *  separat davor steht. Jedes Element landet als eigener argv-Eintrag (kein Shell-Tokenizing wie bei
-     *  {@code -Dexec.args}), Precon-Namen mit Leerzeichen brauchen deshalb kein Quoting. */
-    private static List<String> cliArgs(BenchArgs args) {
+    /** Das Argument-Array des Kindprozesses: {@code --bench-one <i>} und dahinter {@link BenchArgs} als
+     *  CLI-Argumente, so wie {@link BenchArgs#parse} sie wieder einliest - {@code --bench-one} braucht
+     *  dieselben Parameter wie der Elternlauf. Jedes Element landet als eigener argv-Eintrag (kein
+     *  Shell-Tokenizing wie bei {@code -Dexec.args}), Precon-Namen mit Leerzeichen brauchen deshalb kein
+     *  Quoting. Paketsichtbar und eigene Methode, damit ein Test sieht, was das Kind wirklich bekommt:
+     *  ein nur im Elternlauf gelesener Schalter (z. B. {@code --teams}) liesse jedes Kind ein anderes
+     *  Spiel spielen als der Lauf zu messen glaubt, ohne dass etwas fehlschluege. */
+    static List<String> childArgs(BenchArgs args, int i) {
         List<String> out = new ArrayList<>();
+        out.add("--bench-one");
+        out.add(Integer.toString(i));
         out.add("--games");
         out.add(Integer.toString(args.games()));
         out.add("--a");
@@ -127,6 +129,9 @@ final class SubprocessRunner implements GameRunner {
         out.add(args.out().toString());
         out.add("--game-timeout");
         out.add(Integer.toString(args.gameTimeoutMinutes()));
+        if (args.teams()) {
+            out.add("--teams");
+        }
         return out;
     }
 }

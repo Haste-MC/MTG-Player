@@ -82,7 +82,7 @@ public final class Main {
             if (modus.equals("--bench-one")) {
                 // Von SubprocessRunner aufgerufen: genau ein Spiel, Ergebnis als JSON-Zeile auf stdout - siehe
                 // README Abschnitt "Bench". args[1] ist der Spielindex, args[2..] dieselben Optionen wie bei
-                // --bench (siehe SubprocessRunner.cliArgs).
+                // --bench (siehe SubprocessRunner.childArgs).
                 ForgeBoot.init();
                 printCardsLoaded(t0);
                 int i = Integer.parseInt(args[1]);
