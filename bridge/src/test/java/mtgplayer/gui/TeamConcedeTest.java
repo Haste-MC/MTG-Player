@@ -21,6 +21,7 @@ import mtgplayer.forge.ForgeBoot;
 import mtgplayer.match.CommanderRules;
 import mtgplayer.protocol.Messages;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -28,6 +29,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -45,6 +47,23 @@ class TeamConcedeTest {
     @BeforeAll
     static void boot() {
         ForgeBoot.init();
+    }
+
+    /** Alle in diesem Test gebauten Oberflaechen - {@link #tickerBeenden()} raeumt sie ab. */
+    private static final List<WebGuiGame> aufgebaut = new CopyOnWriteArrayList<>();
+
+    /**
+     * {@code setGameView} mit einem echten Spiel startet einen {@code thinking-ticker}-Thread (Daemon, 1 s),
+     * der in den Transport des Tests schreibt. Ohne Abbau lebt er bis zum Ende der Suite weiter und
+     * schreibt in Listen, die andere Tests lesen. {@code resetForNewMatch()} ist der unterstuetzte Weg,
+     * ihn zu beenden.
+     */
+    @AfterEach
+    void tickerBeenden() {
+        for (WebGuiGame g : aufgebaut) {
+            g.resetForNewMatch();
+        }
+        aufgebaut.clear();
     }
 
     private record Tisch(Game game, WebGuiGame gui, List<Object> gesendet, List<Player> sitze) {
@@ -72,6 +91,7 @@ class TeamConcedeTest {
         List<Player> sitze = List.copyOf(game.getRegisteredPlayers());
         List<Object> gesendet = Collections.synchronizedList(new ArrayList<>());
         WebGuiGame gui = new WebGuiGame(gesendet::add);
+        aufgebaut.add(gui);
         if (teams != null) {
             gui.setTeams(teams);
         }

@@ -22,6 +22,7 @@ import mtgplayer.forge.ForgeBoot;
 import mtgplayer.forge.Precons;
 import mtgplayer.match.CommanderRules;
 import mtgplayer.protocol.Json;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -29,6 +30,7 @@ import org.junit.jupiter.api.Timeout;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
@@ -45,6 +47,23 @@ class CommanderDeathTest {
     @BeforeAll
     static void boot() {
         ForgeBoot.init();
+    }
+
+    /** Alle in diesem Test gebauten Oberflaechen - {@link #tickerBeenden()} raeumt sie ab. */
+    private static final List<WebGuiGame> aufgebaut = new CopyOnWriteArrayList<>();
+
+    /**
+     * {@code setGameView} mit einem echten Spiel startet einen {@code thinking-ticker}-Thread (Daemon, 1 s),
+     * der in den Transport des Tests schreibt. Ohne Abbau lebt er bis zum Ende der Suite weiter und
+     * schreibt in Listen, die andere Tests lesen. {@code resetForNewMatch()} ist der unterstuetzte Weg,
+     * ihn zu beenden.
+     */
+    @AfterEach
+    void tickerBeenden() {
+        for (WebGuiGame g : aufgebaut) {
+            g.resetForNewMatch();
+        }
+        aufgebaut.clear();
     }
 
     record Harness(Game game, Player me, WebGuiGame gui, BlockingQueue<String> sent, Card commander) {}
@@ -65,6 +84,7 @@ class CommanderDeathTest {
         BlockingQueue<String> sent = new LinkedBlockingQueue<>();
         WebGuiGame gui = new WebGuiGame(m -> sent.add(Json.toJson(m)));
         controller.setGui(gui);
+        aufgebaut.add(gui);
         gui.setGameView(game.getView());
         gui.setOriginalGameController(me.getView(), controller);
         game.subscribeToEvents(new FControlGameEventHandler(controller));

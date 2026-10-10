@@ -29,6 +29,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BooleanSupplier;
 
@@ -57,9 +58,22 @@ class MatchRecorderWiringTest {
         CrashLog.setFile(dir.resolve("logs").resolve("bridge.log"));
     }
 
+    /** Alle in diesem Test gebauten Oberflaechen - {@link #tickerBeenden()} raeumt sie ab. */
+    private final List<WebGuiGame> offeneGuis = new CopyOnWriteArrayList<>();
+
     @AfterEach
     void resetCrashLog() {
         CrashLog.setFile(null);
+    }
+
+    /** Die Denk-Anzeige jeder hier gebauten Oberflaeche beenden (sonst lebt ihr Ticker-Thread bis zum
+     *  Ende der Suite weiter, siehe PartnerHandTest). */
+    @AfterEach
+    void tickerBeenden() {
+        for (WebGuiGame g : offeneGuis) {
+            g.resetForNewMatch();
+        }
+        offeneGuis.clear();
     }
 
     // ---------------------------------------------------------------- echtes Zuschauer-Spiel
@@ -71,6 +85,7 @@ class MatchRecorderWiringTest {
         List<Deck> decks = precons.stream().map(Precons::load).toList();
         List<MatchRecord> sunk = new ArrayList<>();
         WebGuiGame gui = new WebGuiGame(m -> { });
+        offeneGuis.add(gui);
         // Forges Zuschauer-Pfad holt sich die GUI ueber GuiBase.getNewGuiGame() - im Betrieb macht
         // das die Bridge, hier der Test.
         WebGuiBase base = (WebGuiBase) GuiBase.getInterface();
@@ -117,6 +132,7 @@ class MatchRecorderWiringTest {
     @Timeout(value = 2, unit = TimeUnit.MINUTES)
     void hakenFeuertGenauEinmalJeSpielUndNieFuerEinTeilspiel() {
         WebGuiGame gui = new WebGuiGame(m -> { });
+        offeneGuis.add(gui);
         List<Game> seen = new ArrayList<>();
         gui.onNewGame(seen::add);
 

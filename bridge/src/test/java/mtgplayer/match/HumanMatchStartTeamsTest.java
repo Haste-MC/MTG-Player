@@ -63,7 +63,13 @@ class HumanMatchStartTeamsTest {
             // bekommt - sonst ging gui.setTeams(...) in startSpectator verloren.
             gesendet.clear();
             gui.pushState();
-            Snapshot snap = gesendet.stream().filter(Snapshot.class::isInstance).map(Snapshot.class::cast)
+            // Kopie unter dem Monitor: die Denk-Anzeige der laufenden Partie schreibt nebenher in die Liste,
+            // und synchronizedList sperrt das Iterieren nicht (ConcurrentModificationException).
+            List<Object> kopie;
+            synchronized (gesendet) {
+                kopie = new ArrayList<>(gesendet);
+            }
+            Snapshot snap = kopie.stream().filter(Snapshot.class::isInstance).map(Snapshot.class::cast)
                     .findFirst().orElseGet(() -> fail("pushState hat keinen Snapshot gesendet"));
             assertEquals(2, snap.players().size(), "zwei Sitze im Snapshot");
             assertEquals(1, snap.players().get(0).team(), "Sitz 0 zeigt Team 1 im Snapshot");

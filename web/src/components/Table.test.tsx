@@ -84,6 +84,17 @@ describe("Table: nach dem Aufgeben zuschauen (Aufgabe 11)", () => {
     expect(screen.queryByRole("button", { name: "End game" })).toBeNull();
   });
 
+  it("Partie ohne Teams, ich bin raus: die Partie laeuft ohne mich weiter, kein Team im Satz", () => {
+    // 1v3 ohne Teams: Forge beendet die Partie nicht, wenn der Mensch stirbt - "Your team plays on" waere gelogen.
+    zeige(snapshot({
+      players: [seat(0, "You", undefined, true), seat(1, "AI 1", undefined, false), seat(2, "AI 2", undefined, false), seat(3, "AI 3", undefined, false)],
+    }));
+    expect(screen.getByText("You are out. The game continues without you.")).toBeInTheDocument();
+    expect(screen.queryByText(/team/i)).toBeNull();
+    expect(screen.getByRole("button", { name: "End game" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Pass priority" })).toBeNull();
+  });
+
   it("Partie ohne Teams, nichts verloren: unveraendert", () => {
     zeige(snapshot({ players: [seat(0, "You", undefined, false), seat(1, "AI 1", undefined, false)] }));
     expect(screen.getByRole("button", { name: "Concede" })).toBeInTheDocument();

@@ -21,6 +21,7 @@ import forge.player.PlayerControllerHuman;
 import mtgplayer.forge.ForgeBoot;
 import mtgplayer.match.CommanderRules;
 import mtgplayer.protocol.Snapshot;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -29,6 +30,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -94,6 +96,24 @@ class PartnerHandTest {
 
     // ---- die Verdrahtung: Snapshot einer echten Stellung -----------------------------------
 
+    /** Alle in diesem Test gebauten Oberflaechen - {@link #tickerBeenden()} raeumt sie ab. */
+    private static final List<WebGuiGame> aufgebaut = new CopyOnWriteArrayList<>();
+
+    /**
+     * Jeder {@code setGameView} mit einem echten Spiel startet einen {@code thinking-ticker}-Thread
+     * (Daemon, 1 s), der Nachrichten in {@code gesendet} schreibt. Ohne Abbau bleibt er nach dem Test
+     * am Leben und schreibt bis zum Ende der Suite weiter - elf Tickers gleichzeitig in Listen, die
+     * spaeter von anderen Tests gelesen werden (das war die ConcurrentModificationException im
+     * Vollauf). {@code resetForNewMatch()} ist der unterstuetzte Weg, den Ticker zu beenden.
+     */
+    @AfterEach
+    void tickerBeenden() {
+        for (WebGuiGame g : aufgebaut) {
+            g.resetForNewMatch();
+        }
+        aufgebaut.clear();
+    }
+
     /** Vier Sitze, Team 1 = Mensch (Sitz 0) + Sitz 1, Team 2 = Sitz 2 + 3; Hand und Bibliothek je Sitz gefuellt. */
     private record Tisch(Game game, WebGuiGame gui, List<Object> gesendet, List<Player> sitze) {
         Player ich() {
@@ -112,7 +132,13 @@ class PartnerHandTest {
         Snapshot snapshot() {
             gesendet.clear();
             gui.pushState();
-            return gesendet.stream().filter(Snapshot.class::isInstance).map(Snapshot.class::cast).findFirst()
+            // Kopie unter dem Monitor: synchronizedList sperrt nur Einzelaufrufe, nicht das Iterieren; ein
+            // fremder Schreiber (Ticker) wuerfe sonst mitten im stream() eine ConcurrentModificationException.
+            List<Object> kopie;
+            synchronized (gesendet) {
+                kopie = new ArrayList<>(gesendet);
+            }
+            return kopie.stream().filter(Snapshot.class::isInstance).map(Snapshot.class::cast).findFirst()
                     .orElseGet(() -> fail("pushState hat keinen Snapshot gesendet"));
         }
     }
@@ -140,6 +166,7 @@ class PartnerHandTest {
         }
         List<Object> gesendet = Collections.synchronizedList(new ArrayList<>());
         WebGuiGame gui = new WebGuiGame(gesendet::add);
+        aufgebaut.add(gui);
         gui.setTeams(teams);
         if (partnerHandZeigen != null) {
             gui.setRevealPartnerHand(partnerHandZeigen);
@@ -150,6 +177,32 @@ class PartnerHandTest {
             gui.setOriginalGameController(ich.getView(), (PlayerControllerHuman) ich.getController());
         }
         return new Tisch(game, gui, gesendet, sitze);
+    }
+
+    /** Lebende Taktgeber der Denk-Anzeige (Daemon-Threads "thinking-ticker"). */
+    private static long lebendeTicker() {
+        return Thread.getAllStackTraces().keySet().stream()
+                .filter(t -> "thinking-ticker".equals(t.getName()) && t.isAlive()).count();
+    }
+
+    /**
+     * Beweis fuer den Abbau: {@code setGameView} startet einen Taktgeber, {@code resetForNewMatch()} beendet
+     * ihn wieder. Gezaehlt wird relativ zum Stand davor - andere Testklassen in derselben JVM duerfen ihre
+     * eigenen haben, dieser Test darf nur keinen zusaetzlichen zurueckbehalten. Faellt der Abbau aus, bleiben
+     * Taktgeber bis zum Ende der Suite am Leben und schreiben in fremde Listen (ConcurrentModificationException).
+     */
+    @Test
+    @Timeout(value = 1, unit = TimeUnit.MINUTES)
+    void resetForNewMatchBeendetDenTaktgeberDerDenkAnzeige() throws InterruptedException {
+        long vorher = lebendeTicker();
+        Tisch t = aufbauen(true, null);
+        assertEquals(vorher + 1, lebendeTicker(), "setGameView hat genau einen Taktgeber gestartet");
+        t.gui().resetForNewMatch();
+        // close() unterbricht nur; der Thread braucht einen Augenblick, bis er aus dem sleep() heraus ist
+        for (long ende = System.currentTimeMillis() + 5000; lebendeTicker() > vorher && System.currentTimeMillis() < ende; ) {
+            Thread.sleep(20);
+        }
+        assertEquals(vorher, lebendeTicker(), "nach resetForNewMatch lebt der Taktgeber nicht mehr");
     }
 
     private static Card karte(String name, Player owner, ZoneType zone, Game game) {

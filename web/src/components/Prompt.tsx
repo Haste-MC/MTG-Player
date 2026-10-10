@@ -2,6 +2,13 @@ import { useEffect, type ReactNode } from "react";
 import type { Snapshot } from "../protocol";
 import { useStore } from "../store";
 import { send } from "../ws";
+import { partnerOf } from "../teams";
+
+/** Satz der Leiste am ausgeschiedenen Sitz. "Your team plays on" stimmt nur mit Partner: in einer Partie ohne Teams
+ *  (1v3, jeder gegen jeden) endet das Spiel nicht, wenn der Mensch stirbt - dort gibt es kein Team, das weiterspielt. */
+function outText(state: Snapshot): string {
+  return partnerOf(state) ? "You are out. Your team plays on." : "You are out. The game continues without you.";
+}
 
 /** children stehen zwischen Nachricht und Knoepfen in der Leiste (Table.tsx haengt dort die Denk-Anzeige
  *  ein - in der Leiste statt darueber, damit nichts umbricht oder das Spielfeld umskaliert).
@@ -35,7 +42,7 @@ export default function Prompt({ state, dangerLabel = "Concede", out = false, ch
   return (
     <div className="prompt">
       <span className="phase-chip"><span className="turn">Turn {state.turn}</span><span className="sep">·</span>{state.phase ?? ""}</span>
-      <span className="message">{out ? "You are out. Your team plays on." : p.message}</span>
+      <span className="message">{out ? outText(state) : p.message}</span>
       {toast && <span className="toast" role="status" key={toast.n}>{toast.text}</span>}
       {children}
       <span className="actions">
