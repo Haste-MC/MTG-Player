@@ -168,7 +168,9 @@ public class WebGuiGame extends AbstractGuiGame {
     }
 
     /**
-     * Schaltet "Partnerhand zeigen" fuer die naechste Partie. Gehoert hierher und nicht in {@code HumanMatch}:
+     * Schaltet "Partnerhand zeigen". Wirksam ab dem naechsten {@link #mayView}-Aufruf - in der Praxis also
+     * ab der naechsten Partie, weil {@code Bridge.startGame} nur bei stehendem Tisch startet
+     * ({@code match.isRunning()}-Sperre). Gehoert hierher und nicht in {@code HumanMatch}:
      * die Teams sind eine Spielregel (die Engine braucht sie), der Haken nur eine Frage, was der Tisch
      * anzeigt - er beruehrt das Spiel nicht und wirkt allein in {@link #mayView}. {@code Bridge.startGame}
      * setzt ihn bei JEDEM Start, auch mit {@code false}, damit er nicht aus der Vorpartie haengen bleibt.
@@ -210,6 +212,9 @@ public class WebGuiGame extends AbstractGuiGame {
         if (super.mayView(c)) {
             return true;
         }
+        // Die Zonenpruefung steht hier UND in istPartnerhand: hier als Abkuerzung, damit nicht fuer jede
+        // Karte des Tisches die Teamzuordnung gebaut wird - dort als Teil der Regel selbst, die ohne
+        // Spielzustand testbar bleiben soll. Keine der beiden ist ueberfluessig.
         if (!revealPartnerHand || c == null || c.getZone() != ZoneType.Hand || c.getController() == null) {
             return false;
         }

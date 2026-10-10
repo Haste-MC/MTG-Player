@@ -118,7 +118,9 @@ class PartnerHandTest {
     }
 
     /** Mit menschlichem Sitz 0 oder ohne (Zuschauer: lauter KI, kein lokaler Spieler am gui). */
-    private static Tisch aufbauen(boolean mitMensch, boolean partnerHandZeigen) {
+    /** {@code partnerHandZeigen == null}: den Setter gar nicht rufen - so wird die Vorgabe des Feldes
+     *  geprueft und nicht die zuletzt gesetzte Fassung. */
+    private static Tisch aufbauen(boolean mitMensch, Boolean partnerHandZeigen) {
         List<Integer> teams = List.of(1, 1, 2, 2);
         List<RegisteredPlayer> reg = new ArrayList<>();
         for (int i = 0; i < 4; i++) {
@@ -139,7 +141,9 @@ class PartnerHandTest {
         List<Object> gesendet = Collections.synchronizedList(new ArrayList<>());
         WebGuiGame gui = new WebGuiGame(gesendet::add);
         gui.setTeams(teams);
-        gui.setRevealPartnerHand(partnerHandZeigen);
+        if (partnerHandZeigen != null) {
+            gui.setRevealPartnerHand(partnerHandZeigen);
+        }
         gui.setGameView(game.getView());
         if (mitMensch) {
             Player ich = sitze.get(0);
@@ -181,6 +185,20 @@ class PartnerHandTest {
                 hand.stream().map(Snapshot.CardSnap::name).sorted().toList());
         // Die eigene Hand blieb sichtbar - die Regel ergaenzt Forge, sie ersetzt es nicht.
         assertTrue(handVon(snap, t.ich()).stream().noneMatch(Snapshot.CardSnap::faceDown), "eigene Hand weiter offen");
+    }
+
+    @Test
+    @Timeout(value = 3, unit = TimeUnit.MINUTES)
+    void ohneSetterAufrufBleibtDiePartnerhandVerdeckt() {
+        // Jede andere Pruefung setzt den Haken ausdruecklich - damit waere eine Vorgabe "true" nie
+        // aufgefallen, und eine frisch gebaute Bridge haette die Partnerhand von sich aus gezeigt.
+        Tisch t = aufbauen(true, null);
+        Snapshot snap = t.snapshot();
+
+        for (Snapshot.CardSnap c : handVon(snap, t.partner())) {
+            assertTrue(c.faceDown(), "ohne gesetzten Haken bleibt die Partnerhand verdeckt");
+            assertNull(c.name());
+        }
     }
 
     @Test
