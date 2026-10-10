@@ -80,6 +80,47 @@ class HumanMatchStartTeamsTest {
         }
     }
 
+    @Test
+    @Timeout(value = 3, unit = TimeUnit.MINUTES)
+    void vierSitzeMitZweiTeamsSitzenAbwechselndUndDerSnapshotZeigtDieselbenTeams() throws Exception {
+        // Lobby-Reihenfolge 1,1,2,2 - gespielt wird 1,2,1,2. Die Teamliste fuer die Snapshots (gui.setTeams)
+        // muss mit den Sitzen wandern, sonst zeigt der Browser dem falschen Sitz das falsche Team.
+        List<Deck> decks = List.of(Precons.load("Abzan Armor [TDC] [2025]"),
+                Precons.load("Adaptive Enchantment [C18] [2018]"),
+                Precons.load("Abzan Armor [TDC] [2025]"),
+                Precons.load("Adaptive Enchantment [C18] [2018]"));
+        List<Object> gesendet = Collections.synchronizedList(new ArrayList<>());
+        WebGuiGame gui = new WebGuiGame(gesendet::add);
+        ((WebGuiBase) GuiBase.getInterface()).setGuiSupplier(() -> gui);
+        HumanMatch match = new HumanMatch();
+        try {
+            match.startSpectator(decks, List.of("A", "B", "C", "D"), Collections.nCopies(4, AiConfig.DEFAULT),
+                    List.of(1, 1, 2, 2), 3, gui, null, java.util.Set.of(), null);
+            Game game = warteAufSpiel(match);
+
+            List<Player> sitze = List.copyOf(game.getRegisteredPlayers());
+            assertEquals(List.of("A", "C", "B", "D"), sitze.stream().map(Player::getName).toList(),
+                    "abwechselnd: Sitz 0 bleibt vorn, dann das andere Team");
+            assertEquals(List.of(1, 2, 1, 2), sitze.stream().map(Player::getTeam).toList(),
+                    "die Teams wandern mit den Sitzen");
+
+            gesendet.clear();
+            gui.pushState();
+            List<Object> kopie;
+            synchronized (gesendet) {
+                kopie = new ArrayList<>(gesendet);
+            }
+            Snapshot snap = kopie.stream().filter(Snapshot.class::isInstance).map(Snapshot.class::cast)
+                    .findFirst().orElseGet(() -> fail("pushState hat keinen Snapshot gesendet"));
+            assertEquals(List.of("A", "C", "B", "D"), snap.players().stream().map(p -> p.name()).toList());
+            assertEquals(List.of(1, 2, 1, 2), snap.players().stream().map(p -> p.team()).toList(),
+                    "der Snapshot zeigt jedem Sitz sein eigenes Team");
+        } finally {
+            match.end();
+            ((WebGuiBase) GuiBase.getInterface()).setGuiSupplier(null);
+        }
+    }
+
     private static Game warteAufSpiel(HumanMatch match) throws InterruptedException {
         long ende = System.currentTimeMillis() + TimeUnit.MINUTES.toMillis(2);
         while (System.currentTimeMillis() < ende) {

@@ -56,7 +56,8 @@ public final class HumanMatch {
     }
 
     /**
-     * @param teams    Teamnummer je Sitz in Sitzreihenfolge (Mensch zuerst), siehe {@link #applyTeams};
+     * @param teams    Teamnummer je Sitz in Lobby-Reihenfolge (Mensch zuerst); gespielt wird abwechselnd,
+     *                 siehe {@link #seated};
      *                 {@code null} = Jeder gegen jeden
      * @param sink     bekommt den Datensatz der Partie, sobald sie vorbei ist (siehe {@link #record})
      * @param ownDecks Decknamen (aus dem {@code DeckStore} des Aufrufers), fuer die eine Kartenbiografie
@@ -87,7 +88,7 @@ public final class HumanMatch {
             players.add(rp);
             deckNames.put(rp, aiDecks.get(i).getName());
         }
-        applyTeams(players, teams);
+        players = seated(players, teams);
         Map<RegisteredPlayer, IGuiGame> guis = new HashMap<>();
         guis.put(human, gui);
 
@@ -96,7 +97,7 @@ public final class HumanMatch {
         rules.setWarnAboutAICards(false);
         hosted = new HostedMatch();
         gui.resetForNewMatch(); // sonst haengt Auswahl/Prompt-Zustand aus dem vorigen Spiel noch dran
-        gui.setTeams(teams);    // Teamnummern fuer die Snapshots dieses Spiels (null = keine Teams)
+        gui.setTeams(seatTeams(players, teams)); // Teamnummern je Sitz fuer die Snapshots (null = keine Teams)
         // HostedMatch.startGame liest diese Preference beim Spielstart (setzt Game.AI_TIMEOUT) - kein save(),
         // die Aenderung soll nur diese JVM/Session betreffen.
         FModel.getPreferences().setPref(FPref.MATCH_AI_TIMEOUT, String.valueOf(aiTimeout));
@@ -125,7 +126,7 @@ public final class HumanMatch {
     }
 
     /**
-     * @param teams    Teamnummer je KI-Sitz, siehe {@link #applyTeams}; {@code null} = Jeder gegen jeden
+     * @param teams    Teamnummer je KI-Sitz in Lobby-Reihenfolge, siehe {@link #seated}; {@code null} = Jeder gegen jeden
      * @param sink     bekommt den Datensatz der Partie, sobald sie vorbei ist (siehe {@link #record})
      * @param ownDecks Decknamen (aus dem {@code DeckStore} des Aufrufers), fuer die eine Kartenbiografie
      *                 gefuehrt wird - siehe {@code MatchRecorder}
@@ -148,16 +149,52 @@ public final class HumanMatch {
             players.add(rp);
             deckNames.put(rp, aiDecks.get(i).getName());
         }
-        applyTeams(players, teams);
+        players = seated(players, teams);
 
         GameRules rules = CommanderRules.create();
         rules.setWarnAboutAICards(false);
         hosted = new HostedMatch();
         gui.resetForNewMatch(); // sonst haengt Auswahl/Prompt-Zustand aus dem vorigen Spiel noch dran
-        gui.setTeams(teams);    // Teamnummern fuer die Snapshots dieses Spiels (null = keine Teams)
+        gui.setTeams(seatTeams(players, teams)); // Teamnummern je Sitz fuer die Snapshots (null = keine Teams)
         FModel.getPreferences().setPref(FPref.MATCH_AI_TIMEOUT, String.valueOf(aiTimeout));
         record(gui, "spectate", aiTimeout, deckNames, sink, ownDecks, cardSink);
         hosted.startMatch(rules, null, players, Map.of(), null);
+    }
+
+    /**
+     * Sitzreihenfolge der Partie: mit Teams abwechselnd ({@link Seating#interleave}), sonst wie gegeben.
+     * Setzt dabei die Teamnummern, weil beides zusammengehoert - die Teamliste kommt in Lobby-Reihenfolge,
+     * und nur die Sitze zu drehen hiesse, dass hinterher der falsche Sitz das falsche Team traegt.
+     */
+    static List<RegisteredPlayer> seated(List<RegisteredPlayer> players, List<Integer> teams) {
+        if (teams == null) {
+            applyTeams(players, null);
+            return players;
+        }
+        if (teams.size() != players.size()) {
+            // Vor dem Umsortieren: interleave liefert Indizes in die Teamliste, eine zu lange Liste
+            // liesse sie ueber die Sitze hinauslaufen.
+            throw new IllegalArgumentException("je Sitz eine Teamnummer: " + players.size()
+                    + " Sitze, " + teams.size() + " Nummern");
+        }
+        List<Integer> order = Seating.interleave(teams);
+        List<RegisteredPlayer> sortiert = new ArrayList<>();
+        List<Integer> sortierteTeams = new ArrayList<>();
+        for (int i : order) {
+            sortiert.add(players.get(i));
+            sortierteTeams.add(teams.get(i));
+        }
+        applyTeams(sortiert, sortierteTeams);
+        return sortiert;
+    }
+
+    /**
+     * Die Teamnummern in der Reihenfolge der (schon umsortierten) Sitze - fuer die Snapshots, die ihre
+     * Zuordnung ueber die Sitzposition lesen ({@code WebGuiGame#teamsById}). Aus den Sitzen selbst
+     * gelesen statt aus der Lobby-Liste: die kennt die Umsortierung nicht.
+     */
+    private static List<Integer> seatTeams(List<RegisteredPlayer> players, List<Integer> teams) {
+        return teams == null ? null : players.stream().map(RegisteredPlayer::getTeamNumber).toList();
     }
 
     /**

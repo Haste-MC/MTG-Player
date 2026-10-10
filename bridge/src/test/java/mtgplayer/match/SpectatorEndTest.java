@@ -114,12 +114,14 @@ class SpectatorEndTest {
                 java.util.Set.of(), null);
         Game game = warteAufSpiel();
         List<Player> sitze = List.copyOf(game.getRegisteredPlayers());
+        // Lobby 1,1,2,2 - gesessen wird abwechselnd, also gehoeren die Sitze 1 und 3 zu Team 2.
+        assertEquals(List.of(1, 2, 1, 2), sitze.stream().map(Player::getTeam).toList());
         gesendet.clear();
 
         // Auf Forges Spiel-Thread, wie bei einer gewinnenden KI: Team 2 geht auf 0 Leben, die
         // Zustandspruefung setzt "verloren" und beendet die Partie - Forges eigener Weg zu finishGame().
         game.getAction().invoke(() -> {
-            sitze.get(2).setLife(0, null);
+            sitze.get(1).setLife(0, null);
             sitze.get(3).setLife(0, null);
             game.getAction().checkStateEffects(true);
         });
@@ -127,7 +129,7 @@ class SpectatorEndTest {
         Messages.GameOver over = (Messages.GameOver) warteAuf(Messages.GameOver.class, 60);
         assertNotNull(over, "keine gameOver-Nachricht angekommen");
         assertEquals("Team 1", over.winner(), "das Teamkennzeichen, nicht der Name eines einzelnen Sitzes");
-        assertEquals(List.of(sitze.get(0).getId(), sitze.get(1).getId()), over.winnerSeats(),
+        assertEquals(List.of(sitze.get(0).getId(), sitze.get(2).getId()), over.winnerSeats(),
                 "genau die beiden Sitze des Gewinnerteams, in Sitzreihenfolge");
     }
 

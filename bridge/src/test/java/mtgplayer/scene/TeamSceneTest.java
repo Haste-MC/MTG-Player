@@ -2,6 +2,7 @@ package mtgplayer.scene;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import forge.game.GameEndReason;
@@ -62,5 +63,20 @@ class TeamSceneTest {
         s.step(1);
         assertFalse(s.game().isGameOver(),
                 "solange ein Partner lebt, ist das Team nicht draussen - die Partie laeuft weiter");
+    }
+
+    @Test
+    @Timeout(value = 120, unit = TimeUnit.SECONDS)
+    void dieZugreihenfolgeWechseltZwischenDenTeams() {
+        // Scene baut die Sitze in der gegebenen Reihenfolge; hier die, die HumanMatch erzeugen wuerde.
+        Scene s = Scene.ofTeams(List.of(AiConfig.DEFAULT, AiConfig.DEFAULT, AiConfig.DEFAULT, AiConfig.DEFAULT),
+                List.of(1, 2, 1, 2), 3);
+
+        List<Integer> reihenfolge = s.game().getPlayers().stream().map(Player::getTeam).toList();
+
+        for (int i = 1; i < reihenfolge.size(); i++) {
+            assertNotEquals(reihenfolge.get(i - 1), reihenfolge.get(i),
+                    "Sitz " + i + " zieht direkt nach seinem eigenen Team: " + reihenfolge);
+        }
     }
 }
