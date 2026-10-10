@@ -40,12 +40,9 @@ public final class BenchStats {
             turnSum += g.turns();
             millisSum += g.millis();
             turns.add(g.turns());
-            if (g.fewSpells("A")) {
-                fewSpellsA++;
-            }
-            if (g.fewSpells("B")) {
-                fewSpellsB++;
-            }
+            // Sitze zaehlen, nicht Spiele: im 2v2 koennen beide Sitze eines Teams nichts getan haben.
+            fewSpellsA += g.fewSpellsSitze("A");
+            fewSpellsB += g.fewSpellsSitze("B");
             if ("A".equals(g.winner())) {
                 winsA++;
             } else if ("B".equals(g.winner())) {

@@ -1,6 +1,9 @@
 package mtgplayer.bench;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectWriter;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import forge.deck.Deck;
 import forge.util.MyRandom;
 import java.io.IOException;
@@ -240,7 +243,7 @@ public final class Bench {
     private record ArgsReport(int games, String a, String b, String deckA, String deckB, int turns, int timeout,
                                long seed, String out) { }
 
-    private record Report(ArgsReport args, Summary summary, List<GameRecord> games) { }
+    private record Report(ArgsReport args, boolean teams, Summary summary, List<JsonNode> games) { }
 
     private static void writeReports(BenchArgs args, List<GameRecord> records, Summary summary) {
         try {
@@ -254,35 +257,69 @@ public final class Bench {
         Path json = args.out().resolve(base + ".json");
         try {
             Files.writeString(md, markdown(args, records, summary));
-            ArgsReport ar = new ArgsReport(args.games(), args.a().spec(), args.b().spec(), args.deckA(), args.deckB(),
-                    args.turns(), args.timeout(), args.seed(), args.out().toString());
-            ObjectWriter writer = Json.mapper().writerWithDefaultPrettyPrinter();
-            Files.writeString(json, writer.writeValueAsString(new Report(ar, summary, records)));
+            Files.writeString(json, json(args, records, summary));
         } catch (IOException e) {
             throw new IllegalStateException("kann Bench-Bericht nicht schreiben unter " + args.out(), e);
         }
     }
 
+    /** Der JSON-Bericht: wie bisher, dazu {@code teams} und je Spiel die Besetzung ({@code besetzung}: Sitzname
+     *  und Team in Sitzreihenfolge), damit sich spaetere Laeufe Sitz fuer Sitz vergleichen lassen. */
+    private static String json(BenchArgs args, List<GameRecord> records, Summary summary) throws IOException {
+        ArgsReport ar = new ArgsReport(args.games(), args.a().spec(), args.b().spec(), args.deckA(), args.deckB(),
+                args.turns(), args.timeout(), args.seed(), args.out().toString());
+        List<JsonNode> spiele = new ArrayList<>();
+        for (GameRecord g : records) {
+            ObjectNode node = Json.mapper().valueToTree(g);
+            Besetzung b = besetzung(args, g.index());
+            ArrayNode sitze = node.putArray("besetzung");
+            for (int k = 0; k < b.namen().size(); k++) {
+                sitze.addObject().put("sitz", b.namen().get(k)).put("team", b.teams().get(k));
+            }
+            spiele.add(node);
+        }
+        ObjectWriter writer = Json.mapper().writerWithDefaultPrettyPrinter();
+        return writer.writeValueAsString(new Report(ar, args.teams(), summary, spiele));
+    }
+
+    /** Fuer den Test: der JSON-Bericht, ohne eine Datei zu schreiben. */
+    static String jsonFuerTest(BenchArgs args, List<GameRecord> records, Summary summary) throws IOException {
+        return json(args, records, summary);
+    }
+
+    /** Paketsichtbarer Alias fuer den Test, damit {@link #markdown} privat bleiben kann. */
+    static String markdownFuerTest(BenchArgs args, List<GameRecord> records, Summary summary) {
+        return markdown(args, records, summary);
+    }
+
     private static String markdown(BenchArgs args, List<GameRecord> records, Summary summary) {
         StringBuilder sb = new StringBuilder();
-        sb.append("# Bench ").append(args.a().spec()).append(" vs ").append(args.b().spec()).append('\n');
-        sb.append("Decks: A = ").append(args.deckA()).append(", B = ").append(args.deckB())
-                .append(" · Spiele: ").append(args.games())
+        // Ohne --teams bleiben alle Zeichen wie vor dem 2v2-Umbau; die Team-Fassung steht nur auf dem anderen Pfad.
+        boolean t = args.teams();
+        sb.append("# Bench ").append(t ? "2v2 " : "").append(args.a().spec()).append(" vs ").append(args.b().spec()).append('\n');
+        if (t) {
+            sb.append("Deckpaar (beide Teams): ").append(args.deckA()).append(" + ").append(args.deckB());
+        } else {
+            sb.append("Decks: A = ").append(args.deckA()).append(", B = ").append(args.deckB());
+        }
+        sb.append(" · Spiele: ").append(args.games())
                 .append(" · Zugdeckel: ").append(args.turns())
                 .append(" · Timeout: ").append(args.timeout()).append(" s")
                 .append(" · Seed: ").append(args.seed())
                 .append(" · ").append(DISPLAY_STAMP.format(LocalDateTime.now()))
                 .append('\n');
-        sb.append("| | A | B | Unentschieden | Abstürze | Sim defekt |\n|---|---|---|---|---|---|\n");
+        sb.append(t ? "| | Team A | Team B | Unentschieden | Abstürze | Sim defekt |\n|---|---|---|---|---|---|\n"
+                : "| | A | B | Unentschieden | Abstürze | Sim defekt |\n|---|---|---|---|---|---|\n");
         sb.append("| Siege | ").append(summary.winsA()).append(" | ").append(summary.winsB()).append(" | ")
                 .append(summary.draws()).append(" (Zugdeckel ").append(summary.drawsByTurnCap()).append(") | ")
                 .append(summary.crashes()).append(" | ").append(summary.simBroken()).append(" |\n");
-        sb.append("Siegquote A (entschiedene Spiele): ").append(pct(summary.winRateA()))
+        sb.append(t ? "Siegquote Team A (entschiedene Spiele): " : "Siegquote A (entschiedene Spiele): ").append(pct(summary.winRateA()))
                 .append(" % · 95-%-Intervall ").append(pct(summary.ciLow())).append('–').append(pct(summary.ciHigh()))
                 .append(" % · Ø Züge ").append(num1(summary.avgTurns())).append(" (Median ").append(num(summary.medianTurns()))
                 .append(") · Ø Dauer ").append(Math.round(summary.avgMillis() / 1000.0)).append(" s")
-                .append(" · Nichtstun (≥ 5 Länder, ≤ 2 Zauber) A ").append(summary.fewSpellsA())
-                .append(" / B ").append(summary.fewSpellsB()).append('\n');
+                .append(t ? " · Nichtstun-Sitze (≥ 5 Länder, ≤ 2 Zauber) Team A " : " · Nichtstun (≥ 5 Länder, ≤ 2 Zauber) A ")
+                .append(summary.fewSpellsA())
+                .append(t ? " / Team B " : " / B ").append(summary.fewSpellsB()).append('\n');
         sb.append("## Spiele\n| # | Seed | Erster | Sieger | Grund | Züge | Dauer s | Sim-Fehler | Nichtstun |\n|---|---|---|---|---|---|---|---|---|\n");
         for (GameRecord g : records) {
             sb.append("| ").append(g.index() + 1).append(" | ").append(g.seed()).append(" | ").append(g.firstSeat())

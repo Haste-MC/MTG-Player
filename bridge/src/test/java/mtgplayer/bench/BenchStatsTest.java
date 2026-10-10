@@ -109,4 +109,27 @@ class BenchStatsTest {
         assertTrue(g(0, "A", 20).withFewSpells("AB").fewSpells("B"));
         assertTrue(!g(0, "A", 20).fewSpells("A"));
     }
+
+    /** Vier Sitze A1,A2,B1,B2: gezaehlt werden Sitze je Team, nicht Spiele mit Treffer - sonst zaehlte ein Team,
+     *  in dem beide Sitze nichts tun, nur einmal. Das Zwei-Sitze-Format ("A", "B", "AB") bleibt wie bisher. */
+    @Test
+    void summaryZaehltNichtstunSitzeJeTeamExakt() {
+        var vier = BenchStats.summarize(List.of(
+                g(0, "A", 20).withFewSpells("A1B2"),
+                g(1, "B", 30).withFewSpells("A1A2"),
+                g(2, "A", 40).withFewSpells("B1"),
+                g(3, "A", 40).withFewSpells("A1A2B1B2")));
+        assertEquals(1 + 2 + 0 + 2, vier.fewSpellsA(), "beide Sitze eines Teams zaehlen doppelt");
+        assertEquals(1 + 0 + 1 + 2, vier.fewSpellsB());
+
+        var zwei = BenchStats.summarize(List.of(g(0, "A", 20).withFewSpells("AB"), g(1, "B", 30).withFewSpells("B")));
+        assertEquals(1, zwei.fewSpellsA());
+        assertEquals(2, zwei.fewSpellsB());
+
+        assertEquals(2, g(0, "A", 20).withFewSpells("A1A2").fewSpellsSitze("A"));
+        assertEquals(0, g(0, "A", 20).withFewSpells("A1A2").fewSpellsSitze("B"));
+        assertEquals(0, g(0, "A", 20).fewSpellsSitze("A"), "null-sicher");
+        assertTrue(g(0, "A", 20).withFewSpells("A1B2").fewSpells("B"));
+        assertTrue(!g(0, "A", 20).withFewSpells("A1A2").fewSpells("B"));
+    }
 }

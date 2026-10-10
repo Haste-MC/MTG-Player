@@ -2,8 +2,8 @@ package mtgplayer.bench;
 
 /** Ergebnis eines einzelnen Bench-Spiels (Sitz A gegen Sitz B). {@code turnCapped}: das Spiel endete am
  *  Zugdeckel (siehe AiMatch.Result#turnCapped) - unterscheidet das von einem Forge-eigenen Unentschieden
- *  mit demselben {@code reason} ("Draw"). {@code fewSpells}: Sitze ("", "A", "B", "AB"), die "nichts getan"
- *  haben - mindestens 5 Laender gespielt, hoechstens 2 Zauber gewirkt (siehe {@link ActivityCounter}). */
+ *  mit demselben {@code reason} ("Draw"). {@code fewSpells}: Sitze ("", "A", "B", "AB"; mit {@code --teams}
+ *  "A1", "A2", "B1", "B2" aneinandergehaengt, etwa "A1B2"), die "nichts getan" haben - mindestens 5 Laender gespielt, hoechstens 2 Zauber gewirkt (siehe {@link ActivityCounter}). */
 public record GameRecord(int index, long seed, String firstSeat /* "A"|"B"|"?" */, String winner /* "A"|"B"|null */,
                           String reason, int turns, long millis, boolean turnCapped, int simErrors, String fewSpells) {
     /** Ohne simErrors und fewSpells (Tests). */
@@ -22,9 +22,20 @@ public record GameRecord(int index, long seed, String firstSeat /* "A"|"B"|"?" *
         return new GameRecord(index, seed, firstSeat, winner, reason, turns, millis, turnCapped, simErrors, seats);
     }
 
-    /** Hat dieser Sitz in diesem Spiel "nichts getan"? (null-sicher: aeltere JSON-Berichte ohne das Feld) */
+    /** Wie viele Sitze des Teams (oder Sitzes) {@code team} ("A"/"B") haben in diesem Spiel "nichts getan"?
+     *  Gezaehlt werden Sitze, nicht Treffer: "A1A2" ergibt fuer "A" zwei, "AB" ergibt fuer "A" eins. Die
+     *  Sitznamen beginnen mit dem Teambuchstaben, Ziffern und das andere Team stoeren nicht.
+     *  (null-sicher: aeltere JSON-Berichte ohne das Feld) */
+    public int fewSpellsSitze(String team) {
+        if (fewSpells == null || team.isEmpty()) {
+            return 0;
+        }
+        return (int) fewSpells.chars().filter(c -> c == team.charAt(0)).count();
+    }
+
+    /** Hat dieser Sitz (bzw. mindestens ein Sitz dieses Teams) in diesem Spiel "nichts getan"? */
     public boolean fewSpells(String seat) {
-        return fewSpells != null && fewSpells.contains(seat);
+        return fewSpellsSitze(seat) > 0;
     }
 
     /** Spiel lief durch, aber die Simulation war defekt - Ergebnis nicht aussagekraeftig. */
