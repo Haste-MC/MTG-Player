@@ -39,3 +39,17 @@ export function gameOverText(state: Snapshot, winner: string | null | undefined,
   if (teamWin && names.length > 0) return `${winner} wins — ${names.join(" and ")}`;
   return `${winner} wins`;
 }
+
+/**
+ * Unter welchen Namen die Serie angezeigt wird: mit Teams je Team einmal ("Team 1", "Team 2", nach Nummer),
+ * sonst je Sitz. Die Bridge meldet einen Teamsieg als winner "Team n" (store.ts zaehlt ihn unter genau dem),
+ * ein Sitznamen-Eintrag wuerde in einer Team-Partie also nie Siege bekommen. Teams gibt es nur ganz oder
+ * gar nicht (Teams.java: "entweder alle Sitze oder keiner"), freie Sitze neben Teams sind darum kein Fall.
+ * Die Beschriftungen vermischen sich zwischen Serien nicht: humanTeam und team der Gegner stehen im
+ * Serien-Schluessel (series.ts), ein Wechsel zwischen Teams und ohne Teams beginnt also eine neue Serie.
+ */
+export function seriesNames(state: Snapshot): string[] {
+  if (!hasTeams(state)) return state.players.map((p) => p.name);
+  const teams = state.players.filter(inTeam).map((p) => p.team as number);
+  return [...new Set(teams)].sort((a, b) => a - b).map((t) => `Team ${t}`);
+}

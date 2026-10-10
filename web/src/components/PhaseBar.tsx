@@ -1,5 +1,6 @@
 import { PHASES, type Snapshot } from "../protocol";
 import { formatSeries } from "../series";
+import { seriesNames } from "../teams";
 import { useStore } from "../store";
 import { send } from "../ws";
 
@@ -21,7 +22,7 @@ export default function PhaseBar({ state }: { state: Snapshot }) {
       {series && (series.games > 1 || bestOf > 0) && (
         // Serienstand waehrend der Partie (Spec §1) - dieselbe Anzeige wie im Spielende-Dialog/Zuschauer-
         // Fusszeile (Table.tsx), damit "Serie: …" ueberall gleich aussieht.
-        <span className="series-status">Serie: {formatSeries(series, state.players.map((p) => p.name))}{bestOf > 0 && ` · Best of ${bestOf}`}</span>
+        <span className="series-status">Serie: {formatSeries(series, seriesNames(state))}{bestOf > 0 && ` · Best of ${bestOf}`}</span>
       )}
       <span className="segments">
         {PHASES.map((ph) => (

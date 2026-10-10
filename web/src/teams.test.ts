@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { gameOverText, hasTeams, partnerOf, teamMembers } from "./teams";
-import type { Snapshot } from "./protocol";
+import { gameOverText, hasTeams, partnerOf, seriesNames, teamMembers } from "./teams";
+import { formatSeries, recordResult, startSeries } from "./series";
+import type { Snapshot, StartGame } from "./protocol";
 
 // team: undefined = Feld fehlt (die Bridge sendet es nur in Team-Partien), -1 = ausdruecklich kein Team.
 const seat = (id: number, name: string, team?: number) => ({
@@ -11,6 +12,10 @@ const seat = (id: number, name: string, team?: number) => ({
 const state = { players: [seat(0, "You", 1), seat(1, "AI 1", 1), seat(2, "AI 2", 2)], me: 0 } as unknown as Snapshot;
 const free = { players: [seat(0, "You", -1), seat(1, "AI 1", -1)], me: 0 } as unknown as Snapshot;
 const absent = { players: [seat(0, "You"), seat(1, "AI 1")], me: 0 } as unknown as Snapshot;
+
+const opp = (team?: number) => ({ precon: "B", name: "KI", team });
+const teamMsg: StartGame = { type: "startGame", humanDeck: { precon: "A" }, humanTeam: 1, opponents: [opp(1), opp(2)] };
+const freeMsg: StartGame = { type: "startGame", humanDeck: { precon: "A" }, opponents: [opp(), opp()] };
 
 describe("teams", () => {
   it("erkennt eine Partie mit Teams", () => {
@@ -62,5 +67,44 @@ describe("teams", () => {
 
   it("bleibt bei einem Teamsieg ohne Sitzliste beim Teamnamen", () => {
     expect(gameOverText(state, "Team 1", [])).toBe("Team 1 wins");
+  });
+
+  it("beschriftet die Serie je Team, nicht je Sitz: sonst stuenden in einer 2v2-Serie vier Sitze mit 0 Siegen, "
+    + "weil die Bridge Teamsiege unter \"Team n\" meldet", () => {
+    expect(seriesNames(state)).toEqual(["Team 1", "Team 2"]);
+  });
+
+  it("sortiert die Teams nach Nummer, nicht nach Sitzreihenfolge, und nennt jedes nur einmal", () => {
+    const umgekehrt = { players: [seat(0, "You", 2), seat(1, "AI 1", 1), seat(2, "AI 2", 2), seat(3, "AI 3", 1)], me: 0 } as unknown as Snapshot;
+    expect(seriesNames(umgekehrt)).toEqual(["Team 1", "Team 2"]);
+  });
+
+  it("beschriftet ohne Teams weiter je Sitz - mit -1 wie mit fehlendem Feld", () => {
+    expect(seriesNames(free)).toEqual(["You", "AI 1"]);
+    expect(seriesNames(absent)).toEqual(["You", "AI 1"]);
+  });
+
+  it("zeigt den Serienstand eines Team-Matches mit den Teams und ihren Siegen", () => {
+    let s = startSeries(undefined, teamMsg);
+    s = recordResult(s, "Team 2");
+    s = recordResult(s, "Team 1");
+    s = recordResult(s, "Team 2");
+    expect(formatSeries(s, seriesNames(state))).toBe("Team 1 1 · Team 2 2");
+  });
+
+  it("laesst einen Team-Sieg ohne Eintrag auf 0 stehen, bis er faellt - der Anfangsstand nennt beide Teams", () => {
+    expect(formatSeries(startSeries(undefined, teamMsg), seriesNames(state))).toBe("Team 1 0 · Team 2 0");
+  });
+
+  it("mischt die Beschriftungen nicht, wenn eine Serie ohne Teams mit Teams weiterlaeuft (und umgekehrt): "
+    + "humanTeam und team der Gegner stehen im Serien-Schluessel, die Serie beginnt also neu", () => {
+    const ohne = recordResult(startSeries(undefined, freeMsg), "You");
+    const mit = startSeries(ohne, teamMsg);
+    expect(mit).not.toBe(ohne);
+    expect(mit.wins).toEqual({});
+    expect(formatSeries(mit, seriesNames(state))).toBe("Team 1 0 · Team 2 0");
+    const zurueck = startSeries(recordResult(mit, "Team 1"), freeMsg);
+    expect(zurueck.wins).toEqual({});
+    expect(formatSeries(zurueck, seriesNames(free))).toBe("You 0 · AI 1 0");
   });
 });

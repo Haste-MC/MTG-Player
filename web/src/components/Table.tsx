@@ -13,7 +13,7 @@ import CardImage from "./CardImage";
 import Combat from "./Combat";
 import CardHoverPopup from "./CardHoverPopup";
 import { begrenzeHoehe, geleseneHoehe, merkeHoehe } from "../tableLayout";
-import { gameOverText } from "../teams";
+import { gameOverText, seriesNames } from "../teams";
 
 /** Sekunden, die der Auto-Start-Countdown im Spielende-Dialog laeuft (Spec §1). */
 const COUNTDOWN_SECONDS = 5;
@@ -127,7 +127,8 @@ export default function Table() {
     // reicht als Trigger, der aktuelle Stand kommt im Callback direkt aus dem Store.
   }, [seriesCountdown === undefined]);
   if (!state) return <div className="lobby"><div className="lobby-card"><p className="muted">Warte auf Spielzustand …</p></div></div>;
-  const names = state.players.map((p) => p.name);
+  // Mit Teams steht die Serie unter den Teams, sonst unter den Sitzen (seriesNames).
+  const names = seriesNames(state);
   // Doppelklick-Schutz: nach noteStart() ist expectNewMatch bis zum naechsten Snapshot (oder error) gesetzt.
   const again = () => {
     if (!lastStart || expectNewMatch) return;
