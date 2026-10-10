@@ -86,6 +86,13 @@ public final class Scene {
             rp.setTeamNumber(teams.get(i));
             players.add(rp);
         }
+        return ofSeats(players, aiTimeout);
+    }
+
+    /** Eine Partie aus fertig gebauten Sitzen - Reihenfolge und Teamnummern exakt so, wie sie ankommen.
+     *  Damit laeuft auch die Sitzliste der Produktion ({@code AiMatch.registered}) in eine echte
+     *  {@link Game}, statt dass ein Test seine eigene Eingabe nachprueft. */
+    public static Scene ofSeats(List<RegisteredPlayer> players, int aiTimeout) {
         GameRules rules = CommanderRules.create();
         Match match = new Match(rules, players, "Scene");
         Game game = new Game(players, rules, match);

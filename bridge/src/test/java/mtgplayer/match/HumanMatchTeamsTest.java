@@ -1,5 +1,6 @@
 package mtgplayer.match;
 
+import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -92,6 +93,19 @@ class HumanMatchTeamsTest {
     @Test
     void seatedLehntEineTeamlisteFalscherLaengeAb() {
         // interleave kennt nur die Teamliste; passt sie nicht zu den Sitzen, darf nichts verrutschen.
-        assertThrows(IllegalArgumentException.class, () -> HumanMatch.seated(sitze(4), List.of(1, 2, 2)));
+        // assertAll, damit beide Faelle einzeln gemeldet werden und der erste den zweiten nicht verdeckt.
+        assertAll(
+                // Zu kurz: ein Sitz bliebe ohne Team und fiele beim Umsortieren still heraus.
+                () -> assertThrows(IllegalArgumentException.class,
+                        () -> HumanMatch.seated(sitze(4), List.of(1, 2, 2)), "drei Nummern fuer vier Sitze"),
+                // Zu lang: der Fall, um den es der Pruefung in seated eigentlich geht - interleave lieferte
+                // Indizes ueber die Sitze hinaus und scheiterte erst als IndexOutOfBounds tief im
+                // Umsortieren, ohne zu sagen, dass die Teamliste das Problem ist.
+                () -> {
+                    IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                            () -> HumanMatch.seated(sitze(4), List.of(1, 2, 1, 2, 1)),
+                            "fuenf Nummern fuer vier Sitze");
+                    assertTrue(e.getMessage().contains("je Sitz eine Teamnummer"), e.getMessage());
+                });
     }
 }

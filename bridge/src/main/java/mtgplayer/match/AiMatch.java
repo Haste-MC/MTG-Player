@@ -99,28 +99,23 @@ public final class AiMatch {
     }
 
     /**
-     * Sitzliste der Partie. Mit Teams ({@code teams != null}) wechseln sich die Teams ab
-     * ({@link Seating#interleave}), und Name, Deck, KI-Einstellung und Teamnummer wandern gemeinsam mit
-     * dem Sitz - eine der vier Listen nicht mitzudrehen hiesse, dass hinterher der falsche Sitz das
-     * falsche Team (oder Deck) traegt.
+     * Sitzliste der Partie. Die {@link RegisteredPlayer} entstehen in Lobby-Reihenfolge (dabei wird
+     * {@code deckNames} gefuellt - die Map ist nach dem Objekt geschluesselt und ueberlebt das
+     * Umsortieren), die Regel "Teams wechseln sich ab, und Name, Deck, KI-Einstellung und Teamnummer
+     * wandern gemeinsam mit dem Sitz" steht an genau einer Stelle: {@link HumanMatch#seated}. Dort lag
+     * sie vorher doppelt - eine Aenderung an nur einer Kopie haette gespielte und headless Partie
+     * still auseinanderlaufen lassen.
      */
     static List<RegisteredPlayer> registered(List<Deck> decks, List<String> names, List<AiConfig> configs,
                                              List<Integer> teams, Map<RegisteredPlayer, String> deckNames) {
-        List<Integer> order = teams == null ? null : Seating.interleave(teams);
         List<RegisteredPlayer> players = new ArrayList<>();
-        List<Integer> sortierteTeams = teams == null ? null : new ArrayList<>();
-        for (int pos = 0; pos < decks.size(); pos++) {
-            int i = order == null ? pos : order.get(pos);
+        for (int i = 0; i < decks.size(); i++) {
             RegisteredPlayer rp = RegisteredPlayer.forCommander(decks.get(i));
             rp.setPlayer(configs.get(i).newLobbyPlayer(names.get(i)));
             players.add(rp);
             deckNames.put(rp, decks.get(i).getName());
-            if (sortierteTeams != null) {
-                sortierteTeams.add(teams.get(i));
-            }
         }
-        HumanMatch.applyTeams(players, sortierteTeams);
-        return players;
+        return HumanMatch.seated(players, teams);
     }
 
     /**

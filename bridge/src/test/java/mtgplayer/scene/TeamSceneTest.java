@@ -5,10 +5,13 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import forge.deck.Deck;
 import forge.game.GameEndReason;
 import forge.game.player.Player;
+import forge.game.player.RegisteredPlayer;
 import mtgplayer.ai.AiConfig;
 import mtgplayer.forge.ForgeBoot;
+import mtgplayer.match.TestSeats;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -68,15 +71,24 @@ class TeamSceneTest {
     @Test
     @Timeout(value = 120, unit = TimeUnit.SECONDS)
     void dieZugreihenfolgeWechseltZwischenDenTeams() {
-        // Scene baut die Sitze in der gegebenen Reihenfolge; hier die, die HumanMatch erzeugen wuerde.
-        Scene s = Scene.ofTeams(List.of(AiConfig.DEFAULT, AiConfig.DEFAULT, AiConfig.DEFAULT, AiConfig.DEFAULT),
-                List.of(1, 2, 1, 2), 3);
+        // Lobby-Reihenfolge 1,1,2,2 - so kommt die Teamliste aus der Lobby. Die Sitze baut die
+        // Produktion (AiMatch.registered -> Seating.interleave); der Test tippt die Reihenfolge nicht
+        // selbst ein, sonst bliebe er gruen, auch wenn das Umsortieren aus der Produktion verschwaende.
+        List<Deck> decks = List.of(new Deck("D0"), new Deck("D1"), new Deck("D2"), new Deck("D3"));
+        List<RegisteredPlayer> sitze = TestSeats.headless(decks, List.of("A1", "A2", "B1", "B2"),
+                List.of(AiConfig.DEFAULT, AiConfig.DEFAULT, AiConfig.DEFAULT, AiConfig.DEFAULT),
+                List.of(1, 1, 2, 2));
 
+        Scene s = Scene.ofSeats(sitze, 3);
+
+        // Die Zugreihenfolge der Engine folgt den Sitzen; gelesen wird sie aus dem echten Spiel.
         List<Integer> reihenfolge = s.game().getPlayers().stream().map(Player::getTeam).toList();
-
         for (int i = 1; i < reihenfolge.size(); i++) {
             assertNotEquals(reihenfolge.get(i - 1), reihenfolge.get(i),
                     "Sitz " + i + " zieht direkt nach seinem eigenen Team: " + reihenfolge);
         }
+        assertEquals(List.of("A1", "B1", "A2", "B2"),
+                s.game().getPlayers().stream().map(Player::getName).toList(),
+                "abwechselnd, Sitz 0 bleibt vorn - und die Namen sind mit ihren Teams mitgewandert");
     }
 }
