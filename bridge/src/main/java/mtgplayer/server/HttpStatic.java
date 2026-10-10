@@ -97,12 +97,23 @@ public final class HttpStatic {
      *
      * @param wsPort der Port, auf dem der WebSocket dieser Bridge tatsaechlich horcht
      */
-    public void ereignisstrom(Klienten klienten, int wsPort) {
+    public void ereignisstrom(Klienten klienten) {
         Ereignisstrom strom = new Ereignisstrom(klienten);
         addContext("/ereignisse", strom::ereignisse);
         addContext("/eingabe", strom::eingabe);
-        addContext("/ports", ex -> ports(ex, wsPort));
         closeables.add(strom);
+    }
+
+    /**
+     * Meldet {@code GET /ports} an - getrennt von {@link #ereignisstrom(Klienten)} und bewusst
+     * FRUEH: das Fenster der gepackten App geht absichtlich vor {@code ForgeBoot.init()} auf, und
+     * genau in diesen 20-60 Sekunden fragt die Seite nach dem Port. Waere der Weg erst nach dem
+     * Kartenladen da, raet der Klient so lange 8081 - und faende dort im Netz womoeglich die Bridge
+     * eines FREMDEN Rechners (beobachtet 2026-10-11 bei einem Kollegen: seine Partie lief auf dem
+     * Rechner des Entwicklers). Deshalb braucht dieser Weg nichts ausser der Portnummer.
+     */
+    public void ports(int wsPort) {
+        addContext("/ports", ex -> ports(ex, wsPort));
     }
 
     /** {@code GET /ports} - {@code {"ws": <Port>}}; anderes als GET ist 405. */

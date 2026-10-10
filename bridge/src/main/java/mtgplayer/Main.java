@@ -276,6 +276,8 @@ public final class Main {
             http = new HttpStatic(httpPort, web);
         }
         http.addContext("/img/", new ImageHandler(ImageCache.standard()));
+        // Vor start() und vor ForgeBoot: die Seite fragt den WebSocket-Port, waehrend Forge noch laedt.
+        http.ports(wsPort);
         http.start();
         if (appMode) {
             // Vor ForgeBoot.init() (Blocker 3): das Fenster erscheint sofort, die Seite zeigt den
@@ -306,7 +308,7 @@ public final class Main {
         Bridge bridge = new Bridge(wsPort);
         // Rueckfallweg auf dem HTTP-Port, fuer Browser, die keinen WebSocket herausbekommen
         // (eingebaute Browser mit einer Freigabe fuer genau Name und Port der Seite).
-        http.ereignisstrom(bridge.klienten(), wsPort);
+        http.ereignisstrom(bridge.klienten());
         IdleExit idleExit = null;
         if (appMode) {
             // Das Fenster ist ein eigener Prozess (AppMode.openWindow) - ohne diese Regel liefe die

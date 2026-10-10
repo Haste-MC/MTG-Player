@@ -52,7 +52,9 @@ class EreignisstromTest {
         CrashLog.setFile(logDatei);
         klienten = new Klienten(m -> gehoert.add(m.path("type").asText()), () -> { });
         http = new HttpStatic(PORT, dir);
-        http.ereignisstrom(klienten, WS_PORT);
+        // Wie in Main: /ports wird FRUEH angemeldet (vor dem Kartenladen), der Strom erst danach.
+        http.ports(WS_PORT);
+        http.ereignisstrom(klienten);
         http.start();
     }
 
