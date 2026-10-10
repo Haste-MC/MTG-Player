@@ -996,6 +996,7 @@ button.sb-deck.on { background: var(--accent-soft); border-color: rgba(79, 140, 
 .match-source { display: flex; align-items: center; gap: 5px; min-width: 0; }
 .match-source .chip { flex: none; }
 .chip.timeout { font-weight: 500; color: var(--faint); }
+.chip.match-lineup { font-weight: 600; color: rgb(183, 156, 255); border-color: rgba(183, 156, 255, 0.4); }  /* Violett wie das Team-Tag am Tisch */
 .chip.src-spectate { color: var(--blue); border-color: rgba(92, 184, 255, 0.35); }
 .chip.src-sparring { color: var(--gold); border-color: var(--gold-line); }
 .chip.excl { font-weight: 500; color: var(--gold); border-color: var(--gold-line); background: var(--gold-soft); }

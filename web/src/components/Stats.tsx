@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { boardDecks, deckKey, formatOf, summarize, type DeckSummary, type Format } from "../matchStats";
+import { boardDecks, deckKey, formatOf, lineupOf, summarize, type DeckSummary, type Format } from "../matchStats";
 import { findings } from "../findings";
 import type { DeckInfo, MatchRecord, MatchSeat } from "../protocol";
 import { sparringOpponents, useStore, type LogEntry, type SparringState } from "../store";
@@ -31,10 +31,12 @@ const SPARRING_ERROR = /^⚠ Sparring/;
 const SPARRING_GAMES = [5, 10, 20, 50];
 /** Titel der Deck-Kachel eines Decks, das wir nur als Gegner gesehen haben (nicht in `decks`). */
 const FOREIGN_DECK_HINT = "nur als Gegner gesehen – kein eigenes Deck, also kein Sparring";
-/** Die drei Format-Schalter im Kopf. "all" rechnet ueber beide - fuer die Bilanz brauchbar, fuer alles
- * Formatabhaengige mit Vorsicht (im Pod verliert man ueberwiegend, Schaden verteilt sich auf drei Gegner). */
+/** Die vier Format-Schalter im Kopf. "all" rechnet ueber alle - fuer die Bilanz brauchbar, fuer alles
+ * Formatabhaengige mit Vorsicht (im Pod verliert man ueberwiegend, Schaden verteilt sich auf drei Gegner;
+ * in der Team-Partie gewinnt der Partner mit). */
 const FORMATS: { id: Format; label: string }[] = [
   { id: "all", label: "Alle" }, { id: "duel", label: "1 vs 1" }, { id: "pod", label: "Pod (3+)" },
+  { id: "team", label: "Team" },
 ];
 
 // Feste Locale: die Oberflaeche ist durchgehend deutsch, und der Screenshot-Browser laeuft sonst mit
@@ -102,12 +104,11 @@ export default function Stats() {
 
   // Partienzahl je Format-Schalter: nur gewertete Partien, denn nur die stehen in den Kennzahlen.
   const formatCounts = useMemo(() => {
-    let duel = 0, pod = 0;
+    const n = { duel: 0, pod: 0, team: 0 };
     for (const m of matches) {
-      if (!m.counted) continue;
-      if (formatOf(m) === "duel") duel += 1; else pod += 1;
+      if (m.counted) n[formatOf(m)] += 1;
     }
-    return { all: duel + pod, duel, pod };
+    return { all: n.duel + n.pod + n.team, ...n };
   }, [matches]);
 
   // Deckliste links: die gespeicherten Decks UND alles, was Partien hat (siehe boardDecks). Ein frisch
@@ -199,7 +200,7 @@ export default function Stats() {
         <div className="sb-title">
           <h1>Statistik</h1>
           <p className="subtitle">
-            Was das Deck tatsächlich tut – getrennt nach 1 vs 1 und Pod.
+            Was das Deck tatsächlich tut – getrennt nach 1 vs 1, Pod und Team.
             {matchesTotal > matches.length && ` Von ${matchesTotal} gespeicherten Partien liegen die letzten ${matches.length} vor.`}
           </p>
         </div>
@@ -423,6 +424,8 @@ function Row(
           {record.aiTimeout != null && (
             <span className="chip timeout" title="KI-Bedenkzeit je Entscheidung">{record.aiTimeout} s</span>
           )}
+          {/* Aufstellung einer Team-Partie ("2v2", "1v2"); Duell und Pod tragen keinen Chip. */}
+          {lineupOf(record) && <span className="chip match-lineup" title="Aufstellung">{lineupOf(record)}</span>}
         </span>
         <span className="match-decks">
           <b>{seat?.deck ?? "?"}</b>

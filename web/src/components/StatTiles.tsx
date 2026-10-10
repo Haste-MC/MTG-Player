@@ -73,7 +73,9 @@ function subSample(n: number, s: DeckSummary, what: string): string {
 /** Die Kennzahlen-Bloecke 1 bis 5 der Spec. Block 6 (Deckinhalt) und 7 (Gegner) stehen daneben in
  * DeckAnalysisPanel bzw. Stats.tsx, weil sie keine Kacheln, sondern Listen mit Bildern sind. */
 export default function StatBlocks({ s, format, explain }: { s: DeckSummary; format: Format; explain: boolean }) {
-  const pod = format === "pod";
+  // Platz und Ausscheide-Zug gibt es dort, wo man vor dem Partieende ausscheiden kann: im Pod und in
+  // Team-Partien (dort ist es dieselbe Kennzahl wie beim Befund "Früh raus"). Im Duell waere sie immer gleich.
+  const pod = format === "pod" || format === "team";
   return (
     <>
       <Block title="Bilanz" explain={explain}

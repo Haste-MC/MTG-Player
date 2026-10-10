@@ -2,8 +2,9 @@
 // erst Lobby + Partienliste einspielen, dann den Screen oeffnen, dann - wie die Bridge es taete - die
 // Deckanalysen nachliefern und beim Aufklappen einer Partie deren Zeitachse.
 // Aufruf (aus web/):
-//   node scripts/shot-stats.mjs <url> <out.png> [--deck="Krenko Goblins"] [--format=all|duel|pod]
+//   node scripts/shot-stats.mjs <url> <out.png> [--deck="Krenko Goblins"] [--format=all|duel|pod|team]
 //                               [--no-explain] [--expand] [--no-analysis] [--suggest] [--cards]
+// --fixture=<pfad> ersetzt die Partienliste fixtures/statboard.json.
 // --suggest klickt "Vorschläge laden" im Abschnitt Kartenvorschläge (Stueck 2, Suggestions.tsx) und
 // spielt danach fixtures/statboard-suggestions.json ein, wie es die Bridge-Antwort auf suggestCards
 // täte - der Socket ist stillgelegt, ohne den Klick bliebe der Abschnitt beim Knopf stehen. Das Fixture
@@ -20,7 +21,7 @@ import { readFile } from "node:fs/promises";
 
 const [, , url, out, ...rest] = process.argv;
 if (!url || !out) {
-  console.error('Usage: node scripts/shot-stats.mjs <url> <out.png> [--deck=<Name>] [--format=all|duel|pod] [--no-explain] [--expand] [--no-analysis] [--suggest] [--cards]');
+  console.error('Usage: node scripts/shot-stats.mjs <url> <out.png> [--deck=<Name>] [--format=all|duel|pod|team] [--no-explain] [--expand] [--no-analysis] [--suggest] [--cards]');
   process.exit(1);
 }
 
@@ -29,15 +30,17 @@ const flag = (name) => {
   return hit ? hit.slice(name.length + 3) : undefined;
 };
 const deck = flag("deck");
+// Eigene Partienliste statt fixtures/statboard.json (z. B. mit Team-Partien, die das Standard-Fixture nicht hat).
+const fixture = flag("fixture") ?? "fixtures/statboard.json";
 const format = flag("format") ?? "all";
 const explain = !rest.includes("--no-explain");
 const expand = rest.includes("--expand");
 const analysis = !rest.includes("--no-analysis");
 const suggest = rest.includes("--suggest");
 const cards = rest.includes("--cards");
-const FORMAT_LABEL = { all: "Alle", duel: "1 vs 1", pod: "Pod (3+)" };
+const FORMAT_LABEL = { all: "Alle", duel: "1 vs 1", pod: "Pod (3+)", team: "Team" };
 if (!FORMAT_LABEL[format]) {
-  console.error(`unbekanntes Format: ${format} (all|duel|pod)`);
+  console.error(`unbekanntes Format: ${format} (all|duel|pod|team)`);
   process.exit(1);
 }
 
@@ -56,7 +59,7 @@ try {
 
   // Lobby (fuer die Commander-Bilder) und Partienliste - die Liste traegt wie bei der echten Bridge
   // KEINE Zeitachse.
-  for (const m of await json("fixtures/statboard.json")) await page.evaluate((msg) => window.mtgApply(msg), m);
+  for (const m of await json(fixture)) await page.evaluate((msg) => window.mtgApply(msg), m);
   await page.waitForTimeout(200);
   await page.click("text=Statistik");
   await page.locator(".statboard").waitFor();

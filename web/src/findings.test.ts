@@ -303,7 +303,7 @@ describe("Regel: Zugdeckel", () => {
   });
 });
 
-describe("Regel: frueh raus (nur im Pod)", () => {
+describe("Regel: frueh raus (nur im Pod und im Team-Format)", () => {
   it("unter der Schwelle -> info", () => {
     const f = findings(summary({ avgEliminationShare: ELIMINATION_SHARE_MIN - 0.01 }), analysis(), "pod")
       .find((x) => x.title === "Früh raus");
@@ -337,6 +337,19 @@ describe("Regel: frueh raus (nur im Pod)", () => {
     const s = summary({ avgEliminationShare: 0.3 });
     expect(titles(s, analysis(), "duel")).not.toContain("Früh raus");
     expect(titles(s, analysis(), "all")).not.toContain("Früh raus");
+  });
+
+  it("auch im Team-Format: dort scheidet man ebenfalls vor dem Partieende aus (Zahlen kommen aus dem Format)", () => {
+    const s = summary({ v2Games: 20, eliminationGames: MIN_ELIMINATIONS, avgEliminationShare: 0.2 });
+    expect(titles(s, analysis(), "team")).toContain("Früh raus");
+    // Ohne genug Team-Partien schweigt sie wie im Pod - die Mindeststichprobe gilt unveraendert.
+    const wenig = summary({ v2Games: 20, eliminationGames: MIN_ELIMINATIONS - 1, avgEliminationShare: 0.2 });
+    expect(titles(wenig, analysis(), "team")).not.toContain("Früh raus");
+  });
+
+  it("die Saetze nennen das Team-Format beim Namen", () => {
+    const f = findings(summary({ games: 1 }), analysis(), "team");
+    expect(f[0].text).toContain("in Team-Partien");
   });
 
   it("traegt die Rolle removal", () => {

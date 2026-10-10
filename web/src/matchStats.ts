@@ -8,15 +8,37 @@ import type { MatchRecord, MatchSeat } from "./protocol";
 /** Ausschlussgrund der Bridge fuer eine am Zugdeckel abgeschnittene Partie (MatchRecorder.markTurnCapped). */
 const TURN_CAPPED = "Zugdeckel";
 
-/** Die Auswertung trennt 1 vs 1 und Gruppe: dieselben Zahlen bedeuten in beiden Formaten Verschiedenes
- * (im Pod verliert man ueberwiegend, Schaden verteilt sich auf drei Gegner). "all" rechnet ueber beide -
- * fuer die Bilanz brauchbar, fuer alles Formatabhaengige mit Vorsicht zu geniessen. */
-export type Format = "all" | "duel" | "pod";
+/** Die Auswertung trennt 1 vs 1, Gruppe und Team: dieselben Zahlen bedeuten in den Formaten Verschiedenes
+ * (im Pod verliert man ueberwiegend, Schaden verteilt sich auf drei Gegner; in einer 2v2 gewinnt der
+ * Partner mit, und er ist kein Gegner). "all" rechnet ueber alle - fuer die Bilanz brauchbar, fuer alles
+ * Formatabhaengige mit Vorsicht zu geniessen. */
+export type Format = "all" | "duel" | "pod" | "team";
 
-/** Das Format einer Partie steckt allein in der Sitzzahl: genau zwei Sitze sind ein Duell, alles andere
+/** Das Format einer Partie: Teams zuerst - eine 2v2 hat vier Sitze, ist aber kein Pod im Sinne der
+ * Kennzahlen. Ohne Teams steckt es allein in der Sitzzahl: genau zwei Sitze sind ein Duell, alles andere
  * ein Pod. Ein einziger Sitz (theoretisch moeglich) ist damit ausdruecklich KEIN Duell. */
-export function formatOf(record: MatchRecord): "duel" | "pod" {
+export function formatOf(record: MatchRecord): "duel" | "pod" | "team" {
+  if (hasTeamSeats(record)) return "team";
   return record.seats.length === 2 ? "duel" : "pod";
+}
+
+/** Dieselbe Regel wie MatchRecorder.hasTeams in der Bridge: Teams gibt es, wenn mindestens zwei Sitze
+ * dieselbe Teamnummer tragen. Ein fehlendes Feld (Altbestand) und -1 heissen "kein Team"; lauter
+ * verschiedene Nummern sind Jeder-gegen-jeden. */
+function hasTeamSeats(record: MatchRecord): boolean {
+  const teams = record.seats.map((s) => s.team ?? -1).filter((t) => t >= 0);
+  return teams.length > 1 && new Set(teams).size < teams.length;
+}
+
+/** "2v2", "1v2" ... - die Groessen der Teams, nach Teamnummer sortiert; ohne Teams undefined. */
+export function lineupOf(record: MatchRecord): string | undefined {
+  if (!hasTeamSeats(record)) return undefined;
+  const sizes = new Map<number, number>();
+  for (const s of record.seats) {
+    const t = s.team ?? -1;
+    if (t >= 0) sizes.set(t, (sizes.get(t) ?? 0) + 1);
+  }
+  return [...sizes.entries()].sort(([a], [b]) => a - b).map(([, n]) => n).join("v");
 }
 
 function inFormat(record: MatchRecord, format: Format): boolean {
@@ -101,8 +123,8 @@ export interface DeckGames { deck: string; games: number; capped: number }
 
 /** Decks aus den gewerteten UND den Zugdeckel-Partien (ueber alle Sitze, nicht nur den eigenen), je mit
  * ihrer Partienzahl, absteigend sortiert nach `games + capped`, dann Name. Ein Deck auf zwei Sitzen
- * derselben Partie (Spiegel) zaehlt fuer diese Partie nur einmal. `format` beschraenkt auf Duelle bzw.
- * Pods (siehe formatOf); "all" zaehlt beide zusammen.
+ * derselben Partie (Spiegel) zaehlt fuer diese Partie nur einmal. `format` beschraenkt auf Duelle, Pods
+ * bzw. Team-Partien (siehe formatOf); "all" zaehlt beide zusammen.
  *
  * Gruppiert wird nach {@link deckKey}: ein Deck, das mit beiden Schreibweisen in den Datensaetzen
  * steht, ist EIN Eintrag mit der Summe seiner Partien.
@@ -288,7 +310,7 @@ interface Entry { record: MatchRecord; seat: MatchSeat; index: number }
  * Einzige Ausnahme von der "nur gewertete Partien"-Regel sind turnCappedGames/turnCappedRate: sie zaehlen
  * genau die NICHT gewerteten Zugdeckel-Partien, nach derselben "ein Sitz je Partie"-Regel.
  *
- * `format` beschraenkt die Auswahl auf Duelle bzw. Pods (siehe formatOf) - und zwar fuer ALLE Zahlen
+ * `format` beschraenkt die Auswahl auf Duelle, Pods bzw. Team-Partien (siehe formatOf) - und zwar fuer ALLE Zahlen
  * einschliesslich der Zugdeckel-Partien und der Gegner-Tabelle. Die Kennzahlen aus Runde B rechnen
  * innerhalb dieser Auswahl noch einmal nur ueber die Partien mit v >= 2 (siehe v2Metrics). */
 export function summarize(records: MatchRecord[], deck: string, format: Format = "all"): DeckSummary | undefined {

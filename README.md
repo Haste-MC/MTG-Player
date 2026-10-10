@@ -142,6 +142,21 @@ connected first. All the others see a banner at the top, "You are watching", wit
 control**; whoever presses it takes control, and the previous controller becomes a spectator. If the
 controller leaves the table, the spectator who has waited longest takes over.
 
+## Team modes
+
+Every seat can carry a team number (lobby: the select next to each deck, or the "2v2" quick pick for exactly
+four seats). Teammates are not opponents — they cannot attack each other, "each opponent" effects skip them,
+and the match ends when only one team is left; both seats of that team count as winners. A team of one seat
+is a free-for-all seat, so 1v2 works, but at least one team needs two seats. Your partner is an AI like the
+others; it will not attack you, but it does not actively help either (Forge's AI barely knows teammates).
+
+The checkbox „Partnerhand zeigen" reveals your partner's hand to you. Team matches are recorded with their
+line-up (shown as a "2v2" or "1v2" chip in the match list) and get their own format switch **Team** in the
+statistics board, so their numbers stay apart from free-for-all pods: a team match is neither a 1 vs 1 nor
+a pod, whatever its seat count. The rule is the same one the bridge uses — a match counts as a team match
+when at least two seats share a team number; records from before team modes have no team field and stay
+duels and pods. Sparring stays 1 vs 1.
+
 ## Card data sync
 
 The workflow `.github/workflows/kartendaten.yml` syncs Forge's card data with upstream every week and files

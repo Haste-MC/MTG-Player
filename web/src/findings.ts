@@ -180,11 +180,12 @@ const turnCapped: Rule = ({ s }) => {
   };
 };
 
-/** Im Pod deutlich vor Partieende ausgeschieden. Nur im Pod: im Duell endet die Partie mit dem
- * Ausscheiden (der Anteil waere immer 1), und in "Alle" mischten sich beide Formate zu einer Zahl,
- * die keines von beiden beschreibt. */
+/** Im Pod oder in einer Team-Partie deutlich vor Partieende ausgeschieden. Nur dort: im Duell endet die
+ * Partie mit dem Ausscheiden (der Anteil waere immer 1), und in "Alle" mischten sich die Formate zu einer
+ * Zahl, die keines von ihnen beschreibt. Die Zahlen kommen aus dem gewaehlten Format; gibt es noch zu
+ * wenige Team-Partien, schweigt die Regel an der Mindeststichprobe. */
 const earlyOut: Rule = ({ s, format, incident }) => {
-  if (format !== "pod") return undefined;
+  if (format !== "pod" && format !== "team") return undefined;
   const share = incident(s.avgEliminationShare);
   // Eigene Mindeststichprobe: gemittelt wird nur ueber die Partien, in denen der Sitz ausschied - und
   // genau die nennt der Satz auch. v2Games waere hier der falsche Nenner (und meist der groessere).
@@ -251,9 +252,9 @@ export function roleGaps(deck: DeckAnalysis | undefined, found: Finding[]): Role
   return gaps.slice(0, MAX_GAPS);
 }
 
-/** " im Duell" / " im Pod" - in "Alle" bleibt der Satz ohne Zusatz. */
+/** " im Duell" / " im Pod" / " in Team-Partien" - in "Alle" bleibt der Satz ohne Zusatz. */
 function formatSuffix(format: Format): string {
-  return format === "duel" ? " im Duell" : format === "pod" ? " im Pod" : "";
+  return format === "duel" ? " im Duell" : format === "pod" ? " im Pod" : format === "team" ? " in Team-Partien" : "";
 }
 
 /** Anteil als ganze Prozent ("43 %"). */

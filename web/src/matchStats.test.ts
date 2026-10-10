@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { boardDecks, deckGames, deckKey, formatOf, summarize, wilson } from "./matchStats";
+import { boardDecks, deckGames, deckKey, formatOf, lineupOf, summarize, wilson } from "./matchStats";
 import type { MatchRecord, MatchSeat } from "./protocol";
 
 // Gleicher Inhalt wie fixtures/matches.json (Statistik-Screen/Screenshots, siehe scripts/shot.mjs) - hier als
@@ -853,6 +853,91 @@ describe("formatOf", () => {
   it("ein einzelner Sitz ist kein Duell (Duell heisst genau zwei Sitze)", () => {
     const solo: MatchRecord = { ...records[0], seats: [records[0].seats[0]] };
     expect(formatOf(solo)).toBe("pod");
+  });
+
+  // Eine Partie mit gegebenen Teamnummern; `{}` ist ein Sitz ohne team-Schluessel (Altbestand, Freie Partie).
+  const withTeams = (teams: Array<number | undefined>, id = "t"): MatchRecord => ({
+    ...records[0], id,
+    seats: teams.map((team, i) => {
+      const { team: _alt, ...base } = records[0].seats[i % 2];
+      return team === undefined ? { ...base, name: "S" + i } : { ...base, name: "S" + i, team };
+    }),
+  });
+
+  it("eine Partie mit Teams ist weder Duell noch Pod - sonst mischte eine 2v2 ihre Zahlen unter die Pods", () => {
+    const r = withTeams([1, 1, 2, 2]);
+    expect(formatOf(r)).toBe("team");
+    expect(lineupOf(r)).toBe("2v2");
+  });
+
+  it("ungleiche Teams werden als Aufstellung benannt", () => {
+    expect(lineupOf(withTeams([1, 2, 2]))).toBe("1v2");
+    expect(formatOf(withTeams([1, 2, 2]))).toBe("team");
+  });
+
+  it("die Aufstellung folgt der Teamnummer, nicht der Sitzreihenfolge", () => {
+    expect(lineupOf(withTeams([2, 1, 2]))).toBe("1v2");
+    expect(lineupOf(withTeams([2, 2, 2, 1]))).toBe("1v3");
+  });
+
+  it("ohne Teams bleibt es bei Duell und Pod und es gibt keine Aufstellung", () => {
+    expect(formatOf(withTeams([undefined, undefined]))).toBe("duel");
+    expect(formatOf(withTeams([undefined, undefined, undefined]))).toBe("pod");
+    expect(lineupOf(withTeams([undefined, undefined]))).toBeUndefined();
+    expect(lineupOf(withTeams([undefined, undefined, undefined]))).toBeUndefined();
+  });
+
+  it("-1 heisst kein Team - auch zwei Sitze mit -1 bilden kein Team", () => {
+    expect(formatOf(withTeams([-1, -1, -1]))).toBe("pod");
+    expect(formatOf(withTeams([-1, -1]))).toBe("duel");
+    expect(lineupOf(withTeams([-1, -1, -1]))).toBeUndefined();
+  });
+
+  it("Teamnummern, die niemand teilt, sind keine Teams (Regel der Bridge: mindestens zwei Sitze mit gleicher Nummer)", () => {
+    expect(formatOf(withTeams([1, 2, 3]))).toBe("pod");
+    expect(formatOf(withTeams([1, 2]))).toBe("duel");
+    expect(lineupOf(withTeams([1, 2, 3, 4]))).toBeUndefined();
+  });
+
+  it("ein Datensatz von vor den Teams (gar kein team-Schluessel) bleibt unveraendert", () => {
+    expect("team" in records[0].seats[0]).toBe(false);
+    expect(formatOf(records[0])).toBe("duel");
+    expect(formatOf(records[1])).toBe("pod");
+    expect(lineupOf(records[0])).toBeUndefined();
+    expect(lineupOf(records[1])).toBeUndefined();
+  });
+});
+
+describe("Formatfilter mit Teams", () => {
+  // "Testdeck" sitzt auf Sitz 1: einmal in einem freien Pod, zweimal in einer 2v2 (davon eine ungewertet).
+  const team = (id: string, counted = true): MatchRecord => {
+    const r = v2Record(id, { team: 1 }, { pod: true });
+    const [own, mate, foe] = r.seats;
+    return {
+      ...r, counted,
+      seats: [own, { ...mate, team: 1 }, { ...foe, team: 2 }, { ...foe, name: "Gegner 3", team: 2 }],
+    };
+  };
+  const pod = v2Record("pod-1", {}, { pod: true });
+  const mixed = [pod, team("team-1"), team("team-2"), team("team-3", false)];
+
+  it("die Zahlen je Schalter gehen auf: Duell + Pod + Team == Alle", () => {
+    const all = [...records, ...mixed].filter((m) => m.counted);
+    const n = (f: "duel" | "pod" | "team") => all.filter((m) => formatOf(m) === f).length;
+    expect(n("team")).toBe(2);
+    expect(n("duel") + n("pod") + n("team")).toBe(all.length);
+  });
+
+  it("Team-Partien stehen nur im Schalter Team, nicht mehr im Pod", () => {
+    expect(summarize(mixed, "Testdeck", "pod")?.games).toBe(1);
+    expect(summarize(mixed, "Testdeck", "pod")).toEqual(summarize([pod], "Testdeck", "pod"));
+    expect(summarize(mixed, "Testdeck", "duel")).toBeUndefined();
+    expect(summarize(mixed, "Testdeck", "team")?.games).toBe(2);
+    expect(summarize(mixed, "Testdeck", "all")?.games).toBe(3);
+    expect(deckGames(mixed, "pod").find((d) => d.deck === "Testdeck")?.games).toBe(1);
+    expect(deckGames(mixed, "team").find((d) => d.deck === "Testdeck")?.games).toBe(2);
+    expect(boardDecks(mixed, [], "duel").map((d) => d.deck)).not.toContain("Testdeck");
+    expect(boardDecks(mixed, [], "team").map((d) => d.deck)).toContain("Testdeck");
   });
 });
 
