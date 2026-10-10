@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { boardDecks, deckKey, formatOf, lineupOf, summarize, type DeckSummary, type Format } from "../matchStats";
+import { boardDecks, deckKey, formatOf, lineupOf, sidesOf, summarize, type DeckSummary, type Format } from "../matchStats";
 import { findings } from "../findings";
 import type { DeckInfo, MatchRecord, MatchSeat } from "../protocol";
 import { sparringOpponents, useStore, type LogEntry, type SparringState } from "../store";
@@ -401,7 +401,10 @@ function Row(
   },
 ) {
   const seat = viewSeat(record, deck);
-  const opponents = record.seats.filter((s) => s !== seat).map((s) => s.deck).join(" · ");
+  // Partner (gleiche Teamnummer) stehen vor dem "gegen" - sie sind keine Gegner (siehe matchStats.sidesOf).
+  const sides = sidesOf(record, seat);
+  const partners = sides.partners.join(" · ");
+  const opponents = sides.opponents.join(" · ");
   const result = record.draw ? "Remis" : seat?.winner ? "Sieg" : "Niederlage";
   const resultClass = record.draw ? "draw" : seat?.winner ? "win" : "loss";
   return (
@@ -429,6 +432,7 @@ function Row(
         </span>
         <span className="match-decks">
           <b>{seat?.deck ?? "?"}</b>
+          {partners && <span className="muted"> mit {partners}</span>}
           {opponents && <span className="muted"> gegen {opponents}</span>}
         </span>
         <span className={"match-result " + resultClass}>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { boardDecks, deckGames, deckKey, formatOf, lineupOf, summarize, wilson } from "./matchStats";
+import { boardDecks, deckGames, deckKey, formatOf, lineupOf, sidesOf, summarize, wilson } from "./matchStats";
 import type { MatchRecord, MatchSeat } from "./protocol";
 
 // Gleicher Inhalt wie fixtures/matches.json (Statistik-Screen/Screenshots, siehe scripts/shot.mjs) - hier als
@@ -938,6 +938,92 @@ describe("Formatfilter mit Teams", () => {
     expect(deckGames(mixed, "team").find((d) => d.deck === "Testdeck")?.games).toBe(2);
     expect(boardDecks(mixed, [], "duel").map((d) => d.deck)).not.toContain("Testdeck");
     expect(boardDecks(mixed, [], "team").map((d) => d.deck)).toContain("Testdeck");
+  });
+});
+
+describe("Partner sind keine Gegner", () => {
+  // 2v2: "Testdeck" (Du, Team 1) und der Partner "Partner-Deck" gegen "Gegner A" und "Gegner B" (Team 2).
+  // Das Team gewinnt; der Partner und die Gegner sind Fuellsitze von v2Record (winner: true).
+  const zweiGegenZwei = (id: string, partnerDeck = "Partner-Deck", winner = true): MatchRecord => {
+    const r = v2Record(id, { team: 1, winner, lossReason: undefined, eliminatedTurn: undefined });
+    const [own, filler] = r.seats;
+    return {
+      ...r,
+      seats: [
+        own,
+        { ...filler, name: "Partner", deck: partnerDeck, team: 1, winner },
+        { ...filler, name: "KI A", deck: "Gegner A", team: 2, winner: !winner },
+        { ...filler, name: "KI B", deck: "Gegner B", team: 2, winner: !winner },
+      ],
+    };
+  };
+  const gegner = (records: MatchRecord[], format: "all" | "team" = "team") =>
+    summarize(records, "Testdeck", format)?.opponents.map((o) => o.deck).sort();
+
+  it("die Gegner-Tabelle fuehrt den Partner nicht", () => {
+    expect(gegner([zweiGegenZwei("t-1")])).toEqual(["Gegner A", "Gegner B"]);
+  });
+
+  it("ein Sieg des Teams ist kein Sieg gegen das Deck des Partners", () => {
+    const s = summarize([zweiGegenZwei("t-1"), zweiGegenZwei("t-2")], "Testdeck", "team")!;
+    expect(s.wins).toBe(2);
+    expect(s.opponents.find((o) => o.deck === "Partner-Deck")).toBeUndefined();
+    expect(s.opponents.find((o) => o.deck === "Gegner A")).toEqual({ deck: "Gegner A", games: 2, wins: 2 });
+  });
+
+  it("auch im Format Alle: die Ausnahme haengt an der Partie, nicht am Schalter", () => {
+    expect(gegner([zweiGegenZwei("t-1")], "all")).toEqual(["Gegner A", "Gegner B"]);
+  });
+
+  it("Spiegel-Partner (dasselbe Deck wie du): kein Gegner und keine Doppelzaehlung - eine Partie, ein Sitz", () => {
+    const r = zweiGegenZwei("t-1", "Testdeck");
+    const s = summarize([r], "Testdeck", "team")!;
+    expect(s.games).toBe(1);
+    expect(s.opponents.map((o) => o.deck).sort()).toEqual(["Gegner A", "Gegner B"]);
+  });
+
+  it("dasselbe Deck auf der Gegenseite bleibt ein Gegner - nur wer im eigenen Team sitzt, faellt heraus", () => {
+    const r = zweiGegenZwei("t-1");
+    r.seats[3] = { ...r.seats[3], deck: "Testdeck" };
+    expect(gegner([r])).toEqual(["Gegner A", "Testdeck"]);
+  });
+
+  it("die Teamnummer des gewaehlten Sitzes entscheidet - die Reihenfolge der Sitze nicht", () => {
+    const r = zweiGegenZwei("t-1");
+    r.seats = [r.seats[2], r.seats[0], r.seats[3], r.seats[1]];   // Gegner A, Du, Gegner B, Partner
+    expect(gegner([r])).toEqual(["Gegner A", "Gegner B"]);
+  });
+
+  it("ein Team mit nur einem Sitz (1v2): die beiden Mitspieler der Gegenseite sind Gegner, keiner ist Partner", () => {
+    const r = zweiGegenZwei("t-1");
+    r.seats = [r.seats[0], r.seats[2], r.seats[3]];
+    expect(gegner([r])).toEqual(["Gegner A", "Gegner B"]);
+    expect(sidesOf(r, r.seats[0])).toEqual({ partners: [], opponents: ["Gegner A", "Gegner B"] });
+  });
+
+  it("ohne Teams bleibt alles beim Alten: jeder andere Sitz ist ein Gegner", () => {
+    const pod = v2Record("pod-1", {}, { pod: true });
+    expect(summarize([pod], "Testdeck", "pod")?.opponents.map((o) => o.deck).sort())
+      .toEqual(["Gegner-Deck", "Zweiter Gegner"]);
+    expect(sidesOf(pod, pod.seats[0])).toEqual({ partners: [], opponents: ["Gegner-Deck", "Zweiter Gegner"] });
+    // -1 an allen Sitzen ist ebenfalls kein Team.
+    const frei = { ...pod, seats: pod.seats.map((s) => ({ ...s, team: -1 })) };
+    expect(sidesOf(frei, frei.seats[0]).partners).toEqual([]);
+  });
+
+  it("die Zeile der Partienliste trennt Partner und Gegner", () => {
+    const r = zweiGegenZwei("t-1");
+    expect(sidesOf(r, r.seats[0])).toEqual({ partners: ["Partner-Deck"], opponents: ["Gegner A", "Gegner B"] });
+    // Aus Sicht des Partners ist es umgekehrt dieselbe Aufteilung mit vertauschten Rollen.
+    expect(sidesOf(r, r.seats[1])).toEqual({ partners: ["Testdeck"], opponents: ["Gegner A", "Gegner B"] });
+    expect(sidesOf(r, r.seats[2])).toEqual({ partners: ["Gegner B"], opponents: ["Testdeck", "Partner-Deck"] });
+  });
+
+  it("ohne gewaehlten Sitz gibt es keine Partner - die Zeile zeigt dann alle Sitze wie bisher", () => {
+    const r = zweiGegenZwei("t-1");
+    expect(sidesOf(r, undefined))
+      .toEqual({ partners: [], opponents: ["Testdeck", "Partner-Deck", "Gegner A", "Gegner B"] });
+    expect(sidesOf({ ...r, seats: [] }, undefined)).toEqual({ partners: [], opponents: [] });
   });
 });
 

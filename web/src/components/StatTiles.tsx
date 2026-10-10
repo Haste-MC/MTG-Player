@@ -73,9 +73,13 @@ function subSample(n: number, s: DeckSummary, what: string): string {
 /** Die Kennzahlen-Bloecke 1 bis 5 der Spec. Block 6 (Deckinhalt) und 7 (Gegner) stehen daneben in
  * DeckAnalysisPanel bzw. Stats.tsx, weil sie keine Kacheln, sondern Listen mit Bildern sind. */
 export default function StatBlocks({ s, format, explain }: { s: DeckSummary; format: Format; explain: boolean }) {
-  // Platz und Ausscheide-Zug gibt es dort, wo man vor dem Partieende ausscheiden kann: im Pod und in
-  // Team-Partien (dort ist es dieselbe Kennzahl wie beim Befund "Früh raus"). Im Duell waere sie immer gleich.
-  const pod = format === "pod" || format === "team";
+  // Ausscheide-Zug gibt es dort, wo man vor dem Partieende ausscheiden kann: im Pod und in Team-Partien
+  // (dort ist es dieselbe Kennzahl wie beim Befund "Früh raus"). Im Duell waere er immer gleich.
+  // Der Platz nur im Pod: er zaehlt jeden Mitspieler, der dich ueberlebt hat - im Team auch den Partner.
+  // Stirbst du in Zug 6 und dein Partner gewinnt in Zug 12, stuende dort "Platz 2" neben einem Sieg in der
+  // Siegquote. Die Metrik wird nicht umgedeutet, sie entfaellt; der Ausscheide-Zug bleibt eine blosse Tatsache.
+  const showPlace = format === "pod";
+  const showEliminated = format === "pod" || format === "team";
   return (
     <>
       <Block title="Bilanz" explain={explain}
@@ -88,12 +92,12 @@ export default function StatBlocks({ s, format, explain }: { s: DeckSummary; for
           hint="Partiezüge insgesamt (alle Sitze), nicht eigene Züge." />
         <Tile explain={explain} value={mmss(s.avgDurationMs)} label="Ø Dauer (mm:ss)"
           hint="Echte Zeit am Stück – hängt auch an der KI-Bedenkzeit der Partie." />
-        {pod && (
+        {showPlace && (
           <Tile explain={explain} value={one(s.avgPlace, 2)} label="Ø Platz"
             sub={`1 = Sieg, ${s.games} Partien`}
             hint="Platz 1 plus jeder Mitspieler, der dich überlebt hat. Im Pod sagt er mehr als die Siegquote." />
         )}
-        {pod && (
+        {showEliminated && (
           <Tile explain={explain} value={optOne(s.avgEliminatedTurn)} label="Ø Ausscheide-Zug"
             sub={s.avgEliminatedTurn != null ? `von Ø ${one(s.avgTurns)} Zügen` : undefined}
             missing="du bist in keiner dieser Partien ausgeschieden"

@@ -92,15 +92,39 @@ export const FLOOD_MAX_SPELLS = 2;
  */
 export const deckKey = (name: string) => name.replace(/\//g, "_");
 
-/** Die Decks eines Datensatzes als deckKey -> anzuzeigender Name; ein Deck auf zwei Sitzen kommt nur
- * einmal vor. `skip` laesst einen Sitzindex aus (fuer die Gegner-Tabelle: der eigene Sitz). */
-function seatDecks(record: MatchRecord, skip?: number): Map<string, string> {
+/** Die Decks der Sitze `seats` als deckKey -> anzuzeigender Name; ein Deck auf zwei Sitzen kommt nur
+ * einmal vor. */
+function seatDecks(seats: MatchSeat[]): Map<string, string> {
   const decks = new Map<string, string>();
-  record.seats.forEach((seat, index) => {
-    if (index === skip) return;
-    decks.set(deckKey(seat.deck), seat.deck);
-  });
+  for (const seat of seats) decks.set(deckKey(seat.deck), seat.deck);
   return decks;
+}
+
+/** Sitze, die im selben Team wie `seat` sitzen (ohne `seat` selbst) - seine Partner. Ohne Team (fehlendes
+ * Feld oder -1, siehe hasTeamSeats) gibt es keine; zwei Sitze ohne Team sind keine Partner. Wer dasselbe
+ * Deck spielt wie `seat`, ist als Partner genauso einer (Spiegel-Partner): entscheidend ist die
+ * Teamnummer, nicht das Deck. */
+function partnersOf(record: MatchRecord, seat: MatchSeat | undefined): MatchSeat[] {
+  const team = seat?.team ?? -1;
+  if (!seat || team < 0) return [];
+  return record.seats.filter((other) => other !== seat && (other.team ?? -1) === team);
+}
+
+/** Sitze, gegen die `seat` spielt: alle ausser ihm selbst und seinen Partnern. Ohne Teams (Duell, Pod,
+ * Altbestand) ist das schlicht jeder andere Sitz - dort aendert sich gegenueber frueher nichts. */
+function opponentsOf(record: MatchRecord, seat: MatchSeat | undefined): MatchSeat[] {
+  const partners = partnersOf(record, seat);
+  return record.seats.filter((other) => other !== seat && !partners.includes(other));
+}
+
+/** Die Decks der Partner und der Gegner von `seat` in Sitzreihenfolge (fuer die Zeile der Partienliste:
+ * "mit X gegen Y · Z"). Partner sind KEINE Gegner - dieselbe Aufteilung rechnet die Gegner-Tabelle in
+ * summarize. `seat` undefined (Partie ganz ohne gewaehlten Sitz): keine Partner, alle Sitze Gegner. */
+export function sidesOf(record: MatchRecord, seat: MatchSeat | undefined): { partners: string[]; opponents: string[] } {
+  return {
+    partners: partnersOf(record, seat).map((s) => s.deck),
+    opponents: opponentsOf(record, seat).map((s) => s.deck),
+  };
 }
 
 /** Sammelt Zaehler je deckKey und merkt sich dabei den Anzeigenamen des ZULETZT gesehenen Datensatzes.
@@ -139,7 +163,7 @@ export function deckGames(records: MatchRecord[], format: Format = "all"): DeckG
     if (!inFormat(r, format)) continue;
     const counted = r.counted;
     if (!counted && r.excludeReason !== TURN_CAPPED) continue;
-    for (const [key, deck] of seatDecks(r)) {
+    for (const [key, deck] of seatDecks(r.seats)) {
       const cur = bump(counts, key, deck, () => ({ games: 0, capped: 0 }));
       if (counted) cur.games += 1;
       else cur.capped += 1;
@@ -205,7 +229,7 @@ export interface DeckSummary {
   avgLifeEnd: number;
   /** Ø Platz: 1 plus die Zahl der Mitspieler, die den Sitz ueberlebt haben (siehe placeOf). Im Duell
    * immer 1 oder 2 und damit nur eine andere Schreibweise der Siegquote - die Anzeige zeigt ihn nur im
-   * Pod. Ueber ALLE gewerteten Partien der Auswahl, denn eliminatedTurn gibt es seit v1. */
+   * Pod - nicht im Team, wo auch der Partner als Ueberlebender zaehlte (siehe StatTiles). Ueber ALLE gewerteten Partien der Auswahl, denn eliminatedTurn gibt es seit v1. */
   avgPlace: number;
   /** Ø Zug, in dem der Sitz ausgeschieden ist - nur ueber die Partien, in denen er ausschied; fehlt,
    * wenn er in keiner ueberhaupt ausgeschieden ist (dann gibt es nichts zu mitteln). */
@@ -300,7 +324,8 @@ interface Entry { record: MatchRecord; seat: MatchSeat; index: number }
 /** Kennzahlen fuer `deck` ueber die gewerteten Partien, in denen ein Sitz dieses Deck traegt (verglichen
  * wird ueber {@link deckKey}, `deck` darf also in jeder der beiden Schreibweisen hereinkommen) -
  * je Partie hoechstens ein Sitz (siehe pickSeat; ein Spiegel zaehlt also als eine Partie). Metriken
- * stammen vom jeweils gewaehlten Sitz, die Gegner-Tabelle von den uebrigen Sitzen derselben Partie.
+ * stammen vom jeweils gewaehlten Sitz, die Gegner-Tabelle von den uebrigen Sitzen derselben Partie
+ * AUSSER seinen Partnern (Sitze mit derselben Teamnummer, siehe opponentsOf).
  * undefined, wenn keine gewertete Partie mit diesem Deck existiert - auch dann, wenn es Zugdeckel-Partien
  * gibt: die sind nicht gewertet und ergeben allein keine Bilanz.
  *
@@ -341,9 +366,12 @@ export function summarize(records: MatchRecord[], deck: string, format: Format =
 
   // Je Partie zaehlt auch auf der Gegenseite jedes Deck nur einmal (dieselbe Regel wie pickSeat und
   // deckGames): zwei Sitze mit demselben Gegner-Deck sind eine Partie gegen dieses Deck, kein Doppel.
+  // Gegner sind nur Sitze ausserhalb des eigenen Teams (opponentsOf): der Partner gewinnt mit, eine
+  // "Siegquote gegen" sein Deck gaebe es nicht. Ein Spiegel-Partner (dasselbe Deck auf dem zweiten Sitz
+  // des eigenen Teams) faellt aus demselben Grund heraus; derselbe Deck auf der GEGENSEITE bleibt ein Gegner.
   const opponents = new Map<string, { deck: string; games: number; wins: number }>();
   for (const e of entries) {
-    for (const [key, other] of seatDecks(e.record, e.index)) {
+    for (const [key, other] of seatDecks(opponentsOf(e.record, e.seat))) {
       const cur = bump(opponents, key, other, () => ({ games: 0, wins: 0 }));
       cur.games += 1;
       if (e.seat.winner) cur.wins += 1;

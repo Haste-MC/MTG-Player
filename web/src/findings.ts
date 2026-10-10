@@ -183,7 +183,10 @@ const turnCapped: Rule = ({ s }) => {
 /** Im Pod oder in einer Team-Partie deutlich vor Partieende ausgeschieden. Nur dort: im Duell endet die
  * Partie mit dem Ausscheiden (der Anteil waere immer 1), und in "Alle" mischten sich die Formate zu einer
  * Zahl, die keines von ihnen beschreibt. Die Zahlen kommen aus dem gewaehlten Format; gibt es noch zu
- * wenige Team-Partien, schweigt die Regel an der Mindeststichprobe. */
+ * wenige Team-Partien, schweigt die Regel an der Mindeststichprobe.
+ *
+ * Achtung im Team: Der Anteil umfasst auch Partien, die dein Team gewonnen hat (der Partner hat
+ * weitergespielt) - die Zahl heisst "du warst frueh raus", nicht "du hast frueh verloren". */
 const earlyOut: Rule = ({ s, format, incident }) => {
   if (format !== "pod" && format !== "team") return undefined;
   const share = incident(s.avgEliminationShare);

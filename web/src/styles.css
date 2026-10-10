@@ -1,6 +1,11 @@
 /* ---------- Grundfarben & Maße ------------------------------------------------------------ */
 :root {
   color-scheme: dark;
+  /* Teamfarben (RGB-Tripel fuer rgb()/rgba()): die EINE Quelle fuer den Tisch (Team-Marke, Randton) und die
+     Statistik (Aufstellungs-Marke der Partienliste). Eine neue Palette aendert nur diese drei Zeilen. */
+  --team-1-rgb: 183, 156, 255;
+  --team-2-rgb: 244, 124, 186;
+  --team-3-rgb: 52, 211, 196;
   --bg-0: #0f1418;
   --bg-1: #141b20;
   --panel: rgba(255, 255, 255, 0.04);
@@ -187,12 +192,12 @@ input[type="checkbox"] { accent-color: var(--accent); width: 14px; height: 14px;
    deshalb Violett / Rosa / Tuerkis. Die Marke traegt zusaetzlich die Nummer als Text, Farbe allein reicht nicht. */
 .player .team-tag { --tc: 154, 165, 173; display: inline-flex; align-items: center; flex: none; font-size: 10px; line-height: 15px; padding: 0 6px; border-radius: 8px; font-weight: 700; letter-spacing: 0.04em; white-space: nowrap; color: rgb(var(--tc)); background: rgba(var(--tc), 0.16); border: 1px solid rgba(var(--tc), 0.4); }
 .player .team-tag b { font-weight: 600; margin-left: 5px; padding-left: 5px; border-left: 1px solid rgba(var(--tc), 0.4); letter-spacing: 0.02em; }
-.player .team-tag.team-1 { --tc: 183, 156, 255; }
-.player .team-tag.team-2 { --tc: 244, 124, 186; }
-.player .team-tag.team-3 { --tc: 52, 211, 196; }
-.player.team-edge-1 { box-shadow: inset 3px 0 0 rgba(183, 156, 255, 0.7), var(--shadow); }
-.player.team-edge-2 { box-shadow: inset 3px 0 0 rgba(244, 124, 186, 0.7), var(--shadow); }
-.player.team-edge-3 { box-shadow: inset 3px 0 0 rgba(52, 211, 196, 0.7), var(--shadow); }
+.player .team-tag.team-1 { --tc: var(--team-1-rgb); }
+.player .team-tag.team-2 { --tc: var(--team-2-rgb); }
+.player .team-tag.team-3 { --tc: var(--team-3-rgb); }
+.player.team-edge-1 { box-shadow: inset 3px 0 0 rgba(var(--team-1-rgb), 0.7), var(--shadow); }
+.player.team-edge-2 { box-shadow: inset 3px 0 0 rgba(var(--team-2-rgb), 0.7), var(--shadow); }
+.player.team-edge-3 { box-shadow: inset 3px 0 0 rgba(var(--team-3-rgb), 0.7), var(--shadow); }
 .player .life { font-size: 27px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1; letter-spacing: -0.02em; min-width: 32px; }
 .player.compact .life { font-size: 26px; }
 .player .prio { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted); }
@@ -976,8 +981,8 @@ button.sb-deck.on { background: var(--accent-soft); border-color: rgba(79, 140, 
 .match-hint { font-size: 11px; color: var(--faint); }
 .match-list > .muted { margin: 4px 0 0; font-size: 12px; }
 .match-entry { display: flex; flex-direction: column; }
-/* Spalte "Quelle" traegt zwei Chips (Quelle + KI-Bedenkzeit), daher 118px statt 78px. */
-.match-row { position: relative; display: grid; grid-template-columns: 24px 112px 118px minmax(0, 1fr) 172px 46px 58px 80px 44px; align-items: center; gap: 8px; padding: 5px 8px; border-radius: var(--radius-sm); font-size: 12px; }
+/* Spalte "Quelle" traegt bis zu drei Chips (Quelle + KI-Bedenkzeit + Aufstellung), daher 162px (siehe .match-source). */
+.match-row { position: relative; display: grid; grid-template-columns: 24px 112px 162px minmax(0, 1fr) 172px 46px 58px 80px 44px; align-items: center; gap: 8px; padding: 5px 8px; border-radius: var(--radius-sm); font-size: 12px; }
 .match-row:not(.head) { background: rgba(0, 0, 0, 0.22); border: 1px solid var(--line); }
 .match-row:not(.head):hover { border-color: var(--line-2); }
 .match-row.head { padding: 0 8px; font-size: 10px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--faint); }
@@ -993,10 +998,14 @@ button.sb-deck.on { background: var(--accent-soft); border-color: rgba(79, 140, 
 .match-result.win { color: var(--green); }
 .match-result.loss { color: var(--red); }
 .match-result.draw { color: var(--muted); }
-.match-source { display: flex; align-items: center; gap: 5px; min-width: 0; }
+/* Quelle (bis "Zuschauer"/"Sparring") + Bedenkzeit + Aufstellung ("2v2", "2v2v2"): ein Zuschauer-Team-Spiel kommt
+   auf rund 155 px. Die Spalte ist darauf ausgelegt; fuer noch laengere Fuellungen bricht die Zeile um, statt dass
+   ein Chip in die Deckspalte malt. */
+.match-source { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 5px; min-width: 0; }
 .match-source .chip { flex: none; }
 .chip.timeout { font-weight: 500; color: var(--faint); }
-.chip.match-lineup { font-weight: 600; color: rgb(183, 156, 255); border-color: rgba(183, 156, 255, 0.4); }  /* Violett wie das Team-Tag am Tisch */
+/* Violett = Farbe von Team 1 am Tisch (Token --team-1-rgb oben); die Marke nennt die Aufstellung, keine Mannschaft. */
+.chip.match-lineup { font-weight: 600; color: rgb(var(--team-1-rgb)); border-color: rgba(var(--team-1-rgb), 0.4); }
 .chip.src-spectate { color: var(--blue); border-color: rgba(92, 184, 255, 0.35); }
 .chip.src-sparring { color: var(--gold); border-color: var(--gold-line); }
 .chip.excl { font-weight: 500; color: var(--gold); border-color: var(--gold-line); background: var(--gold-soft); }
