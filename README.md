@@ -150,6 +150,10 @@ and the match ends when only one team is left; both seats of that team count as 
 is a free-for-all seat, so 1v2 works, but at least one team needs two seats. Your partner is an AI like the
 others; it will not attack you, but it does not actively help either (Forge's AI barely knows teammates).
 
+Seats are arranged so the teams alternate around the table — your lobby order decides who plays *with*
+whom, not who plays *when*. (Turn order follows seat order, so two seats of one team side by side would
+give that team two turns in a row.) Who takes the very first turn is still Forge's coin toss.
+
 The checkbox „Partnerhand zeigen" reveals your partner's hand to you. Team matches are recorded with their
 line-up (shown as a "2v2" or "1v2" chip in the match list) and get their own format switch **Team** in the
 statistics board, so their numbers stay apart from free-for-all pods: a team match is neither a 1 vs 1 nor
@@ -456,6 +460,7 @@ Precon names with spaces have to be quoted inside `-Dexec.args` (Maven splits at
 | `--out dir` | output directory | `~/.mtg-player/bench/` |
 | `--game-timeout min` | time limit per game in the child process (then `destroyForcibly`, the game counts as a crash) | 30 |
 | `--in-process` | every game in the calling thread instead of its own JVM child process (flag, no value) | off |
+| `--teams` | 2v2: four seats, both teams play the deck pair `--deck-a` + `--deck-b`, `--a`/`--b` are the per-team AI settings (flag, no value) | off |
 
 Output: `<out>/<yyyy-MM-dd-HHmmss>-<a>-vs-<b>.md` (table, win rate with a 95 % Wilson interval, parameters,
 seed, one line per game, column „Nichtstun" = seats with ≥ 5 lands played and ≤ 2 spells cast, counted from
