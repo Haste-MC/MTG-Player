@@ -490,6 +490,10 @@ class BridgeEndToEndTest {
      * Muenzwurf-Prompt (Play bzw. Startspieler waehlen), und das einmal.
      */
     private static JsonNode awaitAlleHaende(int seconds) throws InterruptedException {
+        return awaitAlleHaende(seconds, 4);
+    }
+
+    private static JsonNode awaitAlleHaende(int seconds, int sitze) throws InterruptedException {
         long end = System.currentTimeMillis() + seconds * 1000L;
         boolean playClicked = false;
         JsonNode letzter = null;
@@ -499,7 +503,7 @@ class BridgeEndToEndTest {
             if (n == null) break;
             if (!"state".equals(n.path("type").asText())) continue;
             letzter = n;
-            boolean alleMitHand = n.path("players").size() == 4;
+            boolean alleMitHand = n.path("players").size() == sitze;
             for (JsonNode p : n.path("players")) {
                 alleMitHand &= p.path("hand").size() >= 7;
             }
@@ -622,6 +626,100 @@ class BridgeEndToEndTest {
         assertNotNull(neu, "die beendete Partie steht in der Statistik");
         assertEquals("abgebrochen", neu.excludeReason(), "End game ist ein Abbruch");
         assertFalse(neu.counted(), "ein Abbruch zaehlt nicht");
+    }
+
+    /**
+     * Aufgeben im Team gibt NUR den Sitz auf, nicht die Partie (Aufgabe 12): der Partner spielt weiter, der Mensch
+     * schaut zu. Der Test wartet ausdruecklich NACH dem Aufgeben - Forges {@code AbstractGuiGame.concede()} schickt
+     * nach dem Aufgeben noch {@code nextGameDecision(QUIT)}, und {@code HostedMatch} vergisst daraufhin das Spiel
+     * (auf dem UI-Thread, einen Wimpernschlag spaeter). Ein Test, der den Zustand "lost" sofort prueft, sieht das
+     * nicht. Danach beendet "End game" die Partie; der aufgebende Sitz steht im Datensatz weiter als
+     * {@code Conceded}, die Partie als Abbruch.
+     */
+    @Test
+    @Order(16)
+    @Timeout(value = 8, unit = TimeUnit.MINUTES)
+    void imTeamGibtAufgebenNurDenSitzAufUndDerPartnerSpieltWeiter() throws Exception {
+        send("{\"type\":\"startGame\",\"humanTeam\":1,"
+                + "\"humanDeck\":{\"precon\":\"Abzan Armor [TDC] [2025]\"},\"opponents\":["
+                + "{\"precon\":\"Adaptive Enchantment [C18] [2018]\",\"name\":\"Partner\",\"team\":1},"
+                + "{\"precon\":\"Adaptive Enchantment [C18] [2018]\",\"name\":\"Gegner 1\",\"team\":2},"
+                + "{\"precon\":\"Adaptive Enchantment [C18] [2018]\",\"name\":\"Gegner 2\",\"team\":2}]}");
+        JsonNode start = awaitAlleHaende(90);
+        int me = start.get("me").asInt();
+        awaitSpielLaeuft(90);
+
+        send("{\"type\":\"concede\"}");
+        JsonNode confirm = await("choice", n -> "confirm".equals(n.path("kind").asText()), 30);
+        send("{\"type\":\"answer\",\"id\":" + confirm.get("id").asInt() + ",\"value\":true}");
+        JsonNode out = await("state", n -> seatLost(n, me), 60);
+        int turnBeiAufgabe = out.path("turn").asInt();
+        int partner = -1;
+        for (JsonNode p : out.get("players")) {
+            if (p.get("id").asInt() != me && p.path("team").asInt() == 1) partner = p.get("id").asInt();
+        }
+        assertTrue(partner >= 0, "Voraussetzung: der Partner steht im Snapshot");
+
+        // Die Partie laeuft weiter: der Zugzaehler rueckt vor, ohne dass der Mensch noch etwas tut.
+        JsonNode spaeter = await("state", n -> n.path("turn").asInt() >= turnBeiAufgabe + 2, 150);
+        assertTrue(seatLost(spaeter, me), "der aufgebende Sitz bleibt draussen");
+        assertFalse(seatLost(spaeter, partner), "der Partner spielt weiter und ist nicht ausgeschieden");
+        assertTrue(bridge.match().isRunning(), "die Partie laeuft nach dem Aufgeben weiter");
+
+        java.util.Set<String> bekannt = new java.util.HashSet<>();
+        matchStore.all().forEach(r -> bekannt.add(r.id()));
+        inbox.clear();
+        send("{\"type\":\"concede\"}");
+        assertNotNull(await("gameOver", n -> true, 60), "End game beendet die Partie auch jetzt");
+        assertFalse(bridge.match().isRunning(), "die Partie laeuft nicht mehr");
+        mtgplayer.stats.MatchRecord neu = null;
+        for (long ende = System.currentTimeMillis() + 15_000; neu == null && System.currentTimeMillis() < ende; ) {
+            neu = matchStore.all().stream().filter(r -> !bekannt.contains(r.id())).findFirst().orElse(null);
+            if (neu == null) Thread.sleep(100);
+        }
+        assertNotNull(neu, "die beendete Partie steht in der Statistik");
+        assertEquals(List.of(true), neu.seats().stream().filter(s -> "Conceded".equals(s.lossReason()))
+                        .map(mtgplayer.stats.MatchRecord.Seat::human).toList(),
+                "genau ein Sitz steht als aufgegeben im Datensatz: der Mensch");
+        assertEquals("abgebrochen", neu.excludeReason(), "End game bleibt ein Abbruch");
+    }
+
+    /**
+     * Ohne Partner bleibt alles wie bisher (Aufgabe 12): im Free-for-all (drei Sitze, keine Teams) gibt es nichts zum
+     * Zuschauen, und das Aufgeben des Menschen geht Forges Weg, nicht den Team-Zweig.
+     *
+     * <p>Was "wie bisher" hier heisst, ist gemessen und nicht dasselbe wie in einem Duell: Forge schickt nach dem
+     * Aufgeben {@code nextGameDecision(QUIT)}, {@code HostedMatch} vergisst die Partie ({@code isRunning()} wird
+     * falsch), der Sitz steht als {@code lost} im Snapshot - aber ein {@code gameOver} kommt von selbst NICHT, solange
+     * zwei KI weiterleben (der Spiel-Thread bleibt in der Eingabe des Menschen stehen; nach 40 s Beobachtung bewegte
+     * sich nichts mehr). Den Abschluss liefert dann der Knopf "End game". Der Test haelt genau das fest, damit eine
+     * Aenderung am Team-Zweig den Rest nicht still mitverschiebt - er behauptet nicht, dass es so schoen ist.</p>
+     */
+    @Test
+    @Order(17)
+    @Timeout(value = 8, unit = TimeUnit.MINUTES)
+    void imFreeForAllGehtAufgebenDenWegVonForge() throws Exception {
+        send("{\"type\":\"startGame\","
+                + "\"humanDeck\":{\"precon\":\"Abzan Armor [TDC] [2025]\"},\"opponents\":["
+                + "{\"precon\":\"Adaptive Enchantment [C18] [2018]\",\"name\":\"Gegner 1\"},"
+                + "{\"precon\":\"Adaptive Enchantment [C18] [2018]\",\"name\":\"Gegner 2\"}]}");
+        JsonNode start = awaitAlleHaende(90, 3);
+        int me = start.get("me").asInt();
+        awaitSpielLaeuft(90);
+
+        send("{\"type\":\"concede\"}");
+        JsonNode confirm = await("choice", n -> "confirm".equals(n.path("kind").asText()), 30);
+        send("{\"type\":\"answer\",\"id\":" + confirm.get("id").asInt() + ",\"value\":true}");
+        await("state", n -> seatLost(n, me), 60);
+        // Forges QUIT laeuft auf dem UI-Thread, einen Wimpernschlag nach dem Aufgeben.
+        for (long ende = System.currentTimeMillis() + 15_000; bridge.match().isRunning() && System.currentTimeMillis() < ende; ) {
+            Thread.sleep(50);
+        }
+        assertFalse(bridge.match().isRunning(), "Forges Weg: die Partie ist vom Tisch genommen (im Team bleibt sie laufen)");
+
+        inbox.clear();
+        send("{\"type\":\"concede\"}");
+        assertNotNull(await("gameOver", n -> true, 60), "End game schliesst den Tisch");
     }
 
     /** Klickt sich durch Keep und Startspieler-Wahl, bis Zug 1 mit freier Prioritaet des Menschen steht. */

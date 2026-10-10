@@ -31,6 +31,7 @@ import forge.trackable.TrackableCollection;
 import forge.trackable.TrackableTypes;
 import forge.util.FSerializableFunction;
 import forge.util.ITriggerEvent;
+import forge.util.Localizer;
 import mtgplayer.protocol.Messages;
 import mtgplayer.protocol.Snapshot;
 import mtgplayer.protocol.StateSerializer;
@@ -836,9 +837,82 @@ public class WebGuiGame extends AbstractGuiGame {
         return true;
     }
 
+    /**
+     * Gibt auf. Im Team gibt nur der EIGENE Sitz auf, solange ein Partner noch lebt; sonst gilt Forges Weg
+     * unveraendert (Duell, Free-for-all, Teampartie ohne lebenden Partner).
+     *
+     * <p><b>Warum nicht einfach {@code concede()}.</b> Forges {@code AbstractGuiGame.concede()} schickt nach dem
+     * Aufgeben noch {@code nextGameDecision(QUIT)}, und {@code HostedMatch} vergisst daraufhin das ganze Spiel -
+     * der lebende KI-Partner bliebe ohne Tisch zurueck, die Partie liefe verwaist weiter. Fuer einen Sitz mit
+     * lebendem Partner ist das falsch: der Partner spielt weiter, der Mensch schaut zu und beendet die Partie
+     * selbst ueber "End game" (siehe {@link #keinLokalerSitzImSpiel()}). Also wird hier nur der Sitz aufgegeben
+     * ({@link PlayerControllerHuman#concede()}: {@code player.concede()} und {@code checkGameOverCondition()}),
+     * das Team-Ende prueft die Engine dabei selbst.</p>
+     *
+     * <p>Die Rueckfrage bleibt dieselbe wie bei Forge (gleiche Texte, gleiche Sperre waehrend des Mulligans):
+     * ein versehentlicher Klick gibt auch im Team nicht sofort auf.</p>
+     */
     public void onConcede() {
-        if (getGameView() == null) return;
-        concede();
+        GameView gv = getGameView();
+        if (gv == null) return;
+        PlayerControllerHuman sitz = gv.isGameOver() ? null : sitzMitLebendemPartner(gv);
+        if (sitz == null) {
+            concede();
+            return;
+        }
+        Localizer loc = Localizer.getInstance();
+        if (gv.isMulligan()) {
+            // wie Forge: waehrend des Mulligans wartet das Spiel auf Eingaben, Aufgeben liesse die Oberflaeche haengen
+            showErrorDialog(loc.getMessage("lblWaitingforActions"), loc.getMessage("lblConcedeTitle"));
+            return;
+        }
+        if (showConfirmDialog(loc.getMessage("lblConcedeCurrentGame"), loc.getMessage("lblConcedeTitle"),
+                loc.getMessage("lblConcede"), loc.getMessage("lblCancel"))) {
+            sitz.concede();
+            sitzFreigeben(sitz);
+        }
+    }
+
+    /**
+     * Gibt das Spiel frei, falls es gerade auf eine Eingabe des soeben aufgegebenen Sitzes wartet.
+     *
+     * <p>Forge braucht das nicht, weil sein Aufgeben die Partie beendet und {@code Game} dabei alle
+     * Eingaben loest ({@code InputQueue.onGameOver}). Bei weiterlaufender Partie steht der Spiel-Thread
+     * aber im Prioritaets-Dialog des Menschen (oder in einer Frage an ihn) und wartet auf einen Klick, den
+     * der Sitz nie mehr tun wird: die Partie bliebe stehen, der Partner kaeme nie an die Reihe. Gemessen:
+     * ohne diesen Schritt steht der Zug still auf "Priority: You". Offene Fragen enden mit {@code null}
+     * (die Vorgabe der Engine), die Eingabewarteschlange wird geleert - beides ist fuer einen Sitz, der
+     * ausgeschieden ist, folgenlos.</p>
+     */
+    private void sitzFreigeben(PlayerControllerHuman sitz) {
+        sitz.getInputQueue().clearInputs();
+        broker.cancelAll();
+    }
+
+    /**
+     * Der Controller des lokalen, noch lebenden Sitzes, der einen lebenden Teampartner hat - oder {@code null},
+     * wenn es so einen Sitz nicht gibt (kein lokaler Sitz, keine Teams, Free-for-all, Partner schon
+     * ausgeschieden). Ein Sitz "ohne Team" (Nummer {@code < 0}) hat nie einen Partner.
+     *
+     * <p>Der Controller kommt aus {@link #getGameController(PlayerView)} - dort legt
+     * {@link #setOriginalGameController} ihn ab. Ist er kein {@code PlayerControllerHuman} (Netzspiel), gibt es
+     * kein Einzel-Aufgeben und die Methode liefert {@code null}.</p>
+     */
+    PlayerControllerHuman sitzMitLebendemPartner(GameView gv) {
+        Map<Integer, Integer> team = teamMap(gv);
+        for (PlayerView ich : getLocalPlayers()) {
+            Integer meins = team.get(ich.getId());
+            if (ich.getHasLost() || meins == null || meins < 0) {
+                continue;
+            }
+            for (PlayerView p : gv.getPlayers()) {
+                if (p.getId() != ich.getId() && !p.getHasLost() && meins.equals(team.get(p.getId()))
+                        && getGameController(ich) instanceof PlayerControllerHuman pch) {
+                    return pch;
+                }
+            }
+        }
+        return null;
     }
 
     // ---- Synchrone Dialoge (Game-Thread) -------------------------------------------
