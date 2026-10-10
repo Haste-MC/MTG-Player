@@ -822,6 +822,20 @@ public class WebGuiGame extends AbstractGuiGame {
     }
     public void onCancel() { onCancel(null); }
 
+    /**
+     * Ob hier kein lokaler Sitz mehr im Spiel ist: entweder gibt es keinen (Zuschauer) oder jeder ist schon
+     * ausgeschieden (Team-Partie, der Partner spielt weiter). In beiden Faellen hat {@link #onConcede()}
+     * niemanden, den es fragen koennte - Forge fragt den lokalen Spieler, und der hat nichts mehr aufzugeben.
+     */
+    public boolean keinLokalerSitzImSpiel() {
+        for (PlayerView p : getLocalPlayers()) {
+            if (!p.getHasLost()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     public void onConcede() {
         if (getGameView() == null) return;
         concede();

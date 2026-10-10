@@ -77,6 +77,8 @@ export interface PlayerSnap {
   targetable?: boolean;
   /** Teamnummer des Sitzes; fehlt oder -1 = kein Team (Altbestand und aeltere Bridges senden das Feld nicht). */
   team?: number;
+  /** true, sobald der Sitz ausgeschieden ist; im Team laeuft die Partie dann weiter. */
+  lost: boolean;
 }
 
 export interface StackSnap {

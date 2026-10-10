@@ -46,7 +46,10 @@ public record Snapshot(
             Boolean highlighted,
             Boolean targetable,
             /** Teamnummer des Sitzes; {@code null} (Feld fehlt im JSON) = die Partie hat keine Teams. */
-            Integer team) { }
+            Integer team,
+            /** true, sobald der Sitz ausgeschieden ist (Forge: PlayerView.getHasLost). In einer Teampartie laeuft
+             *  die Partie dann weiter; der Browser schaltet am eigenen Sitz auf Zuschauen um. Steht immer im JSON. */
+            boolean lost) { }
 
     public record CardSnap(
             int id,

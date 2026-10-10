@@ -148,6 +148,9 @@ export default function Table() {
   };
   const spectator = !!state.spectator;
   const me = state.players.find((p) => p.id === state.me);
+  // Eigener Sitz ausgeschieden, Partie laeuft weiter (Team: der Partner spielt): der Tisch bleibt offen, die
+  // Fusszeile wird die des Zuschauers. Zu Ende ist die Partie, sobald der Dialog offen ist - dann bleibt alles.
+  const ausgeschieden = !spectator && !!me?.lost && !dialogOpen;
   const foes = state.players.filter((p) => p.id !== state.me);
   const stack = [...state.stack].reverse(); // oberstes Element (löst zuerst auf) zuerst
   const speicher = typeof localStorage === "undefined" ? undefined : localStorage;
@@ -230,7 +233,16 @@ export default function Table() {
         <div className="mine">
           {me && <PlayerZone p={me} state={state} compact={false} />}
           <PhaseBar state={state} />
-          <Prompt state={state}><Thinking /></Prompt>
+          {ausgeschieden ? (
+            <Prompt state={state} dangerLabel="End game" out>
+              {series && (series.games > 1 || bestOf > 0) && (
+                <span className="series-status compact">Serie: {formatSeries(series, names)}{bestOf > 0 && ` · Best of ${bestOf}`}</span>
+              )}
+              <Thinking compact />
+            </Prompt>
+          ) : (
+            <Prompt state={state}><Thinking /></Prompt>
+          )}
           <Hand state={state} />
         </div>
       )}

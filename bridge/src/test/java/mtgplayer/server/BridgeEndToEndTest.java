@@ -74,6 +74,9 @@ class BridgeEndToEndTest {
      *  deleteMatch prueft, dass auch die Kartendatei verschwindet. */
     private static CardStore cards;
 
+    /** Derselbe Store wie der der Bridge - fuer Tests, die die geschriebenen Datensaetze direkt ansehen. */
+    private static MatchStore matchStore;
+
     @BeforeAll
     static void start() throws Exception {
         ForgeBoot.init();
@@ -81,7 +84,8 @@ class BridgeEndToEndTest {
         // obwohl dieser Test mehrere echte Partien bis gameOver spielt (concede). Eigener CardStore aus
         // demselben Grund fuer ~/.mtg-player/cards (Task 2, Runde C).
         cards = new CardStore(matchDir.resolve("cards"));
-        bridge = new Bridge(PORT, DeckStore.standard(), Archidekt.standard(), new MatchStore(matchDir.resolve("matches.json")),
+        matchStore = new MatchStore(matchDir.resolve("matches.json"));
+        bridge = new Bridge(PORT, DeckStore.standard(), Archidekt.standard(), matchStore,
                 new SubprocessGameRunner(), new Edhrec(), cards);
         bridge.start();
         client = new WebSocketClient(new URI("ws://127.0.0.1:" + PORT)) {
@@ -562,5 +566,106 @@ class BridgeEndToEndTest {
             Thread.sleep(1500);
             inbox.clear();
         }
+    }
+
+    /**
+     * Nach dem Aufgeben im Team zuschauen (Aufgabe 11): in einer 2v2-Partie beendet das Aufgeben des Menschen
+     * die Partie nicht, der Partner spielt weiter. Der Snapshot sagt, dass der eigene Sitz draussen ist
+     * (daran schaltet der Browser auf die Zuschauer-Fusszeile) - und "End game" muss die Partie dann wirklich
+     * beenden, statt eine Frage an einen Sitz zu stellen, der schon verloren hat (frueher: nichts passierte,
+     * und startGame lehnte mit "Spiel laeuft noch" ab).
+     */
+    @Test
+    @Order(15)
+    @Timeout(value = 8, unit = TimeUnit.MINUTES)
+    void nachDemAufgebenImTeamBeendetEndGameDiePartie() throws Exception {
+        send("{\"type\":\"startGame\",\"humanTeam\":1,"
+                + "\"humanDeck\":{\"precon\":\"Abzan Armor [TDC] [2025]\"},\"opponents\":["
+                + "{\"precon\":\"Adaptive Enchantment [C18] [2018]\",\"name\":\"Partner\",\"team\":1},"
+                + "{\"precon\":\"Adaptive Enchantment [C18] [2018]\",\"name\":\"Gegner 1\",\"team\":2},"
+                + "{\"precon\":\"Adaptive Enchantment [C18] [2018]\",\"name\":\"Gegner 2\",\"team\":2}]}");
+        JsonNode start = awaitAlleHaende(90);
+        int me = start.get("me").asInt();
+        for (JsonNode p : start.get("players")) {
+            assertFalse(p.get("lost").asBoolean(), "zu Beginn ist niemand draussen");
+        }
+        // Erst aufgeben, wenn der Mulligan der KI-Sitze vorbei ist und die Partie wirklich laeuft: wer waehrend
+        // des Mulligans aufgibt, laesst Forge an den Zonen der anderen Sitze rutschen (ConcurrentModification
+        // auf dem Spiel-Thread) - ein Testartefakt, das mit dem Aufgeben im echten Spiel nichts zu tun hat.
+        awaitSpielLaeuft(90);
+
+        // Aufgeben wie immer: Bestaetigung, dann ist der eigene Sitz draussen - der Partner haelt das Team im Spiel.
+        send("{\"type\":\"concede\"}");
+        JsonNode confirm = await("choice", n -> "confirm".equals(n.path("kind").asText()), 30);
+        send("{\"type\":\"answer\",\"id\":" + confirm.get("id").asInt() + ",\"value\":true}");
+        JsonNode out = await("state", n -> seatLost(n, me), 60);
+        for (JsonNode p : out.get("players")) {
+            assertEquals(p.get("id").asInt() == me, p.get("lost").asBoolean(),
+                    "nur der aufgebende Sitz steht als lost im Snapshot: " + p.get("name"));
+        }
+        assertTrue(bridge.match().isRunning(), "Voraussetzung: der Partner spielt weiter, die Partie laeuft");
+
+        // "End game" aus der Zuschauer-Fusszeile: dieselbe Nachricht wie zuvor, jetzt muss sie wirken.
+        java.util.Set<String> bekannt = new java.util.HashSet<>();
+        matchStore.all().forEach(r -> bekannt.add(r.id()));
+        inbox.clear();
+        send("{\"type\":\"concede\"}");
+        assertNotNull(await("gameOver", n -> true, 60), "End game beendet die Partie");
+        assertFalse(bridge.match().isRunning(), "die Partie laeuft nicht mehr");
+        assertTrue(bridge.match().lastGameOver(), "sie hat wirklich GameStage.GameOver erreicht");
+        // Der Recorder schliesst sich ueber Forges Ereignisbus ab - kurz warten, bis der neue Datensatz steht.
+        mtgplayer.stats.MatchRecord neu = null;
+        for (long ende = System.currentTimeMillis() + 15_000; neu == null && System.currentTimeMillis() < ende; ) {
+            neu = matchStore.all().stream().filter(r -> !bekannt.contains(r.id())).findFirst().orElse(null);
+            if (neu == null) Thread.sleep(100);
+        }
+        assertNotNull(neu, "die beendete Partie steht in der Statistik");
+        assertEquals("abgebrochen", neu.excludeReason(), "End game ist ein Abbruch");
+        assertFalse(neu.counted(), "ein Abbruch zaehlt nicht");
+    }
+
+    /** Klickt sich durch Keep und Startspieler-Wahl, bis Zug 1 mit freier Prioritaet des Menschen steht. */
+    private static void awaitSpielLaeuft(int seconds) throws InterruptedException {
+        long end = System.currentTimeMillis() + seconds * 1000L;
+        int geklickt = -1;
+        JsonNode letzter = null;
+        // awaitAlleHaende hat den Zustand mit dem Keep-Prompt schon verbraucht: den aktuellen noch einmal anfordern.
+        send("{\"type\":\"requestState\"}");
+        while (System.currentTimeMillis() < end) {
+            JsonNode n = inbox.poll(Math.min(3000, Math.max(1, end - System.currentTimeMillis())), TimeUnit.MILLISECONDS);
+            if (n == null) {
+                // Stille: ein Klick kann verloren gehen, solange die Engine den Prompt noch aufbaut - nochmal.
+                geklickt = -1;
+                send("{\"type\":\"requestState\"}");
+                continue;
+            }
+            if (!"state".equals(n.path("type").asText())) continue;
+            letzter = n;
+            JsonNode pr = n.path("prompt");
+            int seq = pr.path("seq").asInt();
+            String ok = pr.path("okLabel").asText();
+            if (n.path("turn").asInt() >= 1 && pr.path("okEnabled").asBoolean()
+                    && !"Keep".equals(ok) && !"Play".equals(ok)
+                    && !pr.path("message").asText().contains("Who would you like to start")) {
+                return;
+            }
+            if (seq == geklickt) continue;
+            if (pr.path("message").asText().contains("Who would you like to start")) {
+                geklickt = seq;
+                send("{\"type\":\"selectPlayer\",\"id\":" + n.get("me").asInt() + ",\"seq\":" + seq + "}");
+            } else if (("Keep".equals(ok) || "Play".equals(ok)) && pr.path("okEnabled").asBoolean()) {
+                geklickt = seq;
+                send("{\"type\":\"ok\",\"seq\":" + seq + "}");
+            }
+        }
+        throw new AssertionError("die Partie kam innerhalb " + seconds + " s nicht in Zug 1; letzter Zustand: "
+                + (letzter == null ? "keiner" : "turn=" + letzter.path("turn") + " " + letzter.path("prompt")));
+    }
+
+    private static boolean seatLost(JsonNode state, int seat) {
+        for (JsonNode p : state.path("players")) {
+            if (p.path("id").asInt() == seat) return p.path("lost").asBoolean(false);
+        }
+        return false;
     }
 }

@@ -102,4 +102,39 @@ class SnapshotTeamTest {
                 "ohne Teams fehlt das Feld ganz - das JSON bleibt fuer aeltere Clients byte-gleich");
         assertEquals(1, seatMit.get("team").asInt(), "mit Teams steht die Nummer im JSON");
     }
+
+    /** Der Browser schaltet auf Zuschauen um, sobald der eigene Sitz draussen ist - dafuer muss der Snapshot
+     *  Sitz fuer Sitz sagen, wer ausgeschieden ist, und zwar nur den, der es wirklich ist. */
+    @Test
+    @Timeout(value = 120, unit = TimeUnit.SECONDS)
+    void snapshotSagtWelcherSitzAusgeschiedenIst() {
+        List<Integer> teams = List.of(1, 1, 2, 2);
+        Scene s = Scene.ofTeams(List.of(AiConfig.DEFAULT, AiConfig.DEFAULT, AiConfig.DEFAULT, AiConfig.DEFAULT),
+                teams, 3);
+        GameView gv = s.game().getView();
+        List<Integer> ids = gv.getPlayers().stream().map(PlayerView::getId).toList();
+        ViewContext ctx = new ViewContext(null, WebGuiGame.teamsById(teams, ids),
+                c -> true, c -> false, c -> false, c -> false, e -> false, p -> false,
+                Snapshot.PromptSnap.EMPTY, new Messages.StopsMsg(List.of(), List.of()), false, true);
+
+        Snapshot vorher = StateSerializer.snapshot(gv, ctx);
+        for (Snapshot.PlayerSnap p : vorher.players()) {
+            assertFalse(p.lost(), "zu Beginn ist niemand draussen: " + p.name());
+        }
+
+        s.player(2).setLife(0, null);                // Sitz 2 scheidet aus, sein Partner Sitz 3 haelt Team 2 im Spiel
+        s.step(1);
+        assertTrue(s.player(2).hasLost(), "Voraussetzung: Sitz 2 ist ausgeschieden");
+        assertFalse(s.game().isGameOver(), "Voraussetzung: die Partie laeuft weiter");
+
+        Snapshot nachher = StateSerializer.snapshot(gv, ctx);
+        for (int i = 0; i < teams.size(); i++) {
+            assertEquals(i == 2, nachher.players().get(i).lost(),
+                    "Sitz " + i + ": nur der ausgeschiedene Sitz 2 steht als lost im Snapshot");
+        }
+        JsonNode seat2 = Json.parse(Json.toJson(nachher)).get("players").get(2);
+        assertTrue(seat2.get("lost").asBoolean(), "das Feld steht im JSON, das der Browser bekommt");
+        assertTrue(Json.parse(Json.toJson(vorher)).get("players").get(0).has("lost"),
+                "auch ein Sitz, der nicht verloren hat, traegt das Feld (false) - es fehlt nie");
+    }
 }
