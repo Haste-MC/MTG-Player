@@ -10,8 +10,11 @@ import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
@@ -25,7 +28,8 @@ import mtgplayer.protocol.Json;
 
 /**
  * Fuehrt {@code args.games()} KI-gegen-KI-Spiele aus, Sitz A (Config/Deck {@code args.a()}/{@code
- * args.deckA()}) gegen Sitz B. Jedes einzelne Spiel laeuft ueber {@link GameRunner} entweder direkt im
+ * args.deckA()}) gegen Sitz B; mit {@code --teams} Team A gegen Team B im 2v2 (siehe {@link #besetzung}).
+ * Jedes einzelne Spiel laeuft ueber {@link GameRunner} entweder direkt im
  * aufrufenden Thread ({@link InProcessRunner}, fuer Tests und {@code --in-process}) oder standardmaessig
  * in einem frischen JVM-Kindprozess ({@link SubprocessRunner}): ein Forge-eigener Absturz waehrend der
  * Simulation (z. B. {@code GameCopier} "Couldn't map") vergiftet globalen Zustand
@@ -133,17 +137,21 @@ public final class Bench {
      *            Verwendung einfach {@code line -> {}}
      */
     public static GameRecord playOne(BenchArgs args, int i, Consumer<String> log) {
-        Deck deckA = loadDeck(args.deckA());
-        Deck deckB = loadDeck(args.deckB());
         long seed = args.seed() + i;
         MyRandom.setRandom(new Random(seed));
         // Sitzreihenfolge in der RegisteredPlayer-Liste wechselt; Forge lost den Startspieler
-        // trotzdem zusaetzlich aus (s. FIRST_TURN oben) - Namen "A"/"B" bleiben an Config/Deck
+        // trotzdem zusaetzlich aus (s. FIRST_TURN oben) - die Namen bleiben an Config/Deck
         // gebunden, nur die Position in der Liste dreht sich.
-        boolean swap = i % 2 != 0;
-        List<Deck> decks = swap ? List.of(deckB, deckA) : List.of(deckA, deckB);
-        List<String> names = swap ? List.of("B", "A") : List.of("A", "B");
-        List<AiConfig> configs = swap ? List.of(args.b(), args.a()) : List.of(args.a(), args.b());
+        Besetzung besetzung = besetzung(args, i);
+        // Jede Referenz nur einmal laden: im Spiegel stehen zwei Sitze auf demselben Deck, und ein
+        // Precon-Laden pro Sitz waere doppelte Arbeit in jedem Kindprozess.
+        Map<String, Deck> geladen = new HashMap<>();
+        List<Deck> decks = new ArrayList<>();
+        for (String ref : besetzung.deckRefs()) {
+            decks.add(geladen.computeIfAbsent(ref, Bench::loadDeck));
+        }
+        List<String> names = besetzung.namen();
+        List<AiConfig> configs = besetzung.configs();
 
         String[] firstSeat = {null};
         int[] lastTurn = {0};
@@ -151,7 +159,7 @@ public final class Bench {
         long t0 = System.currentTimeMillis();
         AiMatch.Result r;
         try {
-            r = AiMatch.play(decks, names, configs, args.timeout(), args.turns(), line -> {
+            r = AiMatch.play(decks, names, configs, args.teams() ? besetzung.teams() : null, args.timeout(), args.turns(), line -> {
                 log.accept(line);
                 activity.see(line);
                 Matcher t = ANY_TURN.matcher(line);
@@ -177,7 +185,46 @@ public final class Bench {
         }
         long millis = System.currentTimeMillis() - t0;
         return new GameRecord(i, seed, firstSeat[0] == null ? "?" : firstSeat[0],
-                r.winner(), r.reason(), r.turns(), millis, r.turnCapped()).withFewSpells(activity.fewSpells());
+                siegerTeam(r.winner(), args.teams()), r.reason(), r.turns(), millis, r.turnCapped()).withFewSpells(activity.fewSpells());
+    }
+
+    /** Besetzung eines einzelnen Bench-Spiels: Namen, Teams, Deck-Referenzen und KI-Einstellungen je Sitz. */
+    record Besetzung(List<String> namen, List<Integer> teams, List<String> deckRefs, List<AiConfig> configs) { }
+
+    /**
+     * Wer sitzt in Spiel {@code i} wo? Ohne {@code --teams} wie bisher zwei Sitze, deren Reihenfolge jedes
+     * zweite Spiel dreht. Mit {@code --teams} vier Sitze: beide Teams spielen dasselbe Deckpaar (Spiegel),
+     * die Teams wechseln sich ab, und ueber vier Spiele faengt jeder Sitz einmal an - sonst wuerde der
+     * Startvorteil an einem Team kleben und die Messung verfaelschen. Rein aus Referenzen (Strings)
+     * gebaut, ohne Deck zu laden, damit sich die Besetzung ohne Forge testen laesst.
+     */
+    static Besetzung besetzung(BenchArgs args, int i) {
+        if (!args.teams()) {
+            boolean swap = i % 2 != 0;
+            return new Besetzung(
+                    swap ? List.of("B", "A") : List.of("A", "B"),
+                    List.of(-1, -1),
+                    swap ? List.of(args.deckB(), args.deckA()) : List.of(args.deckA(), args.deckB()),
+                    swap ? List.of(args.b(), args.a()) : List.of(args.a(), args.b()));
+        }
+        // Ausgangslage: Team A auf 0 und 2, Team B auf 1 und 3. Jedes Team bekommt beide Decks (Sitz 0/1
+        // deckA, Sitz 2/3 deckB), nur die KI-Einstellung gehoert dem Team.
+        List<String> namen = new ArrayList<>(List.of("A1", "B1", "A2", "B2"));
+        List<Integer> teams = new ArrayList<>(List.of(1, 2, 1, 2));
+        List<String> decks = new ArrayList<>(List.of(args.deckA(), args.deckA(), args.deckB(), args.deckB()));
+        List<AiConfig> configs = new ArrayList<>(List.of(args.a(), args.b(), args.a(), args.b()));
+        // Alle vier Listen gemeinsam drehen, damit Name, Team, Deck und KI am Sitz zusammenbleiben.
+        int dreh = i % 4;
+        Collections.rotate(namen, -dreh);
+        Collections.rotate(teams, -dreh);
+        Collections.rotate(decks, -dreh);
+        Collections.rotate(configs, -dreh);
+        return new Besetzung(List.copyOf(namen), List.copyOf(teams), List.copyOf(decks), List.copyOf(configs));
+    }
+
+    /** "A1"/"A2" -> "A"; ohne Teams bleibt der Sitzname stehen. Null (Unentschieden) bleibt null. */
+    static String siegerTeam(String sitz, boolean teams) {
+        return sitz == null || !teams ? sitz : sitz.substring(0, 1);
     }
 
     private static Deck loadDeck(String ref) {
