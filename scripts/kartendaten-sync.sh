@@ -224,8 +224,31 @@ bridge_java() {
 }
 
 pruefen() {   # $1 = Zieldatei
-  local roh
-  roh=$(bridge_java --kartendaten-pruefen) || fehler "Pruefmodus ist abgestuerzt"
+  local roh rc=0 err="$WURZEL/target/pruefen-stderr.txt"
+  mkdir -p "$WURZEL/target"
+  # stderr in eine Datei und danach ins Protokoll: Forges Ladefehler stehen NUR dort, und sie werden gebraucht,
+  # wenn der Pruefmodus an ihnen abstuerzt (siehe unten).
+  roh=$(bridge_java --kartendaten-pruefen 2>"$err") || rc=$?
+  cat "$err" >&2
+  if [ "$rc" -ne 0 ]; then
+    # Ein unlesbares Skript laesst Forge die uebrigen Pakete nicht mehr einsammeln (siehe vollstaendig_geladen).
+    # Je nachdem, welche Dateien dabei fehlen, laeuft der Start trotzdem durch - oder er stirbt danach, z.B. an
+    # einer Split-Karte, deren zweite Haelfte fehlt ("Missing placeholder face"). Welcher Fall eintritt, haengt
+    # an der Reihenfolge, in der das Dateisystem die Dateien liefert. Im zweiten Fall wird aus stderr ein
+    # Befund ohne Karten, der nur die Meldungen traegt: vollstaendig_geladen verwirft ihn, ladefehler_raeumen
+    # kann ihn abarbeiten. Ohne Ladefehler bleibt ein Absturz ein Absturz.
+    grep -q 'Error loading cardscript' "$err" || fehler "Pruefmodus ist abgestuerzt"
+    python3 - "$err" "$1" <<'PY' || fehler "Pruefmodus ist abgestuerzt"
+import json, sys
+with open(sys.argv[1], encoding="utf-8", errors="replace") as f:
+    meldungen = f.read().splitlines()
+with open(sys.argv[2], "w", encoding="utf-8") as f:
+    json.dump({"karten": 0, "nichtBaubar": [], "nichtAuffindbar": [], "doppelteSetCodes": [],
+               "doppelteNamen": [], "parseMeldungen": meldungen}, f, ensure_ascii=False)
+PY
+    echo "Pruefmodus an einem nicht lesbaren Kartenskript abgestuerzt - Befund aus den Meldungen" >&2
+    return 0
+  fi
   printf '%s\n' "$roh" | sed -n 's/^KARTENDATEN_BEFUND //p' > "$1"
   [ -s "$1" ] || fehler "Pruefmodus lieferte keinen Befund"
   python3 -c "import json,sys; assert isinstance(json.load(open(sys.argv[1], encoding='utf-8'))['karten'], int)" "$1" \
