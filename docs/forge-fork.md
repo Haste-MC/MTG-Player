@@ -137,3 +137,33 @@ fewer. That is known and decided this way: switching the engine should not be mi
 data, so that faults can be attributed unambiguously to one of the two causes. Right after the switch the card
 sync is started once by hand; it makes up the difference. Anyone missing a card during that gap finds it again
 after the sync.
+
+## Next Forge release: candidate branch and check
+
+Two helpers prepare a switch to a new Forge release; neither decides anything about AI behaviour.
+
+- `scripts/fork-kandidat.sh forge-<version>` (run in the MTG-Player root, works in `forge/`): creates the branch
+  `mtg-player-<version>` from the upstream release tag and cherry-picks our commits from `forge-<old>..origin/mtg-player`
+  onto it — without merges, without the card-data bot's commits and without commits that only touch card data
+  (those come back through the weekly sync). A commit that does not apply cleanly is **skipped**, not resolved, and
+  named in `fork-kandidat-bericht.md`; a commit upstream already contains is dropped as empty. The version commit
+  is not replayed but set anew, because the version scheme can change between releases: since 2.0.16 upstream
+  uses `${revision}` (`<revision>${versionCode}${snapshotName}</revision>`), and the fork sets
+  `<revision>${versionCode}-mtgplayer</revision>`. Upstream runs `flatten-maven-plugin` only at `deploy`; a plain
+  `mvn install` would then put POMs with a literal `${revision}` into `~/.m2` and the bridge would not resolve
+  Forge (`forge:forge:pom:${revision}`), so the version commit moves the `flatten` execution to
+  `process-resources`. The branch is not pushed. Return codes: 0 all commits carried over, 3 at least one
+  conflict (branch still there), 1 failure. Tests: `ForkKandidatSkriptTest`.
+- `.github/workflows/fork-kandidat.yml` (manual, input: branch in `Haste-MC/forge`): builds Forge from that
+  branch, runs the bridge test suite against it (`-Dforge.version` from the branch's POM) and measures the
+  exclusion list: `kartendaten-sync.sh` with an empty list against `upstream/master`, so "would come back" =
+  entries on `docs/kartendaten-ausgeschlossen.txt` that this engine can build. The results are in the run summary
+  and also as `notice` annotations (`scripts/gh-melden.py`), which the REST API serves even where logs and
+  artifacts cannot be downloaded (`GET /repos/{owner}/{repo}/check-runs/{job_id}/annotations`).
+
+A trial run on 2026-10-29 against `upstream/master` (2.0.16-SNAPSHOT) showed what to expect: 27 of 31 commits
+carried over; conflicts in `Combat.java` (monarch/`<Nothing>` fix), `PlayerControllerAi.java` (mulligan),
+`AiAttackController.java` (must-attack) and `FControlGameEventHandler.java`; Forge builds, but the bridge no longer
+compiles — `IGuiGame` changed its selectable/highlight methods (`setSelectables`, `clearSelectables`,
+`setWeaklySelectable`, `clearWeaklySelectable`, `isWeaklySelectable`, `setHighlighted`) and `IGuiBase` gained
+`getUserAgent()` (`WebGuiGame`, `WebGuiBase`).

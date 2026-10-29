@@ -1,0 +1,207 @@
+name: Fork-Kandidat pruefen
+
+# Baut Forge von einem Zweig in Haste-MC/forge, laesst die Bridge-Tests dagegen laufen und misst, welche
+# Karten der Ausschlussliste die Engine dort bauen kann. Gedacht fuer den Wechsel auf ein neues Forge-Release
+# (scripts/fork-kandidat.sh legt den Zweig an), laeuft aber gegen jeden Fork-Zweig.
+#
+# Das Ergebnis steht in der Zusammenfassung des Laufs UND als Annotationen (scripts/gh-melden.py): die liefert
+# die REST-API auch dort, wo Logs und Artefakte nicht abrufbar sind. Alle eigenen Annotationen sind "notice",
+# auch Fehler (Titel "FEHLER: ..."): GitHub nimmt je Schritt nur 10 Fehler-Annotationen an, und die verbraucht
+# bei einem Compile-Fehler schon der Maven-Problem-Matcher von setup-java - eigene gingen dann verloren.
+on:
+  workflow_dispatch:
+    inputs:
+      zweig:
+        description: 'Zweig in Haste-MC/forge'
+        required: true
+        default: mtg-player
+      kartendaten:
+        description: 'Ausschlussliste gegen upstream/master neu messen'
+        type: boolean
+        default: true
+
+concurrency:
+  group: fork-kandidat-${{ inputs.zweig }}
+  cancel-in-progress: true
+
+jobs:
+  pruefen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    permissions:
+      contents: read
+    env:
+      ZWEIG: ${{ inputs.zweig }}
+      LOGS: ${{ github.workspace }}/target/fork-kandidat
+    steps:
+      - name: Auschecken (ohne Submodul)
+        uses: actions/checkout@v5
+
+      - name: Fork-Zweig auschecken
+        uses: actions/checkout@v5
+        with:
+          repository: Haste-MC/forge
+          ref: ${{ env.ZWEIG }}
+          path: forge
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: JDK 17 (Temurin) einrichten
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+
+      - name: Version bestimmen
+        id: version
+        run: |
+          mkdir -p "$LOGS"
+          # <version> der Wurzel-pom, ${...} ueber die <properties> aufgeloest (ab 2.0.16: ${revision}).
+          v=$(python3 - forge/pom.xml <<'PY'
+          import re, sys
+          t = open(sys.argv[1], encoding="utf-8").read()
+          v = re.search(r"<artifactId>forge</artifactId>.*?<version>([^<]+)</version>", t, re.S).group(1)
+          p = dict(re.findall(r"<([A-Za-z][\w.]*)>([^<]*)</\1>", t.split("<properties>", 1)[1].split("</properties>", 1)[0]))
+          for _ in range(10):
+              v = re.sub(r"\$\{([\w.]+)\}", lambda m: p.get(m.group(1), m.group(0)), v)
+          print(v)
+          PY
+          )
+          echo "Forge-Version auf $ZWEIG: $v"
+          echo "v=$v" >> "$GITHUB_OUTPUT"
+          echo "kurz=$(git -C forge rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Forge bauen
+        id: forge
+        continue-on-error: true
+        working-directory: forge
+        run: |
+          if mvn -B -ntp -pl forge-gui -am install -DskipTests -Dcheckstyle.skip -Dmaven.javadoc.skip=true \
+               > "$LOGS/forge.txt" 2>&1; then
+            echo "Forge gebaut."
+          else
+            tail -n 60 "$LOGS/forge.txt"
+            grep -E '^\[ERROR\]' "$LOGS/forge.txt" | grep -v 'Re-run Maven\|^\[ERROR\] *$\|Help 1\|full stack trace\|-e switch\|-X switch' \
+              | head -40 | python3 ../scripts/gh-melden.py notice "FEHLER: Forge-Build fehlgeschlagen" -
+            exit 1
+          fi
+
+      - name: Bridge-Tests
+        id: tests
+        if: steps.forge.outcome == 'success'
+        continue-on-error: true
+        run: |
+          rc=0
+          mvn -B -ntp -f bridge/pom.xml -Dforge.version="${{ steps.version.outputs.v }}" test > "$LOGS/tests.txt" 2>&1 || rc=$?
+          tail -n 80 "$LOGS/tests.txt"
+          python3 - bridge/target/surefire-reports "$LOGS" <<'PY'
+          import glob, os, sys, xml.etree.ElementTree as ET
+          berichte, logs = sys.argv[1:3]
+          gesamt = fehl = uebersprungen = 0
+          faelle = []
+          for datei in sorted(glob.glob(os.path.join(berichte, "TEST-*.xml"))):
+              wurzel = ET.parse(datei).getroot()
+              for fall in wurzel.iter("testcase"):
+                  gesamt += 1
+                  if fall.find("skipped") is not None:
+                      uebersprungen += 1
+                  problem = fall.find("failure")
+                  if problem is None:
+                      problem = fall.find("error")
+                  if problem is not None:
+                      fehl += 1
+                      text = (problem.get("message") or problem.get("type") or "").strip()
+                      faelle.append(f"{fall.get('classname','?').rsplit('.',1)[-1]}.{fall.get('name')}: {text[:300]}")
+          zeile = f"{gesamt} Tests, {fehl} fehlgeschlagen, {uebersprungen} uebersprungen"
+          with open(os.path.join(logs, "tests-zeile.txt"), "w", encoding="utf-8") as f:
+              f.write(zeile)
+          with open(os.path.join(logs, "tests-fehler.txt"), "w", encoding="utf-8") as f:
+              f.write("\n".join(faelle))
+          print(zeile)
+          PY
+          if [ ! -s "$LOGS/tests-zeile.txt" ] || grep -q '^0 Tests' "$LOGS/tests-zeile.txt"; then
+            # Keine Berichte: die Bridge liess sich gegen diesen Stand nicht einmal uebersetzen.
+            grep -E '^\[ERROR\]' "$LOGS/tests.txt" | head -40 \
+              | python3 scripts/gh-melden.py notice "FEHLER: Bridge laesst sich nicht uebersetzen" -
+            exit 1
+          fi
+          python3 scripts/gh-melden.py notice "Bridge-Tests" "$LOGS/tests-zeile.txt"
+          if [ -s "$LOGS/tests-fehler.txt" ]; then
+            python3 scripts/gh-melden.py notice "FEHLER: Fehlgeschlagene Bridge-Tests" "$LOGS/tests-fehler.txt" 6000
+          fi
+          exit "$rc"
+
+      - name: Kartendaten messen
+        id: karten
+        if: steps.forge.outcome == 'success' && inputs.kartendaten
+        continue-on-error: true
+        run: |
+          v="${{ steps.version.outputs.v }}"
+          if [ ! -s "$LOGS/tests-zeile.txt" ] || grep -q '^0 Tests' "$LOGS/tests-zeile.txt"; then
+            echo "Bridge laesst sich gegen diesen Stand nicht uebersetzen - Messung uebersprungen." \
+              | python3 scripts/gh-melden.py notice "Kartendaten" -
+            exit 1
+          fi
+          mvn -q -B -ntp -f bridge/pom.xml -Dforge.version="$v" -DskipTests package
+          mvn -q -B -ntp -f bridge/pom.xml -Dforge.version="$v" dependency:build-classpath -Dmdep.outputFile="$PWD/target/cp.txt"
+          # Mit LEERER Ausschlussliste: was danach darauf steht, kann diese Engine nicht bauen.
+          : > target/leer.txt
+          rc=0
+          scripts/kartendaten-sync.sh --ausschluss "$PWD/target/leer.txt" > "$LOGS/karten.txt" 2>&1 || rc=$?
+          grep -E '^(==|Karten vorher|FEHLER|ABBRUCH|nicht lesbar|vorab|neue oder|auf unserer|fertig)' "$LOGS/karten.txt" || true
+          python3 - docs/kartendaten-ausgeschlossen.txt target/leer.txt "$rc" "$LOGS/karten-ergebnis.txt" <<'PY'
+          import sys
+          def schluessel(p):
+              try:
+                  return {z.split("\t")[0] for z in open(p, encoding="utf-8") if z.strip() and not z.startswith("#")}
+              except FileNotFoundError:
+                  return set()
+          vorher, nachher, rc, ziel = schluessel(sys.argv[1]), schluessel(sys.argv[2]), sys.argv[3], sys.argv[4]
+          if rc != "0":
+              # Gescheiterter Abgleich: das Skript hat zurueckgesetzt, die Liste ist wieder leer - keine Aussage.
+              zeilen = [f"Abgleich-Rueckgabe {rc}: Messung GESCHEITERT, keine Aussage ueber zurueckkehrende Karten",
+                        f"Ausschlussliste heute: {len(vorher)} Eintraege", "keine Messung"]
+              open(ziel, "w", encoding="utf-8").write("\n".join(zeilen))
+              print("\n".join(zeilen))
+              sys.exit(0)
+          zurueck, bleibt, neu = sorted(vorher - nachher), sorted(vorher & nachher), sorted(nachher - vorher)
+          zeilen = [f"Abgleich-Rueckgabe {rc} (0 = sauber durchgelaufen)",
+                    f"Ausschlussliste heute: {len(vorher)} Eintraege",
+                    f"kaemen zurueck: {len(zurueck)}, blieben ausgeschlossen: {len(bleibt)}, neu nicht baubar: {len(neu)}",
+                    "", "Zurueck: " + "; ".join(zurueck),
+                    "", "Weiter ausgeschlossen: " + "; ".join(bleibt),
+                    "", "Neu nicht baubar: " + "; ".join(neu)]
+          open(ziel, "w", encoding="utf-8").write("\n".join(zeilen))
+          print("\n".join(zeilen[:3]))
+          PY
+          python3 scripts/gh-melden.py notice "Kartendaten" "$LOGS/karten-ergebnis.txt" 6000
+          if [ "$rc" -ne 0 ]; then
+            grep -E 'FEHLER|ABBRUCH|Gegenprobe nicht sauber|nicht lesbar' "$LOGS/karten.txt" | head -20 \
+              | python3 scripts/gh-melden.py notice "FEHLER: Kartendaten-Abgleich gescheitert" -
+            exit 1
+          fi
+
+      - name: Zusammenfassung
+        if: always()
+        run: |
+          {
+            echo "## Fork-Kandidat \`$ZWEIG\` (${{ steps.version.outputs.kurz }}, Version \`${{ steps.version.outputs.v }}\`)"
+            echo
+            echo "| Schritt | Ergebnis |"
+            echo "|---|---|"
+            echo "| Forge bauen | ${{ steps.forge.outcome }} |"
+            echo "| Bridge-Tests | ${{ steps.tests.outcome }} – $(cat "$LOGS/tests-zeile.txt" 2>/dev/null || echo '–') |"
+            echo "| Kartendaten | ${{ steps.karten.outcome }} – $(sed -n 3p "$LOGS/karten-ergebnis.txt" 2>/dev/null || echo '–') |"
+            if [ -s "$LOGS/tests-fehler.txt" ]; then
+              echo; echo "### Fehlgeschlagene Tests"; echo; sed 's/^/- /' "$LOGS/tests-fehler.txt"
+            fi
+            if [ -s "$LOGS/karten-ergebnis.txt" ]; then
+              echo; echo "### Kartendaten"; echo; sed -n '5,$p' "$LOGS/karten-ergebnis.txt"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          printf 'zweig=%s\ncommit=%s\nversion=%s\nforge=%s\ntests=%s\nkartendaten=%s\n' \
+            "$ZWEIG" "${{ steps.version.outputs.kurz }}" "${{ steps.version.outputs.v }}" \
+            "${{ steps.forge.outcome }}" "${{ steps.tests.outcome }}" "${{ steps.karten.outcome }}" \
+            | python3 scripts/gh-melden.py notice "Ergebnis" -
+          [ "${{ steps.forge.outcome }}" = success ] && [ "${{ steps.tests.outcome }}" = success ]
