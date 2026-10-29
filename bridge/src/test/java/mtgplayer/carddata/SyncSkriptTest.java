@@ -535,4 +535,97 @@ class SyncSkriptTest {
         assertEquals(1, lauf.rc(), lauf.ausgabe());
         assertTrue(lauf.ausgabe().contains("Kartenzahl gefallen"), lauf.ausgabe());
     }
+
+    // --- Befund 5: ein Kartenskript, das Forge nicht LESEN kann (Abgleich 2026-10-19/26) ----------
+    // CardStorageReader bricht beim ersten Lesefehler das Einsammeln der uebrigen Pakete ab; der Befund
+    // nennt dann zehntausende Karten "nicht auffindbar". Das Skript muss die eine Datei beiseite raeumen und
+    // neu pruefen, statt diesem Befund zu glauben.
+
+    /** Die Meldungen, die Forge bei einem unlesbaren Skript auf stderr schreibt (gekuerzt), als JSON-Array. */
+    private static String ladefehler(String datei) {
+        return "[\"java.util.concurrent.ExecutionException: java.lang.RuntimeException: Error loading cardscript "
+                + datei + ". Please close Forge and resolve this.\","
+                + "\"\\tat java.base/java.util.concurrent.FutureTask.report(FutureTask.java:122)\","
+                + "\"Caused by: java.lang.IllegalArgumentException: No enum constant forge.card.CardSplitType.Vengeance\","
+                + "\"\\tat java.base/java.lang.Enum.valueOf(Enum.java:273)\","
+                + "\"The card A-Foo was not assigned to any set.\"]";
+    }
+
+    private static String jsonMitMeldungen(int karten, String meldungen) {
+        return "{\"karten\":" + karten + ",\"nichtBaubar\":[],\"nichtAuffindbar\":[],\"doppelteSetCodes\":[],"
+                + "\"doppelteNamen\":[],\"parseMeldungen\":" + meldungen + "}";
+    }
+
+    @Test
+    void eineNeueNichtLesbareKarteWirdGeraeumtAusgeschlossenUndNeuGeprueft(@TempDir Path tmp) throws Exception {
+        Wurzel w = baueWurzel(tmp);
+        upstream(w, "mkdir -p forge-gui/res/cardsfolder/upcoming;"
+                + " printf 'Name:Hela\\nAlternateMode:Vengeance\\n' > forge-gui/res/cardsfolder/upcoming/hela.txt;"
+                + " echo 'Name:Neue Karte' > forge-gui/res/cardsfolder/s/neu.txt");
+        Files.writeString(w.steuer().resolve("befund-1.json"), json(2));
+        Files.writeString(w.steuer().resolve("befund-2.json"), jsonMitMeldungen(1, ladefehler("hela.txt")));
+        Files.writeString(w.steuer().resolve("befund-3.json"), json(3));
+        Files.writeString(w.steuer().resolve("befund-4.json"), json(3));
+
+        Lauf lauf = laufVoll(w, "--ausschluss", w.liste().toString(), "upstream-test");
+
+        assertEquals(0, lauf.rc(), lauf.ausgabe());
+        assertEquals("4", Files.readString(w.steuer().resolve("pruefen-n")).trim(), "nach dem Raeumen neu geprueft");
+        assertFalse(Files.exists(w.karte("upcoming/hela.txt")), "die unlesbare Karte ist weg");
+        assertTrue(Files.exists(w.karte("s/neu.txt")), "die heile neue Karte kam an");
+        assertTrue(Files.readString(w.liste()).contains(
+                "Hela\tKartenskript von dieser Forge-Fassung nicht lesbar: java.lang.IllegalArgumentException: "
+                        + "No enum constant forge.card.CardSplitType.Vengeance\t"), Files.readString(w.liste()));
+        assertFalse(Files.readString(w.steuer().resolve("neu-gesehen.txt")).contains("hela"),
+                "das Aussortieren bekam die geraeumte Datei nicht mehr");
+        assertEquals("A\tforge-gui/res/cardsfolder/s/neu.txt\n",
+                gitAusgabe(w.forge(), "diff", "--cached", "--name-status", "HEAD"));
+        assertTrue(Files.readString(w.bericht()).contains("Neu ausgeschlossen (1)"));
+    }
+
+    @Test
+    void eineGeaenderteNichtLesbareKarteBleibtAufUnsererFassung(@TempDir Path tmp) throws Exception {
+        Wurzel w = baueWurzel(tmp);
+        upstream(w, "echo 'AlternateMode:Vengeance' >> forge-gui/res/cardsfolder/s/sol_ring.txt");
+        Files.writeString(w.steuer().resolve("befund-1.json"), json(2));
+        Files.writeString(w.steuer().resolve("befund-2.json"), jsonMitMeldungen(1, ladefehler("sol_ring.txt")));
+        Files.writeString(w.steuer().resolve("befund-3.json"), json(2));
+        Files.writeString(w.steuer().resolve("befund-4.json"), json(2));
+
+        Lauf lauf = laufVoll(w, "--ausschluss", w.liste().toString(), "upstream-test");
+
+        assertEquals(0, lauf.rc(), lauf.ausgabe());
+        assertEquals(BASIS_SOL, Files.readString(w.karte("s/sol_ring.txt")), "unsere alte Fassung ist zurueck");
+        assertFalse(Files.exists(w.liste()) && Files.readString(w.liste()).contains("Sol Ring"),
+                "die Karte laeuft weiter, sie ist nicht ausgeschlossen");
+        assertTrue(Files.readString(w.bericht()).contains("Bleibt auf unserer bisherigen Fassung (1)"));
+    }
+
+    @Test
+    void eineNichtLesbareDateiDieDerAbgleichNichtAngefasstHatIstEinFehlschlag(@TempDir Path tmp)
+            throws Exception {
+        Wurzel w = baueWurzel(tmp);
+        upstream(w, "echo 'Name:Neue Karte' > forge-gui/res/cardsfolder/s/neu.txt");
+        Files.writeString(w.steuer().resolve("befund-1.json"), json(2));
+        Files.writeString(w.steuer().resolve("befund-2.json"), jsonMitMeldungen(1, ladefehler("alt.txt")));
+
+        Lauf lauf = laufVoll(w, "--ausschluss", w.liste().toString(), "upstream-test");
+
+        assertEquals(1, lauf.rc(), lauf.ausgabe());
+        assertTrue(lauf.ausgabe().contains("nicht auf der Neu-Liste"), lauf.ausgabe());
+        assertEquals("", gitAusgabe(w.forge(), "status", "--porcelain", "-uall"), "zurueckgenommen");
+        assertTrue(Files.exists(w.karte("s/alt.txt")), "nichts geloescht");
+    }
+
+    @Test
+    void einUnvollstaendigGeladenerEigenerStandBrichtSchonInSchritt1Ab(@TempDir Path tmp) throws Exception {
+        Wurzel w = baueWurzel(tmp);
+        upstream(w, "echo 'Name:Neue Karte' > forge-gui/res/cardsfolder/s/neu.txt");
+        Files.writeString(w.steuer().resolve("befund-1.json"), jsonMitMeldungen(2, ladefehler("alt.txt")));
+
+        Lauf lauf = laufVoll(w, "--ausschluss", w.liste().toString(), "upstream-test");
+
+        assertEquals(1, lauf.rc(), lauf.ausgabe());
+        assertTrue(lauf.ausgabe().contains("ABBRUCH im Schritt: 1. Vergleichsmarke"), lauf.ausgabe());
+    }
 }

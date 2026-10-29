@@ -192,12 +192,13 @@ NEUE_DATEIEN="$WURZEL/kartendaten-neu.txt"
 NAMEN_VORHER="$WURZEL/target/kartennamen-vorher.txt"
 NAMEN_NACHHER="$WURZEL/target/kartennamen-nachher.txt"
 BLEIBT="$WURZEL/target/kartendaten-bleibt.tsv"   # Karten, die auf unserer alten Fassung bleiben
+LADEFEHLER="$WURZEL/target/kartendaten-ladefehler.tsv"   # nicht lesbare Skripte, siehe ladefehler_raeumen
 CP_DATEI="$WURZEL/target/cp.txt"
 DATA="$WURZEL/target/kartendaten-data"
 
 # Reste eines frueheren Laufs duerfen nie fuer das Ergebnis dieses Laufs gehalten werden.
 rm -f "$BEFUND_VORHER" "$BEFUND_ROH" "$BEFUND" "$BERICHT" "$NEUE_DATEIEN" \
-      "$NAMEN_VORHER" "$NAMEN_NACHHER" "$BLEIBT"
+      "$NAMEN_VORHER" "$NAMEN_NACHHER" "$BLEIBT" "$LADEFEHLER"
 
 # Das Skript UEBERSETZT NICHT. Es erwartet eine fertig gebaute Bridge und sagt sonst, was zu tun ist.
 # Grund: auf dem Entwicklungsrechner laeuft Kevins Bridge aus genau diesem target/classes - ein
@@ -232,6 +233,109 @@ pruefen() {   # $1 = Zieldatei
 }
 karten() { python3 -c "import json,sys;print(json.load(open(sys.argv[1], encoding='utf-8'))['karten'])" "$1"; }
 
+# Ein Kartenskript, das Forge schon beim LESEN nicht versteht (z.B. ein unbekannter "AlternateMode"), reisst
+# mehr als nur sich selbst mit: CardStorageReader liest die Dateien in Paketen parallel, und scheitert eines,
+# faengt er die ExecutionException, druckt sie und bricht das Einsammeln der uebrigen Pakete ab. Die
+# Datenbank ist dann still unvollstaendig - im Abgleich vom 2026-10-19/26 fehlten so zehntausende Karten
+# (Hela, Mistress of Darkness: "No enum constant forge.card.CardSplitType.Vengeance"), das Aussortieren
+# hielt sie alle fuer "nicht auffindbar" und loeschte ihre Dateien. Darum gilt: steht "Error loading
+# cardscript" in den Meldungen, ist der Befund NICHTS wert. $1 = Befund. Ohne Treffer: 0.
+vollstaendig_geladen() {
+  python3 - "$1" <<'PY'
+import json, sys
+meldungen = json.load(open(sys.argv[1], encoding="utf-8")).get("parseMeldungen") or []
+treffer = [m for m in meldungen if "Error loading cardscript" in m]
+if treffer:
+    print("Forge hat die Kartendaten nur TEILWEISE geladen - der Befund waere wertlos:", file=sys.stderr)
+    for m in treffer[:5]:
+        print("  " + m.strip(), file=sys.stderr)
+    sys.exit(1)
+PY
+}
+
+# Schritt 3, vor dem Aussortieren: Kartenskripte, die Forge nicht LESEN kann, aus dem Weg raeumen - so wie das
+# Aussortieren es mit unbaubaren Karten tut, nur frueher, weil sonst der Befund selbst nicht stimmt (siehe
+# vollstaendig_geladen). Je Datei aus den Meldungen:
+#   - steht sie nicht auf der Neu-Liste, hat dieser Abgleich sie nicht angefasst: Fehlschlag (dann ist etwas
+#     anderes kaputt, und das gehoert angesehen, nicht weggeraeumt);
+#   - kennt HEAD sie (upstream hat sie nur geaendert): unsere alte Fassung zurueck, Eintrag fuer den Bericht
+#     ("bleibt auf unserer bisherigen Fassung"), NICHT auf die Ausschlussliste;
+#   - sonst (wirklich neu): loeschen und ihren Schluessel mit Grund auf die Ausschlussliste.
+# In beiden Faellen verlaesst die Datei die Neu-Liste. Rueckgabe: 0 = nichts zu tun, 10 = etwas geraeumt
+# (neu pruefen), 1 = Fehlschlag. Forge meldet je Lauf nur den ERSTEN Lesefehler, darum ruft Schritt 3 das
+# in einer Schleife.
+# $1 Befund, $2 Neu-Liste, $3 Ausschlussliste, $4 Ladefehler-Liste (Schluessel, Grund, Pfad; wird ergaenzt)
+ladefehler_raeumen() {
+  python3 - "$FORGE" "$1" "$2" "$3" "$4" <<'PY'
+import datetime, json, os, re, subprocess, sys
+repo, befund_p, neue_p, ausschluss_p, ladefehler_p = sys.argv[1:6]
+meldungen = json.load(open(befund_p, encoding="utf-8")).get("parseMeldungen") or []
+
+def git(*args, **kw):
+    return subprocess.run(["git", "-C", repo, *args], capture_output=True, **kw)
+
+def grund_ab(i):
+    # Die tiefste "Caused by:"-Zeile des Stacktraces, der an Zeile i beginnt, nennt den eigentlichen Fehler.
+    grund = None
+    for m in meldungen[i + 1:]:
+        s = m.strip()
+        if s.startswith("Caused by:"):
+            grund = s[len("Caused by:"):].strip()
+        elif not (s.startswith("at ") or s.startswith("...")):
+            break
+    return grund or meldungen[i].strip()
+
+dateien = {}
+for i, m in enumerate(meldungen):
+    for name in re.findall(r"Error loading cardscript (.+?)\. Please close Forge", m):
+        dateien.setdefault(name, grund_ab(i))
+if not dateien:
+    sys.exit(0)
+
+with open(neue_p, "rb") as f:
+    neue = [os.fsdecode(p) for p in f.read().split(b"\n") if p]
+heute = datetime.date.today().isoformat()
+geraeumt = set()
+for name, grund in sorted(dateien.items()):
+    kandidaten = [p for p in neue if os.path.basename(p) == name]
+    if len(kandidaten) != 1:
+        print(f"FEHLER: Forge kann das Kartenskript {name} nicht lesen ({grund}), aber es steht "
+              f"{'nicht' if not kandidaten else 'mehrdeutig'} auf der Neu-Liste - das hat nicht dieser Abgleich "
+              "verursacht, bitte von Hand ansehen", file=sys.stderr)
+        sys.exit(1)
+    pfad = kandidaten[0]
+    with open(os.path.join(repo, pfad), encoding="utf-8", errors="replace") as f:
+        schluessel = next((z[5:].strip() for z in f if z.startswith("Name:")), None)
+    if not schluessel:
+        print(f"FEHLER: {pfad} ist nicht lesbar und hat keine Name:-Zeile - kein Schluessel fuer die "
+              "Ausschlussliste", file=sys.stderr)
+        sys.exit(1)
+    grund = "Kartenskript von dieser Forge-Fassung nicht lesbar: " + grund
+    if git("cat-file", "-e", "HEAD:" + pfad).returncode == 0:
+        git("checkout", "-q", "HEAD", "--", pfad, check=True)
+        print(f"nicht lesbar, bleibt auf unserer Fassung: {schluessel} ({pfad})")
+    else:
+        git("rm", "-q", "-f", "--", pfad, check=True)
+        # Die Liste von Hand bearbeitet und ohne Zeilenende gespeichert? Dann nicht an die letzte Zeile kleben.
+        if os.path.isfile(ausschluss_p) and os.path.getsize(ausschluss_p) > 0:
+            with open(ausschluss_p, "rb") as f:
+                f.seek(-1, os.SEEK_END)
+                if f.read(1) != b"\n":
+                    with open(ausschluss_p, "a", encoding="utf-8") as g:
+                        g.write("\n")
+        with open(ausschluss_p, "a", encoding="utf-8") as f:
+            f.write(f"{schluessel}\t{' '.join(grund.split())}\t{heute}\n")
+        print(f"nicht lesbar, ausgeschlossen: {schluessel} ({pfad})")
+    with open(ladefehler_p, "a", encoding="utf-8") as f:
+        f.write(f"{schluessel}\t{' '.join(grund.split())}\t{pfad}\n")
+    geraeumt.add(pfad)
+
+with open(neue_p, "wb") as f:
+    f.write(b"".join(os.fsencode(p) + b"\n" for p in neue if p not in geraeumt))
+sys.exit(10)
+PY
+}
+
 # Die Kartennamen unter cardsfolder (erste "Name:"-Zeile je Datei, wie CardFiles), sortiert, einer je Zeile.
 # $1 = Zieldatei. Liest den Arbeitsbaum - vor dem Uebernehmen ist der (siehe Pruefung unten) gleich HEAD.
 kartennamen() {
@@ -261,6 +365,7 @@ if [ -n "$(git -C "$FORGE" status --porcelain -uall -- "${VERZEICHNISSE[@]}")" ]
   fehler "Die Kartenordner in forge haben nicht eingecheckte Aenderungen - erst einchecken oder verwerfen"
 fi
 pruefen "$BEFUND_VORHER"
+vollstaendig_geladen "$BEFUND_VORHER" || fehler "unser eigener Stand laedt nicht vollstaendig (siehe oben)"
 KARTEN_VORHER=$(karten "$BEFUND_VORHER")
 echo "Karten vorher: $KARTEN_VORHER"
 mkdir -p "$WURZEL/target"
@@ -315,7 +420,19 @@ echo "neue oder geaenderte Dateien: $(wc -l < "$NEUE_DATEIEN")"
 
 SCHRITT="3. Pruefen und aussortieren"
 echo "== 3. Pruefen und aussortieren =="
-pruefen "$BEFUND_ROH"
+# Erst alles beiseite raeumen, was Forge nicht einmal lesen kann (siehe ladefehler_raeumen), dann pruefen.
+# Obergrenze, damit ein Fehler im Raeumen nicht endlos kreist: Forge nennt je Lauf nur einen Lesefehler.
+runde=0
+while :; do
+  pruefen "$BEFUND_ROH"
+  rc=0
+  ladefehler_raeumen "$BEFUND_ROH" "$NEUE_DATEIEN" "$AUSSCHLUSS" "$LADEFEHLER" || rc=$?
+  [ "$rc" -eq 0 ] && break
+  [ "$rc" -eq 10 ] || fehler "nicht lesbare Kartenskripte liessen sich nicht beiseite raeumen (siehe oben)"
+  runde=$((runde + 1))
+  [ "$runde" -lt 50 ] || fehler "nach $runde Runden noch immer nicht lesbare Kartenskripte - von Hand ansehen"
+done
+vollstaendig_geladen "$BEFUND_ROH" || fehler "Befund nach dem Raeumen noch unvollstaendig"
 rc=0
 bridge_java --kartendaten-aussortieren "$BEFUND_ROH" "$AUSSCHLUSS" "$NEUE_DATEIEN" || rc=$?
 if [ "$rc" -ne 0 ]; then
@@ -339,9 +456,9 @@ fi
 # (anderer Name), waere sie "von upstream entfernt", sonst scheitert die Gegenprobe laut (Schritt 4) mit
 # Ruecknahme. Das ist richtig so: von Hand entscheiden, welche Fassung gelten soll.
 SCHRITT="3b. Bisherige Fassungen wiederherstellen"
-python3 - "$FORGE" "$NEUE_DATEIEN" "$AUSSCHLUSS_KOPIE" "$AUSSCHLUSS" "$BLEIBT" <<'PY'
+python3 - "$FORGE" "$NEUE_DATEIEN" "$AUSSCHLUSS_KOPIE" "$AUSSCHLUSS" "$BLEIBT" "$LADEFEHLER" <<'PY'
 import os, subprocess, sys
-repo, neue, ausschluss_vor, ausschluss_nach, bleibt = sys.argv[1:6]
+repo, neue, ausschluss_vor, ausschluss_nach, bleibt, ladefehler = sys.argv[1:7]
 
 def zeilen(p):
     if not os.path.isfile(p):
@@ -399,6 +516,12 @@ if alt:
                     if not (z.strip() and not z.startswith("#") and z.split("\t")[0] in entfernen)]
         with open(ausschluss_nach, "w", encoding="utf-8") as f:
             f.write("\n".join(behalten))
+# Was ladefehler_raeumen schon in Schritt 3 auf unsere alte Fassung zurueckgesetzt hat, gehoert in denselben
+# Abschnitt des Berichts (Format dort: Schluessel, Grund, Pfad - wie hier).
+for z in zeilen(ladefehler):
+    teile = z.split("\t")
+    if len(teile) == 3 and git("cat-file", "-e", "HEAD:" + teile[2]).returncode == 0:
+        bleibt_zeilen.append(z)
 with open(bleibt, "w", encoding="utf-8") as f:
     f.write("".join(z + "\n" for z in bleibt_zeilen))
 print(f"auf unserer bisherigen Fassung geblieben: {len(bleibt_zeilen)} Karte(n)")
@@ -411,6 +534,7 @@ git -C "$FORGE" add -A -- "${DIRS[@]}"
 SCHRITT="4. Gegenprobe"
 echo "== 4. Gegenprobe =="
 pruefen "$BEFUND"
+vollstaendig_geladen "$BEFUND" || fehler "der Stand nach dem Aussortieren laedt nicht vollstaendig"
 kartennamen "$NAMEN_NACHHER"
 python3 - "$BEFUND" "$BEFUND_VORHER" "$BERICHT" "$AUSSCHLUSS_KOPIE" "$AUSSCHLUSS" "$NAMEN_VORHER" \
           "$NAMEN_NACHHER" "$BLEIBT" "$FORGE" "$REF" "${DIRS[@]}" <<'PY'
