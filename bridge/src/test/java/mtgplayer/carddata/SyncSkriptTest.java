@@ -221,6 +221,7 @@ class SyncSkriptTest {
                 case "$modus" in
                   --kartendaten-pruefen)
                     n=$(( $(cat "$st/pruefen-n" 2>/dev/null || echo 0) + 1 )); echo "$n" > "$st/pruefen-n"
+                    if [ -f "$st/absturz-$n.txt" ]; then cat "$st/absturz-$n.txt" >&2; exit 1; fi
                     echo "irgendeine Forge-Meldung"
                     echo "KARTENDATEN_BEFUND $(cat "$st/befund-$n.json")" ;;
                   --kartendaten-aussortieren)
@@ -581,6 +582,51 @@ class SyncSkriptTest {
         assertEquals("A\tforge-gui/res/cardsfolder/s/neu.txt\n",
                 gitAusgabe(w.forge(), "diff", "--cached", "--name-status", "HEAD"));
         assertTrue(Files.readString(w.bericht()).contains("Neu ausgeschlossen (1)"));
+    }
+
+    /** Was Forge auf stderr schreibt, wenn der Start NACH dem Lesefehler an einer halben Split-Karte stirbt. */
+    private static String absturzNachLadefehler(String datei) {
+        return "java.util.concurrent.ExecutionException: java.lang.RuntimeException: Error loading cardscript "
+                + datei + ". Please close Forge and resolve this.\n"
+                + "Caused by: java.lang.IllegalArgumentException: No enum constant forge.card.CardSplitType.Vengeance\n"
+                + "\tat java.base/java.lang.Enum.valueOf(Enum.java:273)\n"
+                + "main > java.util.NoSuchElementException: Missing placeholder face for 'bind_liberate'; "
+                + "Cannot find 'Liberate'!\n";
+    }
+
+    @Test
+    void stirbtDerPruefmodusNachEinemLesefehlerWirdTrotzdemGeraeumt(@TempDir Path tmp) throws Exception {
+        // Lauf vom 2026-10-29: je nach Dateireihenfolge laeuft Forges Start nach dem Lesefehler nicht weiter,
+        // sondern stirbt an einer Split-Karte, deren zweite Haelfte im abgebrochenen Paket lag.
+        Wurzel w = baueWurzel(tmp);
+        upstream(w, "mkdir -p forge-gui/res/cardsfolder/upcoming;"
+                + " printf 'Name:Hela\\nAlternateMode:Vengeance\\n' > forge-gui/res/cardsfolder/upcoming/hela.txt");
+        Files.writeString(w.steuer().resolve("befund-1.json"), json(2));
+        Files.writeString(w.steuer().resolve("absturz-2.txt"), absturzNachLadefehler("hela.txt"));
+        Files.writeString(w.steuer().resolve("befund-3.json"), json(2));
+        Files.writeString(w.steuer().resolve("befund-4.json"), json(2));
+
+        Lauf lauf = laufVoll(w, "--ausschluss", w.liste().toString(), "upstream-test");
+
+        assertEquals(0, lauf.rc(), lauf.ausgabe());
+        assertFalse(Files.exists(w.karte("upcoming/hela.txt")), "die unlesbare Karte ist weg");
+        assertTrue(Files.readString(w.liste()).contains("Hela\tKartenskript von dieser Forge-Fassung nicht lesbar"),
+                Files.readString(w.liste()));
+        assertTrue(lauf.ausgabe().contains("Missing placeholder face"), "stderr landet weiter im Protokoll");
+    }
+
+    @Test
+    void einAbsturzOhneLesefehlerBleibtEinFehlschlag(@TempDir Path tmp) throws Exception {
+        Wurzel w = baueWurzel(tmp);
+        upstream(w, "echo 'Name:Neue Karte' > forge-gui/res/cardsfolder/s/neu.txt");
+        Files.writeString(w.steuer().resolve("befund-1.json"), json(2));
+        Files.writeString(w.steuer().resolve("absturz-2.txt"), "java.lang.OutOfMemoryError: Java heap space\n");
+
+        Lauf lauf = laufVoll(w, "--ausschluss", w.liste().toString(), "upstream-test");
+
+        assertEquals(1, lauf.rc(), lauf.ausgabe());
+        assertTrue(lauf.ausgabe().contains("Pruefmodus ist abgestuerzt"), lauf.ausgabe());
+        assertEquals("", gitAusgabe(w.forge(), "status", "--porcelain", "-uall"), "zurueckgenommen");
     }
 
     @Test
