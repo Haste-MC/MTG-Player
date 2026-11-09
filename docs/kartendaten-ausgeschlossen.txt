@@ -4,6 +4,8 @@
 A Good Day to Pie	java.lang.RuntimeException: Error in Trigger for Card: A Good Day to Pie / Ursache: java.lang.RuntimeException: Element StickerPlaced not found in TriggerType enum	2026-10-07
 Aerialephant	java.lang.RuntimeException: Error in Trigger for Card: Aerialephant / Ursache: java.lang.RuntimeException: Element PutSticker not found in ApiType enum	2026-10-07
 Ambassador Blorpityblorpboop	java.lang.RuntimeException: Error in Trigger for Card: Ambassador Blorpityblorpboop / Ursache: java.lang.RuntimeException: Element PutSticker not found in ApiType enum	2026-10-07
+Assimilate the Wounded	forge.game.ability.IllegalAbilityException: crash in raw Ability, check card script of Assimilate the Wounded / Ursache: java.lang.RuntimeException: Element Assimilate not found in ApiType enum	2026-11-09
+Assimilation Assessor	java.lang.RuntimeException: Error in Trigger for Card: Assimilation Assessor / Ursache: java.lang.RuntimeException: Element Assimilate not found in ApiType enum	2026-11-09
 Baaallerina	java.lang.RuntimeException: Error in Trigger for Card: Baaallerina / Ursache: java.lang.RuntimeException: Element PutSticker not found in ApiType enum	2026-10-07
 Bioluminary	java.lang.RuntimeException: Error in Trigger for Card: Bioluminary / Ursache: java.lang.RuntimeException: Element PutSticker not found in ApiType enum	2026-10-07
 Borg Cube	java.lang.RuntimeException: Error in Trigger for Card: Borg Cube / Ursache: java.lang.RuntimeException: Element Assimilate not found in ApiType enum	2026-10-29
@@ -13,9 +15,11 @@ Chicken Troupe	java.lang.RuntimeException: Error in Trigger for Card: Chicken Tr
 Clandestine Chameleon	java.lang.RuntimeException: Error in Trigger for Card: Clandestine Chameleon / Ursache: java.lang.RuntimeException: Element PutSticker not found in ApiType enum	2026-10-07
 Command Performance	forge.game.ability.IllegalAbilityException: crash in raw Ability, check card script of Command Performance / Ursache: java.lang.RuntimeException: Element PutSticker not found in ApiType enum	2026-10-07
 Costume Shop	java.lang.RuntimeException: Error in Keyword Visit:TrigSticker for card Costume Shop / Ursache: java.lang.RuntimeException: Element PutSticker not found in ApiType enum	2026-10-07
+Death Is Irrelevant	java.lang.RuntimeException: Error in Trigger for Card: Death Is Irrelevant / Ursache: java.lang.RuntimeException: Element Assimilate not found in ApiType enum	2026-11-09
 Done for the Day	java.lang.RuntimeException: Error in Trigger for Card: Done for the Day / Ursache: java.lang.RuntimeException: Element PutSticker not found in ApiType enum	2026-10-07
 Fight the _____ Fight	java.lang.RuntimeException: Error in Trigger for Card: Fight the _____ Fight / Ursache: java.lang.RuntimeException: Element PutSticker not found in ApiType enum	2026-10-07
 Finishing Move	forge.game.ability.IllegalAbilityException: crash in raw Ability, check card script of Finishing Move / Ursache: java.lang.RuntimeException: Element PutSticker not found in ApiType enum	2026-10-07
+Gift of Perfection	forge.game.ability.IllegalAbilityException: crash in raw Ability, check card script of Gift of Perfection / Ursache: java.lang.RuntimeException: Element Assimilate not found in ApiType enum	2026-11-09
 Glitterflitter	java.lang.RuntimeException: Error in Trigger for Card: Glitterflitter / Ursache: java.lang.RuntimeException: Element PutSticker not found in ApiType enum	2026-10-07
 Goblin Airbrusher	java.lang.RuntimeException: Error in Trigger for Card: Goblin Airbrusher / Ursache: java.lang.RuntimeException: Element StickerPlaced not found in TriggerType enum	2026-10-07
 Hela, Mistress of Darkness	Kartenskript von dieser Forge-Fassung nicht lesbar: java.lang.IllegalArgumentException: No enum constant forge.card.CardSplitType.Vengeance	2026-10-29
@@ -32,6 +36,7 @@ Roxi, Publicist to the Stars	java.lang.RuntimeException: Error in Trigger for Ca
 Scampire	java.lang.RuntimeException: Error in Trigger for Card: Scampire / Ursache: java.lang.RuntimeException: Element PutSticker not found in ApiType enum	2026-10-07
 Stiltstrider	java.lang.RuntimeException: Error in Trigger for Card: Stiltstrider / Ursache: java.lang.RuntimeException: Element PutSticker not found in ApiType enum	2026-10-07
 Sword-Swallowing Seraph	java.lang.RuntimeException: Error in Trigger for Card: Sword-Swallowing Seraph / Ursache: java.lang.RuntimeException: Element PutSticker not found in ApiType enum	2026-10-07
+The Best of Both Worlds	java.lang.RuntimeException: Error in Keyword Chapter:3:DBAssimilate,DBPumpAll,DBExile for card The Best of Both Worlds / Ursache: java.lang.RuntimeException: Element Assimilate not found in ApiType enum	2026-11-09
 The Borg Queen	java.lang.RuntimeException: Error in Trigger for Card: The Borg Queen / Ursache: java.lang.RuntimeException: Element Assimilate not found in ApiType enum	2026-10-29
 Ticketomaton	java.lang.RuntimeException: Error in Trigger for Card: Ticketomaton / Ursache: java.lang.RuntimeException: Element PutSticker not found in ApiType enum	2026-10-07
 Tusk and Whiskers	java.lang.RuntimeException: Error in Trigger for Card: Tusk and Whiskers / Ursache: java.lang.RuntimeException: Element StickerPlaced not found in TriggerType enum	2026-10-07
