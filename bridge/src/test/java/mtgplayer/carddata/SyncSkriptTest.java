@@ -513,6 +513,73 @@ class SyncSkriptTest {
         assertFalse(bericht.contains("verschwunden"), bericht);
     }
 
+    // --- Abgleich 2026-11-16: verschoben UND unbaubar -------------------------------------------
+
+    private static final String VERSCHOBEN_ALT = "Name:Verschobene Karte\nA:SP$ Pump | ValidTgts$ Player\n";
+
+    /** Unser Stand bekommt cardsfolder/upcoming/verschoben.txt; upstream verschiebt sie nach v/ und stellt sie um. */
+    private static void verschobenUndUmgestellt(Wurzel w) throws Exception {
+        Files.createDirectories(w.karte("upcoming"));
+        Files.writeString(w.karte("upcoming/verschoben.txt"), VERSCHOBEN_ALT);
+        git(w.forge(), "add", "-A");
+        git(w.forge(), "-c", "user.email=t@t", "-c", "user.name=T", "commit", "-q", "-m", "upcoming");
+        upstream(w, "mkdir -p forge-gui/res/cardsfolder/v;"
+                + " git mv forge-gui/res/cardsfolder/upcoming/verschoben.txt forge-gui/res/cardsfolder/v/verschoben.txt;"
+                + " sed -i 's/SP\\$ Pump/SP$ TargetOnly/' forge-gui/res/cardsfolder/v/verschoben.txt;"
+                + " echo 'Oracle:neu' >> forge-gui/res/cardsfolder/s/sol_ring.txt");
+    }
+
+    @Test
+    void verschiebtUpstreamEineKarteUndIstDieNeueFassungUnbaubarBleibtUnsereAlteAmAltenPfad(@TempDir Path tmp)
+            throws Exception {
+        Wurzel w = baueWurzel(tmp);
+        verschobenUndUmgestellt(w);
+        befunde(w, json(3), json(3, problem("Verschobene Karte", "Element TargetOnly not found in ApiType enum")),
+                json(3));
+        // Wie die echte Bridge: die neue Datei (neuer Pfad, in HEAD unbekannt) loeschen, Name auf die Liste.
+        aussortieren(w, "rm -f '" + w.karte("v/verschoben.txt") + "'\n"
+                + "printf 'Verschobene Karte\\tElement TargetOnly not found in ApiType enum\\t2026-11-16\\n' >> \"$2\"",
+                0);
+
+        Lauf lauf = laufVoll(w, "--ausschluss", w.liste().toString(), "upstream-test");
+
+        assertEquals(0, lauf.rc(), "die Karte geht nicht verloren - kein Fehlschlag: " + lauf.ausgabe());
+        assertEquals(VERSCHOBEN_ALT, Files.readString(w.karte("upcoming/verschoben.txt")),
+                "unsere alte Fassung ist an ihrem alten Pfad zurueck");
+        assertFalse(Files.exists(w.karte("v/verschoben.txt")), "die unbaubare neue Datei bleibt draussen");
+        assertTrue(Files.readString(w.liste()).contains("Verschobene Karte"),
+                "der Schluessel bleibt ausgeschlossen - er haelt die neue Datei auch kuenftig draussen");
+        assertEquals("M\tforge-gui/res/cardsfolder/s/sol_ring.txt\n",
+                gitAusgabe(w.forge(), "diff", "--cached", "--name-status", "HEAD"),
+                "gegenueber HEAD bleibt nur die heile Aenderung");
+        String bericht = Files.readString(w.bericht());
+        assertTrue(bericht.contains("Bleibt auf unserer bisherigen Fassung (1)"), bericht);
+        assertTrue(bericht.contains("`Verschobene Karte`: von upstream verschoben"), bericht);
+        assertFalse(bericht.contains("verschwunden"), bericht);
+        assertFalse(bericht.contains("Von upstream entfernt"), bericht);
+    }
+
+    @Test
+    void auchImNaechstenLaufMitDemSchluesselAufDerListeBleibtDieVerschobeneKarte(@TempDir Path tmp)
+            throws Exception {
+        // Die Woche danach: die neue Datei laesst schon das Vorab-Ausschliessen nicht herein, sie steht also gar
+        // nicht auf der Neu-Liste - den alten Pfad hat upstream trotzdem geloescht.
+        Wurzel w = baueWurzel(tmp);
+        Files.writeString(w.liste(), "Verschobene Karte\tElement TargetOnly not found\t2026-11-16\n");
+        verschobenUndUmgestellt(w);
+        befunde(w, json(3), json(3), json(3));
+
+        Lauf lauf = laufVoll(w, "--ausschluss", w.liste().toString(), "upstream-test");
+
+        assertEquals(0, lauf.rc(), lauf.ausgabe());
+        assertTrue(lauf.ausgabe().contains("vorab ausgeschlossen: 1 neue Datei(en)"), lauf.ausgabe());
+        assertEquals(VERSCHOBEN_ALT, Files.readString(w.karte("upcoming/verschoben.txt")));
+        assertFalse(Files.exists(w.karte("v/verschoben.txt")));
+        assertEquals("Verschobene Karte\tElement TargetOnly not found\t2026-11-16\n", Files.readString(w.liste()),
+                "die Liste bleibt, wie sie war");
+        assertTrue(Files.readString(w.bericht()).contains("Bleibt auf unserer bisherigen Fassung (1)"));
+    }
+
     @Test
     void entferntUpstreamEineKarteDarfDieKartenzahlUmGenauSoVielFallen(@TempDir Path tmp) throws Exception {
         Wurzel w = baueWurzel(tmp);
