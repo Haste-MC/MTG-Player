@@ -472,16 +472,19 @@ fi
 # diese Dublette bleibt draussen, die alte gute Datei bleibt stehen.
 # Das Format von $BLEIBT: Schluessel, Grund, Pfad - Tabulator-getrennt, fuer den Bericht.
 #
-# BEKANNTE GRENZE (erkannt, bewusst der Handarbeit ueberlassen): Verschiebt upstream eine Datei UND aendert
-# sie zugleich so, dass sie unbaubar wird, ist sie hier nicht wiederherzustellen. Der neue Pfad ist in HEAD
-# unbekannt (also "neu", nicht "alt" - sie wird geloescht und ausgeschlossen), und der alte Pfad ist durch
-# upstream weg. Die Karte, die es vorher gab, fehlt dann nach dem Abgleich; stuende sie nicht mehr in <ref>
-# (anderer Name), waere sie "von upstream entfernt", sonst scheitert die Gegenprobe laut (Schritt 4) mit
-# Ruecknahme. Das ist richtig so: von Hand entscheiden, welche Fassung gelten soll.
+# Verschiebt upstream eine Datei UND aendert sie zugleich so, dass sie unbaubar wird (Abgleich vom 2026-11-16:
+# sieben Karten von cardsfolder/upcoming/ nach cardsfolder/<buchstabe>/, zugleich auf die neue ApiType
+# "TargetOnly" bzw. "Bookkeeping" umgestellt), reicht das Obige nicht: der neue Pfad ist in HEAD unbekannt
+# (also "neu" - er wird geloescht und ausgeschlossen, in spaeteren Laeufen schon vorab), und den alten Pfad hat
+# upstream geloescht. Darum zusaetzlich: jede Datei unter cardsfolder, die HEAD kennt und upstream geloescht hat,
+# deren Name nach dem Aussortieren in KEINER Datei mehr steht, <ref> ihn aber noch fuehrt, kommt an ihrem alten
+# Pfad in unserer alten Fassung zurueck ("bleibt auf unserer bisherigen Fassung"). Fuehrt <ref> den Namen nicht
+# mehr, hat upstream die Karte gestrichen - das bleibt so (Schritt 4: "Von upstream entfernt"). Der Schluessel
+# bleibt auf der Ausschlussliste: er haelt die unbaubare neue Datei auch kuenftig draussen.
 SCHRITT="3b. Bisherige Fassungen wiederherstellen"
-python3 - "$FORGE" "$NEUE_DATEIEN" "$AUSSCHLUSS_KOPIE" "$AUSSCHLUSS" "$BLEIBT" "$LADEFEHLER" <<'PY'
+python3 - "$FORGE" "$NEUE_DATEIEN" "$AUSSCHLUSS_KOPIE" "$AUSSCHLUSS" "$BLEIBT" "$LADEFEHLER" "$REF" <<'PY'
 import os, subprocess, sys
-repo, neue, ausschluss_vor, ausschluss_nach, bleibt, ladefehler = sys.argv[1:7]
+repo, neue, ausschluss_vor, ausschluss_nach, bleibt, ladefehler, ref = sys.argv[1:8]
 
 def zeilen(p):
     if not os.path.isfile(p):
@@ -539,6 +542,67 @@ if alt:
                     if not (z.strip() and not z.startswith("#") and z.split("\t")[0] in entfernen)]
         with open(ausschluss_nach, "w", encoding="utf-8") as f:
             f.write("\n".join(behalten))
+
+# Verschoben und unbaubar (siehe Kommentar ueber diesem Schritt). Nur was upstream geloescht hat (im Index weg,
+# "--diff-filter=D"), nicht was das Aussortieren nur im Arbeitsbaum geloescht hat: eine Datei, die upstream
+# unveraendert behaelt und die trotzdem verschwindet, muss die Gegenprobe weiter rot machen.
+KARTEN = "forge-gui/res/cardsfolder"
+
+def name_aus(inhalt):
+    try:
+        text = inhalt.decode("utf-8")
+    except UnicodeDecodeError:
+        return None
+    return next((z[5:].strip() for z in text.split("\n") if z.startswith("Name:")), None)
+
+def namen_in(baum, pfade):
+    # "cat-file --batch" liest je Zeile "<baum>:<pfad>"; Pfade mit Zeilenumbruch gibt es in Kartendaten nicht.
+    pfade = [p for p in pfade if p and b"\n" not in p]
+    if not pfade:
+        return {}
+    ausgabe = git("cat-file", "--batch", input=b"".join(baum.encode() + b":" + p + b"\n" for p in pfade),
+                  check=True).stdout
+    ergebnis, pos, i = {}, 0, 0
+    while pos < len(ausgabe):
+        ende = ausgabe.index(b"\n", pos)
+        kopf = ausgabe[pos:ende]
+        if kopf.endswith(b" missing"):      # "<baum>:<pfad> missing" - der Pfad darf Leerzeichen haben
+            pos, i = ende + 1, i + 1
+            continue
+        groesse = int(kopf.split(b" ")[2])  # "<sha> blob <groesse>"
+        ergebnis[pfade[i]] = name_aus(ausgabe[ende + 1:ende + 1 + groesse])
+        pos, i = ende + 1 + groesse + 1, i + 1
+    return ergebnis
+
+weg_upstream = [p for p in git("diff", "--cached", "--name-only", "-z", "--no-renames", "--diff-filter=D",
+                               "HEAD", "--", KARTEN, check=True).stdout.split(b"\0") if p]
+if weg_upstream:
+    namen_weg = {p: k for p, k in namen_in("HEAD", weg_upstream).items() if k}
+    uebrig = set()
+    for ordner, _, dateien in os.walk(os.path.join(repo, KARTEN)):
+        for datei in dateien:
+            try:
+                with open(os.path.join(ordner, datei), encoding="utf-8") as f:
+                    n = next((z[5:].strip() for z in f if z.startswith("Name:")), None)
+            except UnicodeDecodeError:
+                n = None
+            if n:
+                uebrig.add(n)
+    fehlt = {p: k for p, k in namen_weg.items() if k not in uebrig}
+    if fehlt:
+        pfade_ref = git("ls-tree", "-r", "-z", "--name-only", ref, "--", KARTEN, check=True).stdout.split(b"\0")
+        in_ref = set(namen_in(ref, pfade_ref).values())
+        zurueck = {p: k for p, k in fehlt.items() if k in in_ref}
+        if zurueck:
+            git("checkout", "-q", "HEAD", "--pathspec-from-file=-", "--pathspec-file-nul",
+                input=b"\0".join(zurueck), check=True)
+            for roh, k in sorted(zurueck.items()):
+                pfad = os.fsdecode(roh)
+                grund = ("von upstream verschoben, neue Fassung nicht baubar: "
+                         + (nach.get(k) or vor.get(k) or "nicht hereingelassen"))
+                bleibt_zeilen.append(f"{k}\t{' '.join(grund.split())}\t{pfad}")
+                print(f"verschoben und unbaubar, bleibt auf unserer Fassung: {k} ({pfad})")
+
 # Was ladefehler_raeumen schon in Schritt 3 auf unsere alte Fassung zurueckgesetzt hat, gehoert in denselben
 # Abschnitt des Berichts (Format dort: Schluessel, Grund, Pfad - wie hier).
 for z in zeilen(ladefehler):
