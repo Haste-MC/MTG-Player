@@ -424,6 +424,46 @@ class SyncSkriptTest {
     }
 
     @Test
+    void verschiebtUpstreamEineKarteUndMachtSieUnbaubarBleibtUnsereAlteAmAltenPfad(@TempDir Path tmp)
+            throws Exception {
+        // Wie im Abgleich vom 2026-11-16/23: upstream sortiert eine Karte aus upcoming/ in den Buchstabenordner
+        // ein und stellt sie zugleich auf eine Faehigkeit um, die unsere Forge-Fassung nicht kennt. Der neue Pfad
+        // ist "neu" und faellt, der alte ist bei upstream weg - die Karte darf trotzdem nicht verschwinden.
+        Wurzel w = baueWurzel(tmp);
+        String alteFassung = "Name:Common Goal\nA:SP$ Pump | ValidTgts$ Creature.YouCtrl\n";
+        Files.createDirectories(w.karte("upcoming"));
+        Files.writeString(w.karte("upcoming/common_goal.txt"), alteFassung);
+        git(w.forge(), "add", "-A");
+        git(w.forge(), "-c", "user.email=t@t", "-c", "user.name=T", "commit", "-q", "-m", "upcoming");
+        upstream(w, "mkdir -p forge-gui/res/cardsfolder/c;"
+                + " git mv forge-gui/res/cardsfolder/upcoming/common_goal.txt forge-gui/res/cardsfolder/c/;"
+                + " sed -i 's/SP\\$ Pump/SP$ TargetOnly/' forge-gui/res/cardsfolder/c/common_goal.txt;"
+                + " echo 'Oracle:neu' >> forge-gui/res/cardsfolder/s/sol_ring.txt");
+        String grund = "Element TargetOnly not found in ApiType enum";
+        befunde(w, json(3), json(3, problem("Common Goal", grund)), json(3));
+        // Wie die echte Bridge: die neue Datei loeschen, den Namen auf die Liste.
+        aussortieren(w, "rm -f '" + w.karte("c/common_goal.txt") + "'\n"
+                + "printf 'Common Goal\\t" + grund + "\\t2026-11-23\\n' >> \"$2\"", 0);
+
+        Lauf lauf = laufVoll(w, "--ausschluss", w.liste().toString(), "upstream-test");
+
+        assertEquals(0, lauf.rc(), lauf.ausgabe());
+        assertFalse(lauf.ausgabe().contains("verschwunden"), lauf.ausgabe());
+        assertEquals(alteFassung, Files.readString(w.karte("upcoming/common_goal.txt")),
+                "unsere alte Fassung ist an ihrem alten Pfad zurueck");
+        assertFalse(Files.exists(w.karte("c/common_goal.txt")), "upstreams unbaubare Fassung bleibt draussen");
+        assertFalse(Files.readString(w.liste()).contains("Common Goal"),
+                "die Karte laeuft weiter, sie ist nicht ausgeschlossen");
+        assertEquals("M\tforge-gui/res/cardsfolder/s/sol_ring.txt\n",
+                gitAusgabe(w.forge(), "diff", "--cached", "--name-status", "HEAD"),
+                "gegenueber HEAD ist nur die heile Aenderung angekommen");
+        String bericht = Files.readString(w.bericht());
+        assertTrue(bericht.contains("Bleibt auf unserer bisherigen Fassung (1)"), bericht);
+        assertTrue(bericht.contains("`Common Goal`: " + grund), bericht);
+        assertTrue(bericht.contains("Nichts neu ausgeschlossen"), bericht);
+    }
+
+    @Test
     void einAltEintragAufDerListeBleibtAuchWennUnsereAlteFassungZurueckkommt(@TempDir Path tmp) throws Exception {
         // Ein Eintrag, der VOR dem Lauf schon stand, ist Handarbeit und wird nicht gestrichen.
         Wurzel w = baueWurzel(tmp);

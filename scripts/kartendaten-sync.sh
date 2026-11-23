@@ -472,16 +472,17 @@ fi
 # diese Dublette bleibt draussen, die alte gute Datei bleibt stehen.
 # Das Format von $BLEIBT: Schluessel, Grund, Pfad - Tabulator-getrennt, fuer den Bericht.
 #
-# BEKANNTE GRENZE (erkannt, bewusst der Handarbeit ueberlassen): Verschiebt upstream eine Datei UND aendert
-# sie zugleich so, dass sie unbaubar wird, ist sie hier nicht wiederherzustellen. Der neue Pfad ist in HEAD
-# unbekannt (also "neu", nicht "alt" - sie wird geloescht und ausgeschlossen), und der alte Pfad ist durch
-# upstream weg. Die Karte, die es vorher gab, fehlt dann nach dem Abgleich; stuende sie nicht mehr in <ref>
-# (anderer Name), waere sie "von upstream entfernt", sonst scheitert die Gegenprobe laut (Schritt 4) mit
-# Ruecknahme. Das ist richtig so: von Hand entscheiden, welche Fassung gelten soll.
+# Verschiebt upstream eine Datei UND macht sie dabei unbaubar, gilt dasselbe: die alte Datei kommt an ihrem
+# ALTEN Pfad zurueck, sofern ihr Schluessel eindeutig zu genau einer von upstream geloeschten Datei passt (siehe
+# "verschoben" unten). BEKANNTE GRENZE (bewusst der Handarbeit ueberlassen): passt der Schluessel nicht oder
+# nicht eindeutig (upstream hat beim Verschieben auch den Namen geaendert, oder es gab mehrere alte Dateien
+# mit dem Namen), fehlt die Karte nachher; stuende sie nicht mehr in <ref>, waere sie "von upstream entfernt",
+# sonst scheitert die Gegenprobe laut (Schritt 4) mit Ruecknahme. Dann von Hand entscheiden.
 SCHRITT="3b. Bisherige Fassungen wiederherstellen"
-python3 - "$FORGE" "$NEUE_DATEIEN" "$AUSSCHLUSS_KOPIE" "$AUSSCHLUSS" "$BLEIBT" "$LADEFEHLER" <<'PY'
+python3 - "$FORGE" "$NEUE_DATEIEN" "$AUSSCHLUSS_KOPIE" "$AUSSCHLUSS" "$BLEIBT" "$LADEFEHLER" "${DIRS[@]}" <<'PY'
 import os, subprocess, sys
 repo, neue, ausschluss_vor, ausschluss_nach, bleibt, ladefehler = sys.argv[1:7]
+dirs = sys.argv[7:]
 
 def zeilen(p):
     if not os.path.isfile(p):
@@ -500,16 +501,26 @@ def eintraege(p):
 def git(*args, **kw):
     return subprocess.run(["git", "-C", repo, *args], capture_output=True, **kw)
 
-def schluessel_im_index(pfad):
-    praefix = ("Name:" if "/cardsfolder/" in pfad else "Code=" if "/editions/" in pfad else None)
+def praefix_fuer(pfad):
+    return "Name:" if "/cardsfolder/" in pfad else "Code=" if "/editions/" in pfad else None
+
+def schluessel(stand, pfad):
+    # stand "" = Index, "HEAD" = unser Stand vor dem Abgleich
+    praefix = praefix_fuer(pfad)
     if praefix is None:
         return None
-    inhalt = git("show", ":" + pfad, check=True).stdout
+    inhalt = git("show", stand + ":" + pfad, check=True).stdout
     try:
         text = inhalt.decode("utf-8")
     except UnicodeDecodeError:
         return None
     return next((z[len(praefix):].strip() for z in text.split("\n") if z.startswith(praefix)), None)
+
+def schluessel_im_index(pfad):
+    return schluessel("", pfad)
+
+def schluessel_in_head(pfad):
+    return schluessel("HEAD", pfad)
 
 with open(neue, "rb") as f:
     kandidaten = [os.fsdecode(p) for p in f.read().split(b"\n") if p]
@@ -520,12 +531,47 @@ neu_weg = [p for p in geloescht if p not in alt]
 vor = eintraege(ausschluss_vor)
 nach = eintraege(ausschluss_nach)
 bleibt_zeilen = []
+
+# Verschoben UND unbaubar: upstream hat eine Datei an einen neuen Pfad gelegt (z.B. cardsfolder/upcoming/x.txt
+# -> cardsfolder/x/x.txt) und sie dabei so geaendert, dass unsere Forge-Fassung sie nicht baut. Der neue Pfad
+# ist in HEAD unbekannt und fiel als "neu", der alte ist durch upstream geloescht - ohne das Folgende fehlte
+# die Karte nachher, und die Gegenprobe scheiterte (Abgleiche vom 2026-11-16/23: sieben Karten, die upstream
+# aus upcoming/ einsortiert und auf "TargetOnly"/"Bookkeeping" umgestellt hatte). Ist der Schluessel der
+# gefallenen Datei genau EINER Datei zugeordnet, die HEAD hatte und die upstream geloescht hat, kommt diese
+# alte Datei an ihrem alten Pfad zurueck - wie bei einer nur geaenderten Datei. Mehrdeutiges bleibt Handarbeit.
+verschoben = {}   # neuer Pfad -> alter Pfad
+if neu_weg:
+    weg_bei_upstream = [os.fsdecode(p) for p in git(
+        "diff", "--cached", "--name-only", "-z", "--no-renames", "--diff-filter=D", "HEAD", "--", *dirs,
+        check=True).stdout.split(b"\0") if p]
+    alte_je_schluessel = {}
+    for p in weg_bei_upstream:
+        k = schluessel_in_head(p)
+        if k is not None:
+            alte_je_schluessel.setdefault((praefix_fuer(p), k), []).append(p)
+    for p in neu_weg:
+        k = schluessel_im_index(p)
+        treffer = alte_je_schluessel.get((praefix_fuer(p), k), []) if k is not None else []
+        if len(treffer) == 1 and treffer[0] not in verschoben.values():
+            verschoben[p] = treffer[0]
+    if verschoben:
+        git("checkout", "-q", "HEAD", "--pathspec-from-file=-", "--pathspec-file-nul",
+            input=b"\0".join(os.fsencode(p) for p in sorted(set(verschoben.values()))), check=True)
+        print(f"verschoben und nicht baubar, alte Datei am alten Pfad zurueck: {len(verschoben)} Karte(n)")
+neu_weg = [p for p in neu_weg if p not in verschoben]
+
+entfernen = set()
+schluessel_neu_weg = {schluessel_im_index(p) for p in neu_weg}
+for neu_pfad, alt_pfad in sorted(verschoben.items()):
+    k = schluessel_im_index(neu_pfad)
+    grund = nach.get(k) or "von unserer Forge-Fassung nicht baubar"
+    bleibt_zeilen.append(f"{k}\t{grund} (upstream verschoben nach {neu_pfad})\t{alt_pfad}")
+    if k not in vor and k not in schluessel_neu_weg:
+        entfernen.add(k)
 if alt:
     schluessel_alt = {p: schluessel_im_index(p) for p in alt}
-    schluessel_neu_weg = {schluessel_im_index(p) for p in neu_weg}
     git("checkout", "-q", "HEAD", "--pathspec-from-file=-", "--pathspec-file-nul",
         input=b"\0".join(os.fsencode(p) for p in alt), check=True)
-    entfernen = set()
     for pfad, k in sorted(schluessel_alt.items()):
         if k is None:
             continue
@@ -534,11 +580,11 @@ if alt:
         # Nur was dieser Lauf neu eingetragen hat, wird wieder gestrichen; ein alter Eintrag ist Handarbeit.
         if k not in vor and k not in schluessel_neu_weg:
             entfernen.add(k)
-    if entfernen and os.path.isfile(ausschluss_nach):
-        behalten = [z for z in zeilen(ausschluss_nach)
-                    if not (z.strip() and not z.startswith("#") and z.split("\t")[0] in entfernen)]
-        with open(ausschluss_nach, "w", encoding="utf-8") as f:
-            f.write("\n".join(behalten))
+if entfernen and os.path.isfile(ausschluss_nach):
+    behalten = [z for z in zeilen(ausschluss_nach)
+                if not (z.strip() and not z.startswith("#") and z.split("\t")[0] in entfernen)]
+    with open(ausschluss_nach, "w", encoding="utf-8") as f:
+        f.write("\n".join(behalten))
 # Was ladefehler_raeumen schon in Schritt 3 auf unsere alte Fassung zurueckgesetzt hat, gehoert in denselben
 # Abschnitt des Berichts (Format dort: Schluessel, Grund, Pfad - wie hier).
 for z in zeilen(ladefehler):
